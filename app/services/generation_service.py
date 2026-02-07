@@ -20,6 +20,10 @@ from app.services.thumbnail_service import ThumbnailService
 from app.utils.paths import ensure_dir
 
 
+class GenerationCancelledError(ProviderError):
+    pass
+
+
 class GenerationService:
     def __init__(
         self,
@@ -151,10 +155,30 @@ class GenerationService:
     def enqueue(self, background_tasks: BackgroundTasks, generation_id: int) -> None:
         background_tasks.add_task(self.run_generation_job, generation_id)
 
+    def cancel_generation(self, session: Session, generation_id: int) -> Optional[Generation]:
+        generation = crud.get_generation(session, generation_id, with_assets=True)
+        if not generation:
+            return None
+
+        if generation.status in {"succeeded", "failed", "cancelled"}:
+            return generation
+
+        generation.status = "cancelled"
+        generation.error = "Cancelled by user."
+        generation.failure_sidecar_path = None
+        generation.finished_at = datetime.utcnow()
+        session.commit()
+        session.refresh(generation)
+        return generation
+
     async def run_generation_job(self, generation_id: int) -> None:
         with SessionLocal() as session:
             generation = crud.get_generation(session, generation_id)
             if not generation:
+                return
+            if generation.status == "cancelled":
+                return
+            if generation.status != "queued":
                 return
 
             generation.status = "running"
@@ -166,8 +190,11 @@ class GenerationService:
             ensure_dir(base_dir)
 
             try:
+                self._raise_if_cancelled(session, generation_id)
                 provider_request = self._provider_request_from_generation(generation)
+                self._raise_if_cancelled(session, generation_id)
                 result = await self.registry.generate(generation.provider, provider_request)
+                self._raise_if_cancelled(session, generation_id)
                 if not result.images:
                     raise ProviderError("Provider returned zero images")
 
@@ -176,6 +203,7 @@ class GenerationService:
                 folder_path = self._resolve_gallery_folder_path(session, generation)
 
                 for idx, image in enumerate(result.images, start=1):
+                    self._raise_if_cancelled(session, generation_id)
                     rendered_rel_path = self.storage_service.render_relative_path(
                         template=storage_template,
                         profile_name=generation.profile_name,
@@ -226,8 +254,26 @@ class GenerationService:
                         )
                     )
 
+                self._raise_if_cancelled(session, generation_id)
                 generation.status = "succeeded"
                 generation.error = None
+                generation.failure_sidecar_path = None
+                generation.finished_at = datetime.utcnow()
+                session.commit()
+            except GenerationCancelledError as exc:
+                session.rollback()
+                generation = crud.get_generation(session, generation_id)
+                if not generation:
+                    return
+
+                for rel in reversed(created_files):
+                    try:
+                        self.storage_service.delete_relative_file(base_dir, rel)
+                    except Exception:
+                        pass
+
+                generation.status = "cancelled"
+                generation.error = self._truncate_error(str(exc))
                 generation.failure_sidecar_path = None
                 generation.finished_at = datetime.utcnow()
                 session.commit()
@@ -263,6 +309,14 @@ class GenerationService:
                     )
 
                 session.commit()
+
+    def _raise_if_cancelled(self, session: Session, generation_id: int) -> None:
+        generation = crud.get_generation(session, generation_id)
+        if not generation:
+            raise GenerationCancelledError("Generation no longer exists.")
+        session.refresh(generation)
+        if generation.status == "cancelled":
+            raise GenerationCancelledError("Cancelled by user.")
 
     def delete_asset(self, session: Session, asset_id: int) -> bool:
         asset = crud.get_asset(session, asset_id, with_generation=True)

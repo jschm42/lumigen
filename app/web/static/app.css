@@ -384,6 +384,33 @@ button {
   padding: 0.8rem;
 }
 
+.job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.job-head h3 {
+  margin: 0;
+}
+
+.job-status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  border: 2px solid rgba(124, 154, 206, 0.25);
+  border-top-color: var(--brand);
+  animation: spin 0.9s linear infinite;
+  flex: 0 0 auto;
+}
+
 .job-running {
   border-color: rgba(105, 159, 236, 0.4);
   background: rgba(10, 28, 58, 0.55);
@@ -397,6 +424,17 @@ button {
 .job-failed {
   border-color: rgba(255, 111, 143, 0.45);
   background: rgba(52, 16, 28, 0.58);
+}
+
+.job-cancelled {
+  border-color: rgba(255, 200, 120, 0.45);
+  background: rgba(56, 41, 13, 0.58);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .error {

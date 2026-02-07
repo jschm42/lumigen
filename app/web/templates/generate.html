@@ -6,7 +6,7 @@
   {% if not profiles %}
     <p>No profiles yet. Create one in <a href="/profiles">Profiles</a>.</p>
   {% else %}
-  <form hx-post="/generate" hx-target="#job-status" hx-swap="innerHTML" method="post" class="stack">
+  <form hx-post="/generate" hx-target="#job-list" hx-swap="afterbegin" method="post" class="stack">
     <label for="prompt_user">Prompt</label>
     <textarea id="prompt_user" name="prompt_user" rows="5" required></textarea>
 
@@ -63,5 +63,15 @@
   {% endif %}
 </section>
 
-<section id="job-status" class="card"></section>
+<section class="card">
+  <div class="section-head">
+    <h2>Jobs</h2>
+  </div>
+  <div id="job-list" class="stack">
+    {% for generation in active_generations %}
+      {% set assets = [] %}
+      {% include "fragments/job_status.html" %}
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}

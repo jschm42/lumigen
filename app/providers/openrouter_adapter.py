@@ -69,6 +69,11 @@ class OpenRouterAdapter(ProviderAdapter):
         timeout = httpx.Timeout(120.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, headers=headers, json=payload)
+            if self._should_retry_with_image_only(response, payload):
+                retry_payload = dict(payload)
+                retry_payload["modalities"] = ["image"]
+                response = await client.post(url, headers=headers, json=retry_payload)
+                payload = retry_payload
 
             if response.status_code == 429:
                 raise ProviderRateLimitError("OpenRouter rate limit reached (429).")
@@ -85,9 +90,11 @@ class OpenRouterAdapter(ProviderAdapter):
             except Exception as exc:
                 raise ProviderError("OpenRouter returned a non-JSON response.") from exc
 
-            image_refs = self._extract_image_refs(body)
+            normalized_output_format = self._normalize_output_format(request.output_format)
+            image_refs = self._extract_image_refs(body, output_format=normalized_output_format)
             if not image_refs:
-                raise ProviderError("OpenRouter returned no generated image data.")
+                summary = self._summarize_empty_image_response(body)
+                raise ProviderError(f"OpenRouter returned no generated image data. {summary}")
 
             fallback_width, fallback_height = self._resolve_dimensions(request)
             images: list[ProviderImage] = []
@@ -111,6 +118,7 @@ class OpenRouterAdapter(ProviderAdapter):
                 "id": body.get("id"),
                 "created": body.get("created"),
                 "model": body.get("model") or request.model,
+                "modalities": payload.get("modalities"),
                 "usage": body.get("usage"),
                 "count": len(images),
             },
@@ -146,68 +154,181 @@ class OpenRouterAdapter(ProviderAdapter):
 
         return payload
 
-    def _extract_image_refs(self, body: dict[str, Any]) -> list[str]:
+    def _extract_image_refs(self, body: dict[str, Any], output_format: str) -> list[str]:
         refs: list[str] = []
         choices = body.get("choices")
-        if not isinstance(choices, list):
-            return refs
+        if isinstance(choices, list):
+            for choice in choices:
+                if not isinstance(choice, dict):
+                    continue
+                message = choice.get("message")
+                if not isinstance(message, dict):
+                    continue
 
-        for choice in choices:
-            if not isinstance(choice, dict):
-                continue
-            message = choice.get("message")
-            if not isinstance(message, dict):
-                continue
+                refs.extend(self._extract_image_refs_from_message_images(message.get("images"), output_format))
+                refs.extend(self._extract_image_refs_from_message_content(message.get("content"), output_format))
 
-            refs.extend(self._extract_image_refs_from_message_images(message.get("images")))
-            refs.extend(self._extract_image_refs_from_message_content(message.get("content")))
+        refs.extend(self._extract_image_refs_from_message_images(body.get("images"), output_format))
+        refs.extend(self._extract_image_refs_from_data(body.get("data"), output_format))
+        refs.extend(self._extract_image_refs_from_output(body.get("output"), output_format))
+        return self._unique_refs(refs)
 
-        return refs
-
-    def _extract_image_refs_from_message_images(self, value: Any) -> list[str]:
+    def _extract_image_refs_from_message_images(self, value: Any, output_format: str) -> list[str]:
         refs: list[str] = []
         if not isinstance(value, list):
             return refs
 
         for image_obj in value:
-            ref = self._extract_single_image_ref(image_obj)
+            ref = self._extract_single_image_ref(image_obj, output_format)
             if ref:
                 refs.append(ref)
         return refs
 
-    def _extract_image_refs_from_message_content(self, value: Any) -> list[str]:
+    def _extract_image_refs_from_message_content(self, value: Any, output_format: str) -> list[str]:
         refs: list[str] = []
+        if isinstance(value, str):
+            refs.extend(self._extract_refs_from_text(value))
+            return refs
+
         if not isinstance(value, list):
             return refs
 
         for part in value:
+            if isinstance(part, str):
+                refs.extend(self._extract_refs_from_text(part))
+                continue
             if not isinstance(part, dict):
                 continue
-            if part.get("type") != "image_url":
+            part_type = str(part.get("type") or "").strip().lower()
+            if part_type in {"image_url", "image", "input_image", "output_image"}:
+                ref = self._extract_single_image_ref(part, output_format)
+                if ref:
+                    refs.append(ref)
                 continue
-            ref = self._extract_single_image_ref(part)
+            text_value = part.get("text")
+            if isinstance(text_value, str):
+                refs.extend(self._extract_refs_from_text(text_value))
+                continue
+            if part_type:
+                continue
+            ref = self._extract_single_image_ref(part, output_format)
             if ref:
                 refs.append(ref)
         return refs
 
-    def _extract_single_image_ref(self, image_obj: Any) -> Optional[str]:
+    def _extract_image_refs_from_data(self, value: Any, output_format: str) -> list[str]:
+        refs: list[str] = []
+        if not isinstance(value, list):
+            return refs
+        for item in value:
+            ref = self._extract_single_image_ref(item, output_format)
+            if ref:
+                refs.append(ref)
+        return refs
+
+    def _extract_image_refs_from_output(self, value: Any, output_format: str) -> list[str]:
+        refs: list[str] = []
+        if not isinstance(value, list):
+            return refs
+
+        for item in value:
+            if isinstance(item, str):
+                refs.extend(self._extract_refs_from_text(item))
+                continue
+            if not isinstance(item, dict):
+                continue
+
+            ref = self._extract_single_image_ref(item, output_format)
+            if ref:
+                refs.append(ref)
+
+            content = item.get("content")
+            refs.extend(self._extract_image_refs_from_message_content(content, output_format))
+        return refs
+
+    def _extract_single_image_ref(self, image_obj: Any, output_format: str) -> Optional[str]:
+        if isinstance(image_obj, str):
+            return self._normalize_ref_string(image_obj, output_format)
+
         if not isinstance(image_obj, dict):
             return None
 
         nested = image_obj.get("image_url")
         if isinstance(nested, dict):
-            value = nested.get("url") or nested.get("uri")
+            value = nested.get("url") or nested.get("uri") or nested.get("image_url")
             if isinstance(value, str) and value.strip():
-                return value.strip()
+                return self._normalize_ref_string(value.strip(), output_format)
 
         if isinstance(nested, str) and nested.strip():
-            return nested.strip()
+            return self._normalize_ref_string(nested.strip(), output_format)
 
-        direct = image_obj.get("url") or image_obj.get("uri")
+        direct = image_obj.get("url") or image_obj.get("uri") or image_obj.get("href")
         if isinstance(direct, str) and direct.strip():
-            return direct.strip()
+            return self._normalize_ref_string(direct.strip(), output_format)
+
+        text = image_obj.get("text")
+        if isinstance(text, str) and text.strip():
+            refs = self._extract_refs_from_text(text)
+            if refs:
+                return refs[0]
+
+        b64 = image_obj.get("b64_json") or image_obj.get("b64") or image_obj.get("base64") or image_obj.get("image_base64")
+        if isinstance(b64, str) and self._looks_like_base64_payload(b64):
+            return self._to_data_url(b64, output_format)
 
         return None
+
+    def _normalize_ref_string(self, value: str, output_format: str) -> Optional[str]:
+        raw = value.strip()
+        if not raw:
+            return None
+        if raw.startswith("data:"):
+            return raw
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        if self._looks_like_base64_payload(raw):
+            return self._to_data_url(raw, output_format)
+        return None
+
+    def _extract_refs_from_text(self, value: str) -> list[str]:
+        refs: list[str] = []
+        if not value:
+            return refs
+
+        for match in re.findall(r"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+", value):
+            if isinstance(match, str) and match.strip():
+                refs.append(match.strip())
+
+        for match in re.findall(r"!\[[^\]]*\]\((https?://[^)]+)\)", value):
+            if isinstance(match, str) and match.strip():
+                refs.append(match.strip())
+
+        for match in re.findall(r"https?://[^\s)\]>\"]+", value):
+            if isinstance(match, str) and match.strip():
+                refs.append(match.strip())
+
+        return self._unique_refs(refs)
+
+    def _unique_refs(self, refs: list[str]) -> list[str]:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for ref in refs:
+            normalized = ref.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(normalized)
+        return deduped
+
+    def _looks_like_base64_payload(self, value: str) -> bool:
+        payload = re.sub(r"\s+", "", value.strip())
+        if len(payload) < 128:
+            return False
+        return re.fullmatch(r"[A-Za-z0-9+/=]+", payload) is not None
+
+    def _to_data_url(self, payload: str, output_format: str) -> str:
+        encoded = re.sub(r"\s+", "", payload.strip())
+        return f"data:{self._mime_from_output_format(output_format)};base64,{encoded}"
 
     async def _read_image_payload(
         self,
@@ -320,6 +441,65 @@ class OpenRouterAdapter(ProviderAdapter):
         if not left.isdigit() or not right.isdigit():
             return False
         return int(left) > 0 and int(right) > 0
+
+    def _should_retry_with_image_only(self, response: httpx.Response, payload: dict[str, Any]) -> bool:
+        if response.status_code not in {400, 404}:
+            return False
+
+        requested_modalities = payload.get("modalities")
+        if not isinstance(requested_modalities, list):
+            return False
+
+        normalized_modalities = {
+            str(modality).strip().lower()
+            for modality in requested_modalities
+            if isinstance(modality, str) and modality.strip()
+        }
+        if normalized_modalities != {"image", "text"}:
+            return False
+
+        message = self._extract_error_message(response).lower()
+        return "no endpoints found that support the requested output modalities" in message
+
+    def _summarize_empty_image_response(self, body: dict[str, Any]) -> str:
+        summary: list[str] = [f"top_keys={sorted(body.keys())}"]
+
+        choices = body.get("choices")
+        if isinstance(choices, list):
+            summary.append(f"choices={len(choices)}")
+            if choices and isinstance(choices[0], dict):
+                choice = choices[0]
+                finish_reason = choice.get("finish_reason") or choice.get("native_finish_reason")
+                if finish_reason:
+                    summary.append(f"finish_reason={finish_reason}")
+
+                message = choice.get("message")
+                if isinstance(message, dict):
+                    summary.append(f"message_keys={sorted(message.keys())}")
+                    images = message.get("images")
+                    if isinstance(images, list):
+                        summary.append(f"message_images={len(images)}")
+                    content = message.get("content")
+                    if isinstance(content, list):
+                        summary.append(f"content_parts={len(content)}")
+                    elif isinstance(content, str):
+                        content_excerpt = content.strip().replace("\n", " ")
+                        if content_excerpt:
+                            summary.append(f"content_excerpt={content_excerpt[:160]}")
+        elif choices is not None:
+            summary.append(f"choices_type={type(choices).__name__}")
+
+        top_images = body.get("images")
+        if isinstance(top_images, list):
+            summary.append(f"top_images={len(top_images)}")
+        top_data = body.get("data")
+        if isinstance(top_data, list):
+            summary.append(f"top_data={len(top_data)}")
+        top_output = body.get("output")
+        if isinstance(top_output, list):
+            summary.append(f"top_output={len(top_output)}")
+
+        return "; ".join(summary)[:1000]
 
     def _extract_error_message(self, response: httpx.Response) -> str:
         try:

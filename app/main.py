@@ -225,12 +225,21 @@ def generate_page(
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     gallery_folders = crud.list_gallery_folders(session)
+    active_generations = list(
+        session.scalars(
+            select(Generation)
+            .where(Generation.status.in_(["queued", "running"]))
+            .order_by(Generation.id.desc())
+            .limit(20)
+        ).all()
+    )
     return templates.TemplateResponse(
         "generate.html",
         {
             "request": request,
             "profiles": profiles,
             "gallery_folders": gallery_folders,
+            "active_generations": active_generations,
             "error": error or "",
         },
     )
@@ -342,6 +351,29 @@ def job_status(
             "assets": assets,
         },
     )
+
+
+@app.post("/jobs/{generation_id}/cancel", response_class=HTMLResponse)
+def job_cancel(
+    request: Request,
+    generation_id: int,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    generation = generation_service.cancel_generation(session, generation_id)
+    if not generation:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    assets = sorted(generation.assets, key=lambda item: item.id) if generation.assets else []
+    if is_htmx(request):
+        return templates.TemplateResponse(
+            "fragments/job_status.html",
+            {
+                "request": request,
+                "generation": generation,
+                "assets": assets,
+            },
+        )
+    return RedirectResponse(url=f"/jobs/{generation.id}", status_code=303)
 
 
 @app.get("/api/providers/{provider}/models", response_class=JSONResponse)

@@ -1,11 +1,26 @@
-<div class="job-box {% if generation.status == 'failed' %}job-failed{% elif generation.status == 'succeeded' %}job-success{% else %}job-running{% endif %}"
+<div id="job-{{ generation.id }}"
+     class="job-box {% if generation.status == 'failed' %}job-failed{% elif generation.status == 'succeeded' %}job-success{% elif generation.status == 'cancelled' %}job-cancelled{% else %}job-running{% endif %}"
      {% if generation.status in ['queued', 'running'] %}
      hx-get="/jobs/{{ generation.id }}"
      hx-trigger="every 1s"
      hx-swap="outerHTML"
      {% endif %}>
-  <h3>Job #{{ generation.id }}</h3>
-  <p>Status: <strong>{{ generation.status }}</strong></p>
+  <div class="job-head">
+    <h3>Job #{{ generation.id }}</h3>
+    {% if generation.status in ['queued', 'running'] %}
+      <form method="post"
+            action="/jobs/{{ generation.id }}/cancel"
+            hx-post="/jobs/{{ generation.id }}/cancel"
+            hx-target="closest .job-box"
+            hx-swap="outerHTML">
+        <button type="submit" class="button-secondary compact">Abbrechen</button>
+      </form>
+    {% endif %}
+  </div>
+  <p class="job-status-line">
+    {% if generation.status in ['queued', 'running'] %}<span class="spinner" aria-hidden="true"></span>{% endif %}
+    Status: <strong>{{ generation.status }}</strong>
+  </p>
   {% if generation.error %}
     <p class="error">{{ generation.error }}</p>
   {% endif %}
