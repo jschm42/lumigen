@@ -2,6 +2,7 @@
 {% block content %}
 <section class="card">
   <h2>Generate</h2>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
   {% if not profiles %}
     <p>No profiles yet. Create one in <a href="/profiles">Profiles</a>.</p>
   {% else %}
@@ -13,6 +14,47 @@
     <select id="profile_id" name="profile_id" required>
       {% for profile in profiles %}
         <option value="{{ profile.id }}">{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+      {% endfor %}
+    </select>
+
+    <h3 class="section-subhead">Override profile defaults (optional)</h3>
+    <div class="field-grid">
+      <div>
+        <label for="width">Width</label>
+        <input id="width" type="number" name="width" min="1" placeholder="from profile">
+      </div>
+      <div>
+        <label for="height">Height</label>
+        <input id="height" type="number" name="height" min="1" placeholder="from profile">
+      </div>
+      <div>
+        <label for="aspect_ratio">Ratio</label>
+        <input id="aspect_ratio" type="text" name="aspect_ratio" placeholder="e.g. 16:9 (from profile)">
+      </div>
+      <div>
+        <label for="n_images">Number of images</label>
+        <input id="n_images" type="number" min="1" max="8" name="n_images" placeholder="from profile">
+      </div>
+      <div>
+        <label for="seed">Seed</label>
+        <div class="inline-field">
+          <input id="seed" type="number" name="seed" placeholder="from profile">
+          <button type="button" class="button-secondary compact" data-random-seed-btn data-seed-target="seed">Random</button>
+        </div>
+      </div>
+    </div>
+
+    <label class="checkbox-row" for="override_negative_prompt">
+      <input id="override_negative_prompt" type="checkbox" name="override_negative_prompt">
+      Override negative prompt
+    </label>
+    <textarea name="negative_prompt" rows="3" placeholder="used only when checkbox is enabled"></textarea>
+
+    <label for="gallery_folder_id">Target folder in gallery</label>
+    <select id="gallery_folder_id" name="gallery_folder_id">
+      <option value="">Root</option>
+      {% for folder in gallery_folders %}
+        <option value="{{ folder.id }}">{{ folder.path }}</option>
       {% endfor %}
     </select>
 

@@ -12,6 +12,10 @@ from app.providers.base import ProviderAdapter, ProviderGenerationRequest, Provi
 class StubAdapter(ProviderAdapter):
     name = "stub"
 
+    async def list_models(self, settings: Settings) -> list[str]:
+        _ = settings
+        return ["stub-v1"]
+
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         n_images = max(1, request.n_images)
         width = request.width or 768

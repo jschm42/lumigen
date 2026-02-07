@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Asset, Generation, Profile, StorageTemplate
+from app.db.models import Asset, GalleryFolder, Generation, Profile, StorageTemplate
 
 
 def ensure_default_storage_template(session: Session, base_dir: Path, template: str) -> StorageTemplate:
@@ -83,5 +83,28 @@ def get_generation(session: Session, generation_id: int, with_assets: bool = Fal
 def get_asset(session: Session, asset_id: int, with_generation: bool = True) -> Optional[Asset]:
     stmt: Select[tuple[Asset]] = select(Asset).where(Asset.id == asset_id)
     if with_generation:
-        stmt = stmt.options(selectinload(Asset.generation))
+        stmt = stmt.options(selectinload(Asset.generation), selectinload(Asset.gallery_folder))
     return session.scalar(stmt)
+
+
+def list_gallery_folders(session: Session) -> list[GalleryFolder]:
+    stmt = select(GalleryFolder).order_by(GalleryFolder.path.asc())
+    return list(session.scalars(stmt).all())
+
+
+def get_gallery_folder(session: Session, folder_id: int) -> Optional[GalleryFolder]:
+    stmt = select(GalleryFolder).where(GalleryFolder.id == folder_id)
+    return session.scalar(stmt)
+
+
+def get_gallery_folder_by_path(session: Session, path: str) -> Optional[GalleryFolder]:
+    stmt = select(GalleryFolder).where(GalleryFolder.path == path)
+    return session.scalar(stmt)
+
+
+def create_gallery_folder(session: Session, path: str) -> GalleryFolder:
+    folder = GalleryFolder(path=path)
+    session.add(folder)
+    session.commit()
+    session.refresh(folder)
+    return folder

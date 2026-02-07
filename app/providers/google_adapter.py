@@ -13,6 +13,11 @@ from app.providers.base import (
 class GoogleAdapter(ProviderAdapter):
     name = "google"
 
+    async def list_models(self, settings: Settings) -> list[str]:
+        if not settings.google_api_key:
+            raise ProviderConfigError("Google adapter requires GOOGLE_API_KEY in .env.")
+        return ["imagen-3.0-generate-002"]
+
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         if not settings.google_api_key:
             raise ProviderConfigError("Google adapter requires GOOGLE_API_KEY in .env.")

@@ -25,6 +25,35 @@ from app.providers.base import (
 class OpenRouterAdapter(ProviderAdapter):
     name = "openrouter"
 
+    async def list_models(self, settings: Settings) -> list[str]:
+        if not settings.openrouter_api_key:
+            raise ProviderConfigError("OpenRouter adapter requires OPENROUTER_API_KEY in .env.")
+
+        url = settings.openrouter_base_url.rstrip("/") + "/models"
+        headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
+        timeout = httpx.Timeout(30.0, connect=10.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, headers=headers)
+
+        if response.status_code >= 400:
+            message = self._extract_error_message(response)
+            raise ProviderError(f"OpenRouter models request failed ({response.status_code}): {message}")
+
+        try:
+            body = response.json()
+        except Exception as exc:
+            raise ProviderError("OpenRouter returned a non-JSON models response.") from exc
+
+        models: list[str] = []
+        for item in body.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+            model_id = item.get("id") or item.get("name")
+            if isinstance(model_id, str) and model_id.strip():
+                models.append(model_id.strip())
+        return models
+
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         if not settings.openrouter_api_key:
             raise ProviderConfigError("OpenRouter adapter requires OPENROUTER_API_KEY in .env.")

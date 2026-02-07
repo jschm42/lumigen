@@ -13,6 +13,11 @@ from app.providers.base import (
 class BFLAdapter(ProviderAdapter):
     name = "bfl"
 
+    async def list_models(self, settings: Settings) -> list[str]:
+        if not settings.bfl_api_key:
+            raise ProviderConfigError("BFL adapter requires BFL_API_KEY in .env.")
+        return ["flux-pro-1.1", "flux-dev"]
+
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         if not settings.bfl_api_key:
             raise ProviderConfigError("BFL adapter requires BFL_API_KEY in .env.")

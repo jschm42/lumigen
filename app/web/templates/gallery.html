@@ -1,13 +1,58 @@
 {% extends "layout.html" %}
 {% block content %}
+{% set return_to = '/gallery?page=' ~ page_data.page ~ '&profile_name=' ~ (profile_name | urlencode) ~ '&provider=' ~ (provider | urlencode) ~ '&status=' ~ (status | urlencode) ~ '&q=' ~ (q | urlencode) ~ '&folder=' ~ (folder | urlencode) ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
 <section class="card">
-  <h2>Gallery</h2>
+  <div class="section-head">
+    <h2>Gallery</h2>
+    <form method="post" action="/gallery/folders" class="folder-create-form">
+      <select name="parent_folder_id">
+        <option value="">Root</option>
+        {% for item in filter_options.folders %}
+          <option value="{{ item.id }}">{{ item.path }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="folder_name" placeholder="new subfolder name" required>
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <button type="submit">Create folder</button>
+    </form>
+  </div>
+
+  {% if message %}<div class="flash">{{ message }}</div>{% endif %}
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
   <form method="get" action="/gallery" class="filters">
-    <input type="text" name="profile_name" value="{{ profile_name }}" placeholder="profile_name">
-    <input type="text" name="provider" value="{{ provider }}" placeholder="provider">
-    <input type="text" name="status" value="{{ status }}" placeholder="status">
+    <select name="profile_name">
+      <option value="">All profiles</option>
+      {% for item in filter_options.profile_names %}
+        <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+    <select name="provider">
+      <option value="">All providers</option>
+      {% for item in filter_options.providers %}
+        <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="">All statuses</option>
+      {% for item in filter_options.statuses %}
+        <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+    <select name="folder">
+      <option value="">All folders</option>
+      <option value="root" {% if folder == 'root' %}selected{% endif %}>Root only</option>
+      {% for item in filter_options.folders %}
+        <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
+      {% endfor %}
+    </select>
     <input type="text" name="q" value="{{ q }}" placeholder="prompt contains">
-    <button type="submit">Filter</button>
+    <select name="thumb_size">
+      <option value="sm" {% if thumb_size == 'sm' %}selected{% endif %}>Thumbs S</option>
+      <option value="md" {% if thumb_size == 'md' %}selected{% endif %}>Thumbs M</option>
+      <option value="lg" {% if thumb_size == 'lg' %}selected{% endif %}>Thumbs L</option>
+    </select>
+    <button type="submit">Apply</button>
   </form>
 
   {% include "fragments/gallery_grid.html" %}
@@ -16,10 +61,10 @@
     <span>Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</span>
     <div class="actions">
       {% if page_data.page > 1 %}
-        <a class="button-secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}">Prev</a>
+        <a class="button-secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}&folder={{ folder }}&thumb_size={{ thumb_size }}">Prev</a>
       {% endif %}
       {% if page_data.page < page_data.pages %}
-        <a class="button-secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}">Next</a>
+        <a class="button-secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}&folder={{ folder }}&thumb_size={{ thumb_size }}">Next</a>
       {% endif %}
     </div>
   </div>

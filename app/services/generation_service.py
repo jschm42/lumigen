@@ -35,11 +35,29 @@ class GenerationService:
         self.thumbnail_service = thumbnail_service
         self.sidecar_service = sidecar_service
 
-    def create_generation_from_profile(self, session: Session, profile: Profile, prompt_user: str) -> Generation:
+    def create_generation_from_profile(
+        self,
+        session: Session,
+        profile: Profile,
+        prompt_user: str,
+        overrides: Optional[dict[str, Any]] = None,
+    ) -> Generation:
         prompt_final = self._compose_prompt(profile.base_prompt, prompt_user)
         storage_template = profile.storage_template
         if storage_template is None:
             raise ValueError("Profile has no storage template")
+        effective_overrides = overrides or {}
+
+        negative_prompt = profile.negative_prompt
+        if "negative_prompt" in effective_overrides:
+            negative_prompt = effective_overrides.get("negative_prompt")
+
+        width = effective_overrides.get("width", profile.width)
+        height = effective_overrides.get("height", profile.height)
+        aspect_ratio = effective_overrides.get("aspect_ratio", profile.aspect_ratio)
+        n_images = int(effective_overrides.get("n_images", profile.n_images) or 1)
+        seed = effective_overrides.get("seed", profile.seed)
+        gallery_folder_id = effective_overrides.get("gallery_folder_id")
 
         profile_snapshot = {
             "id": profile.id,
@@ -68,16 +86,26 @@ class GenerationService:
         request_snapshot = {
             "prompt_user": prompt_user,
             "prompt_final": prompt_final,
-            "negative_prompt": profile.negative_prompt,
-            "width": profile.width,
-            "height": profile.height,
-            "aspect_ratio": profile.aspect_ratio,
-            "n_images": profile.n_images,
-            "seed": profile.seed,
+            "negative_prompt": negative_prompt,
+            "width": width,
+            "height": height,
+            "aspect_ratio": aspect_ratio,
+            "n_images": max(1, n_images),
+            "seed": seed,
             "output_format": profile.output_format,
             "provider": profile.provider,
             "model": profile.model,
             "params_json": profile.params_json or {},
+            "gallery_folder_id": gallery_folder_id,
+            "overrides": {
+                "negative_prompt": "negative_prompt" in effective_overrides,
+                "width": "width" in effective_overrides,
+                "height": "height" in effective_overrides,
+                "aspect_ratio": "aspect_ratio" in effective_overrides,
+                "n_images": "n_images" in effective_overrides,
+                "seed": "seed" in effective_overrides,
+                "gallery_folder_id": "gallery_folder_id" in effective_overrides,
+            },
         }
 
         generation = Generation(
@@ -176,6 +204,9 @@ class GenerationService:
                     session.add(
                         Asset(
                             generation_id=generation.id,
+                            gallery_folder_id=self._parse_optional_int(
+                                generation.request_snapshot_json.get("gallery_folder_id")
+                            ),
                             file_path=rel_path.as_posix(),
                             sidecar_path=sidecar_rel.as_posix(),
                             thumbnail_path=thumb_rel.as_posix(),
@@ -338,3 +369,11 @@ class GenerationService:
 
     def _truncate_error(self, value: str, max_len: int = 2048) -> str:
         return value[:max_len]
+
+    def _parse_optional_int(self, value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None

@@ -5,10 +5,11 @@ import json
 import os
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
+from urllib.parse import urlencode
 
 import uvicorn
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, Generation
+from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
@@ -27,6 +29,7 @@ from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
+from app.utils.slugify import slugify
 
 
 settings = get_settings()
@@ -90,15 +93,57 @@ def parse_params_json(raw: Optional[str]) -> dict[str, Any]:
     return parsed
 
 
+def normalize_thumb_size(value: Optional[str]) -> str:
+    candidate = (value or "md").strip().lower()
+    if candidate in {"sm", "md", "lg"}:
+        return candidate
+    return "md"
+
+
+def safe_gallery_return_to(value: Optional[str]) -> str:
+    candidate = (value or "/gallery").strip()
+    if candidate.startswith("/gallery"):
+        return candidate
+    return "/gallery"
+
+
+def gallery_redirect(
+    return_to: Optional[str] = "/gallery",
+    *,
+    message: Optional[str] = None,
+    error: Optional[str] = None,
+) -> RedirectResponse:
+    target = safe_gallery_return_to(return_to)
+    params: dict[str, str] = {}
+    if message:
+        params["message"] = message
+    if error:
+        params["error"] = error
+    if params:
+        sep = "&" if "?" in target else "?"
+        target = f"{target}{sep}{urlencode(params)}"
+    return RedirectResponse(url=target, status_code=303)
+
+
+def normalize_folder_segment(value: str) -> str:
+    return slugify(value, max_length=64, fallback="")
+
+
 @app.get("/", response_class=HTMLResponse)
-def generate_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+def generate_page(
+    request: Request,
+    error: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
     profiles = crud.list_profiles(session)
+    gallery_folders = crud.list_gallery_folders(session)
     return templates.TemplateResponse(
         "generate.html",
         {
             "request": request,
             "profiles": profiles,
-            "provider_names": provider_registry.provider_names(),
+            "gallery_folders": gallery_folders,
+            "error": error or "",
         },
     )
 
@@ -109,14 +154,71 @@ def generate_submit(
     background_tasks: BackgroundTasks,
     prompt_user: str = Form(...),
     profile_id: int = Form(...),
+    width: str = Form(default=""),
+    height: str = Form(default=""),
+    aspect_ratio: str = Form(default=""),
+    n_images: str = Form(default=""),
+    seed: str = Form(default=""),
+    override_negative_prompt: bool = Form(default=False),
+    negative_prompt: str = Form(default=""),
+    gallery_folder_id: str = Form(default=""),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profile = crud.get_profile(session, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    generation = generation_service.create_generation_from_profile(session, profile, prompt_user)
-    generation_service.enqueue(background_tasks, generation.id)
+    try:
+        overrides: dict[str, Any] = {}
+
+        width_value = parse_optional_int(width)
+        if width_value is not None:
+            if width_value <= 0:
+                raise ValueError("Width must be > 0")
+            overrides["width"] = width_value
+
+        height_value = parse_optional_int(height)
+        if height_value is not None:
+            if height_value <= 0:
+                raise ValueError("Height must be > 0")
+            overrides["height"] = height_value
+
+        aspect_ratio_value = aspect_ratio.strip()
+        if aspect_ratio_value:
+            overrides["aspect_ratio"] = aspect_ratio_value
+
+        n_images_value = parse_optional_int(n_images)
+        if n_images_value is not None:
+            overrides["n_images"] = max(1, min(8, n_images_value))
+
+        seed_value = parse_optional_int(seed)
+        if seed_value is not None:
+            overrides["seed"] = seed_value
+
+        if override_negative_prompt:
+            overrides["negative_prompt"] = negative_prompt.strip() or None
+
+        folder_id_value = parse_optional_int(gallery_folder_id)
+        if folder_id_value is not None:
+            folder = crud.get_gallery_folder(session, folder_id_value)
+            if not folder:
+                raise ValueError("Selected gallery folder does not exist")
+            overrides["gallery_folder_id"] = folder.id
+
+        generation = generation_service.create_generation_from_profile(
+            session,
+            profile,
+            prompt_user,
+            overrides=overrides or None,
+        )
+        generation_service.enqueue(background_tasks, generation.id)
+    except ValueError as exc:
+        if is_htmx(request):
+            return templates.TemplateResponse(
+                "fragments/flash.html",
+                {"request": request, "message": f"Error: {str(exc)}"},
+            )
+        return RedirectResponse(url=f"/?error={str(exc)}", status_code=303)
 
     if is_htmx(request):
         return templates.TemplateResponse(
@@ -153,6 +255,15 @@ def job_status(
     )
 
 
+@app.get("/api/providers/{provider}/models", response_class=JSONResponse)
+async def provider_models(provider: str) -> JSONResponse:
+    try:
+        models = await provider_registry.list_models(provider.strip())
+        return JSONResponse({"provider": provider, "models": models, "error": None})
+    except ProviderError as exc:
+        return JSONResponse({"provider": provider, "models": [], "error": str(exc)})
+
+
 @app.get("/profiles", response_class=HTMLResponse)
 def profiles_page(
     request: Request,
@@ -172,7 +283,6 @@ def profiles_page(
             "storage_templates": storage_templates,
             "form_profile": form_profile,
             "providers": provider_registry.provider_names(),
-            "form_action": f"/profiles/{form_profile.id}/update" if form_profile else "/profiles",
             "error": error,
         },
     )
@@ -286,8 +396,21 @@ def gallery_page(
     provider: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
+    folder: Optional[str] = Query(default=None),
+    thumb_size: Optional[str] = Query(default="md"),
+    message: Optional[str] = Query(default=None),
+    error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    selected_folder = (folder or "").strip()
+    root_only = selected_folder == "root"
+    folder_id: Optional[int] = None
+    if selected_folder and not root_only:
+        try:
+            folder_id = int(selected_folder)
+        except ValueError:
+            selected_folder = ""
+
     page_data = gallery_service.list_assets(
         session,
         page=page,
@@ -295,7 +418,10 @@ def gallery_page(
         provider=provider or None,
         status=status or None,
         prompt_query=q or None,
+        gallery_folder_id=folder_id,
+        root_only=root_only,
     )
+    options = gallery_service.list_filter_options(session)
     return templates.TemplateResponse(
         "gallery.html",
         {
@@ -305,8 +431,75 @@ def gallery_page(
             "provider": provider or "",
             "status": status or "",
             "q": q or "",
+            "folder": selected_folder,
+            "thumb_size": normalize_thumb_size(thumb_size),
+            "filter_options": options,
+            "message": message or "",
+            "error": error or "",
         },
     )
+
+
+@app.post("/gallery/folders")
+def create_gallery_folder(
+    parent_folder_id: str = Form(default=""),
+    folder_name: str = Form(...),
+    return_to: str = Form(default="/gallery"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    try:
+        parent_id = parse_optional_int(parent_folder_id)
+    except ValueError:
+        return gallery_redirect(return_to, error="Invalid parent folder")
+    parent_path = ""
+    if parent_id is not None:
+        parent = crud.get_gallery_folder(session, parent_id)
+        if not parent:
+            return gallery_redirect(return_to, error="Parent folder not found")
+        parent_path = parent.path
+
+    folder_segment = normalize_folder_segment(folder_name)
+    if not folder_segment:
+        return gallery_redirect(return_to, error="Folder name is empty or invalid")
+
+    path = f"{parent_path}/{folder_segment}" if parent_path else folder_segment
+    if crud.get_gallery_folder_by_path(session, path):
+        return gallery_redirect(return_to, error=f"Folder already exists: {path}")
+
+    try:
+        crud.create_gallery_folder(session, path=path)
+    except IntegrityError:
+        return gallery_redirect(return_to, error=f"Folder already exists: {path}")
+
+    return gallery_redirect(return_to, message=f"Folder created: {path}")
+
+
+@app.post("/assets/{asset_id}/move-folder")
+def move_asset_to_folder(
+    asset_id: int,
+    gallery_folder_id: str = Form(default=""),
+    return_to: str = Form(default="/gallery"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    asset = crud.get_asset(session, asset_id, with_generation=False)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    try:
+        folder_id = parse_optional_int(gallery_folder_id)
+    except ValueError:
+        return gallery_redirect(return_to, error="Invalid target folder")
+    if folder_id is None:
+        asset.gallery_folder_id = None
+    else:
+        folder = crud.get_gallery_folder(session, folder_id)
+        if not folder:
+            return gallery_redirect(return_to, error="Target folder not found")
+        asset.gallery_folder_id = folder.id
+
+    session.add(asset)
+    session.commit()
+    return gallery_redirect(return_to, message=f"Asset #{asset.id} moved")
 
 
 @app.get("/assets/{asset_id}", response_class=HTMLResponse)
@@ -316,7 +509,7 @@ def asset_detail(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     asset = session.scalar(
-        select(Asset).options(selectinload(Asset.generation)).where(Asset.id == asset_id)
+        select(Asset).options(selectinload(Asset.generation), selectinload(Asset.gallery_folder)).where(Asset.id == asset_id)
     )
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -401,6 +594,18 @@ def asset_file(asset_id: int, session: Session = Depends(get_session)) -> FileRe
     if not absolute_path.exists():
         raise HTTPException(status_code=404, detail="Asset file missing")
     return FileResponse(path=absolute_path, media_type=asset.mime)
+
+
+@app.get("/assets/{asset_id}/download")
+def asset_download(asset_id: int, session: Session = Depends(get_session)) -> FileResponse:
+    asset = session.scalar(select(Asset).options(selectinload(Asset.generation)).where(Asset.id == asset_id))
+    if not asset or not asset.generation:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    absolute_path = generation_service.asset_absolute_path(asset, which="file")
+    if not absolute_path.exists():
+        raise HTTPException(status_code=404, detail="Asset file missing")
+    filename = Path(asset.file_path).name
+    return FileResponse(path=absolute_path, media_type=asset.mime, filename=filename)
 
 
 @app.get("/assets/{asset_id}/thumb")

@@ -4,12 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title if title else "img-hub" }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body>
   <header class="topbar">
-    <h1>img-hub</h1>
+    <div class="brand">
+      <h1>img-hub</h1>
+      <small>Local image generation control room</small>
+    </div>
     <nav>
       <a href="/">Generate</a>
       <a href="/profiles">Profiles</a>
@@ -19,5 +25,87 @@
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    (function () {
+      function randomInt(min, max) {
+        var span = (max - min + 1);
+        return Math.floor(Math.random() * span) + min;
+      }
+
+      document.querySelectorAll("[data-random-seed-btn]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var targetId = button.getAttribute("data-seed-target");
+          if (!targetId) return;
+          var input = document.getElementById(targetId);
+          if (!input) return;
+          input.value = String(randomInt(1, 2147483646));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      });
+
+      async function loadModels(providerSelect) {
+        if (!providerSelect) return;
+        var provider = providerSelect.value;
+        var modelInputId = providerSelect.getAttribute("data-model-input-id");
+        var modelListId = providerSelect.getAttribute("data-model-list-id");
+        var modelStatusId = providerSelect.getAttribute("data-model-status-id");
+        var modelInput = modelInputId ? document.getElementById(modelInputId) : null;
+        var modelList = modelListId ? document.getElementById(modelListId) : null;
+        var modelStatus = modelStatusId ? document.getElementById(modelStatusId) : null;
+        if (!provider || !modelList) return;
+
+        if (modelStatus) {
+          modelStatus.textContent = "Loading models...";
+        }
+        modelList.innerHTML = "";
+
+        try {
+          var response = await fetch("/api/providers/" + encodeURIComponent(provider) + "/models");
+          var payload = await response.json();
+          var models = Array.isArray(payload.models) ? payload.models : [];
+
+          models.forEach(function (item) {
+            var option = document.createElement("option");
+            option.value = String(item);
+            modelList.appendChild(option);
+          });
+
+          if (modelInput && !modelInput.value.trim() && models.length > 0) {
+            modelInput.value = String(models[0]);
+          }
+
+          if (modelStatus) {
+            if (payload.error) {
+              modelStatus.textContent = "Model API error: " + payload.error;
+            } else {
+              modelStatus.textContent = models.length > 0
+                ? "Loaded " + models.length + " model(s) from API."
+                : "No models returned by API. Free input remains possible.";
+            }
+          }
+        } catch (error) {
+          if (modelStatus) {
+            modelStatus.textContent = "Failed to load models. Free input remains possible.";
+          }
+        }
+      }
+
+      document.querySelectorAll("[data-provider-select]").forEach(function (select) {
+        select.addEventListener("change", function () {
+          loadModels(select);
+        });
+        loadModels(select);
+      });
+
+      document.querySelectorAll("[data-load-models-btn]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var selectId = button.getAttribute("data-provider-select-id");
+          var providerSelect = selectId ? document.getElementById(selectId) : null;
+          loadModels(providerSelect);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

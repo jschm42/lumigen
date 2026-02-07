@@ -58,6 +58,15 @@ class Profile(Base, TimestampMixin):
     generations: Mapped[list["Generation"]] = relationship(back_populates="profile")
 
 
+class GalleryFolder(Base, TimestampMixin):
+    __tablename__ = "gallery_folders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    path: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
+
+    assets: Mapped[list["Asset"]] = relationship(back_populates="gallery_folder")
+
+
 class Generation(Base):
     __tablename__ = "generations"
 
@@ -99,6 +108,10 @@ class Asset(Base):
         ForeignKey("generations.id", ondelete="CASCADE"),
         nullable=False,
     )
+    gallery_folder_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("gallery_folders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     file_path: Mapped[str] = mapped_column(String(1024), unique=True, nullable=False)
     sidecar_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     thumbnail_path: Mapped[str] = mapped_column(String(1024), nullable=False)
@@ -109,3 +122,4 @@ class Asset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     generation: Mapped[Generation] = relationship(back_populates="assets")
+    gallery_folder: Mapped[Optional[GalleryFolder]] = relationship(back_populates="assets")

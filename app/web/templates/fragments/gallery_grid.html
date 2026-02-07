@@ -1,11 +1,26 @@
-<div class="thumb-grid">
+<div class="thumb-grid thumb-size-{{ thumb_size }}">
   {% for asset in page_data.items %}
   <article class="thumb-card">
     <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
-    <div>
+    <div class="thumb-meta">
       <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
       <small>{{ asset.generation.profile_name }} | {{ asset.generation.provider }}</small>
+      <small>Folder: {{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</small>
     </div>
+    <div class="actions">
+      <a class="button-secondary compact" href="/assets/{{ asset.id }}/download">Download</a>
+      <a class="button-secondary compact" href="/assets/{{ asset.id }}">Details</a>
+    </div>
+    <form method="post" action="/assets/{{ asset.id }}/move-folder" class="move-form">
+      <select name="gallery_folder_id">
+        <option value="">Root</option>
+        {% for folder_item in filter_options.folders %}
+          <option value="{{ folder_item.id }}" {% if asset.gallery_folder_id == folder_item.id %}selected{% endif %}>{{ folder_item.path }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <button type="submit">Move</button>
+    </form>
   </article>
   {% else %}
     <p>No assets found for current filters.</p>

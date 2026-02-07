@@ -58,3 +58,6 @@ class ProviderAdapter(ABC):
     @abstractmethod
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         raise NotImplementedError
+
+    async def list_models(self, settings: Settings) -> list[str]:
+        return []

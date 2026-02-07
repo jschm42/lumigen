@@ -21,6 +21,36 @@ from app.providers.base import (
 class OpenAIAdapter(ProviderAdapter):
     name = "openai"
 
+    async def list_models(self, settings: Settings) -> list[str]:
+        if not settings.openai_api_key:
+            raise ProviderConfigError("OpenAI adapter requires OPENAI_API_KEY in .env.")
+
+        url = settings.openai_base_url.rstrip("/") + "/models"
+        headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+        timeout = httpx.Timeout(30.0, connect=10.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, headers=headers)
+
+        if response.status_code >= 400:
+            message = self._extract_error_message(response)
+            raise ProviderError(f"OpenAI models request failed ({response.status_code}): {message}")
+
+        try:
+            body = response.json()
+        except Exception as exc:
+            raise ProviderError("OpenAI returned a non-JSON models response.") from exc
+
+        model_ids: list[str] = []
+        for item in body.get("data") or []:
+            if isinstance(item, dict):
+                model_id = item.get("id")
+                if isinstance(model_id, str) and model_id.strip():
+                    model_ids.append(model_id.strip())
+
+        image_like = [item for item in model_ids if "image" in item or item.startswith("dall-e")]
+        return image_like or model_ids
+
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         if not settings.openai_api_key:
             raise ProviderConfigError("OpenAI adapter requires OPENAI_API_KEY in .env.")

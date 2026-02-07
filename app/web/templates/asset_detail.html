@@ -7,6 +7,7 @@
 
   <div class="actions">
     <button type="button" onclick='navigator.clipboard.writeText({{ asset.generation.prompt_final | tojson }})'>Copy prompt_final</button>
+    <a class="button-secondary" href="/assets/{{ asset.id }}/download">Download</a>
     <button
       hx-post="/generations/{{ asset.generation.id }}/rerun"
       hx-target="#rerun-status"
@@ -30,6 +31,7 @@
     <dt>Status</dt><dd>{{ asset.generation.status }}</dd>
     <dt>Provider</dt><dd>{{ asset.generation.provider }}</dd>
     <dt>Model</dt><dd>{{ asset.generation.model }}</dd>
+    <dt>Gallery folder</dt><dd>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</dd>
     <dt>Size</dt><dd>{{ asset.width }}x{{ asset.height }}</dd>
     <dt>MIME</dt><dd>{{ asset.mime }}</dd>
     <dt>File path (relative)</dt><dd>{{ asset.file_path }}</dd>

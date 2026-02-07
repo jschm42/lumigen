@@ -120,3 +120,9 @@ class ProviderRegistry:
         adapter = self.get(provider)
         executor = self._executor_for(provider)
         return await executor.run(lambda: adapter.generate(request, self._settings))
+
+    async def list_models(self, provider: str) -> list[str]:
+        adapter = self.get(provider)
+        models = await adapter.list_models(self._settings)
+        normalized = [str(item).strip() for item in models if str(item).strip()]
+        return sorted(set(normalized))

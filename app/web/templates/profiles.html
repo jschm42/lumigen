@@ -1,15 +1,42 @@
 {% extends "layout.html" %}
 {% block content %}
-<section class="grid-two">
-  <div class="card">
-    <h2>{{ "Edit Profile" if form_profile else "Create Profile" }}</h2>
-    {% if error %}<div class="error">{{ error }}</div>{% endif %}
-    {% include "profile_form.html" %}
-  </div>
-
-  <div class="card">
+<section class="card">
+  <div class="section-head">
     <h2>Profiles</h2>
-    {% include "fragments/profiles_table.html" %}
+    <button type="button" class="button-secondary" onclick="document.getElementById('create-profile-dialog').showModal()">New profile</button>
   </div>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% include "fragments/profiles_table.html" %}
 </section>
+
+<dialog id="create-profile-dialog" class="modal">
+  <div class="modal-head">
+    <h3>Create profile</h3>
+    <button type="button" class="button-secondary compact" onclick="document.getElementById('create-profile-dialog').close()">Close</button>
+  </div>
+  {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url=none %}
+    {% include "profile_form.html" %}
+  {% endwith %}
+</dialog>
+
+{% set edit_profile = form_profile %}
+{% if edit_profile %}
+<dialog id="edit-profile-dialog" class="modal">
+  <div class="modal-head">
+    <h3>Edit profile: {{ edit_profile.name }}</h3>
+    <button type="button" class="button-secondary compact" onclick="window.location='/profiles'">Close</button>
+  </div>
+  {% with form_profile=edit_profile, form_action="/profiles/" ~ edit_profile.id ~ "/update", form_dom_id="edit-profile-form", submit_label="Update", cancel_url="/profiles" %}
+    {% include "profile_form.html" %}
+  {% endwith %}
+</dialog>
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    var dialog = document.getElementById("edit-profile-dialog");
+    if (dialog) {
+      dialog.showModal();
+    }
+  });
+</script>
+{% endif %}
 {% endblock %}
