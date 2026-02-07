@@ -1,0 +1,340 @@
+from __future__ import annotations
+
+import copy
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import BackgroundTasks
+from sqlalchemy.orm import Session
+
+from app.config import Settings
+from app.db import crud
+from app.db.engine import SessionLocal
+from app.db.models import Asset, Generation, Profile
+from app.providers.base import ProviderError, ProviderGenerationRequest
+from app.providers.registry import ProviderRegistry
+from app.services.sidecar_service import SidecarService
+from app.services.storage_service import StorageService
+from app.services.thumbnail_service import ThumbnailService
+from app.utils.paths import ensure_dir
+
+
+class GenerationService:
+    def __init__(
+        self,
+        settings: Settings,
+        registry: ProviderRegistry,
+        storage_service: StorageService,
+        thumbnail_service: ThumbnailService,
+        sidecar_service: SidecarService,
+    ) -> None:
+        self.settings = settings
+        self.registry = registry
+        self.storage_service = storage_service
+        self.thumbnail_service = thumbnail_service
+        self.sidecar_service = sidecar_service
+
+    def create_generation_from_profile(self, session: Session, profile: Profile, prompt_user: str) -> Generation:
+        prompt_final = self._compose_prompt(profile.base_prompt, prompt_user)
+        storage_template = profile.storage_template
+        if storage_template is None:
+            raise ValueError("Profile has no storage template")
+
+        profile_snapshot = {
+            "id": profile.id,
+            "name": profile.name,
+            "provider": profile.provider,
+            "model": profile.model,
+            "base_prompt": profile.base_prompt,
+            "negative_prompt": profile.negative_prompt,
+            "width": profile.width,
+            "height": profile.height,
+            "aspect_ratio": profile.aspect_ratio,
+            "n_images": profile.n_images,
+            "seed": profile.seed,
+            "output_format": profile.output_format,
+            "params_json": profile.params_json or {},
+            "storage_template_id": profile.storage_template_id,
+        }
+
+        storage_snapshot = {
+            "id": storage_template.id,
+            "name": storage_template.name,
+            "base_dir": Path(storage_template.base_dir).resolve().as_posix(),
+            "template": storage_template.template,
+        }
+
+        request_snapshot = {
+            "prompt_user": prompt_user,
+            "prompt_final": prompt_final,
+            "negative_prompt": profile.negative_prompt,
+            "width": profile.width,
+            "height": profile.height,
+            "aspect_ratio": profile.aspect_ratio,
+            "n_images": profile.n_images,
+            "seed": profile.seed,
+            "output_format": profile.output_format,
+            "provider": profile.provider,
+            "model": profile.model,
+            "params_json": profile.params_json or {},
+        }
+
+        generation = Generation(
+            profile_id=profile.id,
+            profile_name=profile.name,
+            prompt_user=prompt_user,
+            prompt_final=prompt_final,
+            provider=profile.provider,
+            model=profile.model,
+            status="queued",
+            error=None,
+            profile_snapshot_json=profile_snapshot,
+            storage_template_snapshot_json=storage_snapshot,
+            request_snapshot_json=request_snapshot,
+            failure_sidecar_path=None,
+        )
+        return crud.create_generation(session, generation)
+
+    def create_generation_from_snapshot(self, session: Session, source: Generation) -> Generation:
+        profile_snapshot = copy.deepcopy(source.profile_snapshot_json or {})
+        storage_snapshot = copy.deepcopy(source.storage_template_snapshot_json or {})
+        request_snapshot = copy.deepcopy(source.request_snapshot_json or {})
+
+        generation = Generation(
+            profile_id=source.profile_id,
+            profile_name=source.profile_name,
+            prompt_user=source.prompt_user,
+            prompt_final=source.prompt_final,
+            provider=source.provider,
+            model=source.model,
+            status="queued",
+            error=None,
+            profile_snapshot_json=profile_snapshot,
+            storage_template_snapshot_json=storage_snapshot,
+            request_snapshot_json=request_snapshot,
+            failure_sidecar_path=None,
+        )
+        return crud.create_generation(session, generation)
+
+    def enqueue(self, background_tasks: BackgroundTasks, generation_id: int) -> None:
+        background_tasks.add_task(self.run_generation_job, generation_id)
+
+    async def run_generation_job(self, generation_id: int) -> None:
+        with SessionLocal() as session:
+            generation = crud.get_generation(session, generation_id)
+            if not generation:
+                return
+
+            generation.status = "running"
+            generation.error = None
+            session.commit()
+
+            created_files: list[str] = []
+            base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+            ensure_dir(base_dir)
+
+            try:
+                provider_request = self._provider_request_from_generation(generation)
+                result = await self.registry.generate(generation.provider, provider_request)
+                if not result.images:
+                    raise ProviderError("Provider returned zero images")
+
+                storage_template = str(generation.storage_template_snapshot_json.get("template", self.settings.default_storage_template))
+                output_format = str(generation.request_snapshot_json.get("output_format", "png")).lower().lstrip(".")
+
+                for idx, image in enumerate(result.images, start=1):
+                    rel_path = self.storage_service.render_relative_path(
+                        template=storage_template,
+                        profile_name=generation.profile_name,
+                        prompt_user=generation.prompt_user,
+                        generation_id=generation.id,
+                        idx=idx,
+                        ext=output_format,
+                    )
+                    abs_path = self.storage_service.resolve_managed_path(base_dir, rel_path)
+                    self.storage_service.write_bytes_atomic(abs_path, image.data)
+                    created_files.append(rel_path.as_posix())
+
+                    thumb_rel = self.thumbnail_service.create_thumbnail(base_dir, rel_path)
+                    created_files.append(thumb_rel.as_posix())
+
+                    sidecar_payload = self._build_asset_sidecar_payload(
+                        generation=generation,
+                        asset_index=idx,
+                        image_rel=rel_path.as_posix(),
+                        thumbnail_rel=thumb_rel.as_posix(),
+                        provider_meta=image.meta,
+                        raw_meta=result.raw_meta,
+                        image_width=image.width,
+                        image_height=image.height,
+                        image_mime=image.mime,
+                    )
+                    sidecar_rel = self.sidecar_service.write_asset_sidecar(base_dir, rel_path, sidecar_payload)
+                    created_files.append(sidecar_rel.as_posix())
+
+                    session.add(
+                        Asset(
+                            generation_id=generation.id,
+                            file_path=rel_path.as_posix(),
+                            sidecar_path=sidecar_rel.as_posix(),
+                            thumbnail_path=thumb_rel.as_posix(),
+                            width=image.width,
+                            height=image.height,
+                            mime=image.mime,
+                            meta_json={"provider_meta": image.meta, "raw_meta": result.raw_meta},
+                        )
+                    )
+
+                generation.status = "succeeded"
+                generation.error = None
+                generation.failure_sidecar_path = None
+                generation.finished_at = datetime.utcnow()
+                session.commit()
+            except Exception as exc:
+                session.rollback()
+                generation = crud.get_generation(session, generation_id)
+                if not generation:
+                    return
+
+                for rel in reversed(created_files):
+                    try:
+                        self.storage_service.delete_relative_file(base_dir, rel)
+                    except Exception:
+                        pass
+
+                generation.status = "failed"
+                generation.error = self._truncate_error(str(exc))
+                generation.finished_at = datetime.utcnow()
+
+                failure_payload = self._build_failure_sidecar_payload(generation, exc)
+                try:
+                    failure_rel = self.sidecar_service.write_failure_sidecar(
+                        base_dir,
+                        generation.profile_name,
+                        generation.id,
+                        failure_payload,
+                    )
+                    generation.failure_sidecar_path = failure_rel.as_posix()
+                except Exception as sidecar_exc:
+                    generation.failure_sidecar_path = None
+                    generation.error = self._truncate_error(
+                        f"{generation.error}; failure-sidecar-write={sidecar_exc}"
+                    )
+
+                session.commit()
+
+    def delete_asset(self, session: Session, asset_id: int) -> bool:
+        asset = crud.get_asset(session, asset_id, with_generation=True)
+        if not asset or not asset.generation:
+            return False
+
+        base_dir = self._base_dir_from_snapshot(asset.generation.storage_template_snapshot_json)
+        for rel in (asset.file_path, asset.thumbnail_path, asset.sidecar_path):
+            self.storage_service.delete_relative_file(base_dir, rel)
+
+        session.delete(asset)
+        session.commit()
+        return True
+
+    def delete_generation(self, session: Session, generation_id: int) -> bool:
+        generation = crud.get_generation(session, generation_id, with_assets=True)
+        if not generation:
+            return False
+
+        base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+        for asset in list(generation.assets):
+            for rel in (asset.file_path, asset.thumbnail_path, asset.sidecar_path):
+                self.storage_service.delete_relative_file(base_dir, rel)
+
+        if generation.failure_sidecar_path:
+            self.storage_service.delete_relative_file(base_dir, generation.failure_sidecar_path)
+
+        session.delete(generation)
+        session.commit()
+        return True
+
+    def asset_absolute_path(self, asset: Asset, which: str = "file") -> Path:
+        generation = asset.generation
+        if not generation:
+            raise ValueError("Asset has no associated generation")
+        base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+        rel = asset.file_path if which == "file" else asset.thumbnail_path
+        return self.storage_service.resolve_managed_path(base_dir, rel)
+
+    def _provider_request_from_generation(self, generation: Generation) -> ProviderGenerationRequest:
+        request_data = generation.request_snapshot_json or {}
+        return ProviderGenerationRequest(
+            prompt=generation.prompt_final,
+            negative_prompt=request_data.get("negative_prompt"),
+            width=request_data.get("width"),
+            height=request_data.get("height"),
+            aspect_ratio=request_data.get("aspect_ratio"),
+            n_images=int(request_data.get("n_images") or 1),
+            seed=request_data.get("seed"),
+            output_format=str(request_data.get("output_format") or "png"),
+            model=str(request_data.get("model") or generation.model),
+            params=request_data.get("params_json") or {},
+        )
+
+    def _base_dir_from_snapshot(self, snapshot: Optional[dict[str, Any]]) -> Path:
+        candidate = (snapshot or {}).get("base_dir")
+        if candidate:
+            return Path(str(candidate)).resolve()
+        return self.settings.default_base_dir.resolve()
+
+    def _build_asset_sidecar_payload(
+        self,
+        *,
+        generation: Generation,
+        asset_index: int,
+        image_rel: str,
+        thumbnail_rel: str,
+        provider_meta: dict[str, Any],
+        raw_meta: dict[str, Any],
+        image_width: int,
+        image_height: int,
+        image_mime: str,
+    ) -> dict[str, Any]:
+        return {
+            "type": "asset_success",
+            "generated_at": datetime.utcnow().isoformat(),
+            "generation_id": generation.id,
+            "asset_index": asset_index,
+            "image_path": image_rel,
+            "thumbnail_path": thumbnail_rel,
+            "image": {
+                "width": image_width,
+                "height": image_height,
+                "mime": image_mime,
+            },
+            "provider_meta": provider_meta,
+            "raw_meta": raw_meta,
+            "profile_snapshot_json": generation.profile_snapshot_json,
+            "storage_template_snapshot_json": generation.storage_template_snapshot_json,
+            "request_snapshot_json": generation.request_snapshot_json,
+        }
+
+    def _build_failure_sidecar_payload(self, generation: Generation, exc: Exception) -> dict[str, Any]:
+        return {
+            "type": "generation_failure",
+            "failed_at": datetime.utcnow().isoformat(),
+            "generation_id": generation.id,
+            "profile_name": generation.profile_name,
+            "provider": generation.provider,
+            "model": generation.model,
+            "error": self._truncate_error(str(exc)),
+            "profile_snapshot_json": generation.profile_snapshot_json,
+            "storage_template_snapshot_json": generation.storage_template_snapshot_json,
+            "request_snapshot_json": generation.request_snapshot_json,
+        }
+
+    def _compose_prompt(self, base_prompt: str, prompt_user: str) -> str:
+        base = (base_prompt or "").strip()
+        user = (prompt_user or "").strip()
+        if base and user:
+            return f"{base}\n{user}"
+        return base or user
+
+    def _truncate_error(self, value: str, max_len: int = 2048) -> str:
+        return value[:max_len]

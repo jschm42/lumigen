@@ -1,0 +1,31 @@
+<div class="job-box {% if generation.status == 'failed' %}job-failed{% elif generation.status == 'succeeded' %}job-success{% else %}job-running{% endif %}"
+     {% if generation.status in ['queued', 'running'] %}
+     hx-get="/jobs/{{ generation.id }}"
+     hx-trigger="every 1s"
+     hx-swap="outerHTML"
+     {% endif %}>
+  <h3>Job #{{ generation.id }}</h3>
+  <p>Status: <strong>{{ generation.status }}</strong></p>
+  {% if generation.error %}
+    <p class="error">{{ generation.error }}</p>
+  {% endif %}
+  {% if generation.failure_sidecar_path %}
+    <p><small>Failure sidecar: {{ generation.failure_sidecar_path }}</small></p>
+  {% endif %}
+
+  {% if generation.status == 'succeeded' and assets %}
+    <div class="thumb-grid">
+      {% for asset in assets %}
+      <article class="thumb-card">
+        <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
+        <div>
+          <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
+          <small>{{ asset.width }}x{{ asset.height }}</small>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  {% elif generation.status == 'succeeded' %}
+    <p>Job completed but produced no assets.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="grid-two">
+  <div class="card">
+    <h2>{{ "Edit Profile" if form_profile else "Create Profile" }}</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    {% include "profile_form.html" %}
+  </div>
+
+  <div class="card">
+    <h2>Profiles</h2>
+    {% include "fragments/profiles_table.html" %}
+  </div>
+</section>
+{% endblock %}

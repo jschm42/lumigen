@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="card">
+  <h2>Generate</h2>
+  {% if not profiles %}
+    <p>No profiles yet. Create one in <a href="/profiles">Profiles</a>.</p>
+  {% else %}
+  <form hx-post="/generate" hx-target="#job-status" hx-swap="innerHTML" method="post" class="stack">
+    <label for="prompt_user">Prompt</label>
+    <textarea id="prompt_user" name="prompt_user" rows="5" required></textarea>
+
+    <label for="profile_id">Profile</label>
+    <select id="profile_id" name="profile_id" required>
+      {% for profile in profiles %}
+        <option value="{{ profile.id }}">{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">Generate</button>
+  </form>
+  {% endif %}
+</section>
+
+<section id="job-status" class="card"></section>
+{% endblock %}

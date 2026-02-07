@@ -1,0 +1,59 @@
+{% set p = form_profile %}
+<form action="{{ form_action }}" method="post" class="stack">
+  <label>Name</label>
+  <input type="text" name="name" value="{{ p.name if p else '' }}" required>
+
+  <label>Provider</label>
+  <select name="provider" required>
+    {% for provider_name in providers %}
+      <option value="{{ provider_name }}" {% if p and p.provider == provider_name %}selected{% endif %}>{{ provider_name }}</option>
+    {% endfor %}
+  </select>
+
+  <label>Model</label>
+  <input type="text" name="model" value="{{ p.model if p else 'stub-v1' }}" required>
+
+  <label>Base prompt</label>
+  <textarea name="base_prompt" rows="3" required>{{ p.base_prompt if p else '' }}</textarea>
+
+  <label>Negative prompt</label>
+  <textarea name="negative_prompt" rows="2">{{ p.negative_prompt if p and p.negative_prompt else '' }}</textarea>
+
+  <label>Width</label>
+  <input type="number" name="width" value="{{ p.width if p and p.width else '' }}">
+
+  <label>Height</label>
+  <input type="number" name="height" value="{{ p.height if p and p.height else '' }}">
+
+  <label>Aspect ratio</label>
+  <input type="text" name="aspect_ratio" value="{{ p.aspect_ratio if p and p.aspect_ratio else '' }}" placeholder="1:1">
+
+  <label>Images per generation</label>
+  <input type="number" min="1" max="8" name="n_images" value="{{ p.n_images if p else 1 }}" required>
+
+  <label>Seed</label>
+  <input type="number" name="seed" value="{{ p.seed if p and p.seed is not none else '' }}">
+
+  <label>Output format</label>
+  <select name="output_format" required>
+    {% set selected_format = p.output_format if p else 'png' %}
+    <option value="png" {% if selected_format == 'png' %}selected{% endif %}>png</option>
+    <option value="jpg" {% if selected_format == 'jpg' %}selected{% endif %}>jpg</option>
+    <option value="webp" {% if selected_format == 'webp' %}selected{% endif %}>webp</option>
+  </select>
+
+  <label>params_json</label>
+  <textarea name="params_json" rows="4">{{ p.params_json | tojson if p else '{}' }}</textarea>
+
+  <label>Storage template</label>
+  <select name="storage_template_id" required>
+    {% for st in storage_templates %}
+    <option value="{{ st.id }}" {% if p and p.storage_template_id == st.id %}selected{% endif %}>{{ st.name }} :: {{ st.base_dir }}</option>
+    {% endfor %}
+  </select>
+
+  <div class="actions">
+    <button type="submit">{{ "Update" if p else "Create" }}</button>
+    {% if p %}<a class="button-secondary" href="/profiles">Cancel</a>{% endif %}
+  </div>
+</form>

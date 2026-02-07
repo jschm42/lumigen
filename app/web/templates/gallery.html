@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="card">
+  <h2>Gallery</h2>
+  <form method="get" action="/gallery" class="filters">
+    <input type="text" name="profile_name" value="{{ profile_name }}" placeholder="profile_name">
+    <input type="text" name="provider" value="{{ provider }}" placeholder="provider">
+    <input type="text" name="status" value="{{ status }}" placeholder="status">
+    <input type="text" name="q" value="{{ q }}" placeholder="prompt contains">
+    <button type="submit">Filter</button>
+  </form>
+
+  {% include "fragments/gallery_grid.html" %}
+
+  <div class="pagination">
+    <span>Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</span>
+    <div class="actions">
+      {% if page_data.page > 1 %}
+        <a class="button-secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}">Prev</a>
+      {% endif %}
+      {% if page_data.page < page_data.pages %}
+        <a class="button-secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}">Next</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

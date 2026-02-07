@@ -1,0 +1,13 @@
+<div class="thumb-grid">
+  {% for asset in page_data.items %}
+  <article class="thumb-card">
+    <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
+    <div>
+      <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
+      <small>{{ asset.generation.profile_name }} | {{ asset.generation.provider }}</small>
+    </div>
+  </article>
+  {% else %}
+    <p>No assets found for current filters.</p>
+  {% endfor %}
+</div>

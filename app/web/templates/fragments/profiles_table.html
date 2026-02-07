@@ -1,0 +1,33 @@
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Provider</th>
+      <th>Model</th>
+      <th>Format</th>
+      <th>Storage</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for profile in profiles %}
+    <tr>
+      <td>{{ profile.name }}</td>
+      <td>{{ profile.provider }}</td>
+      <td>{{ profile.model }}</td>
+      <td>{{ profile.output_format }}</td>
+      <td>{{ profile.storage_template.name if profile.storage_template else profile.storage_template_id }}</td>
+      <td>
+        <a class="button-secondary" href="/profiles?edit_id={{ profile.id }}">Edit</a>
+        <form action="/profiles/{{ profile.id }}/delete" method="post" onsubmit="return confirm('Delete this profile?');" style="display:inline-block">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr>
+      <td colspan="6">No profiles yet.</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
