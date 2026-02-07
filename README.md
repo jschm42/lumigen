@@ -1,6 +1,6 @@
 # img-hub
 
-Local-first FastAPI app for image generation with provider adapters (stub, OpenAI skeleton, OpenRouter skeleton) and SQLite-first storage.
+Local-first FastAPI app for image generation with provider adapters (stub, OpenAI, OpenRouter skeleton) and SQLite-first storage.
 
 ## Features
 
@@ -54,5 +54,5 @@ If port `8000` is already in use on your machine (common on Windows with other l
 
 - Create at least one profile in **Profiles** before generating.
 - Use provider `stub` for fully local end-to-end generation.
-- OpenAI/OpenRouter adapters are skeletons and intentionally return clear errors until implemented/configured.
+- OpenAI adapter works with `OPENAI_API_KEY`; OpenRouter is kept as a skeleton and returns clear errors until implemented.
 - Generated files are managed via DB-indexed relative paths only; no arbitrary path browsing is exposed.
