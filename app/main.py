@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlencode
 
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
-from app.db.models import Asset, Generation
+from app.db.models import Asset, GalleryFolder, Generation
 from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
 from app.services.gallery_service import GalleryService
@@ -46,6 +46,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             base_dir=settings.default_base_dir,
             template=settings.default_storage_template,
         )
+        for folder in crud.list_gallery_folders(session):
+            normalized = normalize_folder_path(folder.path)
+            if not normalized:
+                continue
+            folder_abs_path = storage_service.resolve_managed_path(settings.default_base_dir, Path(normalized))
+            ensure_dir(folder_abs_path)
     yield
 
 
@@ -129,6 +135,88 @@ def normalize_folder_segment(value: str) -> str:
     return slugify(value, max_length=64, fallback="")
 
 
+def normalize_folder_path(value: str) -> str:
+    raw = (value or "").strip().replace("\\", "/").strip("/")
+    if not raw:
+        return ""
+    posix_path = PurePosixPath(raw)
+    if posix_path.is_absolute() or ".." in posix_path.parts:
+        return ""
+    parts = [normalize_folder_segment(part) for part in posix_path.parts]
+    parts = [part for part in parts if part]
+    return PurePosixPath(*parts).as_posix() if parts else ""
+
+
+def build_folder_navigation(
+    folders: list[GalleryFolder],
+    selected_folder: Optional[GalleryFolder],
+) -> dict[str, Any]:
+    normalized_rows: list[tuple[GalleryFolder, str]] = []
+    by_path: dict[str, GalleryFolder] = {}
+    for folder in folders:
+        normalized = normalize_folder_path(folder.path)
+        if not normalized:
+            continue
+        normalized_rows.append((folder, normalized))
+        by_path[normalized] = folder
+
+    selected_path = ""
+    if selected_folder:
+        selected_path = normalize_folder_path(selected_folder.path)
+    selected_depth = selected_path.count("/") + 1 if selected_path else 0
+    selected_prefix = f"{selected_path}/" if selected_path else ""
+
+    children: list[dict[str, Any]] = []
+    for folder, path in normalized_rows:
+        depth = path.count("/") + 1
+        if selected_path:
+            if not path.startswith(selected_prefix):
+                continue
+            if depth != selected_depth + 1:
+                continue
+        else:
+            if depth != 1:
+                continue
+        children.append(
+            {
+                "id": folder.id,
+                "name": path.rsplit("/", maxsplit=1)[-1],
+                "path": path,
+            }
+        )
+    children.sort(key=lambda item: item["path"])
+
+    breadcrumbs: list[dict[str, Any]] = [{"label": "Root", "token": "root"}]
+    if selected_path:
+        cumulative: list[str] = []
+        for segment in selected_path.split("/"):
+            cumulative.append(segment)
+            segment_path = "/".join(cumulative)
+            folder = by_path.get(segment_path)
+            if not folder:
+                continue
+            breadcrumbs.append({"label": segment, "token": str(folder.id)})
+
+    parent_token: Optional[str] = None
+    if selected_path:
+        parent_path = selected_path.rsplit("/", maxsplit=1)[0] if "/" in selected_path else ""
+        if parent_path:
+            parent = by_path.get(parent_path)
+            if parent:
+                parent_token = str(parent.id)
+        else:
+            parent_token = "root"
+
+    return {
+        "current_token": str(selected_folder.id) if selected_folder else "root",
+        "current_label": selected_path or "Root",
+        "current_folder_id": selected_folder.id if selected_folder else None,
+        "breadcrumbs": breadcrumbs,
+        "parent_token": parent_token,
+        "children": children,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def generate_page(
     request: Request,
@@ -204,6 +292,7 @@ def generate_submit(
             if not folder:
                 raise ValueError("Selected gallery folder does not exist")
             overrides["gallery_folder_id"] = folder.id
+            overrides["gallery_folder_path"] = folder.path
 
         generation = generation_service.create_generation_from_profile(
             session,
@@ -402,14 +491,21 @@ def gallery_page(
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    selected_folder = (folder or "").strip()
-    root_only = selected_folder == "root"
+    selected_folder_raw = (folder or "").strip()
+    if selected_folder_raw.lower() in {"", "root"}:
+        selected_folder_raw = "root"
+
+    selected_folder: Optional[GalleryFolder] = None
     folder_id: Optional[int] = None
-    if selected_folder and not root_only:
+    if selected_folder_raw != "root":
         try:
-            folder_id = int(selected_folder)
+            folder_id = int(selected_folder_raw)
         except ValueError:
-            selected_folder = ""
+            folder_id = None
+    if folder_id is not None:
+        selected_folder = crud.get_gallery_folder(session, folder_id)
+        if not selected_folder:
+            folder_id = None
 
     page_data = gallery_service.list_assets(
         session,
@@ -419,9 +515,10 @@ def gallery_page(
         status=status or None,
         prompt_query=q or None,
         gallery_folder_id=folder_id,
-        root_only=root_only,
+        root_only=folder_id is None,
     )
     options = gallery_service.list_filter_options(session)
+    folder_nav = build_folder_navigation(options.folders, selected_folder)
     return templates.TemplateResponse(
         "gallery.html",
         {
@@ -431,9 +528,10 @@ def gallery_page(
             "provider": provider or "",
             "status": status or "",
             "q": q or "",
-            "folder": selected_folder,
+            "folder": folder_nav["current_token"],
             "thumb_size": normalize_thumb_size(thumb_size),
             "filter_options": options,
+            "folder_nav": folder_nav,
             "message": message or "",
             "error": error or "",
         },
@@ -463,8 +561,17 @@ def create_gallery_folder(
         return gallery_redirect(return_to, error="Folder name is empty or invalid")
 
     path = f"{parent_path}/{folder_segment}" if parent_path else folder_segment
+    path = normalize_folder_path(path)
+    if not path:
+        return gallery_redirect(return_to, error="Folder path is empty or invalid")
     if crud.get_gallery_folder_by_path(session, path):
         return gallery_redirect(return_to, error=f"Folder already exists: {path}")
+
+    try:
+        folder_abs_path = storage_service.resolve_managed_path(settings.default_base_dir, Path(path))
+        ensure_dir(folder_abs_path)
+    except ValueError:
+        return gallery_redirect(return_to, error="Folder path escapes gallery root")
 
     try:
         crud.create_gallery_folder(session, path=path)
@@ -481,14 +588,16 @@ def move_asset_to_folder(
     return_to: str = Form(default="/gallery"),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
-    asset = crud.get_asset(session, asset_id, with_generation=False)
-    if not asset:
+    asset = crud.get_asset(session, asset_id, with_generation=True)
+    if not asset or not asset.generation:
         raise HTTPException(status_code=404, detail="Asset not found")
 
     try:
         folder_id = parse_optional_int(gallery_folder_id)
     except ValueError:
         return gallery_redirect(return_to, error="Invalid target folder")
+
+    target_folder_path = ""
     if folder_id is None:
         asset.gallery_folder_id = None
     else:
@@ -496,10 +605,63 @@ def move_asset_to_folder(
         if not folder:
             return gallery_redirect(return_to, error="Target folder not found")
         asset.gallery_folder_id = folder.id
+        target_folder_path = folder.path
 
-    session.add(asset)
-    session.commit()
-    return gallery_redirect(return_to, message=f"Asset #{asset.id} moved")
+    target_folder_path = normalize_folder_path(target_folder_path)
+
+    snapshot = asset.generation.storage_template_snapshot_json or {}
+    base_dir_raw = snapshot.get("base_dir")
+    base_dir = Path(str(base_dir_raw)).resolve() if base_dir_raw else settings.default_base_dir.resolve()
+
+    old_image_rel = Path(asset.file_path)
+    old_sidecar_rel = Path(asset.sidecar_path)
+    old_thumb_rel = Path(asset.thumbnail_path)
+
+    target_image_rel = (Path(target_folder_path) / old_image_rel.name) if target_folder_path else Path(old_image_rel.name)
+    target_sidecar_rel = sidecar_service.asset_sidecar_relative_path(target_image_rel)
+    target_thumb_rel = thumbnail_service.thumbnail_relative_path(target_image_rel)
+    target_image_rel_str = target_image_rel.as_posix()
+
+    existing = session.scalar(select(Asset.id).where(Asset.file_path == target_image_rel_str, Asset.id != asset.id))
+    if existing is not None:
+        return gallery_redirect(return_to, error=f"Target already assigned to asset #{existing}")
+
+    try:
+        pairs = (
+            (old_image_rel, target_image_rel),
+            (old_sidecar_rel, target_sidecar_rel),
+            (old_thumb_rel, target_thumb_rel),
+        )
+
+        old_image_abs = storage_service.resolve_managed_path(base_dir, old_image_rel)
+        if not old_image_abs.exists():
+            return gallery_redirect(return_to, error=f"Source image missing: {old_image_rel.as_posix()}")
+
+        for old_rel, target_rel in pairs:
+            old_abs = storage_service.resolve_managed_path(base_dir, old_rel)
+            target_abs = storage_service.resolve_managed_path(base_dir, target_rel)
+            if old_abs != target_abs and target_abs.exists():
+                return gallery_redirect(return_to, error=f"Target already exists: {target_rel.as_posix()}")
+
+        for old_rel, target_rel in pairs:
+            storage_service.move_relative_file(base_dir, old_rel, target_rel)
+    except ValueError:
+        return gallery_redirect(return_to, error="Asset move rejected due to invalid path")
+    except FileExistsError as exc:
+        return gallery_redirect(return_to, error=str(exc))
+
+    asset.file_path = target_image_rel.as_posix()
+    asset.sidecar_path = target_sidecar_rel.as_posix()
+    asset.thumbnail_path = target_thumb_rel.as_posix()
+
+    try:
+        session.add(asset)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        return gallery_redirect(return_to, error=f"Target already assigned: {target_image_rel_str}")
+    moved_to = target_folder_path or "root"
+    return gallery_redirect(return_to, message=f"Asset #{asset.id} moved to {moved_to}")
 
 
 @app.get("/assets/{asset_id}", response_class=HTMLResponse)

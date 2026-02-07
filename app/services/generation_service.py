@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from fastapi import BackgroundTasks
@@ -58,6 +58,7 @@ class GenerationService:
         n_images = int(effective_overrides.get("n_images", profile.n_images) or 1)
         seed = effective_overrides.get("seed", profile.seed)
         gallery_folder_id = effective_overrides.get("gallery_folder_id")
+        gallery_folder_path = effective_overrides.get("gallery_folder_path")
 
         profile_snapshot = {
             "id": profile.id,
@@ -97,6 +98,7 @@ class GenerationService:
             "model": profile.model,
             "params_json": profile.params_json or {},
             "gallery_folder_id": gallery_folder_id,
+            "gallery_folder_path": gallery_folder_path,
             "overrides": {
                 "negative_prompt": "negative_prompt" in effective_overrides,
                 "width": "width" in effective_overrides,
@@ -105,6 +107,7 @@ class GenerationService:
                 "n_images": "n_images" in effective_overrides,
                 "seed": "seed" in effective_overrides,
                 "gallery_folder_id": "gallery_folder_id" in effective_overrides,
+                "gallery_folder_path": "gallery_folder_path" in effective_overrides,
             },
         }
 
@@ -170,15 +173,21 @@ class GenerationService:
 
                 storage_template = str(generation.storage_template_snapshot_json.get("template", self.settings.default_storage_template))
                 output_format = str(generation.request_snapshot_json.get("output_format", "png")).lower().lstrip(".")
+                folder_path = self._resolve_gallery_folder_path(session, generation)
 
                 for idx, image in enumerate(result.images, start=1):
-                    rel_path = self.storage_service.render_relative_path(
+                    rendered_rel_path = self.storage_service.render_relative_path(
                         template=storage_template,
                         profile_name=generation.profile_name,
                         prompt_user=generation.prompt_user,
                         generation_id=generation.id,
                         idx=idx,
                         ext=output_format,
+                    )
+                    rel_path = (
+                        Path(folder_path) / rendered_rel_path.name
+                        if folder_path
+                        else rendered_rel_path
                     )
                     abs_path = self.storage_service.resolve_managed_path(base_dir, rel_path)
                     self.storage_service.write_bytes_atomic(abs_path, image.data)
@@ -377,3 +386,31 @@ class GenerationService:
             return int(value)
         except (TypeError, ValueError):
             return None
+
+    def _resolve_gallery_folder_path(self, session: Session, generation: Generation) -> Optional[str]:
+        request = generation.request_snapshot_json or {}
+        normalized = self._normalize_folder_path(request.get("gallery_folder_path"))
+        if normalized:
+            return normalized
+
+        folder_id = self._parse_optional_int(request.get("gallery_folder_id"))
+        if folder_id is None:
+            return None
+        folder = crud.get_gallery_folder(session, folder_id)
+        if not folder:
+            return None
+        return self._normalize_folder_path(folder.path)
+
+    def _normalize_folder_path(self, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        raw = str(value).strip().replace("\\", "/").strip("/")
+        if not raw:
+            return None
+        posix_path = PurePosixPath(raw)
+        if posix_path.is_absolute() or ".." in posix_path.parts:
+            return None
+        parts = [part.strip() for part in posix_path.parts if part.strip() and part != "."]
+        if not parts:
+            return None
+        return PurePosixPath(*parts).as_posix()

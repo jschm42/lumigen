@@ -6,9 +6,9 @@
     <h2>Gallery</h2>
     <form method="post" action="/gallery/folders" class="folder-create-form">
       <select name="parent_folder_id">
-        <option value="">Root</option>
+        <option value="" {% if folder_nav.current_token == 'root' %}selected{% endif %}>Root</option>
         {% for item in filter_options.folders %}
-          <option value="{{ item.id }}">{{ item.path }}</option>
+          <option value="{{ item.id }}" {% if folder_nav.current_folder_id == item.id %}selected{% endif %}>{{ item.path }}</option>
         {% endfor %}
       </select>
       <input type="text" name="folder_name" placeholder="new subfolder name" required>
@@ -19,6 +19,35 @@
 
   {% if message %}<div class="flash">{{ message }}</div>{% endif %}
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <div class="folder-browser">
+    <div class="folder-browser-head">
+      <div class="folder-breadcrumbs">
+        {% for crumb in folder_nav.breadcrumbs %}
+          <a class="crumb-link {% if crumb.token == folder_nav.current_token %}active{% endif %}" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ crumb.token }}&thumb_size={{ thumb_size | urlencode }}">{{ crumb.label }}</a>
+          {% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+        {% endfor %}
+      </div>
+      {% if folder_nav.parent_token %}
+        <a class="button-secondary compact" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder_nav.parent_token }}&thumb_size={{ thumb_size | urlencode }}">Up</a>
+      {% endif %}
+    </div>
+    {% if folder_nav.children %}
+      <div class="explorer-grid">
+        {% for item in folder_nav.children %}
+          <a class="explorer-folder" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ item.id }}&thumb_size={{ thumb_size | urlencode }}">
+            <span class="explorer-folder-icon" aria-hidden="true"></span>
+            <span class="explorer-folder-text">
+              <strong>{{ item.name }}</strong>
+              <small>{{ item.path }}</small>
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No subfolders in this folder.</p>
+    {% endif %}
+  </div>
 
   <form method="get" action="/gallery" class="filters">
     <select name="profile_name">
@@ -40,8 +69,7 @@
       {% endfor %}
     </select>
     <select name="folder">
-      <option value="">All folders</option>
-      <option value="root" {% if folder == 'root' %}selected{% endif %}>Root only</option>
+      <option value="root" {% if folder == 'root' %}selected{% endif %}>Root</option>
       {% for item in filter_options.folders %}
         <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
       {% endfor %}
@@ -61,10 +89,10 @@
     <span>Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</span>
     <div class="actions">
       {% if page_data.page > 1 %}
-        <a class="button-secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}&folder={{ folder }}&thumb_size={{ thumb_size }}">Prev</a>
+        <a class="button-secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Prev</a>
       {% endif %}
       {% if page_data.page < page_data.pages %}
-        <a class="button-secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name }}&provider={{ provider }}&status={{ status }}&q={{ q }}&folder={{ folder }}&thumb_size={{ thumb_size }}">Next</a>
+        <a class="button-secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Next</a>
       {% endif %}
     </div>
   </div>

@@ -83,3 +83,21 @@ class StorageService:
             return
         absolute_path.unlink(missing_ok=True)
         prune_empty_directories(absolute_path.parent, base_dir.resolve())
+
+    def move_relative_file(
+        self,
+        base_dir: Path,
+        source_relative_path: Union[str, Path],
+        target_relative_path: Union[str, Path],
+    ) -> None:
+        source_abs = self.resolve_managed_path(base_dir, source_relative_path)
+        target_abs = self.resolve_managed_path(base_dir, target_relative_path)
+        if source_abs == target_abs:
+            return
+        if not source_abs.exists():
+            return
+        if target_abs.exists():
+            raise FileExistsError(f"Target already exists: {target_abs}")
+        ensure_dir(target_abs.parent)
+        os.replace(source_abs, target_abs)
+        prune_empty_directories(source_abs.parent, base_dir.resolve())
