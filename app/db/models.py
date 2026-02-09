@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -12,7 +12,9 @@ class Base(DeclarativeBase):
 
 
 class TimestampMixin:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.utcnow,
@@ -39,15 +41,19 @@ class Profile(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
-    base_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    base_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     negative_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     aspect_ratio: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     n_images: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    output_format: Mapped[str] = mapped_column(String(16), default="png", nullable=False)
-    params_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    output_format: Mapped[str] = mapped_column(
+        String(16), default="png", nullable=False
+    )
+    params_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, nullable=False
+    )
 
     storage_template_id: Mapped[int] = mapped_column(
         ForeignKey("storage_templates.id", ondelete="RESTRICT"),
@@ -85,12 +91,20 @@ class Generation(Base):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     profile_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    storage_template_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    storage_template_snapshot_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False
+    )
     request_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
-    failure_sidecar_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_sidecar_path: Mapped[Optional[str]] = mapped_column(
+        String(1024), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     profile: Mapped[Optional[Profile]] = relationship(back_populates="generations")
     assets: Mapped[list["Asset"]] = relationship(
@@ -118,8 +132,14 @@ class Asset(Base):
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     mime: Mapped[str] = mapped_column(String(64), nullable=False)
-    meta_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    meta_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
 
     generation: Mapped[Generation] = relationship(back_populates="assets")
-    gallery_folder: Mapped[Optional[GalleryFolder]] = relationship(back_populates="assets")
+    gallery_folder: Mapped[Optional[GalleryFolder]] = relationship(
+        back_populates="assets"
+    )

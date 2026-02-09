@@ -44,8 +44,8 @@
   <datalist id="{{ model_datalist_id }}"></datalist>
   <small id="{{ form_dom_id }}-models-status" class="muted">Free input remains possible.</small>
 
-  <label for="{{ form_dom_id }}-base-prompt">Base prompt</label>
-  <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3" required>{{ p.base_prompt if p else '' }}</textarea>
+  <label for="{{ form_dom_id }}-base-prompt">Base prompt (optional)</label>
+  <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3">{{ p.base_prompt if p else '' }}</textarea>
 
   <label for="{{ form_dom_id }}-negative-prompt">Negative prompt</label>
   <textarea id="{{ form_dom_id }}-negative-prompt" name="negative_prompt" rows="2">{{ p.negative_prompt if p and p.negative_prompt else '' }}</textarea>
