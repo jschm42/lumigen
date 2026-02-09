@@ -1,51 +1,50 @@
 {% extends "layout.html" %}
 {% block content %}
-<section class="card">
-  <div class="card-body">
-  <h2 class="h4 mb-3 d-flex align-items-center gap-2"><i class="bi bi-magic"></i>Generate</h2>
+<article>
+  <header>
+    <h2>Generate</h2>
+  </header>
+
   {% if error %}
-    <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
-      <i class="bi bi-exclamation-triangle-fill"></i><span>{{ error }}</span>
-    </div>
+    <div class="notice error" role="alert">{{ error }}</div>
   {% endif %}
+
   {% if not profiles %}
-    <p class="mb-0">No profiles yet. Create one in <a href="/profiles">Profiles</a>.</p>
+    <p>No profiles yet. Create one in <a href="/profiles">Profiles</a>.</p>
   {% else %}
   <form
+    action="/generate"
     hx-post="/generate"
     hx-target="#job-list"
     hx-swap="afterbegin"
     method="post"
-    class="vstack gap-3"
+    class="stack"
     data-generation-form
   >
-    <div>
-      <label class="form-label" for="prompt_user">Prompt</label>
-      <textarea class="form-control" id="prompt_user" name="prompt_user" rows="5" required></textarea>
-    </div>
+    <label for="prompt_user">Prompt</label>
+    <textarea id="prompt_user" name="prompt_user" rows="5" required></textarea>
 
-    <div>
-      <label class="form-label" for="profile_id">Profile</label>
-      <select class="form-select" id="profile_id" name="profile_id" data-generation-profile required>
-        {% for profile in profiles %}
-          <option
-            value="{{ profile.id }}"
-            data-width="{{ profile.width if profile.width is not none else '' }}"
-            data-height="{{ profile.height if profile.height is not none else '' }}"
-            data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"
-            data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
-            data-seed="{{ profile.seed if profile.seed is not none else '' }}"
-            data-negative-prompt="{{ profile.negative_prompt if profile.negative_prompt else '' }}"
-          >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
-        {% endfor %}
-      </select>
-    </div>
+    <label for="profile_id">Profile</label>
+    <select id="profile_id" name="profile_id" data-generation-profile required>
+      {% for profile in profiles %}
+        <option
+          value="{{ profile.id }}"
+          data-width="{{ profile.width if profile.width is not none else '' }}"
+          data-height="{{ profile.height if profile.height is not none else '' }}"
+          data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"
+          data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
+          data-seed="{{ profile.seed if profile.seed is not none else '' }}"
+          data-negative-prompt="{{ profile.negative_prompt if profile.negative_prompt else '' }}"
+        >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+      {% endfor %}
+    </select>
 
-    <h3 class="section-subhead d-flex align-items-center gap-2"><i class="bi bi-sliders"></i>Override profile defaults (optional)</h3>
-    <div class="row g-3">
-      <div class="col-md-4">
-        <label class="form-label" for="dimension_preset">Dimension preset</label>
-        <select class="form-select" id="dimension_preset" data-dimension-preset>
+    <h3 class="section-subhead">Override profile defaults (optional)</h3>
+
+    <div class="grid">
+      <div>
+        <label for="dimension_preset">Dimension preset</label>
+        <select id="dimension_preset" data-dimension-preset>
           <option value="">Custom / from profile</option>
           <option value="512x512">512 x 512</option>
           <option value="768x768">768 x 768</option>
@@ -60,17 +59,20 @@
           <option value="640x1536">640 x 1536</option>
         </select>
       </div>
-      <div class="col-md-4">
-        <label class="form-label" for="width">Width</label>
-        <input class="form-control" id="width" type="text" name="width" inputmode="numeric" list="width-presets" placeholder="from profile">
+      <div>
+        <label for="width">Width</label>
+        <input id="width" type="text" name="width" inputmode="numeric" list="width-presets" placeholder="from profile">
       </div>
-      <div class="col-md-4">
-        <label class="form-label" for="height">Height</label>
-        <input class="form-control" id="height" type="text" name="height" inputmode="numeric" list="height-presets" placeholder="from profile">
+      <div>
+        <label for="height">Height</label>
+        <input id="height" type="text" name="height" inputmode="numeric" list="height-presets" placeholder="from profile">
       </div>
-      <div class="col-md-4">
-        <label class="form-label" for="aspect_ratio_preset">Ratio preset</label>
-        <select class="form-select" id="aspect_ratio_preset" data-ratio-preset>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label for="aspect_ratio_preset">Ratio preset</label>
+        <select id="aspect_ratio_preset" data-ratio-preset>
           <option value="">Custom / from profile</option>
           <option value="1:1">1:1</option>
           <option value="16:9">16:9</option>
@@ -82,24 +84,24 @@
           <option value="21:9">21:9</option>
         </select>
       </div>
-      <div class="col-md-4">
-        <label class="form-label" for="aspect_ratio">Ratio</label>
-        <input class="form-control" id="aspect_ratio" type="text" name="aspect_ratio" list="ratio-presets" placeholder="e.g. 16:9 (from profile)">
+      <div>
+        <label for="aspect_ratio">Ratio</label>
+        <input id="aspect_ratio" type="text" name="aspect_ratio" list="ratio-presets" placeholder="e.g. 16:9 (from profile)">
       </div>
-      <div class="col-md-4">
-        <label class="form-label" for="n_images">Number of images</label>
-        <input class="form-control" id="n_images" type="number" min="1" max="8" name="n_images" placeholder="from profile">
-      </div>
-      <div class="col-md-6">
-        <label class="form-label" for="seed">Seed</label>
-        <div class="input-group">
-          <input class="form-control" id="seed" type="number" name="seed" placeholder="from profile">
-          <button type="button" class="btn btn-outline-secondary" data-random-seed-btn data-seed-target="seed">
-            <i class="bi bi-shuffle me-1"></i>Random
-          </button>
-        </div>
+      <div>
+        <label for="n_images">Number of images</label>
+        <input id="n_images" type="number" min="1" max="8" name="n_images" placeholder="from profile">
       </div>
     </div>
+
+    <div>
+      <label for="seed">Seed</label>
+      <div role="group">
+        <input id="seed" type="number" name="seed" placeholder="from profile">
+        <button type="button" class="secondary" data-random-seed-btn data-seed-target="seed">Random</button>
+      </div>
+    </div>
+
     <datalist id="width-presets">
       <option value="512"></option>
       <option value="640"></option>
@@ -136,16 +138,16 @@
     </datalist>
 
     <div>
-      <div class="form-check mb-2">
-        <input class="form-check-input" id="override_negative_prompt" type="checkbox" name="override_negative_prompt">
-        <label class="form-check-label" for="override_negative_prompt">Override negative prompt</label>
-      </div>
-      <textarea class="form-control" name="negative_prompt" rows="3" placeholder="used only when checkbox is enabled"></textarea>
+      <label>
+        <input id="override_negative_prompt" type="checkbox" name="override_negative_prompt">
+        Override negative prompt
+      </label>
+      <textarea name="negative_prompt" rows="3" placeholder="used only when checkbox is enabled"></textarea>
     </div>
 
     <div>
-      <label class="form-label" for="gallery_folder_id">Target folder in gallery</label>
-      <select class="form-select" id="gallery_folder_id" name="gallery_folder_id">
+      <label for="gallery_folder_id">Target folder in gallery</label>
+      <select id="gallery_folder_id" name="gallery_folder_id">
         <option value="">Root</option>
         {% for folder in gallery_folders %}
           <option value="{{ folder.id }}">{{ folder.path }}</option>
@@ -153,25 +155,22 @@
       </select>
     </div>
 
-    <div class="d-flex justify-content-end">
-      <button class="btn btn-primary" type="submit"><i class="bi bi-stars me-1"></i>Generate</button>
+    <div class="actions">
+      <button type="submit">Generate</button>
     </div>
   </form>
   {% endif %}
-  </div>
-</section>
+</article>
 
-<section class="card">
-  <div class="card-body">
-  <div class="section-head mb-3">
-    <h2 class="h4 mb-0 d-flex align-items-center gap-2"><i class="bi bi-cpu"></i>Jobs</h2>
-  </div>
-  <div id="job-list" class="vstack gap-3">
+<article>
+  <header>
+    <h2>Jobs</h2>
+  </header>
+  <div id="job-list" class="stack">
     {% for generation in active_generations %}
       {% set assets = [] %}
       {% include "fragments/job_status.html" %}
     {% endfor %}
   </div>
-  </div>
-</section>
+</article>
 {% endblock %}

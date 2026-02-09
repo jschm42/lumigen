@@ -1,30 +1,30 @@
 <div class="thumb-grid thumb-size-{{ thumb_size }}">
   {% for asset in page_data.items %}
-  <article class="thumb-card card">
-    <div class="card-body p-2 d-grid gap-2">
+  <article class="thumb-card">
     <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
     <div class="thumb-meta">
       <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
       <small>{{ asset.generation.profile_name }} | {{ asset.generation.provider }}</small>
-      <small><i class="bi bi-folder2-open me-1"></i>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</small>
+      <small>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</small>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-outline-secondary btn-sm" href="/assets/{{ asset.id }}/download"><i class="bi bi-download me-1"></i>Download</a>
-      <a class="btn btn-outline-secondary btn-sm" href="/assets/{{ asset.id }}"><i class="bi bi-info-circle me-1"></i>Details</a>
+    <div class="thumb-actions">
+      <a role="button" class="secondary" href="/assets/{{ asset.id }}/download">Download</a>
+      <a role="button" class="secondary" href="/assets/{{ asset.id }}">Details</a>
     </div>
     <form method="post" action="/assets/{{ asset.id }}/move-folder" class="move-form">
-      <select class="form-select form-select-sm" name="gallery_folder_id">
-        <option value="">Root</option>
-        {% for folder_item in filter_options.folders %}
-          <option value="{{ folder_item.id }}" {% if asset.gallery_folder_id == folder_item.id %}selected{% endif %}>{{ folder_item.path }}</option>
-        {% endfor %}
-      </select>
-      <input type="hidden" name="return_to" value="{{ return_to }}">
-      <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-arrow-right-circle me-1"></i>Move</button>
+      <div role="group">
+        <select name="gallery_folder_id">
+          <option value="">Root</option>
+          {% for folder_item in filter_options.folders %}
+            <option value="{{ folder_item.id }}" {% if asset.gallery_folder_id == folder_item.id %}selected{% endif %}>{{ folder_item.path }}</option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <button type="submit">Move</button>
+      </div>
     </form>
-    </div>
   </article>
   {% else %}
-    <p class="text-body-secondary"><i class="bi bi-search me-1"></i>No assets found for current filters.</p>
+    <p class="muted">No assets found for current filters.</p>
   {% endfor %}
 </div>

@@ -1,51 +1,46 @@
 {% extends "layout.html" %}
 {% block content %}
 {% set return_to = '/gallery?page=' ~ page_data.page ~ '&profile_name=' ~ (profile_name | urlencode) ~ '&provider=' ~ (provider | urlencode) ~ '&status=' ~ (status | urlencode) ~ '&q=' ~ (q | urlencode) ~ '&folder=' ~ (folder | urlencode) ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
-<section class="card">
-  <div class="card-body">
-  <div class="section-head mb-3">
-    <h2 class="h4 mb-0 d-flex align-items-center gap-2"><i class="bi bi-collection"></i>Gallery</h2>
+<article>
+  <header class="section-head">
+    <h2>Gallery</h2>
     <form method="post" action="/gallery/folders" class="folder-create-form">
-      <select class="form-select form-select-sm" name="parent_folder_id">
+      <select name="parent_folder_id">
         <option value="" {% if folder_nav.current_token == 'root' %}selected{% endif %}>Root</option>
         {% for item in filter_options.folders %}
           <option value="{{ item.id }}" {% if folder_nav.current_folder_id == item.id %}selected{% endif %}>{{ item.path }}</option>
         {% endfor %}
       </select>
-      <input class="form-control form-control-sm" type="text" name="folder_name" placeholder="new subfolder name" required>
+      <input type="text" name="folder_name" placeholder="new subfolder name" required>
       <input type="hidden" name="return_to" value="{{ return_to }}">
-      <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-folder-plus me-1"></i>Create folder</button>
+      <button type="submit">Create folder</button>
     </form>
-  </div>
+  </header>
 
   {% if message %}
-    <div class="alert alert-success d-flex align-items-center gap-2" role="alert">
-      <i class="bi bi-check-circle-fill"></i><span>{{ message }}</span>
-    </div>
+    <div class="notice success" role="alert">{{ message }}</div>
   {% endif %}
   {% if error %}
-    <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
-      <i class="bi bi-exclamation-triangle-fill"></i><span>{{ error }}</span>
-    </div>
+    <div class="notice error" role="alert">{{ error }}</div>
   {% endif %}
 
-  <div class="folder-browser mb-3">
+  <section class="folder-browser">
     <div class="folder-browser-head">
       <div class="folder-breadcrumbs">
         {% for crumb in folder_nav.breadcrumbs %}
           <a class="crumb-link {% if crumb.token == folder_nav.current_token %}active{% endif %}" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ crumb.token }}&thumb_size={{ thumb_size | urlencode }}">{{ crumb.label }}</a>
-          {% if not loop.last %}<span class="crumb-sep"><i class="bi bi-chevron-right"></i></span>{% endif %}
+          {% if not loop.last %}<span class="crumb-sep">></span>{% endif %}
         {% endfor %}
       </div>
       {% if folder_nav.parent_token %}
-        <a class="btn btn-outline-secondary btn-sm" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder_nav.parent_token }}&thumb_size={{ thumb_size | urlencode }}"><i class="bi bi-arrow-up-left me-1"></i>Up</a>
+        <a role="button" class="secondary" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder_nav.parent_token }}&thumb_size={{ thumb_size | urlencode }}">Up</a>
       {% endif %}
     </div>
     {% if folder_nav.children %}
       <div class="explorer-grid">
         {% for item in folder_nav.children %}
           <a class="explorer-folder" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ item.id }}&thumb_size={{ thumb_size | urlencode }}">
-            <i class="bi bi-folder-fill text-warning fs-4" aria-hidden="true"></i>
+            <span class="material-symbols-outlined folder-icon" aria-hidden="true">folder</span>
             <span class="explorer-folder-text">
               <strong>{{ item.name }}</strong>
               <small>{{ item.path }}</small>
@@ -54,71 +49,82 @@
         {% endfor %}
       </div>
     {% else %}
-      <p class="muted mb-0"><i class="bi bi-folder2-open me-1"></i>No subfolders in this folder.</p>
+      <p class="muted">No subfolders in this folder.</p>
     {% endif %}
-  </div>
+  </section>
 
-  <form method="get" action="/gallery" class="row g-2 mb-3">
-    <div class="col-sm-6 col-lg-2">
-    <select class="form-select form-select-sm" name="profile_name">
-      <option value="">All profiles</option>
-      {% for item in filter_options.profile_names %}
-        <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
+  <form method="get" action="/gallery" class="filter-grid">
+    <div>
+      <label>Profile
+        <select name="profile_name">
+          <option value="">All profiles</option>
+          {% for item in filter_options.profile_names %}
+            <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
-    <div class="col-sm-6 col-lg-2">
-    <select class="form-select form-select-sm" name="provider">
-      <option value="">All providers</option>
-      {% for item in filter_options.providers %}
-        <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
+    <div>
+      <label>Provider
+        <select name="provider">
+          <option value="">All providers</option>
+          {% for item in filter_options.providers %}
+            <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
-    <div class="col-sm-6 col-lg-2">
-    <select class="form-select form-select-sm" name="status">
-      <option value="">All statuses</option>
-      {% for item in filter_options.statuses %}
-        <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
+    <div>
+      <label>Status
+        <select name="status">
+          <option value="">All statuses</option>
+          {% for item in filter_options.statuses %}
+            <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
-    <div class="col-sm-6 col-lg-2">
-    <select class="form-select form-select-sm" name="folder">
-      <option value="root" {% if folder == 'root' %}selected{% endif %}>Root</option>
-      {% for item in filter_options.folders %}
-        <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
-      {% endfor %}
-    </select>
+    <div>
+      <label>Folder
+        <select name="folder">
+          <option value="root" {% if folder == 'root' %}selected{% endif %}>Root</option>
+          {% for item in filter_options.folders %}
+            <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
-    <div class="col-sm-6 col-lg-2">
-    <input class="form-control form-control-sm" type="text" name="q" value="{{ q }}" placeholder="prompt contains">
+    <div>
+      <label>Prompt contains
+        <input type="text" name="q" value="{{ q }}" placeholder="prompt contains">
+      </label>
     </div>
-    <div class="col-sm-6 col-lg-1">
-    <select class="form-select form-select-sm" name="thumb_size">
-      <option value="sm" {% if thumb_size == 'sm' %}selected{% endif %}>Thumbs S</option>
-      <option value="md" {% if thumb_size == 'md' %}selected{% endif %}>Thumbs M</option>
-      <option value="lg" {% if thumb_size == 'lg' %}selected{% endif %}>Thumbs L</option>
-    </select>
+    <div>
+      <label>Thumb size
+        <select name="thumb_size">
+          <option value="sm" {% if thumb_size == 'sm' %}selected{% endif %}>Thumbs S</option>
+          <option value="md" {% if thumb_size == 'md' %}selected{% endif %}>Thumbs M</option>
+          <option value="lg" {% if thumb_size == 'lg' %}selected{% endif %}>Thumbs L</option>
+        </select>
+      </label>
     </div>
-    <div class="col-sm-12 col-lg-1 d-grid">
-    <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-funnel-fill me-1"></i>Apply</button>
+    <div class="filter-actions">
+      <button type="submit">Apply</button>
     </div>
   </form>
 
   {% include "fragments/gallery_grid.html" %}
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
-    <span class="text-body-secondary">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</span>
-    <div class="d-flex flex-wrap gap-2">
+  <div class="pagination">
+    <small class="muted">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</small>
+    <div class="pagination-actions">
       {% if page_data.page > 1 %}
-        <a class="btn btn-outline-secondary btn-sm" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}"><i class="bi bi-arrow-left me-1"></i>Prev</a>
+        <a role="button" class="secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Prev</a>
       {% endif %}
       {% if page_data.page < page_data.pages %}
-        <a class="btn btn-outline-secondary btn-sm" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Next<i class="bi bi-arrow-right ms-1"></i></a>
+        <a role="button" class="secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Next</a>
       {% endif %}
     </div>
   </div>
-  </div>
-</section>
+</article>
 {% endblock %}
