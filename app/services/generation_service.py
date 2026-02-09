@@ -131,7 +131,9 @@ class GenerationService:
         )
         return crud.create_generation(session, generation)
 
-    def create_generation_from_snapshot(self, session: Session, source: Generation) -> Generation:
+    def create_generation_from_snapshot(
+        self, session: Session, source: Generation
+    ) -> Generation:
         profile_snapshot = copy.deepcopy(source.profile_snapshot_json or {})
         storage_snapshot = copy.deepcopy(source.storage_template_snapshot_json or {})
         request_snapshot = copy.deepcopy(source.request_snapshot_json or {})
@@ -155,7 +157,9 @@ class GenerationService:
     def enqueue(self, background_tasks: BackgroundTasks, generation_id: int) -> None:
         background_tasks.add_task(self.run_generation_job, generation_id)
 
-    def cancel_generation(self, session: Session, generation_id: int) -> Optional[Generation]:
+    def cancel_generation(
+        self, session: Session, generation_id: int
+    ) -> Optional[Generation]:
         generation = crud.get_generation(session, generation_id, with_assets=True)
         if not generation:
             return None
@@ -186,20 +190,32 @@ class GenerationService:
             session.commit()
 
             created_files: list[str] = []
-            base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+            base_dir = self._base_dir_from_snapshot(
+                generation.storage_template_snapshot_json
+            )
             ensure_dir(base_dir)
 
             try:
                 self._raise_if_cancelled(session, generation_id)
                 provider_request = self._provider_request_from_generation(generation)
                 self._raise_if_cancelled(session, generation_id)
-                result = await self.registry.generate(generation.provider, provider_request)
+                result = await self.registry.generate(
+                    generation.provider, provider_request
+                )
                 self._raise_if_cancelled(session, generation_id)
                 if not result.images:
                     raise ProviderError("Provider returned zero images")
 
-                storage_template = str(generation.storage_template_snapshot_json.get("template", self.settings.default_storage_template))
-                output_format = str(generation.request_snapshot_json.get("output_format", "png")).lower().lstrip(".")
+                storage_template = str(
+                    generation.storage_template_snapshot_json.get(
+                        "template", self.settings.default_storage_template
+                    )
+                )
+                output_format = (
+                    str(generation.request_snapshot_json.get("output_format", "png"))
+                    .lower()
+                    .lstrip(".")
+                )
                 folder_path = self._resolve_gallery_folder_path(session, generation)
 
                 for idx, image in enumerate(result.images, start=1):
@@ -217,11 +233,15 @@ class GenerationService:
                         if folder_path
                         else rendered_rel_path
                     )
-                    abs_path = self.storage_service.resolve_managed_path(base_dir, rel_path)
+                    abs_path = self.storage_service.resolve_managed_path(
+                        base_dir, rel_path
+                    )
                     self.storage_service.write_bytes_atomic(abs_path, image.data)
                     created_files.append(rel_path.as_posix())
 
-                    thumb_rel = self.thumbnail_service.create_thumbnail(base_dir, rel_path)
+                    thumb_rel = self.thumbnail_service.create_thumbnail(
+                        base_dir, rel_path
+                    )
                     created_files.append(thumb_rel.as_posix())
 
                     sidecar_payload = self._build_asset_sidecar_payload(
@@ -235,14 +255,18 @@ class GenerationService:
                         image_height=image.height,
                         image_mime=image.mime,
                     )
-                    sidecar_rel = self.sidecar_service.write_asset_sidecar(base_dir, rel_path, sidecar_payload)
+                    sidecar_rel = self.sidecar_service.write_asset_sidecar(
+                        base_dir, rel_path, sidecar_payload
+                    )
                     created_files.append(sidecar_rel.as_posix())
 
                     session.add(
                         Asset(
                             generation_id=generation.id,
                             gallery_folder_id=self._parse_optional_int(
-                                generation.request_snapshot_json.get("gallery_folder_id")
+                                generation.request_snapshot_json.get(
+                                    "gallery_folder_id"
+                                )
                             ),
                             file_path=rel_path.as_posix(),
                             sidecar_path=sidecar_rel.as_posix(),
@@ -327,7 +351,9 @@ class GenerationService:
         if not asset or not asset.generation:
             return False
 
-        base_dir = self._base_dir_from_snapshot(asset.generation.storage_template_snapshot_json)
+        base_dir = self._base_dir_from_snapshot(
+            asset.generation.storage_template_snapshot_json
+        )
         for rel in (asset.file_path, asset.thumbnail_path, asset.sidecar_path):
             self.storage_service.delete_relative_file(base_dir, rel)
 
@@ -340,13 +366,17 @@ class GenerationService:
         if not generation:
             return False
 
-        base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+        base_dir = self._base_dir_from_snapshot(
+            generation.storage_template_snapshot_json
+        )
         for asset in list(generation.assets):
             for rel in (asset.file_path, asset.thumbnail_path, asset.sidecar_path):
                 self.storage_service.delete_relative_file(base_dir, rel)
 
         if generation.failure_sidecar_path:
-            self.storage_service.delete_relative_file(base_dir, generation.failure_sidecar_path)
+            self.storage_service.delete_relative_file(
+                base_dir, generation.failure_sidecar_path
+            )
 
         session.delete(generation)
         session.commit()
@@ -356,11 +386,15 @@ class GenerationService:
         generation = asset.generation
         if not generation:
             raise ValueError("Asset has no associated generation")
-        base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+        base_dir = self._base_dir_from_snapshot(
+            generation.storage_template_snapshot_json
+        )
         rel = asset.file_path if which == "file" else asset.thumbnail_path
         return self.storage_service.resolve_managed_path(base_dir, rel)
 
-    def _provider_request_from_generation(self, generation: Generation) -> ProviderGenerationRequest:
+    def _provider_request_from_generation(
+        self, generation: Generation
+    ) -> ProviderGenerationRequest:
         request_data = generation.request_snapshot_json or {}
         return ProviderGenerationRequest(
             prompt=generation.prompt_final,
@@ -413,7 +447,9 @@ class GenerationService:
             "request_snapshot_json": generation.request_snapshot_json,
         }
 
-    def _build_failure_sidecar_payload(self, generation: Generation, exc: Exception) -> dict[str, Any]:
+    def _build_failure_sidecar_payload(
+        self, generation: Generation, exc: Exception
+    ) -> dict[str, Any]:
         return {
             "type": "generation_failure",
             "failed_at": datetime.utcnow().isoformat(),
@@ -445,7 +481,9 @@ class GenerationService:
         except (TypeError, ValueError):
             return None
 
-    def _resolve_gallery_folder_path(self, session: Session, generation: Generation) -> Optional[str]:
+    def _resolve_gallery_folder_path(
+        self, session: Session, generation: Generation
+    ) -> Optional[str]:
         request = generation.request_snapshot_json or {}
         normalized = self._normalize_folder_path(request.get("gallery_folder_path"))
         if normalized:
@@ -468,7 +506,9 @@ class GenerationService:
         posix_path = PurePosixPath(raw)
         if posix_path.is_absolute() or ".." in posix_path.parts:
             return None
-        parts = [part.strip() for part in posix_path.parts if part.strip() and part != "."]
+        parts = [
+            part.strip() for part in posix_path.parts if part.strip() and part != "."
+        ]
         if not parts:
             return None
         return PurePosixPath(*parts).as_posix()
