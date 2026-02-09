@@ -207,6 +207,67 @@
       }
 
       document.querySelectorAll("[data-generation-form]").forEach(setupGenerationForm);
+
+      function setupGallerySelection() {
+        var bulkForm = document.getElementById("bulk-action-form");
+        if (!bulkForm) return;
+
+        var checkboxes = Array.from(document.querySelectorAll("[data-gallery-select]"));
+        var selectAll = document.querySelector("[data-gallery-select-all]");
+        var countLabel = document.querySelector("[data-gallery-selection-count]");
+        var actionButtons = Array.from(document.querySelectorAll("[data-bulk-action]"));
+
+        function updateState() {
+          var selected = 0;
+          checkboxes.forEach(function (checkbox) {
+            var card = checkbox.closest("[data-gallery-card]");
+            if (checkbox.checked) {
+              selected += 1;
+            }
+            if (card) {
+              card.classList.toggle("is-selected", checkbox.checked);
+            }
+          });
+
+          if (countLabel) {
+            countLabel.textContent = selected + " selected";
+          }
+
+          actionButtons.forEach(function (button) {
+            button.disabled = selected === 0;
+          });
+
+          if (selectAll) {
+            if (selected === 0) {
+              selectAll.checked = false;
+              selectAll.indeterminate = false;
+            } else if (selected === checkboxes.length) {
+              selectAll.checked = true;
+              selectAll.indeterminate = false;
+            } else {
+              selectAll.checked = false;
+              selectAll.indeterminate = true;
+            }
+          }
+        }
+
+        checkboxes.forEach(function (checkbox) {
+          checkbox.addEventListener("change", updateState);
+        });
+
+        if (selectAll) {
+          selectAll.addEventListener("change", function () {
+            checkboxes.forEach(function (checkbox) {
+              checkbox.checked = selectAll.checked;
+            });
+            updateState();
+          });
+        }
+
+        updateState();
+      }
+
+      setupGallerySelection();
     })();
   </script>
 </body>

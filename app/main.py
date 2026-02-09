@@ -1,14 +1,22 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import json
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlencode
 
 import uvicorn
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+)
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -31,7 +39,6 @@ from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
 
-
 settings = get_settings()
 
 
@@ -50,7 +57,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             normalized = normalize_folder_path(folder.path)
             if not normalized:
                 continue
-            folder_abs_path = storage_service.resolve_managed_path(settings.default_base_dir, Path(normalized))
+            folder_abs_path = storage_service.resolve_managed_path(
+                settings.default_base_dir, Path(normalized)
+            )
             ensure_dir(folder_abs_path)
     yield
 
@@ -199,7 +208,9 @@ def build_folder_navigation(
 
     parent_token: Optional[str] = None
     if selected_path:
-        parent_path = selected_path.rsplit("/", maxsplit=1)[0] if "/" in selected_path else ""
+        parent_path = (
+            selected_path.rsplit("/", maxsplit=1)[0] if "/" in selected_path else ""
+        )
         if parent_path:
             parent = by_path.get(parent_path)
             if parent:
@@ -337,7 +348,9 @@ def job_status(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     generation = session.scalar(
-        select(Generation).options(selectinload(Generation.assets)).where(Generation.id == generation_id)
+        select(Generation)
+        .options(selectinload(Generation.assets))
+        .where(Generation.id == generation_id)
     )
     if not generation:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -363,7 +376,9 @@ def job_cancel(
     if not generation:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    assets = sorted(generation.assets, key=lambda item: item.id) if generation.assets else []
+    assets = (
+        sorted(generation.assets, key=lambda item: item.id) if generation.assets else []
+    )
     if is_htmx(request):
         return templates.TemplateResponse(
             "fragments/job_status.html",
@@ -489,13 +504,17 @@ def update_profile(
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/profiles?edit_id={profile_id}&error={str(exc)}", status_code=303)
+        return RedirectResponse(
+            url=f"/profiles?edit_id={profile_id}&error={str(exc)}", status_code=303
+        )
 
     return RedirectResponse(url="/profiles", status_code=303)
 
 
 @app.post("/profiles/{profile_id}/delete")
-def delete_profile(profile_id: int, session: Session = Depends(get_session)) -> RedirectResponse:
+def delete_profile(
+    profile_id: int, session: Session = Depends(get_session)
+) -> RedirectResponse:
     profile = crud.get_profile(session, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -600,7 +619,9 @@ def create_gallery_folder(
         return gallery_redirect(return_to, error=f"Folder already exists: {path}")
 
     try:
-        folder_abs_path = storage_service.resolve_managed_path(settings.default_base_dir, Path(path))
+        folder_abs_path = storage_service.resolve_managed_path(
+            settings.default_base_dir, Path(path)
+        )
         ensure_dir(folder_abs_path)
     except ValueError:
         return gallery_redirect(return_to, error="Folder path escapes gallery root")
@@ -611,6 +632,93 @@ def create_gallery_folder(
         return gallery_redirect(return_to, error=f"Folder already exists: {path}")
 
     return gallery_redirect(return_to, message=f"Folder created: {path}")
+
+
+def move_asset_to_folder_internal(
+    session: Session,
+    asset: Asset,
+    folder_id: Optional[int],
+) -> str:
+    if not asset.generation:
+        raise ValueError("Asset not found")
+
+    target_folder_path = ""
+    if folder_id is None:
+        asset.gallery_folder_id = None
+    else:
+        folder = crud.get_gallery_folder(session, folder_id)
+        if not folder:
+            raise ValueError("Target folder not found")
+        asset.gallery_folder_id = folder.id
+        target_folder_path = folder.path
+
+    target_folder_path = normalize_folder_path(target_folder_path)
+
+    snapshot = asset.generation.storage_template_snapshot_json or {}
+    base_dir_raw = snapshot.get("base_dir")
+    base_dir = (
+        Path(str(base_dir_raw)).resolve()
+        if base_dir_raw
+        else settings.default_base_dir.resolve()
+    )
+
+    old_image_rel = Path(asset.file_path)
+    old_sidecar_rel = Path(asset.sidecar_path)
+    old_thumb_rel = Path(asset.thumbnail_path)
+
+    target_image_rel = (
+        (Path(target_folder_path) / old_image_rel.name)
+        if target_folder_path
+        else Path(old_image_rel.name)
+    )
+    target_sidecar_rel = sidecar_service.asset_sidecar_relative_path(target_image_rel)
+    target_thumb_rel = thumbnail_service.thumbnail_relative_path(target_image_rel)
+    target_image_rel_str = target_image_rel.as_posix()
+
+    existing = session.scalar(
+        select(Asset.id).where(
+            Asset.file_path == target_image_rel_str, Asset.id != asset.id
+        )
+    )
+    if existing is not None:
+        raise ValueError(f"Target already assigned to asset #{existing}")
+
+    try:
+        pairs = (
+            (old_image_rel, target_image_rel),
+            (old_sidecar_rel, target_sidecar_rel),
+            (old_thumb_rel, target_thumb_rel),
+        )
+
+        old_image_abs = storage_service.resolve_managed_path(base_dir, old_image_rel)
+        if not old_image_abs.exists():
+            raise ValueError(f"Source image missing: {old_image_rel.as_posix()}")
+
+        for old_rel, target_rel in pairs:
+            old_abs = storage_service.resolve_managed_path(base_dir, old_rel)
+            target_abs = storage_service.resolve_managed_path(base_dir, target_rel)
+            if old_abs != target_abs and target_abs.exists():
+                raise ValueError(f"Target already exists: {target_rel.as_posix()}")
+
+        for old_rel, target_rel in pairs:
+            storage_service.move_relative_file(base_dir, old_rel, target_rel)
+    except ValueError as exc:
+        raise ValueError(str(exc))
+    except FileExistsError as exc:
+        raise ValueError(str(exc))
+
+    asset.file_path = target_image_rel.as_posix()
+    asset.sidecar_path = target_sidecar_rel.as_posix()
+    asset.thumbnail_path = target_thumb_rel.as_posix()
+
+    try:
+        session.add(asset)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise ValueError(f"Target already assigned: {target_image_rel_str}")
+
+    return target_folder_path or "root"
 
 
 @app.post("/assets/{asset_id}/move-folder")
@@ -629,71 +737,90 @@ def move_asset_to_folder(
     except ValueError:
         return gallery_redirect(return_to, error="Invalid target folder")
 
-    target_folder_path = ""
-    if folder_id is None:
-        asset.gallery_folder_id = None
-    else:
+    try:
+        moved_to = move_asset_to_folder_internal(session, asset, folder_id)
+    except ValueError as exc:
+        return gallery_redirect(return_to, error=str(exc))
+
+    return gallery_redirect(return_to, message=f"Asset #{asset.id} moved to {moved_to}")
+
+
+@app.post("/assets/bulk-move")
+def bulk_move_assets(
+    gallery_folder_id: str = Form(default=""),
+    asset_ids: list[int] = Form(default=[]),
+    return_to: str = Form(default="/gallery"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    if not asset_ids:
+        return gallery_redirect(return_to, error="No assets selected")
+
+    try:
+        folder_id = parse_optional_int(gallery_folder_id)
+    except ValueError:
+        return gallery_redirect(return_to, error="Invalid target folder")
+
+    moved_to_label = "root"
+    if folder_id is not None:
         folder = crud.get_gallery_folder(session, folder_id)
         if not folder:
             return gallery_redirect(return_to, error="Target folder not found")
-        asset.gallery_folder_id = folder.id
-        target_folder_path = folder.path
+        moved_to_label = folder.path
 
-    target_folder_path = normalize_folder_path(target_folder_path)
+    moved = 0
+    errors: list[str] = []
 
-    snapshot = asset.generation.storage_template_snapshot_json or {}
-    base_dir_raw = snapshot.get("base_dir")
-    base_dir = Path(str(base_dir_raw)).resolve() if base_dir_raw else settings.default_base_dir.resolve()
+    for asset_id in asset_ids:
+        asset = crud.get_asset(session, asset_id, with_generation=True)
+        if not asset or not asset.generation:
+            errors.append(f"Asset #{asset_id} not found")
+            continue
+        try:
+            move_asset_to_folder_internal(session, asset, folder_id)
+            moved += 1
+        except ValueError as exc:
+            errors.append(str(exc))
 
-    old_image_rel = Path(asset.file_path)
-    old_sidecar_rel = Path(asset.sidecar_path)
-    old_thumb_rel = Path(asset.thumbnail_path)
+    message = None
+    error = None
+    if moved:
+        message = f"Moved {moved} asset(s) to {moved_to_label}"
+    if errors:
+        error = f"{len(errors)} asset(s) failed. First error: {errors[0]}"
+    if not moved and not errors:
+        error = "No assets moved"
 
-    target_image_rel = (Path(target_folder_path) / old_image_rel.name) if target_folder_path else Path(old_image_rel.name)
-    target_sidecar_rel = sidecar_service.asset_sidecar_relative_path(target_image_rel)
-    target_thumb_rel = thumbnail_service.thumbnail_relative_path(target_image_rel)
-    target_image_rel_str = target_image_rel.as_posix()
+    return gallery_redirect(return_to, message=message, error=error)
 
-    existing = session.scalar(select(Asset.id).where(Asset.file_path == target_image_rel_str, Asset.id != asset.id))
-    if existing is not None:
-        return gallery_redirect(return_to, error=f"Target already assigned to asset #{existing}")
 
-    try:
-        pairs = (
-            (old_image_rel, target_image_rel),
-            (old_sidecar_rel, target_sidecar_rel),
-            (old_thumb_rel, target_thumb_rel),
-        )
+@app.post("/assets/bulk-delete")
+def bulk_delete_assets(
+    asset_ids: list[int] = Form(default=[]),
+    return_to: str = Form(default="/gallery"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    if not asset_ids:
+        return gallery_redirect(return_to, error="No assets selected")
 
-        old_image_abs = storage_service.resolve_managed_path(base_dir, old_image_rel)
-        if not old_image_abs.exists():
-            return gallery_redirect(return_to, error=f"Source image missing: {old_image_rel.as_posix()}")
+    deleted = 0
+    failures = 0
 
-        for old_rel, target_rel in pairs:
-            old_abs = storage_service.resolve_managed_path(base_dir, old_rel)
-            target_abs = storage_service.resolve_managed_path(base_dir, target_rel)
-            if old_abs != target_abs and target_abs.exists():
-                return gallery_redirect(return_to, error=f"Target already exists: {target_rel.as_posix()}")
+    for asset_id in asset_ids:
+        if generation_service.delete_asset(session, asset_id):
+            deleted += 1
+        else:
+            failures += 1
 
-        for old_rel, target_rel in pairs:
-            storage_service.move_relative_file(base_dir, old_rel, target_rel)
-    except ValueError:
-        return gallery_redirect(return_to, error="Asset move rejected due to invalid path")
-    except FileExistsError as exc:
-        return gallery_redirect(return_to, error=str(exc))
+    message = None
+    error = None
+    if deleted:
+        message = f"Deleted {deleted} asset(s)"
+    if failures:
+        error = f"{failures} asset(s) could not be deleted"
+    if not deleted and not failures:
+        error = "No assets deleted"
 
-    asset.file_path = target_image_rel.as_posix()
-    asset.sidecar_path = target_sidecar_rel.as_posix()
-    asset.thumbnail_path = target_thumb_rel.as_posix()
-
-    try:
-        session.add(asset)
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        return gallery_redirect(return_to, error=f"Target already assigned: {target_image_rel_str}")
-    moved_to = target_folder_path or "root"
-    return gallery_redirect(return_to, message=f"Asset #{asset.id} moved to {moved_to}")
+    return gallery_redirect(return_to, message=message, error=error)
 
 
 @app.get("/assets/{asset_id}", response_class=HTMLResponse)
@@ -703,7 +830,9 @@ def asset_detail(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     asset = session.scalar(
-        select(Asset).options(selectinload(Asset.generation), selectinload(Asset.gallery_folder)).where(Asset.id == asset_id)
+        select(Asset)
+        .options(selectinload(Asset.generation), selectinload(Asset.gallery_folder))
+        .where(Asset.id == asset_id)
     )
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -714,9 +843,21 @@ def asset_detail(
             "request": request,
             "asset": asset,
             "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
-            "profile_snapshot_pretty": dumps_json(asset.generation.profile_snapshot_json, pretty=True) if asset.generation else "{}",
-            "storage_snapshot_pretty": dumps_json(asset.generation.storage_template_snapshot_json, pretty=True) if asset.generation else "{}",
-            "request_snapshot_pretty": dumps_json(asset.generation.request_snapshot_json, pretty=True) if asset.generation else "{}",
+            "profile_snapshot_pretty": (
+                dumps_json(asset.generation.profile_snapshot_json, pretty=True)
+                if asset.generation
+                else "{}"
+            ),
+            "storage_snapshot_pretty": (
+                dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
+                if asset.generation
+                else "{}"
+            ),
+            "request_snapshot_pretty": (
+                dumps_json(asset.generation.request_snapshot_json, pretty=True)
+                if asset.generation
+                else "{}"
+            ),
         },
     )
 
@@ -781,7 +922,11 @@ def rerun_generation(
 
 @app.get("/assets/{asset_id}/file")
 def asset_file(asset_id: int, session: Session = Depends(get_session)) -> FileResponse:
-    asset = session.scalar(select(Asset).options(selectinload(Asset.generation)).where(Asset.id == asset_id))
+    asset = session.scalar(
+        select(Asset)
+        .options(selectinload(Asset.generation))
+        .where(Asset.id == asset_id)
+    )
     if not asset or not asset.generation:
         raise HTTPException(status_code=404, detail="Asset not found")
     absolute_path = generation_service.asset_absolute_path(asset, which="file")
@@ -791,8 +936,14 @@ def asset_file(asset_id: int, session: Session = Depends(get_session)) -> FileRe
 
 
 @app.get("/assets/{asset_id}/download")
-def asset_download(asset_id: int, session: Session = Depends(get_session)) -> FileResponse:
-    asset = session.scalar(select(Asset).options(selectinload(Asset.generation)).where(Asset.id == asset_id))
+def asset_download(
+    asset_id: int, session: Session = Depends(get_session)
+) -> FileResponse:
+    asset = session.scalar(
+        select(Asset)
+        .options(selectinload(Asset.generation))
+        .where(Asset.id == asset_id)
+    )
     if not asset or not asset.generation:
         raise HTTPException(status_code=404, detail="Asset not found")
     absolute_path = generation_service.asset_absolute_path(asset, which="file")
@@ -803,8 +954,14 @@ def asset_download(asset_id: int, session: Session = Depends(get_session)) -> Fi
 
 
 @app.get("/assets/{asset_id}/thumb")
-def asset_thumbnail(asset_id: int, session: Session = Depends(get_session)) -> FileResponse:
-    asset = session.scalar(select(Asset).options(selectinload(Asset.generation)).where(Asset.id == asset_id))
+def asset_thumbnail(
+    asset_id: int, session: Session = Depends(get_session)
+) -> FileResponse:
+    asset = session.scalar(
+        select(Asset)
+        .options(selectinload(Asset.generation))
+        .where(Asset.id == asset_id)
+    )
     if not asset or not asset.generation:
         raise HTTPException(status_code=404, detail="Asset not found")
     absolute_path = generation_service.asset_absolute_path(asset, which="thumb")

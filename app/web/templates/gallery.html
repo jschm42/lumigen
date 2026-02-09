@@ -115,6 +115,37 @@
 
   {% include "fragments/gallery_grid.html" %}
 
+  <form id="bulk-action-form" method="post" class="bulk-actions" data-gallery-bulk-form>
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+    <div class="bulk-actions-row">
+      <label class="bulk-select-all">
+        <input type="checkbox" data-gallery-select-all>
+        Select all
+      </label>
+      <small class="muted" data-gallery-selection-count>0 selected</small>
+    </div>
+    <div class="bulk-actions-row bulk-actions-controls">
+      <div class="bulk-move-group">
+        <select name="gallery_folder_id">
+          <option value="">Root</option>
+          {% for folder_item in filter_options.folders %}
+            <option value="{{ folder_item.id }}">{{ folder_item.path }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="secondary" formaction="/assets/bulk-move" data-bulk-action disabled>Move selected</button>
+      </div>
+      <button
+        type="submit"
+        class="contrast"
+        formaction="/assets/bulk-delete"
+        data-bulk-action
+        onclick="return confirm('Delete selected assets?');"
+        disabled>
+        Delete selected
+      </button>
+    </div>
+  </form>
+
   <div class="pagination">
     <small class="muted">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</small>
     <div class="pagination-actions">

@@ -1,6 +1,15 @@
 <div class="thumb-grid thumb-size-{{ thumb_size }}">
   {% for asset in page_data.items %}
-  <article class="thumb-card">
+  <article class="thumb-card" data-gallery-card>
+    <div class="thumb-select">
+      <input
+        type="checkbox"
+        name="asset_ids"
+        value="{{ asset.id }}"
+        form="bulk-action-form"
+        data-gallery-select
+        aria-label="Select asset {{ asset.id }}">
+    </div>
     <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
     <div class="thumb-meta">
       <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
@@ -21,18 +30,6 @@
         </button>
       </form>
     </div>
-    <form method="post" action="/assets/{{ asset.id }}/move-folder" class="move-form">
-      <div role="group">
-        <select name="gallery_folder_id">
-          <option value="">Root</option>
-          {% for folder_item in filter_options.folders %}
-            <option value="{{ folder_item.id }}" {% if asset.gallery_folder_id == folder_item.id %}selected{% endif %}>{{ folder_item.path }}</option>
-          {% endfor %}
-        </select>
-        <input type="hidden" name="return_to" value="{{ return_to }}">
-        <button type="submit">Move</button>
-      </div>
-    </form>
   </article>
   {% else %}
     <p class="muted">No assets found for current filters.</p>
