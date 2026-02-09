@@ -6,41 +6,54 @@
      hx-swap="outerHTML"
      {% endif %}>
   <div class="job-head">
-    <h3>Job #{{ generation.id }}</h3>
+    <h3 class="h6 mb-0 d-flex align-items-center gap-2"><i class="bi bi-cpu"></i>Job #{{ generation.id }}</h3>
     {% if generation.status in ['queued', 'running'] %}
       <form method="post"
             action="/jobs/{{ generation.id }}/cancel"
             hx-post="/jobs/{{ generation.id }}/cancel"
             hx-target="closest .job-box"
             hx-swap="outerHTML">
-        <button type="submit" class="button-secondary compact">Abbrechen</button>
+        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-stop-circle me-1"></i>Abbrechen</button>
       </form>
     {% endif %}
   </div>
   <p class="job-status-line">
-    {% if generation.status in ['queued', 'running'] %}<span class="spinner" aria-hidden="true"></span>{% endif %}
+    {% if generation.status in ['queued', 'running'] %}
+      <span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
+      <i class="bi bi-hourglass-split text-primary"></i>
+    {% elif generation.status == 'succeeded' %}
+      <i class="bi bi-check-circle-fill text-success"></i>
+    {% elif generation.status == 'failed' %}
+      <i class="bi bi-x-octagon-fill text-danger"></i>
+    {% elif generation.status == 'cancelled' %}
+      <i class="bi bi-slash-circle-fill text-warning"></i>
+    {% endif %}
     Status: <strong>{{ generation.status }}</strong>
   </p>
   {% if generation.error %}
-    <p class="error">{{ generation.error }}</p>
+    <div class="alert alert-danger py-2 d-flex align-items-center gap-2 mb-2" role="alert">
+      <i class="bi bi-exclamation-triangle-fill"></i><span>{{ generation.error }}</span>
+    </div>
   {% endif %}
   {% if generation.failure_sidecar_path %}
-    <p><small>Failure sidecar: {{ generation.failure_sidecar_path }}</small></p>
+    <p class="mb-2"><small class="text-body-secondary"><i class="bi bi-file-earmark-code me-1"></i>Failure sidecar: {{ generation.failure_sidecar_path }}</small></p>
   {% endif %}
 
   {% if generation.status == 'succeeded' and assets %}
     <div class="thumb-grid">
       {% for asset in assets %}
-      <article class="thumb-card">
+      <article class="thumb-card card">
+        <div class="card-body p-2">
         <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
-        <div>
+        <div class="d-grid gap-1 mt-2">
           <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
-          <small>{{ asset.width }}x{{ asset.height }}</small>
+          <small class="text-body-secondary"><i class="bi bi-aspect-ratio me-1"></i>{{ asset.width }}x{{ asset.height }}</small>
+        </div>
         </div>
       </article>
       {% endfor %}
     </div>
   {% elif generation.status == 'succeeded' %}
-    <p>Job completed but produced no assets.</p>
+    <p class="mb-0 text-body-secondary"><i class="bi bi-info-circle me-1"></i>Job completed but produced no assets.</p>
   {% endif %}
 </div>

@@ -1,18 +1,24 @@
 {% extends "layout.html" %}
 {% block content %}
 <section class="card">
-  <div class="section-head">
-    <h2>Profiles</h2>
-    <button type="button" class="button-secondary" onclick="document.getElementById('create-profile-dialog').showModal()">New profile</button>
+  <div class="card-body">
+  <div class="section-head mb-3">
+    <h2 class="h4 mb-0 d-flex align-items-center gap-2"><i class="bi bi-sliders2"></i>Profiles</h2>
+    <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('create-profile-dialog').showModal()"><i class="bi bi-plus-circle me-1"></i>New profile</button>
   </div>
-  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% if error %}
+    <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+      <i class="bi bi-exclamation-triangle-fill"></i><span>{{ error }}</span>
+    </div>
+  {% endif %}
   {% include "fragments/profiles_table.html" %}
+  </div>
 </section>
 
-<dialog id="create-profile-dialog" class="modal">
+<dialog id="create-profile-dialog" class="profile-dialog">
   <div class="modal-head">
-    <h3>Create profile</h3>
-    <button type="button" class="button-secondary compact" onclick="document.getElementById('create-profile-dialog').close()">Close</button>
+    <h3 class="h5 mb-0 d-flex align-items-center gap-2"><i class="bi bi-plus-square"></i>Create profile</h3>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('create-profile-dialog').close()"><i class="bi bi-x-lg"></i></button>
   </div>
   {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url=none %}
     {% include "profile_form.html" %}
@@ -21,10 +27,10 @@
 
 {% set edit_profile = form_profile %}
 {% if edit_profile %}
-<dialog id="edit-profile-dialog" class="modal">
+<dialog id="edit-profile-dialog" class="profile-dialog">
   <div class="modal-head">
-    <h3>Edit profile: {{ edit_profile.name }}</h3>
-    <button type="button" class="button-secondary compact" onclick="window.location='/profiles'">Close</button>
+    <h3 class="h5 mb-0 d-flex align-items-center gap-2"><i class="bi bi-pencil-square"></i>Edit profile: {{ edit_profile.name }}</h3>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.location='/profiles'"><i class="bi bi-x-lg"></i></button>
   </div>
   {% with form_profile=edit_profile, form_action="/profiles/" ~ edit_profile.id ~ "/update", form_dom_id="edit-profile-form", submit_label="Update", cancel_url="/profiles" %}
     {% include "profile_form.html" %}

@@ -1,57 +1,60 @@
 {% extends "layout.html" %}
 {% block content %}
 <section class="card">
-  <h2>Asset #{{ asset.id }}</h2>
+  <div class="card-body">
+  <h2 class="h4 mb-3 d-flex align-items-center gap-2"><i class="bi bi-image"></i>Asset #{{ asset.id }}</h2>
 
   <img class="detail-image" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}">
 
-  <div class="actions">
-    <button type="button" onclick='navigator.clipboard.writeText({{ asset.generation.prompt_final | tojson }})'>Copy prompt_final</button>
-    <a class="button-secondary" href="/assets/{{ asset.id }}/download">Download</a>
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <button class="btn btn-outline-secondary btn-sm" type="button" onclick='navigator.clipboard.writeText({{ asset.generation.prompt_final | tojson }})'><i class="bi bi-clipboard me-1"></i>Copy prompt_final</button>
+    <a class="btn btn-outline-secondary btn-sm" href="/assets/{{ asset.id }}/download"><i class="bi bi-download me-1"></i>Download</a>
     <button
+      class="btn btn-primary btn-sm"
       hx-post="/generations/{{ asset.generation.id }}/rerun"
       hx-target="#rerun-status"
       hx-swap="innerHTML"
       type="button"
-    >Re-run</button>
+    ><i class="bi bi-arrow-repeat me-1"></i>Re-run</button>
     <form method="post" action="/assets/{{ asset.id }}/delete" onsubmit="return confirm('Delete this asset?');">
-      <button type="submit">Delete asset</button>
+      <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash3 me-1"></i>Delete asset</button>
     </form>
     <form method="post" action="/generations/{{ asset.generation.id }}/delete" onsubmit="return confirm('Delete full generation and all assets?');">
-      <button type="submit">Delete generation</button>
+      <button class="btn btn-danger btn-sm" type="submit"><i class="bi bi-exclamation-octagon me-1"></i>Delete generation</button>
     </form>
-    <a class="button-secondary" href="/gallery">Back to gallery</a>
+    <a class="btn btn-outline-secondary btn-sm" href="/gallery"><i class="bi bi-arrow-left me-1"></i>Back to gallery</a>
   </div>
 
   <div id="rerun-status"></div>
 
-  <h3>Metadata</h3>
-  <dl class="meta-list">
-    <dt>Generation</dt><dd>{{ asset.generation.id }}</dd>
-    <dt>Status</dt><dd>{{ asset.generation.status }}</dd>
-    <dt>Provider</dt><dd>{{ asset.generation.provider }}</dd>
-    <dt>Model</dt><dd>{{ asset.generation.model }}</dd>
-    <dt>Gallery folder</dt><dd>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</dd>
-    <dt>Size</dt><dd>{{ asset.width }}x{{ asset.height }}</dd>
-    <dt>MIME</dt><dd>{{ asset.mime }}</dd>
-    <dt>File path (relative)</dt><dd>{{ asset.file_path }}</dd>
-    <dt>Thumbnail path (relative)</dt><dd>{{ asset.thumbnail_path }}</dd>
-    <dt>Sidecar path (relative)</dt><dd>{{ asset.sidecar_path }}</dd>
+  <h3 class="h5 mt-4">Metadata</h3>
+  <dl class="row g-2 mb-4">
+    <dt class="col-sm-4 col-lg-3">Generation</dt><dd class="col-sm-8 col-lg-9">{{ asset.generation.id }}</dd>
+    <dt class="col-sm-4 col-lg-3">Status</dt><dd class="col-sm-8 col-lg-9">{{ asset.generation.status }}</dd>
+    <dt class="col-sm-4 col-lg-3">Provider</dt><dd class="col-sm-8 col-lg-9">{{ asset.generation.provider }}</dd>
+    <dt class="col-sm-4 col-lg-3">Model</dt><dd class="col-sm-8 col-lg-9">{{ asset.generation.model }}</dd>
+    <dt class="col-sm-4 col-lg-3">Gallery folder</dt><dd class="col-sm-8 col-lg-9">{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</dd>
+    <dt class="col-sm-4 col-lg-3">Size</dt><dd class="col-sm-8 col-lg-9">{{ asset.width }}x{{ asset.height }}</dd>
+    <dt class="col-sm-4 col-lg-3">MIME</dt><dd class="col-sm-8 col-lg-9">{{ asset.mime }}</dd>
+    <dt class="col-sm-4 col-lg-3">File path (relative)</dt><dd class="col-sm-8 col-lg-9">{{ asset.file_path }}</dd>
+    <dt class="col-sm-4 col-lg-3">Thumbnail path (relative)</dt><dd class="col-sm-8 col-lg-9">{{ asset.thumbnail_path }}</dd>
+    <dt class="col-sm-4 col-lg-3">Sidecar path (relative)</dt><dd class="col-sm-8 col-lg-9">{{ asset.sidecar_path }}</dd>
     {% if asset.generation.failure_sidecar_path %}
-      <dt>Failure sidecar (generation)</dt><dd>{{ asset.generation.failure_sidecar_path }}</dd>
+      <dt class="col-sm-4 col-lg-3">Failure sidecar (generation)</dt><dd class="col-sm-8 col-lg-9">{{ asset.generation.failure_sidecar_path }}</dd>
     {% endif %}
   </dl>
 
-  <h3>asset.meta_json</h3>
+  <h3 class="h6">asset.meta_json</h3>
   <pre>{{ asset_meta_pretty }}</pre>
 
-  <h3>profile_snapshot_json</h3>
+  <h3 class="h6 mt-3">profile_snapshot_json</h3>
   <pre>{{ profile_snapshot_pretty }}</pre>
 
-  <h3>storage_template_snapshot_json</h3>
+  <h3 class="h6 mt-3">storage_template_snapshot_json</h3>
   <pre>{{ storage_snapshot_pretty }}</pre>
 
-  <h3>request_snapshot_json</h3>
+  <h3 class="h6 mt-3">request_snapshot_json</h3>
   <pre>{{ request_snapshot_pretty }}</pre>
+  </div>
 </section>
 {% endblock %}
