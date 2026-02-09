@@ -272,7 +272,7 @@ nav a.active {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(6, minmax(180px, 1fr)) auto;
   gap: 0.5rem;
   align-items: end;
   margin: 0.6rem 0;
@@ -281,6 +281,13 @@ nav a.active {
 .filter-actions {
   display: flex;
   align-items: flex-end;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1200px) {
+  .filter-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
 }
 
 .thumb-grid {
