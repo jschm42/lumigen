@@ -6,30 +6,76 @@
   {% if not profiles %}
     <p>No profiles yet. Create one in <a href="/profiles">Profiles</a>.</p>
   {% else %}
-  <form hx-post="/generate" hx-target="#job-list" hx-swap="afterbegin" method="post" class="stack">
+  <form
+    hx-post="/generate"
+    hx-target="#job-list"
+    hx-swap="afterbegin"
+    method="post"
+    class="stack"
+    data-generation-form
+  >
     <label for="prompt_user">Prompt</label>
     <textarea id="prompt_user" name="prompt_user" rows="5" required></textarea>
 
     <label for="profile_id">Profile</label>
-    <select id="profile_id" name="profile_id" required>
+    <select id="profile_id" name="profile_id" data-generation-profile required>
       {% for profile in profiles %}
-        <option value="{{ profile.id }}">{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+        <option
+          value="{{ profile.id }}"
+          data-width="{{ profile.width if profile.width is not none else '' }}"
+          data-height="{{ profile.height if profile.height is not none else '' }}"
+          data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"
+          data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
+          data-seed="{{ profile.seed if profile.seed is not none else '' }}"
+          data-negative-prompt="{{ profile.negative_prompt if profile.negative_prompt else '' }}"
+        >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
       {% endfor %}
     </select>
 
     <h3 class="section-subhead">Override profile defaults (optional)</h3>
     <div class="field-grid">
       <div>
+        <label for="dimension_preset">Dimension preset</label>
+        <select id="dimension_preset" data-dimension-preset>
+          <option value="">Custom / from profile</option>
+          <option value="512x512">512 x 512</option>
+          <option value="768x768">768 x 768</option>
+          <option value="1024x1024">1024 x 1024</option>
+          <option value="1152x896">1152 x 896</option>
+          <option value="896x1152">896 x 1152</option>
+          <option value="1216x832">1216 x 832</option>
+          <option value="832x1216">832 x 1216</option>
+          <option value="1344x768">1344 x 768</option>
+          <option value="768x1344">768 x 1344</option>
+          <option value="1536x640">1536 x 640</option>
+          <option value="640x1536">640 x 1536</option>
+        </select>
+      </div>
+      <div>
         <label for="width">Width</label>
-        <input id="width" type="number" name="width" min="1" placeholder="from profile">
+        <input id="width" type="text" name="width" inputmode="numeric" list="width-presets" placeholder="from profile">
       </div>
       <div>
         <label for="height">Height</label>
-        <input id="height" type="number" name="height" min="1" placeholder="from profile">
+        <input id="height" type="text" name="height" inputmode="numeric" list="height-presets" placeholder="from profile">
+      </div>
+      <div>
+        <label for="aspect_ratio_preset">Ratio preset</label>
+        <select id="aspect_ratio_preset" data-ratio-preset>
+          <option value="">Custom / from profile</option>
+          <option value="1:1">1:1</option>
+          <option value="16:9">16:9</option>
+          <option value="9:16">9:16</option>
+          <option value="4:3">4:3</option>
+          <option value="3:4">3:4</option>
+          <option value="3:2">3:2</option>
+          <option value="2:3">2:3</option>
+          <option value="21:9">21:9</option>
+        </select>
       </div>
       <div>
         <label for="aspect_ratio">Ratio</label>
-        <input id="aspect_ratio" type="text" name="aspect_ratio" placeholder="e.g. 16:9 (from profile)">
+        <input id="aspect_ratio" type="text" name="aspect_ratio" list="ratio-presets" placeholder="e.g. 16:9 (from profile)">
       </div>
       <div>
         <label for="n_images">Number of images</label>
@@ -43,6 +89,40 @@
         </div>
       </div>
     </div>
+    <datalist id="width-presets">
+      <option value="512"></option>
+      <option value="640"></option>
+      <option value="768"></option>
+      <option value="832"></option>
+      <option value="896"></option>
+      <option value="1024"></option>
+      <option value="1152"></option>
+      <option value="1216"></option>
+      <option value="1344"></option>
+      <option value="1536"></option>
+    </datalist>
+    <datalist id="height-presets">
+      <option value="512"></option>
+      <option value="640"></option>
+      <option value="768"></option>
+      <option value="832"></option>
+      <option value="896"></option>
+      <option value="1024"></option>
+      <option value="1152"></option>
+      <option value="1216"></option>
+      <option value="1344"></option>
+      <option value="1536"></option>
+    </datalist>
+    <datalist id="ratio-presets">
+      <option value="1:1"></option>
+      <option value="16:9"></option>
+      <option value="9:16"></option>
+      <option value="4:3"></option>
+      <option value="3:4"></option>
+      <option value="3:2"></option>
+      <option value="2:3"></option>
+      <option value="21:9"></option>
+    </datalist>
 
     <label class="checkbox-row" for="override_negative_prompt">
       <input id="override_negative_prompt" type="checkbox" name="override_negative_prompt">

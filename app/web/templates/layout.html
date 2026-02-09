@@ -105,6 +105,95 @@
           loadModels(providerSelect);
         });
       });
+
+      function syncRatioPreset(ratioInput, ratioPreset) {
+        if (!ratioInput || !ratioPreset) return;
+        var value = ratioInput.value.trim();
+        var hasMatch = Array.from(ratioPreset.options).some(function (option) {
+          return option.value === value;
+        });
+        ratioPreset.value = hasMatch ? value : "";
+      }
+
+      function syncDimensionPreset(widthInput, heightInput, dimensionPreset) {
+        if (!widthInput || !heightInput || !dimensionPreset) return;
+        var width = widthInput.value.trim();
+        var height = heightInput.value.trim();
+        if (!width || !height) {
+          dimensionPreset.value = "";
+          return;
+        }
+        var combined = width + "x" + height;
+        var hasMatch = Array.from(dimensionPreset.options).some(function (option) {
+          return option.value === combined;
+        });
+        dimensionPreset.value = hasMatch ? combined : "";
+      }
+
+      function setupGenerationForm(form) {
+        var profileSelect = form.querySelector("[data-generation-profile]");
+        if (!profileSelect) return;
+
+        var widthInput = form.querySelector("[name='width']");
+        var heightInput = form.querySelector("[name='height']");
+        var ratioInput = form.querySelector("[name='aspect_ratio']");
+        var imagesInput = form.querySelector("[name='n_images']");
+        var seedInput = form.querySelector("[name='seed']");
+        var negativePromptInput = form.querySelector("[name='negative_prompt']");
+        var ratioPreset = form.querySelector("[data-ratio-preset]");
+        var dimensionPreset = form.querySelector("[data-dimension-preset]");
+
+        function applyProfileDefaults() {
+          var selected = profileSelect.options[profileSelect.selectedIndex];
+          if (!selected) return;
+
+          if (widthInput) widthInput.value = selected.dataset.width || "";
+          if (heightInput) heightInput.value = selected.dataset.height || "";
+          if (ratioInput) ratioInput.value = selected.dataset.aspectRatio || "";
+          if (imagesInput) imagesInput.value = selected.dataset.nImages || "";
+          if (seedInput) seedInput.value = selected.dataset.seed || "";
+          if (negativePromptInput) negativePromptInput.value = selected.dataset.negativePrompt || "";
+
+          syncRatioPreset(ratioInput, ratioPreset);
+          syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        }
+
+        profileSelect.addEventListener("change", applyProfileDefaults);
+
+        if (dimensionPreset && widthInput && heightInput) {
+          dimensionPreset.addEventListener("change", function () {
+            var value = dimensionPreset.value.trim();
+            if (!value) return;
+            var parts = value.split("x");
+            if (parts.length !== 2) return;
+            widthInput.value = parts[0].trim();
+            heightInput.value = parts[1].trim();
+            syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+          });
+
+          widthInput.addEventListener("input", function () {
+            syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+          });
+          heightInput.addEventListener("input", function () {
+            syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+          });
+        }
+
+        if (ratioPreset && ratioInput) {
+          ratioPreset.addEventListener("change", function () {
+            if (!ratioPreset.value) return;
+            ratioInput.value = ratioPreset.value;
+            syncRatioPreset(ratioInput, ratioPreset);
+          });
+          ratioInput.addEventListener("input", function () {
+            syncRatioPreset(ratioInput, ratioPreset);
+          });
+        }
+
+        applyProfileDefaults();
+      }
+
+      document.querySelectorAll("[data-generation-form]").forEach(setupGenerationForm);
     })();
   </script>
 </body>
