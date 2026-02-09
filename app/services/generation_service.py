@@ -250,7 +250,11 @@ class GenerationService:
                             width=image.width,
                             height=image.height,
                             mime=image.mime,
-                            meta_json={"provider_meta": image.meta, "raw_meta": result.raw_meta},
+                            meta_json={
+                                "provider_meta": image.meta,
+                                "raw_meta": result.raw_meta,
+                                "prompt_final": generation.prompt_final,
+                            },
                         )
                     )
 
