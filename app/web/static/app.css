@@ -28,12 +28,22 @@
 }
 
 :root {
-  --app-radius: 0.75rem;
-  --app-shadow: 0 0.5rem 1.5rem rgba(2, 22, 53, 0.08);
+  --app-radius: 0.6rem;
+  --app-shadow: 0 0.4rem 1.2rem rgba(2, 22, 53, 0.08);
+  --pico-font-size: 90%;
+  --pico-line-height: 1.4;
+  --pico-form-element-spacing-vertical: 0.45rem;
+  --pico-form-element-spacing-horizontal: 0.6rem;
+  --pico-nav-element-spacing-vertical: 0.35rem;
+  --pico-nav-element-spacing-horizontal: 0.6rem;
+  --pico-button-padding-vertical: 0.45rem;
+  --pico-button-padding-horizontal: 0.75rem;
 }
 
 body {
   min-height: 100vh;
+  font-size: 0.9rem;
+  line-height: 1.4;
   background:
     radial-gradient(900px 450px at 110% -10%, rgba(1, 114, 173, 0.12), transparent 60%),
     radial-gradient(900px 450px at -10% 110%, rgba(82, 95, 122, 0.12), transparent 60%),
@@ -51,7 +61,7 @@ body {
 
 main.main-stack {
   display: grid;
-  gap: 1.5rem;
+  gap: 0.9rem;
 }
 
 .app-header {
@@ -106,18 +116,18 @@ nav a.active {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: 0.6rem;
 }
 
 .section-subhead {
   margin: 0;
   color: var(--pico-muted-color);
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .stack {
   display: grid;
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 .actions {
@@ -131,7 +141,7 @@ nav a.active {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.6rem;
 }
 
 .action-row form {
@@ -142,7 +152,7 @@ nav a.active {
   border: 1px solid var(--pico-muted-border-color);
   border-left: 0.3rem solid var(--pico-muted-color);
   border-radius: var(--app-radius);
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.85rem;
   background: var(--pico-card-background-color);
   box-shadow: var(--pico-card-box-shadow);
 }
@@ -170,10 +180,10 @@ nav a.active {
 .folder-browser {
   border: 1px solid var(--pico-card-border-color);
   border-radius: var(--app-radius);
-  padding: 1rem;
+  padding: 0.75rem;
   background: var(--pico-card-background-color);
   box-shadow: var(--pico-card-box-shadow);
-  margin: 1rem 0;
+  margin: 0.6rem 0;
 }
 
 .folder-browser-head {
@@ -182,7 +192,7 @@ nav a.active {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .folder-breadcrumbs {
@@ -217,8 +227,8 @@ nav a.active {
 
 .explorer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
 }
 
 .explorer-folder {
@@ -226,12 +236,13 @@ nav a.active {
   color: inherit;
   border: 1px solid var(--pico-card-border-color);
   border-radius: var(--app-radius);
-  padding: 0.75rem;
+  padding: 0.6rem 0.7rem;
   background: var(--pico-card-background-color);
   box-shadow: var(--pico-card-box-shadow);
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  width: 100%;
 }
 
 .explorer-folder:hover {
@@ -260,9 +271,9 @@ nav a.active {
 .filter-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
+  gap: 0.5rem;
   align-items: end;
-  margin: 1rem 0;
+  margin: 0.6rem 0;
 }
 
 .filter-actions {
@@ -273,7 +284,7 @@ nav a.active {
 .thumb-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .thumb-size-sm {
@@ -291,11 +302,11 @@ nav a.active {
 .thumb-card {
   border: 1px solid var(--pico-card-border-color);
   border-radius: var(--app-radius);
-  padding: 0.75rem;
+  padding: 0.6rem;
   background: var(--pico-card-background-color);
   box-shadow: var(--pico-card-box-shadow);
   display: grid;
-  gap: 0.6rem;
+  gap: 0.35rem;
 }
 
 .thumb-card img {
@@ -317,8 +328,45 @@ nav a.active {
 
 .thumb-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  min-width: 2.1rem;
+  max-width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  line-height: 1;
+  margin: 0;
+  flex: 0 0 2.1rem;
+}
+
+.icon-button .material-symbols-outlined {
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+
+.icon-button.danger {
+  background: color-mix(in srgb, var(--pico-del-color) 20%, var(--pico-card-background-color));
+  border-color: color-mix(in srgb, var(--pico-del-color) 55%, var(--pico-card-border-color));
+  color: var(--pico-del-color);
+}
+
+.icon-button.danger:hover {
+  background: color-mix(in srgb, var(--pico-del-color) 28%, var(--pico-card-background-color));
+  border-color: color-mix(in srgb, var(--pico-del-color) 70%, var(--pico-card-border-color));
 }
 
 .move-form {
@@ -329,11 +377,11 @@ nav a.active {
   border: 1px solid var(--pico-card-border-color);
   border-left: 0.35rem solid var(--pico-muted-color);
   border-radius: var(--app-radius);
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.85rem;
   background: var(--pico-card-background-color);
   box-shadow: var(--pico-card-box-shadow);
   display: grid;
-  gap: 0.6rem;
+  gap: 0.35rem;
 }
 
 .status-queued,
@@ -439,6 +487,7 @@ nav a.active {
 
 .inline-form {
   display: inline-flex;
+  align-items: stretch;
   margin: 0;
 }
 
@@ -448,7 +497,7 @@ nav a.active {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-top: 1rem;
+  margin-top: 0.6rem;
 }
 
 .pagination-actions {

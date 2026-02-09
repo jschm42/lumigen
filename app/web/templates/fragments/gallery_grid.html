@@ -8,8 +8,18 @@
       <small>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</small>
     </div>
     <div class="thumb-actions">
-      <a role="button" class="secondary" href="/assets/{{ asset.id }}/download">Download</a>
-      <a role="button" class="secondary" href="/assets/{{ asset.id }}">Details</a>
+      <a role="button" class="secondary icon-button" href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+      </a>
+      <a role="button" class="secondary icon-button" href="/assets/{{ asset.id }}" aria-label="View details" title="Details">
+        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      </a>
+      <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-form" onsubmit="return confirm('Delete this asset?');">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <button type="submit" class="contrast icon-button danger" aria-label="Delete asset" title="Delete">
+          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+        </button>
+      </form>
     </div>
     <form method="post" action="/assets/{{ asset.id }}/move-folder" class="move-form">
       <div role="group">
