@@ -23,8 +23,14 @@
     class="stack"
     data-generation-form
   >
-    <label for="prompt_user">Prompt</label>
+    <div class="section-head">
+      <label for="prompt_user">Prompt</label>
+      <button type="button" class="secondary" data-enhance-prompt {% if not enhancement_ready %}disabled{% endif %}>Enhance</button>
+    </div>
     <textarea id="prompt_user" name="prompt_user" rows="5" required></textarea>
+    {% if not enhancement_ready %}
+      <small class="muted">Enhancement LLM is not configured.</small>
+    {% endif %}
 
     <div>
       <label for="input_images">Input images (1-5)</label>
@@ -41,6 +47,7 @@
       {% for profile in profiles %}
         <option
           value="{{ profile.id }}"
+          data-model-config-id="{{ profile.model_config_id if profile.model_config_id is not none else '' }}"
           data-width="{{ profile.width if profile.width is not none else '' }}"
           data-height="{{ profile.height if profile.height is not none else '' }}"
           data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"

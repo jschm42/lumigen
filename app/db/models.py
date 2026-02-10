@@ -87,11 +87,23 @@ class ModelConfig(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
+    enhancement_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     api_key_encrypted: Mapped[Optional[str]] = mapped_column(
         String(4096), nullable=True
     )
 
     profiles: Mapped[list["Profile"]] = relationship(back_populates="model_config")
+
+
+class EnhancementConfig(Base, TimestampMixin):
+    __tablename__ = "enhancement_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    api_key_encrypted: Mapped[Optional[str]] = mapped_column(
+        String(4096), nullable=True
+    )
 
 
 class Generation(Base):

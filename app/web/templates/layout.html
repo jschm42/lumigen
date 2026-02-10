@@ -160,6 +160,8 @@
         var inputPreview = form.querySelector("[data-input-preview]");
         var inputClear = form.querySelector("[data-input-clear]");
         var inputFileState = [];
+        var enhanceBtn = form.querySelector("[data-enhance-prompt]");
+        var promptInput = form.querySelector("[name='prompt_user']");
 
         function applyProfileDefaults() {
           var selected = profileSelect.options[profileSelect.selectedIndex];
@@ -292,6 +294,41 @@
             inputFileState = [];
             syncInputFiles();
             renderInputPreviews();
+          });
+        }
+
+        if (enhanceBtn && promptInput) {
+          enhanceBtn.addEventListener("click", async function () {
+            var selected = profileSelect.options[profileSelect.selectedIndex];
+            var modelConfigId = selected ? selected.dataset.modelConfigId : "";
+            var promptValue = promptInput.value.trim();
+            if (!promptValue) return;
+
+            enhanceBtn.disabled = true;
+            var originalText = enhanceBtn.textContent;
+            enhanceBtn.textContent = "Enhancing...";
+
+            try {
+              var response = await fetch("/api/enhance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  prompt: promptValue,
+                  model_config_id: modelConfigId ? Number(modelConfigId) : null
+                })
+              });
+              var payload = await response.json();
+              if (payload && payload.prompt) {
+                promptInput.value = payload.prompt;
+              } else if (payload && payload.error) {
+                alert(payload.error);
+              }
+            } catch (error) {
+              alert("Enhancement failed.");
+            } finally {
+              enhanceBtn.disabled = false;
+              enhanceBtn.textContent = originalText;
+            }
           });
         }
 

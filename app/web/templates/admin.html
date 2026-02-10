@@ -75,6 +75,9 @@
       <label for="new-model-id">Model</label>
       <input id="new-model-id" type="text" name="model" required>
 
+      <label for="new-model-enhancement">Enhancement prompt (optional)</label>
+      <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3"></textarea>
+
       <label for="new-model-key">API key</label>
       <input id="new-model-key" type="password" name="api_key" placeholder="optional">
 
@@ -106,6 +109,9 @@
       <label for="edit-model-id-{{ config.id }}">Model</label>
       <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required>
 
+      <label for="edit-model-enhancement-{{ config.id }}">Enhancement prompt (optional)</label>
+      <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
+
       <label for="edit-model-key-{{ config.id }}">API key</label>
       <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep">
 
@@ -121,4 +127,33 @@
   </article>
 </dialog>
 {% endfor %}
+
+<article>
+  <header class="section-head">
+    <h3>Enhancement LLM</h3>
+  </header>
+  <form action="/admin/enhancement" method="post" class="stack">
+    <label for="enhancement-provider">Provider</label>
+    <select id="enhancement-provider" name="provider" required>
+      {% for provider in providers %}
+        <option value="{{ provider }}" {% if enhancement_config and enhancement_config.provider == provider %}selected{% endif %}>{{ provider }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="enhancement-model">Model</label>
+    <input id="enhancement-model" type="text" name="model" value="{{ enhancement_config.model if enhancement_config else '' }}" required>
+
+    <label for="enhancement-key">API key</label>
+    <input id="enhancement-key" type="password" name="api_key" placeholder="leave blank to keep">
+
+    <label>
+      <input type="checkbox" name="clear_api_key">
+      Clear stored key
+    </label>
+
+    <div class="actions">
+      <button type="submit">Save</button>
+    </div>
+  </form>
+</article>
 {% endblock %}

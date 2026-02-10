@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
     Asset,
+    EnhancementConfig,
     GalleryFolder,
     Generation,
     ModelConfig,
@@ -91,6 +92,38 @@ def update_model_config(
 def delete_model_config(session: Session, model_config: ModelConfig) -> None:
     session.delete(model_config)
     session.commit()
+
+
+def get_enhancement_config(session: Session) -> Optional[EnhancementConfig]:
+    stmt = select(EnhancementConfig).order_by(EnhancementConfig.id.asc())
+    return session.scalar(stmt)
+
+
+def upsert_enhancement_config(
+    session: Session,
+    provider: str,
+    model: str,
+    api_key_encrypted: Optional[str],
+) -> EnhancementConfig:
+    existing = get_enhancement_config(session)
+    if existing:
+        existing.provider = provider
+        existing.model = model
+        existing.api_key_encrypted = api_key_encrypted
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
+
+    row = EnhancementConfig(
+        provider=provider,
+        model=model,
+        api_key_encrypted=api_key_encrypted,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
 
 
 def get_profile(session: Session, profile_id: int) -> Optional[Profile]:

@@ -33,6 +33,7 @@ from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, GalleryFolder, Generation
 from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
+from app.services.enhancement_service import EnhancementService
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
 from app.services.model_config_service import ModelConfigService
@@ -82,6 +83,7 @@ storage_service = StorageService(max_slug_length=settings.max_slug_length)
 thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_px)
 sidecar_service = SidecarService(storage_service)
 model_config_service = ModelConfigService(settings)
+enhancement_service = EnhancementService(settings, model_config_service)
 provider_registry = ProviderRegistry(settings)
 generation_service = GenerationService(
     settings=settings,
@@ -244,6 +246,7 @@ def generate_page(
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     gallery_folders = crud.list_gallery_folders(session)
+    enhancement_config = crud.get_enhancement_config(session)
     active_generations = list(
         session.scalars(
             select(Generation)
@@ -259,6 +262,9 @@ def generate_page(
             "profiles": profiles,
             "gallery_folders": gallery_folders,
             "active_generations": active_generations,
+            "enhancement_ready": bool(
+                enhancement_config and enhancement_config.api_key_encrypted
+            ),
             "error": error or "",
         },
     )
@@ -438,6 +444,7 @@ def admin_page(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     model_configs = crud.list_model_configs(session)
+    enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
 
     return templates.TemplateResponse(
@@ -445,6 +452,7 @@ def admin_page(
         {
             "request": request,
             "model_configs": model_configs,
+            "enhancement_config": enhancement_config,
             "providers": provider_registry.provider_names(),
             "error": error or "",
             "message": message or "",
@@ -458,6 +466,7 @@ def admin_create_model_config(
     name: str = Form(...),
     provider: str = Form(...),
     model: str = Form(...),
+    enhancement_prompt: str = Form(default=""),
     api_key: str = Form(default=""),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -476,6 +485,7 @@ def admin_create_model_config(
             name=name.strip(),
             provider=provider,
             model=model.strip(),
+            enhancement_prompt=enhancement_prompt.strip() or None,
             api_key_encrypted=api_key_encrypted,
         )
     except (ValueError, IntegrityError) as exc:
@@ -490,6 +500,7 @@ def admin_update_model_config(
     name: str = Form(...),
     provider: str = Form(...),
     model: str = Form(...),
+    enhancement_prompt: str = Form(default=""),
     api_key: str = Form(default=""),
     clear_api_key: bool = Form(default=False),
     session: Session = Depends(get_session),
@@ -517,6 +528,7 @@ def admin_update_model_config(
             name=name.strip(),
             provider=provider,
             model=model.strip(),
+            enhancement_prompt=enhancement_prompt.strip() or None,
             api_key_encrypted=api_key_encrypted,
         )
     except (ValueError, IntegrityError) as exc:
@@ -535,6 +547,68 @@ def admin_delete_model_config(
 
     crud.delete_model_config(session, config)
     return RedirectResponse(url="/admin?message=Deleted", status_code=303)
+
+
+@app.post("/admin/enhancement")
+def admin_update_enhancement(
+    provider: str = Form(...),
+    model: str = Form(...),
+    api_key: str = Form(default=""),
+    clear_api_key: bool = Form(default=False),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    provider = provider.strip()
+    if provider not in provider_registry.provider_names():
+        raise HTTPException(status_code=404, detail="Unknown provider")
+
+    try:
+        existing = crud.get_enhancement_config(session)
+        api_key_encrypted = existing.api_key_encrypted if existing else None
+        if clear_api_key:
+            api_key_encrypted = None
+        else:
+            api_key_value = api_key.strip()
+            if api_key_value:
+                api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+
+        crud.upsert_enhancement_config(
+            session,
+            provider=provider,
+            model=model.strip(),
+            api_key_encrypted=api_key_encrypted,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/api/enhance", response_class=JSONResponse)
+async def enhance_prompt(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    payload = await request.json()
+    prompt = str(payload.get("prompt") or "").strip()
+    model_config_id = payload.get("model_config_id")
+    if not prompt:
+        return JSONResponse(
+            {"prompt": "", "error": "Prompt is required."}, status_code=400
+        )
+
+    model_config = None
+    if isinstance(model_config_id, int):
+        model_config = crud.get_model_config(session, model_config_id)
+
+    enhancement_prompt = None
+    if model_config and model_config.enhancement_prompt:
+        enhancement_prompt = model_config.enhancement_prompt
+
+    try:
+        enhanced = await enhancement_service.enhance(prompt, enhancement_prompt)
+        return JSONResponse({"prompt": enhanced, "error": None})
+    except ValueError as exc:
+        return JSONResponse({"prompt": "", "error": str(exc)}, status_code=400)
 
 
 @app.get("/profiles", response_class=HTMLResponse)
