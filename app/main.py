@@ -611,6 +611,26 @@ async def enhance_prompt(
         return JSONResponse({"prompt": "", "error": str(exc)}, status_code=400)
 
 
+@app.get("/profiles/new", response_class=HTMLResponse)
+def new_profile_page(
+    request: Request,
+    error: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    storage_templates = crud.list_storage_templates(session)
+    model_configs = crud.list_model_configs(session)
+
+    return templates.TemplateResponse(
+        "profile_create.html",
+        {
+            "request": request,
+            "storage_templates": storage_templates,
+            "model_configs": model_configs,
+            "error": error,
+        },
+    )
+
+
 @app.get("/profiles", response_class=HTMLResponse)
 def profiles_page(
     request: Request,
@@ -677,7 +697,7 @@ def create_profile(
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/profiles?error={str(exc)}", status_code=303)
+        return RedirectResponse(url=f"/profiles/new?error={str(exc)}", status_code=303)
     return RedirectResponse(url="/profiles", status_code=303)
 
 

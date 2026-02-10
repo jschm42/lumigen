@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block content %}
+<article>
+  <header class="section-head">
+    <h2>Create profile</h2>
+    <a role="button" class="secondary" href="/profiles">Back to list</a>
+  </header>
+
+  {% if error %}
+    <div class="notice error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url="/profiles" %}
+    {% include "profile_form.html" %}
+  {% endwith %}
+</article>
+{% endblock %}

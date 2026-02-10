@@ -3,7 +3,7 @@
 <article>
   <header class="section-head">
     <h2>Profiles</h2>
-    <button type="button" onclick="document.getElementById('create-profile-dialog').showModal()">New profile</button>
+    <a role="button" href="/profiles/new">New profile</a>
   </header>
 
   {% if error %}
@@ -12,18 +12,6 @@
 
   {% include "fragments/profiles_table.html" %}
 </article>
-
-<dialog id="create-profile-dialog">
-  <article>
-    <header>
-      <button type="button" class="close" aria-label="Close" onclick="document.getElementById('create-profile-dialog').close()"></button>
-      <h3>Create profile</h3>
-    </header>
-    {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url=none %}
-      {% include "profile_form.html" %}
-    {% endwith %}
-  </article>
-</dialog>
 
 {% set edit_profile = form_profile %}
 {% if edit_profile %}

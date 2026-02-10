@@ -3,7 +3,6 @@
 <article>
   <header class="section-head">
     <h2>Admin</h2>
-    <button type="button" onclick="document.getElementById('create-model-config-dialog').showModal()">New model</button>
   </header>
 
   {% if message %}
@@ -19,6 +18,36 @@
       PROVIDER_CONFIG_KEY is missing. API keys cannot be saved or decrypted.
     </div>
   {% endif %}
+
+  <details id="create-model-config-panel" class="subdialog">
+    <summary>New model</summary>
+    <div class="subdialog-body">
+      <form action="/admin/model-configs" method="post" class="stack">
+        <label for="new-model-name">Name</label>
+        <input id="new-model-name" type="text" name="name" required>
+
+        <label for="new-model-provider">Provider</label>
+        <select id="new-model-provider" name="provider" required>
+          {% for provider in providers %}
+            <option value="{{ provider }}">{{ provider }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="new-model-id">Model</label>
+        <input id="new-model-id" type="text" name="model" required>
+
+        <label for="new-model-enhancement">Enhancement prompt (optional)</label>
+        <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3"></textarea>
+
+        <label for="new-model-key">API key</label>
+        <input id="new-model-key" type="password" name="api_key" placeholder="optional">
+
+        <div class="actions">
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </details>
 
   <div class="table-scroll">
     <table>
@@ -53,40 +82,7 @@
       </tbody>
     </table>
   </div>
-</article>
-
-<dialog id="create-model-config-dialog">
-  <article>
-    <header>
-      <button type="button" class="close" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()"></button>
-      <h3>New model</h3>
-    </header>
-    <form action="/admin/model-configs" method="post" class="stack">
-      <label for="new-model-name">Name</label>
-      <input id="new-model-name" type="text" name="name" required>
-
-      <label for="new-model-provider">Provider</label>
-      <select id="new-model-provider" name="provider" required>
-        {% for provider in providers %}
-          <option value="{{ provider }}">{{ provider }}</option>
-        {% endfor %}
-      </select>
-
-      <label for="new-model-id">Model</label>
-      <input id="new-model-id" type="text" name="model" required>
-
-      <label for="new-model-enhancement">Enhancement prompt (optional)</label>
-      <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3"></textarea>
-
-      <label for="new-model-key">API key</label>
-      <input id="new-model-key" type="password" name="api_key" placeholder="optional">
-
-      <div class="actions">
-        <button type="submit">Save</button>
-      </div>
-    </form>
-  </article>
-</dialog>
+  
 
 {% for config in model_configs %}
 <dialog id="edit-model-config-{{ config.id }}">

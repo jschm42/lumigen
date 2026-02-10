@@ -125,6 +125,33 @@ nav a.active {
   font-size: 0.95rem;
 }
 
+.subdialog {
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--app-radius);
+  background: var(--pico-card-background-color);
+  box-shadow: var(--pico-card-box-shadow);
+  margin-bottom: 0.8rem;
+}
+
+.subdialog > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.6rem 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.subdialog > summary::-webkit-details-marker {
+  display: none;
+}
+
+.subdialog-body {
+  border-top: 1px solid var(--pico-muted-border-color);
+  padding: 0.6rem 0.85rem 0.85rem;
+}
+
 .stack {
   display: grid;
   gap: 0.6rem;
