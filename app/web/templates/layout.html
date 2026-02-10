@@ -157,6 +157,8 @@
         var dimensionPreset = form.querySelector("[data-dimension-preset]");
         var inputImages = form.querySelector("[data-input-images]");
         var inputPreview = form.querySelector("[data-input-preview]");
+        var inputClear = form.querySelector("[data-input-clear]");
+        var inputFileState = [];
 
         function applyProfileDefaults() {
           var selected = profileSelect.options[profileSelect.selectedIndex];
@@ -205,18 +207,30 @@
           });
         }
 
+        function syncInputFiles() {
+          if (!inputImages) return;
+          var dataTransfer = new DataTransfer();
+          inputFileState.forEach(function (file) {
+            dataTransfer.items.add(file);
+          });
+          inputImages.files = dataTransfer.files;
+        }
+
         function renderInputPreviews() {
           if (!inputImages || !inputPreview) return;
-          var files = Array.from(inputImages.files || []);
           inputPreview.innerHTML = "";
 
-          if (files.length > 5) {
+          if (inputFileState.length > 5) {
             inputImages.setCustomValidity("Max 5 images allowed.");
           } else {
             inputImages.setCustomValidity("");
           }
 
-          files.slice(0, 5).forEach(function (file) {
+          if (inputClear) {
+            inputClear.disabled = inputFileState.length === 0;
+          }
+
+          inputFileState.slice(0, 5).forEach(function (file, index) {
             var objectUrl = URL.createObjectURL(file);
             var wrapper = document.createElement("div");
             wrapper.className = "input-image-thumb";
@@ -226,14 +240,58 @@
             img.addEventListener("load", function () {
               URL.revokeObjectURL(objectUrl);
             });
+            var removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.className = "input-image-remove";
+            removeBtn.textContent = "Remove";
+            removeBtn.addEventListener("click", function () {
+              inputFileState.splice(index, 1);
+              syncInputFiles();
+              renderInputPreviews();
+            });
             wrapper.appendChild(img);
+            wrapper.appendChild(removeBtn);
             inputPreview.appendChild(wrapper);
           });
         }
 
-        if (inputImages) {
-          inputImages.addEventListener("change", renderInputPreviews);
+        function addSelectedFiles(fileList) {
+          var incoming = Array.from(fileList || []);
+          if (incoming.length === 0) return;
+
+          incoming.forEach(function (file) {
+            var isDuplicate = inputFileState.some(function (existing) {
+              return existing.name === file.name
+                && existing.size === file.size
+                && existing.lastModified === file.lastModified;
+            });
+            if (!isDuplicate) {
+              inputFileState.push(file);
+            }
+          });
+
+          if (inputFileState.length > 5) {
+            inputFileState = inputFileState.slice(0, 5);
+          }
+
+          syncInputFiles();
           renderInputPreviews();
+        }
+
+        if (inputImages) {
+          inputImages.addEventListener("change", function () {
+            addSelectedFiles(inputImages.files);
+            inputImages.value = "";
+          });
+          renderInputPreviews();
+        }
+
+        if (inputClear) {
+          inputClear.addEventListener("click", function () {
+            inputFileState = [];
+            syncInputFiles();
+            renderInputPreviews();
+          });
         }
 
         applyProfileDefaults();
