@@ -27,7 +27,9 @@ class OpenRouterAdapter(ProviderAdapter):
 
     async def list_models(self, settings: Settings) -> list[str]:
         if not settings.openrouter_api_key:
-            raise ProviderConfigError("OpenRouter adapter requires OPENROUTER_API_KEY in .env.")
+            raise ProviderConfigError(
+                "OpenRouter adapter requires OPENROUTER_API_KEY in .env."
+            )
 
         url = settings.openrouter_base_url.rstrip("/") + "/models"
         headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
@@ -38,12 +40,16 @@ class OpenRouterAdapter(ProviderAdapter):
 
         if response.status_code >= 400:
             message = self._extract_error_message(response)
-            raise ProviderError(f"OpenRouter models request failed ({response.status_code}): {message}")
+            raise ProviderError(
+                f"OpenRouter models request failed ({response.status_code}): {message}"
+            )
 
         try:
             body = response.json()
         except Exception as exc:
-            raise ProviderError("OpenRouter returned a non-JSON models response.") from exc
+            raise ProviderError(
+                "OpenRouter returned a non-JSON models response."
+            ) from exc
 
         models: list[str] = []
         for item in body.get("data") or []:
@@ -54,9 +60,13 @@ class OpenRouterAdapter(ProviderAdapter):
                 models.append(model_id.strip())
         return models
 
-    async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
+    async def generate(
+        self, request: ProviderGenerationRequest, settings: Settings
+    ) -> ProviderGenerationResult:
         if not settings.openrouter_api_key:
-            raise ProviderConfigError("OpenRouter adapter requires OPENROUTER_API_KEY in .env.")
+            raise ProviderConfigError(
+                "OpenRouter adapter requires OPENROUTER_API_KEY in .env."
+            )
 
         url = settings.openrouter_base_url.rstrip("/") + "/chat/completions"
         headers = {
@@ -78,29 +88,45 @@ class OpenRouterAdapter(ProviderAdapter):
             if response.status_code == 429:
                 raise ProviderRateLimitError("OpenRouter rate limit reached (429).")
             if response.status_code == 503:
-                raise ProviderServiceUnavailableError("OpenRouter service unavailable (503).")
+                raise ProviderServiceUnavailableError(
+                    "OpenRouter service unavailable (503)."
+                )
             if response.status_code >= 500:
-                raise ProviderServiceUnavailableError(f"OpenRouter upstream error ({response.status_code}).")
+                raise ProviderServiceUnavailableError(
+                    f"OpenRouter upstream error ({response.status_code})."
+                )
             if response.status_code >= 400:
                 message = self._extract_error_message(response)
-                raise ProviderError(f"OpenRouter request failed ({response.status_code}): {message}")
+                raise ProviderError(
+                    f"OpenRouter request failed ({response.status_code}): {message}"
+                )
 
             try:
                 body = response.json()
             except Exception as exc:
                 raise ProviderError("OpenRouter returned a non-JSON response.") from exc
 
-            normalized_output_format = self._normalize_output_format(request.output_format)
-            image_refs = self._extract_image_refs(body, output_format=normalized_output_format)
+            normalized_output_format = self._normalize_output_format(
+                request.output_format
+            )
+            image_refs = self._extract_image_refs(
+                body, output_format=normalized_output_format
+            )
             if not image_refs:
                 summary = self._summarize_empty_image_response(body)
-                raise ProviderError(f"OpenRouter returned no generated image data. {summary}")
+                raise ProviderError(
+                    f"OpenRouter returned no generated image data. {summary}"
+                )
 
             fallback_width, fallback_height = self._resolve_dimensions(request)
             images: list[ProviderImage] = []
             for idx, image_ref in enumerate(image_refs, start=1):
-                image_bytes, mime = await self._read_image_payload(client, image_ref, idx)
-                width, height = self._probe_dimensions(image_bytes, fallback_width, fallback_height)
+                image_bytes, mime = await self._read_image_payload(
+                    client, image_ref, idx
+                )
+                width, height = self._probe_dimensions(
+                    image_bytes, fallback_width, fallback_height
+                )
                 images.append(
                     ProviderImage(
                         data=image_bytes,
@@ -125,9 +151,19 @@ class OpenRouterAdapter(ProviderAdapter):
         )
 
     def _build_payload(self, request: ProviderGenerationRequest) -> dict[str, Any]:
+        content: Any = request.prompt
+        if request.input_images:
+            parts: list[dict[str, Any]] = [{"type": "text", "text": request.prompt}]
+            for image in request.input_images:
+                data_url = self._to_input_data_url(image.data, image.mime)
+                if not data_url:
+                    continue
+                parts.append({"type": "image_url", "image_url": {"url": data_url}})
+            content = parts
+
         payload: dict[str, Any] = {
             "model": request.model,
-            "messages": [{"role": "user", "content": request.prompt}],
+            "messages": [{"role": "user", "content": content}],
             "modalities": ["image", "text"],
             "stream": False,
             "n": max(1, int(request.n_images)),
@@ -154,7 +190,15 @@ class OpenRouterAdapter(ProviderAdapter):
 
         return payload
 
-    def _extract_image_refs(self, body: dict[str, Any], output_format: str) -> list[str]:
+    def _to_input_data_url(self, data: bytes, mime: str) -> str:
+        if not data or not mime:
+            return ""
+        b64_value = base64.b64encode(data).decode("ascii")
+        return f"data:{mime};base64,{b64_value}"
+
+    def _extract_image_refs(
+        self, body: dict[str, Any], output_format: str
+    ) -> list[str]:
         refs: list[str] = []
         choices = body.get("choices")
         if isinstance(choices, list):
@@ -165,15 +209,31 @@ class OpenRouterAdapter(ProviderAdapter):
                 if not isinstance(message, dict):
                     continue
 
-                refs.extend(self._extract_image_refs_from_message_images(message.get("images"), output_format))
-                refs.extend(self._extract_image_refs_from_message_content(message.get("content"), output_format))
+                refs.extend(
+                    self._extract_image_refs_from_message_images(
+                        message.get("images"), output_format
+                    )
+                )
+                refs.extend(
+                    self._extract_image_refs_from_message_content(
+                        message.get("content"), output_format
+                    )
+                )
 
-        refs.extend(self._extract_image_refs_from_message_images(body.get("images"), output_format))
+        refs.extend(
+            self._extract_image_refs_from_message_images(
+                body.get("images"), output_format
+            )
+        )
         refs.extend(self._extract_image_refs_from_data(body.get("data"), output_format))
-        refs.extend(self._extract_image_refs_from_output(body.get("output"), output_format))
+        refs.extend(
+            self._extract_image_refs_from_output(body.get("output"), output_format)
+        )
         return self._unique_refs(refs)
 
-    def _extract_image_refs_from_message_images(self, value: Any, output_format: str) -> list[str]:
+    def _extract_image_refs_from_message_images(
+        self, value: Any, output_format: str
+    ) -> list[str]:
         refs: list[str] = []
         if not isinstance(value, list):
             return refs
@@ -184,7 +244,9 @@ class OpenRouterAdapter(ProviderAdapter):
                 refs.append(ref)
         return refs
 
-    def _extract_image_refs_from_message_content(self, value: Any, output_format: str) -> list[str]:
+    def _extract_image_refs_from_message_content(
+        self, value: Any, output_format: str
+    ) -> list[str]:
         refs: list[str] = []
         if isinstance(value, str):
             refs.extend(self._extract_refs_from_text(value))
@@ -216,7 +278,9 @@ class OpenRouterAdapter(ProviderAdapter):
                 refs.append(ref)
         return refs
 
-    def _extract_image_refs_from_data(self, value: Any, output_format: str) -> list[str]:
+    def _extract_image_refs_from_data(
+        self, value: Any, output_format: str
+    ) -> list[str]:
         refs: list[str] = []
         if not isinstance(value, list):
             return refs
@@ -226,7 +290,9 @@ class OpenRouterAdapter(ProviderAdapter):
                 refs.append(ref)
         return refs
 
-    def _extract_image_refs_from_output(self, value: Any, output_format: str) -> list[str]:
+    def _extract_image_refs_from_output(
+        self, value: Any, output_format: str
+    ) -> list[str]:
         refs: list[str] = []
         if not isinstance(value, list):
             return refs
@@ -243,10 +309,14 @@ class OpenRouterAdapter(ProviderAdapter):
                 refs.append(ref)
 
             content = item.get("content")
-            refs.extend(self._extract_image_refs_from_message_content(content, output_format))
+            refs.extend(
+                self._extract_image_refs_from_message_content(content, output_format)
+            )
         return refs
 
-    def _extract_single_image_ref(self, image_obj: Any, output_format: str) -> Optional[str]:
+    def _extract_single_image_ref(
+        self, image_obj: Any, output_format: str
+    ) -> Optional[str]:
         if isinstance(image_obj, str):
             return self._normalize_ref_string(image_obj, output_format)
 
@@ -272,7 +342,12 @@ class OpenRouterAdapter(ProviderAdapter):
             if refs:
                 return refs[0]
 
-        b64 = image_obj.get("b64_json") or image_obj.get("b64") or image_obj.get("base64") or image_obj.get("image_base64")
+        b64 = (
+            image_obj.get("b64_json")
+            or image_obj.get("b64")
+            or image_obj.get("base64")
+            or image_obj.get("image_base64")
+        )
         if isinstance(b64, str) and self._looks_like_base64_payload(b64):
             return self._to_data_url(b64, output_format)
 
@@ -295,7 +370,9 @@ class OpenRouterAdapter(ProviderAdapter):
         if not value:
             return refs
 
-        for match in re.findall(r"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+", value):
+        for match in re.findall(
+            r"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+", value
+        ):
             if isinstance(match, str) and match.strip():
                 refs.append(match.strip())
 
@@ -345,33 +422,56 @@ class OpenRouterAdapter(ProviderAdapter):
                 raise ProviderError(
                     f"OpenRouter image URL fetch failed at index {idx} with status {response.status_code}."
                 )
-            content_type = str(response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+            content_type = (
+                str(response.headers.get("content-type") or "")
+                .split(";", 1)[0]
+                .strip()
+                .lower()
+            )
             mime = content_type or self._mime_from_output_format("png")
             if not response.content:
-                raise ProviderError(f"OpenRouter image URL payload was empty at index {idx}.")
+                raise ProviderError(
+                    f"OpenRouter image URL payload was empty at index {idx}."
+                )
             return response.content, mime
 
-        raise ProviderError(f"OpenRouter image reference at index {idx} had unsupported format.")
+        raise ProviderError(
+            f"OpenRouter image reference at index {idx} had unsupported format."
+        )
 
     def _decode_data_url(self, image_ref: str, idx: int) -> tuple[bytes, str]:
-        match = re.match(r"^data:(?P<mime>[^;]+);base64,(?P<data>.+)$", image_ref, flags=re.IGNORECASE | re.DOTALL)
+        match = re.match(
+            r"^data:(?P<mime>[^;]+);base64,(?P<data>.+)$",
+            image_ref,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
         if not match:
-            raise ProviderError(f"OpenRouter image payload at index {idx} was not a valid base64 data URL.")
+            raise ProviderError(
+                f"OpenRouter image payload at index {idx} was not a valid base64 data URL."
+            )
 
-        mime = match.group("mime").strip().lower() or self._mime_from_output_format("png")
+        mime = match.group("mime").strip().lower() or self._mime_from_output_format(
+            "png"
+        )
         data = match.group("data").strip()
 
         try:
             image_bytes = base64.b64decode(data)
         except Exception as exc:
-            raise ProviderError(f"Failed to decode OpenRouter image payload at index {idx}.") from exc
+            raise ProviderError(
+                f"Failed to decode OpenRouter image payload at index {idx}."
+            ) from exc
 
         if not image_bytes:
-            raise ProviderError(f"Decoded OpenRouter image payload was empty at index {idx}.")
+            raise ProviderError(
+                f"Decoded OpenRouter image payload was empty at index {idx}."
+            )
 
         return image_bytes, mime
 
-    def _resolve_aspect_ratio(self, request: ProviderGenerationRequest) -> Optional[str]:
+    def _resolve_aspect_ratio(
+        self, request: ProviderGenerationRequest
+    ) -> Optional[str]:
         if request.aspect_ratio:
             ratio = str(request.aspect_ratio).strip()
             if self._is_ratio(ratio):
@@ -386,7 +486,9 @@ class OpenRouterAdapter(ProviderAdapter):
 
         return None
 
-    def _resolve_dimensions(self, request: ProviderGenerationRequest) -> tuple[int, int]:
+    def _resolve_dimensions(
+        self, request: ProviderGenerationRequest
+    ) -> tuple[int, int]:
         if request.width and request.height:
             width = int(request.width)
             height = int(request.height)
@@ -408,7 +510,9 @@ class OpenRouterAdapter(ProviderAdapter):
 
         return 1024, 1024
 
-    def _probe_dimensions(self, image_bytes: bytes, fallback_width: int, fallback_height: int) -> tuple[int, int]:
+    def _probe_dimensions(
+        self, image_bytes: bytes, fallback_width: int, fallback_height: int
+    ) -> tuple[int, int]:
         try:
             with Image.open(BytesIO(image_bytes)) as image:
                 width, height = image.size
@@ -442,7 +546,9 @@ class OpenRouterAdapter(ProviderAdapter):
             return False
         return int(left) > 0 and int(right) > 0
 
-    def _should_retry_with_image_only(self, response: httpx.Response, payload: dict[str, Any]) -> bool:
+    def _should_retry_with_image_only(
+        self, response: httpx.Response, payload: dict[str, Any]
+    ) -> bool:
         if response.status_code not in {400, 404}:
             return False
 
@@ -459,7 +565,9 @@ class OpenRouterAdapter(ProviderAdapter):
             return False
 
         message = self._extract_error_message(response).lower()
-        return "no endpoints found that support the requested output modalities" in message
+        return (
+            "no endpoints found that support the requested output modalities" in message
+        )
 
     def _summarize_empty_image_response(self, body: dict[str, Any]) -> str:
         summary: list[str] = [f"top_keys={sorted(body.keys())}"]
@@ -469,7 +577,9 @@ class OpenRouterAdapter(ProviderAdapter):
             summary.append(f"choices={len(choices)}")
             if choices and isinstance(choices[0], dict):
                 choice = choices[0]
-                finish_reason = choice.get("finish_reason") or choice.get("native_finish_reason")
+                finish_reason = choice.get("finish_reason") or choice.get(
+                    "native_finish_reason"
+                )
                 if finish_reason:
                     summary.append(f"finish_reason={finish_reason}")
 

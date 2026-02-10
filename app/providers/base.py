@@ -19,6 +19,13 @@ class ProviderGenerationRequest:
     output_format: str
     model: str
     params: dict[str, Any] = field(default_factory=dict)
+    input_images: list["ProviderInputImage"] = field(default_factory=list)
+
+
+@dataclass
+class ProviderInputImage:
+    data: bytes
+    mime: str
 
 
 @dataclass
@@ -56,7 +63,9 @@ class ProviderAdapter(ABC):
     name: str
 
     @abstractmethod
-    async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
+    async def generate(
+        self, request: ProviderGenerationRequest, settings: Settings
+    ) -> ProviderGenerationResult:
         raise NotImplementedError
 
     async def list_models(self, settings: Settings) -> list[str]:

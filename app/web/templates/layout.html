@@ -155,6 +155,8 @@
         var negativePromptInput = form.querySelector("[name='negative_prompt']");
         var ratioPreset = form.querySelector("[data-ratio-preset]");
         var dimensionPreset = form.querySelector("[data-dimension-preset]");
+        var inputImages = form.querySelector("[data-input-images]");
+        var inputPreview = form.querySelector("[data-input-preview]");
 
         function applyProfileDefaults() {
           var selected = profileSelect.options[profileSelect.selectedIndex];
@@ -201,6 +203,37 @@
           ratioInput.addEventListener("input", function () {
             syncRatioPreset(ratioInput, ratioPreset);
           });
+        }
+
+        function renderInputPreviews() {
+          if (!inputImages || !inputPreview) return;
+          var files = Array.from(inputImages.files || []);
+          inputPreview.innerHTML = "";
+
+          if (files.length > 5) {
+            inputImages.setCustomValidity("Max 5 images allowed.");
+          } else {
+            inputImages.setCustomValidity("");
+          }
+
+          files.slice(0, 5).forEach(function (file) {
+            var objectUrl = URL.createObjectURL(file);
+            var wrapper = document.createElement("div");
+            wrapper.className = "input-image-thumb";
+            var img = document.createElement("img");
+            img.src = objectUrl;
+            img.alt = file.name || "input image";
+            img.addEventListener("load", function () {
+              URL.revokeObjectURL(objectUrl);
+            });
+            wrapper.appendChild(img);
+            inputPreview.appendChild(wrapper);
+          });
+        }
+
+        if (inputImages) {
+          inputImages.addEventListener("change", renderInputPreviews);
+          renderInputPreviews();
         }
 
         applyProfileDefaults();

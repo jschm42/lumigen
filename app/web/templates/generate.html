@@ -17,12 +17,21 @@
     hx-post="/generate"
     hx-target="#job-list"
     hx-swap="afterbegin"
+    hx-encoding="multipart/form-data"
     method="post"
+    enctype="multipart/form-data"
     class="stack"
     data-generation-form
   >
     <label for="prompt_user">Prompt</label>
     <textarea id="prompt_user" name="prompt_user" rows="5" required></textarea>
+
+    <div>
+      <label for="input_images">Input images (1-5)</label>
+      <input id="input_images" name="input_images" type="file" accept="image/*" multiple data-input-images>
+      <small class="muted">Used as visual guidance for the model.</small>
+      <div class="input-image-row" data-input-preview aria-live="polite"></div>
+    </div>
 
     <label for="profile_id">Profile</label>
     <select id="profile_id" name="profile_id" data-generation-profile required>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import copy
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -12,7 +13,11 @@ from app.config import Settings
 from app.db import crud
 from app.db.engine import SessionLocal
 from app.db.models import Asset, Generation, Profile
-from app.providers.base import ProviderError, ProviderGenerationRequest
+from app.providers.base import (
+    ProviderError,
+    ProviderGenerationRequest,
+    ProviderInputImage,
+)
 from app.providers.registry import ProviderRegistry
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
@@ -63,6 +68,7 @@ class GenerationService:
         seed = effective_overrides.get("seed", profile.seed)
         gallery_folder_id = effective_overrides.get("gallery_folder_id")
         gallery_folder_path = effective_overrides.get("gallery_folder_path")
+        input_images = effective_overrides.get("input_images")
 
         profile_snapshot = {
             "id": profile.id,
@@ -103,6 +109,7 @@ class GenerationService:
             "params_json": profile.params_json or {},
             "gallery_folder_id": gallery_folder_id,
             "gallery_folder_path": gallery_folder_path,
+            "input_images": input_images or [],
             "overrides": {
                 "negative_prompt": "negative_prompt" in effective_overrides,
                 "width": "width" in effective_overrides,
@@ -112,6 +119,7 @@ class GenerationService:
                 "seed": "seed" in effective_overrides,
                 "gallery_folder_id": "gallery_folder_id" in effective_overrides,
                 "gallery_folder_path": "gallery_folder_path" in effective_overrides,
+                "input_images": "input_images" in effective_overrides,
             },
         }
 
@@ -396,6 +404,21 @@ class GenerationService:
         self, generation: Generation
     ) -> ProviderGenerationRequest:
         request_data = generation.request_snapshot_json or {}
+        input_images: list[ProviderInputImage] = []
+        raw_input_images = request_data.get("input_images")
+        if isinstance(raw_input_images, list):
+            for item in raw_input_images:
+                if not isinstance(item, dict):
+                    continue
+                b64_value = item.get("b64")
+                mime = item.get("mime")
+                if not isinstance(b64_value, str) or not isinstance(mime, str):
+                    continue
+                try:
+                    image_bytes = base64.b64decode(b64_value)
+                except Exception:
+                    continue
+                input_images.append(ProviderInputImage(data=image_bytes, mime=mime))
         return ProviderGenerationRequest(
             prompt=generation.prompt_final,
             negative_prompt=request_data.get("negative_prompt"),
@@ -407,6 +430,7 @@ class GenerationService:
             output_format=str(request_data.get("output_format") or "png"),
             model=str(request_data.get("model") or generation.model),
             params=request_data.get("params_json") or {},
+            input_images=input_images,
         )
 
     def _base_dir_from_snapshot(self, snapshot: Optional[dict[str, Any]]) -> Path:

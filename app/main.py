@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 from contextlib import asynccontextmanager
@@ -12,10 +13,12 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
+    File,
     Form,
     HTTPException,
     Query,
     Request,
+    UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,6 +43,8 @@ from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
 
 settings = get_settings()
+
+MAX_INPUT_IMAGES = 5
 
 
 @asynccontextmanager
@@ -270,6 +275,7 @@ def generate_submit(
     override_negative_prompt: bool = Form(default=False),
     negative_prompt: str = Form(default=""),
     gallery_folder_id: str = Form(default=""),
+    input_images: list[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profile = crud.get_profile(session, profile_id)
@@ -278,6 +284,27 @@ def generate_submit(
 
     try:
         overrides: dict[str, Any] = {}
+
+        if input_images:
+            if len(input_images) > MAX_INPUT_IMAGES:
+                raise ValueError(f"Upload up to {MAX_INPUT_IMAGES} input images.")
+            encoded_images: list[dict[str, str]] = []
+            for upload in input_images:
+                content_type = (upload.content_type or "").lower()
+                if not content_type.startswith("image/"):
+                    raise ValueError("Input images must be valid image files.")
+                data = upload.file.read()
+                if not data:
+                    continue
+                encoded_images.append(
+                    {
+                        "name": upload.filename or "input",
+                        "mime": content_type,
+                        "b64": base64.b64encode(data).decode("ascii"),
+                    }
+                )
+            if encoded_images:
+                overrides["input_images"] = encoded_images
 
         width_value = parse_optional_int(width)
         if width_value is not None:
