@@ -15,7 +15,7 @@
     <tr>
       <td>{{ profile.name }}</td>
       <td>{{ profile.provider }}</td>
-      <td>{{ profile.model }}</td>
+      <td>{{ profile.model_config.name if profile.model_config else profile.model }}</td>
       <td>{{ profile.output_format }}</td>
       <td>{{ profile.storage_template.name if profile.storage_template else profile.storage_template_id }}</td>
       <td class="table-actions">

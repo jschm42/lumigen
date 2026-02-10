@@ -18,6 +18,7 @@ class ProviderGenerationRequest:
     seed: Optional[int]
     output_format: str
     model: str
+    api_key: Optional[str] = None
     params: dict[str, Any] = field(default_factory=dict)
     input_images: list["ProviderInputImage"] = field(default_factory=list)
 

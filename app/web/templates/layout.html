@@ -27,6 +27,7 @@
         <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Generate</a></li>
         <li><a href="/profiles" class="{% if request.url.path.startswith('/profiles') %}active{% endif %}">Profiles</a></li>
         <li><a href="/gallery" class="{% if request.url.path.startswith('/gallery') or request.url.path.startswith('/assets') %}active{% endif %}">Gallery</a></li>
+        <li><a href="/admin" class="{% if request.url.path.startswith('/admin') %}active{% endif %}">Admin</a></li>
       </ul>
     </nav>
   </header>

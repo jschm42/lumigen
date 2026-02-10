@@ -1,0 +1,124 @@
+{% extends "layout.html" %}
+{% block content %}
+<article>
+  <header class="section-head">
+    <h2>Admin</h2>
+    <button type="button" onclick="document.getElementById('create-model-config-dialog').showModal()">New model</button>
+  </header>
+
+  {% if message %}
+    <div class="notice success" role="status">{{ message }}</div>
+  {% endif %}
+
+  {% if error %}
+    <div class="notice error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  {% if not encryption_ready %}
+    <div class="notice error" role="alert">
+      PROVIDER_CONFIG_KEY is missing. API keys cannot be saved or decrypted.
+    </div>
+  {% endif %}
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Provider</th>
+          <th>Model</th>
+          <th>API key</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for config in model_configs %}
+        <tr>
+          <td>{{ config.name }}</td>
+          <td>{{ config.provider }}</td>
+          <td>{{ config.model }}</td>
+          <td>{{ "stored" if config.api_key_encrypted else "none" }}</td>
+          <td class="table-actions">
+            <button type="button" class="secondary" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
+            <form action="/admin/model-configs/{{ config.id }}/delete" method="post" onsubmit="return confirm('Delete this model config?');" class="inline-form">
+              <button class="contrast" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5">No model configs yet.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<dialog id="create-model-config-dialog">
+  <article>
+    <header>
+      <button type="button" class="close" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()"></button>
+      <h3>New model</h3>
+    </header>
+    <form action="/admin/model-configs" method="post" class="stack">
+      <label for="new-model-name">Name</label>
+      <input id="new-model-name" type="text" name="name" required>
+
+      <label for="new-model-provider">Provider</label>
+      <select id="new-model-provider" name="provider" required>
+        {% for provider in providers %}
+          <option value="{{ provider }}">{{ provider }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="new-model-id">Model</label>
+      <input id="new-model-id" type="text" name="model" required>
+
+      <label for="new-model-key">API key</label>
+      <input id="new-model-key" type="password" name="api_key" placeholder="optional">
+
+      <div class="actions">
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </article>
+</dialog>
+
+{% for config in model_configs %}
+<dialog id="edit-model-config-{{ config.id }}">
+  <article>
+    <header>
+      <button type="button" class="close" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()"></button>
+      <h3>Edit model: {{ config.name }}</h3>
+    </header>
+    <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="stack">
+      <label for="edit-model-name-{{ config.id }}">Name</label>
+      <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" required>
+
+      <label for="edit-model-provider-{{ config.id }}">Provider</label>
+      <select id="edit-model-provider-{{ config.id }}" name="provider" required>
+        {% for provider in providers %}
+          <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="edit-model-id-{{ config.id }}">Model</label>
+      <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required>
+
+      <label for="edit-model-key-{{ config.id }}">API key</label>
+      <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep">
+
+      <label>
+        <input type="checkbox" name="clear_api_key">
+        Clear stored key
+      </label>
+
+      <div class="actions">
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </article>
+</dialog>
+{% endfor %}
+{% endblock %}

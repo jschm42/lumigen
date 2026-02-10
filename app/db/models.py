@@ -41,6 +41,10 @@ class Profile(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
+    model_config_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("model_configs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     base_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     negative_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -61,6 +65,9 @@ class Profile(Base, TimestampMixin):
     )
 
     storage_template: Mapped[StorageTemplate] = relationship(back_populates="profiles")
+    model_config: Mapped[Optional["ModelConfig"]] = relationship(
+        back_populates="profiles"
+    )
     generations: Mapped[list["Generation"]] = relationship(back_populates="profile")
 
 
@@ -71,6 +78,20 @@ class GalleryFolder(Base, TimestampMixin):
     path: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
 
     assets: Mapped[list["Asset"]] = relationship(back_populates="gallery_folder")
+
+
+class ModelConfig(Base, TimestampMixin):
+    __tablename__ = "model_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    api_key_encrypted: Mapped[Optional[str]] = mapped_column(
+        String(4096), nullable=True
+    )
+
+    profiles: Mapped[list["Profile"]] = relationship(back_populates="model_config")
 
 
 class Generation(Base):

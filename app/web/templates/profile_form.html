@@ -1,48 +1,21 @@
 {% set p = form_profile %}
 {% set action = form_action if form_action else '/profiles' %}
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
-{% set provider_field_id = provider_field_id if provider_field_id else form_dom_id ~ '-provider' %}
-{% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model' %}
-{% set model_datalist_id = model_datalist_id if model_datalist_id else form_dom_id ~ '-models' %}
+{% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
 
 <form action="{{ action }}" method="post" class="stack profile-form" id="{{ form_dom_id }}">
   <label for="{{ form_dom_id }}-name">Name</label>
   <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" required>
 
-  <label for="{{ provider_field_id }}">Provider</label>
-  <select
-    id="{{ provider_field_id }}"
-    name="provider"
-    data-provider-select
-    data-model-input-id="{{ model_field_id }}"
-    data-model-list-id="{{ model_datalist_id }}"
-    data-model-status-id="{{ form_dom_id }}-models-status"
-    required
-  >
-    {% for provider_name in providers %}
-      <option value="{{ provider_name }}" {% if p and p.provider == provider_name %}selected{% endif %}>{{ provider_name }}</option>
+  <label for="{{ model_field_id }}">Model</label>
+  <select id="{{ model_field_id }}" name="model_config_id" required>
+    <option value="">Select a model</option>
+    {% for config in model_configs %}
+      <option value="{{ config.id }}" {% if p and p.model_config_id == config.id %}selected{% endif %}>
+        {{ config.name }} ({{ config.provider }} / {{ config.model }})
+      </option>
     {% endfor %}
   </select>
-
-  <label for="{{ model_field_id }}">Model</label>
-  <div role="group">
-    <input
-      id="{{ model_field_id }}"
-      type="text"
-      name="model"
-      value="{{ p.model if p else 'stub-v1' }}"
-      list="{{ model_datalist_id }}"
-      required
-    >
-    <button
-      type="button"
-      class="secondary"
-      data-load-models-btn
-      data-provider-select-id="{{ provider_field_id }}"
-    >Load models</button>
-  </div>
-  <datalist id="{{ model_datalist_id }}"></datalist>
-  <small id="{{ form_dom_id }}-models-status" class="muted">Free input remains possible.</small>
 
   <label for="{{ form_dom_id }}-base-prompt">Base prompt (optional)</label>
   <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3">{{ p.base_prompt if p else '' }}</textarea>

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     provider_bfl_max_concurrent: int = 1
     provider_bfl_min_interval_ms: int = 800
 
+    provider_config_key: Optional[str] = None
+
     openai_api_key: Optional[str] = None
     openai_base_url: str = "https://api.openai.com/v1"
     openrouter_api_key: Optional[str] = None

@@ -6,7 +6,6 @@ import time
 from dataclasses import dataclass
 
 from app.config import Settings
-from app.providers.bfl_adapter import BFLAdapter
 from app.providers.base import (
     ProviderAdapter,
     ProviderError,
@@ -15,6 +14,7 @@ from app.providers.base import (
     ProviderRateLimitError,
     ProviderServiceUnavailableError,
 )
+from app.providers.bfl_adapter import BFLAdapter
 from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
@@ -62,7 +62,9 @@ class ProviderExecutor:
 
                 base_delay = max(1, self._policy.retry_base_delay_ms)
                 raw_delay = base_delay * (2 ** (attempt - 1))
-                bounded_delay = min(raw_delay, max(base_delay, self._policy.retry_max_delay_ms))
+                bounded_delay = min(
+                    raw_delay, max(base_delay, self._policy.retry_max_delay_ms)
+                )
                 jitter = random.uniform(0.8, 1.25)
                 await asyncio.sleep((bounded_delay / 1000) * jitter)
             except ProviderError:
@@ -100,8 +102,20 @@ class ProviderRegistry:
     def _build_policy(self, provider: str) -> ProviderPolicy:
         defaults = self._settings
         return ProviderPolicy(
-            max_concurrent=int(getattr(defaults, f"provider_{provider}_max_concurrent", defaults.provider_default_max_concurrent)),
-            min_interval_ms=int(getattr(defaults, f"provider_{provider}_min_interval_ms", defaults.provider_default_min_interval_ms)),
+            max_concurrent=int(
+                getattr(
+                    defaults,
+                    f"provider_{provider}_max_concurrent",
+                    defaults.provider_default_max_concurrent,
+                )
+            ),
+            min_interval_ms=int(
+                getattr(
+                    defaults,
+                    f"provider_{provider}_min_interval_ms",
+                    defaults.provider_default_min_interval_ms,
+                )
+            ),
             retry_max_attempts=int(defaults.provider_default_retry_max_attempts),
             retry_base_delay_ms=int(defaults.provider_default_retry_base_delay_ms),
             retry_max_delay_ms=int(defaults.provider_default_retry_max_delay_ms),
@@ -116,13 +130,34 @@ class ProviderRegistry:
         self._executors[provider] = executor
         return executor
 
-    async def generate(self, provider: str, request: ProviderGenerationRequest) -> ProviderGenerationResult:
+    async def generate(
+        self, provider: str, request: ProviderGenerationRequest
+    ) -> ProviderGenerationResult:
         adapter = self.get(provider)
+        settings = self._settings_for_provider(provider, request.api_key)
         executor = self._executor_for(provider)
-        return await executor.run(lambda: adapter.generate(request, self._settings))
+        return await executor.run(lambda: adapter.generate(request, settings))
 
     async def list_models(self, provider: str) -> list[str]:
         adapter = self.get(provider)
-        models = await adapter.list_models(self._settings)
+        models = await adapter.list_models(self._settings_for_provider(provider, None))
         normalized = [str(item).strip() for item in models if str(item).strip()]
         return sorted(set(normalized))
+
+    def _settings_for_provider(self, provider: str, api_key: str | None) -> Settings:
+        if not api_key:
+            return self._settings
+
+        update: dict[str, str] = {}
+        if provider == "openai":
+            update["openai_api_key"] = api_key
+        elif provider == "openrouter":
+            update["openrouter_api_key"] = api_key
+        elif provider == "google":
+            update["google_api_key"] = api_key
+        elif provider == "bfl":
+            update["bfl_api_key"] = api_key
+        else:
+            return self._settings
+
+        return self._settings.model_copy(update=update)

@@ -19,6 +19,7 @@ from app.providers.base import (
     ProviderInputImage,
 )
 from app.providers.registry import ProviderRegistry
+from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
@@ -37,12 +38,14 @@ class GenerationService:
         storage_service: StorageService,
         thumbnail_service: ThumbnailService,
         sidecar_service: SidecarService,
+        model_config_service: ModelConfigService | None = None,
     ) -> None:
         self.settings = settings
         self.registry = registry
         self.storage_service = storage_service
         self.thumbnail_service = thumbnail_service
         self.sidecar_service = sidecar_service
+        self.model_config_service = model_config_service
 
     def create_generation_from_profile(
         self,
@@ -75,6 +78,7 @@ class GenerationService:
             "name": profile.name,
             "provider": profile.provider,
             "model": profile.model,
+            "model_config_id": profile.model_config_id,
             "base_prompt": profile.base_prompt,
             "negative_prompt": profile.negative_prompt,
             "width": profile.width,
@@ -106,6 +110,7 @@ class GenerationService:
             "output_format": profile.output_format,
             "provider": profile.provider,
             "model": profile.model,
+            "model_config_id": profile.model_config_id,
             "params_json": profile.params_json or {},
             "gallery_folder_id": gallery_folder_id,
             "gallery_folder_path": gallery_folder_path,
@@ -404,6 +409,10 @@ class GenerationService:
         self, generation: Generation
     ) -> ProviderGenerationRequest:
         request_data = generation.request_snapshot_json or {}
+        api_key = None
+        model_config_id = self._parse_optional_int(request_data.get("model_config_id"))
+        if model_config_id is not None and self.model_config_service:
+            api_key = self.model_config_service.get_api_key(model_config_id)
         input_images: list[ProviderInputImage] = []
         raw_input_images = request_data.get("input_images")
         if isinstance(raw_input_images, list):
@@ -429,6 +438,7 @@ class GenerationService:
             seed=request_data.get("seed"),
             output_format=str(request_data.get("output_format") or "png"),
             model=str(request_data.get("model") or generation.model),
+            api_key=api_key,
             params=request_data.get("params_json") or {},
             input_images=input_images,
         )

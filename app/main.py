@@ -35,6 +35,7 @@ from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
+from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
@@ -80,6 +81,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 storage_service = StorageService(max_slug_length=settings.max_slug_length)
 thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_px)
 sidecar_service = SidecarService(storage_service)
+model_config_service = ModelConfigService(settings)
 provider_registry = ProviderRegistry(settings)
 generation_service = GenerationService(
     settings=settings,
@@ -87,6 +89,7 @@ generation_service = GenerationService(
     storage_service=storage_service,
     thumbnail_service=thumbnail_service,
     sidecar_service=sidecar_service,
+    model_config_service=model_config_service,
 )
 gallery_service = GalleryService(default_page_size=settings.default_page_size)
 
@@ -427,6 +430,113 @@ async def provider_models(provider: str) -> JSONResponse:
         return JSONResponse({"provider": provider, "models": [], "error": str(exc)})
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(
+    request: Request,
+    error: Optional[str] = Query(default=None),
+    message: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    model_configs = crud.list_model_configs(session)
+    encryption_ready = bool((settings.provider_config_key or "").strip())
+
+    return templates.TemplateResponse(
+        "admin.html",
+        {
+            "request": request,
+            "model_configs": model_configs,
+            "providers": provider_registry.provider_names(),
+            "error": error or "",
+            "message": message or "",
+            "encryption_ready": encryption_ready,
+        },
+    )
+
+
+@app.post("/admin/model-configs")
+def admin_create_model_config(
+    name: str = Form(...),
+    provider: str = Form(...),
+    model: str = Form(...),
+    api_key: str = Form(default=""),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    provider = provider.strip()
+    if provider not in provider_registry.provider_names():
+        raise HTTPException(status_code=404, detail="Unknown provider")
+
+    try:
+        api_key_encrypted = None
+        api_key_value = api_key.strip()
+        if api_key_value:
+            api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+
+        crud.create_model_config(
+            session,
+            name=name.strip(),
+            provider=provider,
+            model=model.strip(),
+            api_key_encrypted=api_key_encrypted,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/admin/model-configs/{model_config_id}/update")
+def admin_update_model_config(
+    model_config_id: int,
+    name: str = Form(...),
+    provider: str = Form(...),
+    model: str = Form(...),
+    api_key: str = Form(default=""),
+    clear_api_key: bool = Form(default=False),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    provider = provider.strip()
+    if provider not in provider_registry.provider_names():
+        raise HTTPException(status_code=404, detail="Unknown provider")
+
+    config = crud.get_model_config(session, model_config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Model config not found")
+
+    try:
+        api_key_encrypted = config.api_key_encrypted
+        if clear_api_key:
+            api_key_encrypted = None
+        else:
+            api_key_value = api_key.strip()
+            if api_key_value:
+                api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+
+        crud.update_model_config(
+            session,
+            config,
+            name=name.strip(),
+            provider=provider,
+            model=model.strip(),
+            api_key_encrypted=api_key_encrypted,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/admin/model-configs/{model_config_id}/delete")
+def admin_delete_model_config(
+    model_config_id: int, session: Session = Depends(get_session)
+) -> RedirectResponse:
+    config = crud.get_model_config(session, model_config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Model config not found")
+
+    crud.delete_model_config(session, config)
+    return RedirectResponse(url="/admin?message=Deleted", status_code=303)
+
+
 @app.get("/profiles", response_class=HTMLResponse)
 def profiles_page(
     request: Request,
@@ -436,6 +546,7 @@ def profiles_page(
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     storage_templates = crud.list_storage_templates(session)
+    model_configs = crud.list_model_configs(session)
     form_profile = crud.get_profile(session, edit_id) if edit_id else None
 
     return templates.TemplateResponse(
@@ -445,7 +556,7 @@ def profiles_page(
             "profiles": profiles,
             "storage_templates": storage_templates,
             "form_profile": form_profile,
-            "providers": provider_registry.provider_names(),
+            "model_configs": model_configs,
             "error": error,
         },
     )
@@ -454,8 +565,7 @@ def profiles_page(
 @app.post("/profiles")
 def create_profile(
     name: str = Form(...),
-    provider: str = Form(...),
-    model: str = Form(...),
+    model_config_id: str = Form(...),
     base_prompt: str = Form(default=""),
     negative_prompt: str = Form(default=""),
     width: str = Form(default=""),
@@ -469,11 +579,18 @@ def create_profile(
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     try:
+        model_config_value = parse_optional_int(model_config_id)
+        if model_config_value is None:
+            raise ValueError("Model selection is required")
+        model_config = crud.get_model_config(session, model_config_value)
+        if not model_config:
+            raise ValueError("Selected model does not exist")
         crud.create_profile(
             session,
             name=name.strip(),
-            provider=provider.strip(),
-            model=model.strip(),
+            provider=model_config.provider,
+            model=model_config.model,
+            model_config_id=model_config.id,
             base_prompt=base_prompt.strip() or None,
             negative_prompt=negative_prompt.strip() or None,
             width=parse_optional_int(width),
@@ -494,8 +611,7 @@ def create_profile(
 def update_profile(
     profile_id: int,
     name: str = Form(...),
-    provider: str = Form(...),
-    model: str = Form(...),
+    model_config_id: str = Form(...),
     base_prompt: str = Form(default=""),
     negative_prompt: str = Form(default=""),
     width: str = Form(default=""),
@@ -513,12 +629,19 @@ def update_profile(
         raise HTTPException(status_code=404, detail="Profile not found")
 
     try:
+        model_config_value = parse_optional_int(model_config_id)
+        if model_config_value is None:
+            raise ValueError("Model selection is required")
+        model_config = crud.get_model_config(session, model_config_value)
+        if not model_config:
+            raise ValueError("Selected model does not exist")
         crud.update_profile(
             session,
             profile,
             name=name.strip(),
-            provider=provider.strip(),
-            model=model.strip(),
+            provider=model_config.provider,
+            model=model_config.model,
+            model_config_id=model_config.id,
             base_prompt=base_prompt.strip() or None,
             negative_prompt=negative_prompt.strip() or None,
             width=parse_optional_int(width),

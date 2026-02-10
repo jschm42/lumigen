@@ -130,6 +130,16 @@ nav a.active {
   gap: 0.6rem;
 }
 
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.8rem;
+}
+
+.admin-card {
+  box-shadow: var(--pico-card-box-shadow);
+}
+
 .input-image-row {
   display: flex;
   flex-wrap: wrap;
