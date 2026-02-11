@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE_NAME="pixelforge:latest"
-CONTAINER_NAME="pixelforge"
+IMAGE_NAME="lumigen:latest"
+CONTAINER_NAME="lumigen"
 ENV_FILE="$ROOT_DIR/.env"
 
 if [[ -f "$ENV_FILE" ]]; then

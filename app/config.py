@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Pixelforge"
+    app_name: str = "Lumigen"
 
     data_dir: Path = Path("./data")
     sqlite_path: Path = Path("./data/app.db")

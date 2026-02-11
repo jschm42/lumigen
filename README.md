@@ -1,4 +1,4 @@
-# Pixelforge
+# Lumigen
 
 Local-first FastAPI app for image generation with provider adapters (stub, OpenAI, OpenRouter) and SQLite-first storage.
 

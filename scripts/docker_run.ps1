@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 
 $Root = Resolve-Path "$PSScriptRoot\.."
-$Image = "pixelforge:latest"
-$Container = "pixelforge"
+$Image = "lumigen:latest"
+$Container = "lumigen"
 $EnvFile = Join-Path $Root ".env"
 $EnvMap = @{}
 

@@ -59,7 +59,7 @@ class StubAdapter(ProviderAdapter):
             draw = ImageDraw.Draw(image)
 
             prompt_preview = request.prompt.strip().replace("\n", " ")[:180]
-            text = f"Pixelforge stub\nmodel={request.model}\nseed={seed} idx={idx}\n{prompt_preview}"
+            text = f"Lumigen stub\nmodel={request.model}\nseed={seed} idx={idx}\n{prompt_preview}"
             draw.text((24, 24), text, fill=(255, 255, 255))
 
             output = BytesIO()
