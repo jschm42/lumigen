@@ -31,10 +31,16 @@ if [[ -n "${PROVIDER_CONFIG_KEY:-}" ]]; then
   DOCKER_ENV_ARGS+=("-e" "PROVIDER_CONFIG_KEY=$PROVIDER_CONFIG_KEY")
 fi
 
+DOCKER_ENV_FILE_ARGS=()
+if [[ -f "$ENV_FILE" ]]; then
+  DOCKER_ENV_FILE_ARGS+=("--env-file" "$ENV_FILE")
+fi
+
 docker run -d --name "$CONTAINER_NAME" \
   -p 7003:7003 \
   -e HOST=0.0.0.0 \
   -e PORT=7003 \
+  "${DOCKER_ENV_FILE_ARGS[@]}" \
   "${DOCKER_ENV_ARGS[@]}" \
   -v "$DATA_DIR:/app/data" \
   "$IMAGE_NAME" >/dev/null

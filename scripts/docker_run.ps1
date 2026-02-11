@@ -46,10 +46,17 @@ if (-not [string]::IsNullOrWhiteSpace($ProviderConfigKey)) {
   $EnvArgs += "PROVIDER_CONFIG_KEY=$ProviderConfigKey"
 }
 
+$EnvFileArgs = @()
+if (Test-Path $EnvFile) {
+  $EnvFileArgs += "--env-file"
+  $EnvFileArgs += $EnvFile
+}
+
 docker run -d --name $Container `
   -p 7003:7003 `
   -e HOST=0.0.0.0 `
   -e PORT=7003 `
+  $EnvFileArgs `
   $EnvArgs `
   -v "$($DataDir):/app/data" `
   $Image | Out-Null
