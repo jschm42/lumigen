@@ -106,6 +106,15 @@ class EnhancementConfig(Base, TimestampMixin):
     )
 
 
+class DimensionPreset(Base, TimestampMixin):
+    __tablename__ = "dimension_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class Generation(Base):
     __tablename__ = "generations"
 

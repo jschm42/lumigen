@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
     Asset,
+    DimensionPreset,
     EnhancementConfig,
     GalleryFolder,
     Generation,
@@ -60,6 +61,11 @@ def list_model_configs(session: Session) -> list[ModelConfig]:
     return list(session.scalars(stmt).all())
 
 
+def list_dimension_presets(session: Session) -> list[DimensionPreset]:
+    stmt = select(DimensionPreset).order_by(DimensionPreset.name.asc())
+    return list(session.scalars(stmt).all())
+
+
 def get_model_config(session: Session, model_config_id: int) -> Optional[ModelConfig]:
     stmt = select(ModelConfig).where(ModelConfig.id == model_config_id)
     return session.scalar(stmt)
@@ -76,6 +82,37 @@ def create_model_config(session: Session, **fields) -> ModelConfig:
     session.commit()
     session.refresh(row)
     return row
+
+
+def get_dimension_preset(
+    session: Session, preset_id: int
+) -> Optional[DimensionPreset]:
+    stmt = select(DimensionPreset).where(DimensionPreset.id == preset_id)
+    return session.scalar(stmt)
+
+
+def create_dimension_preset(session: Session, **fields) -> DimensionPreset:
+    row = DimensionPreset(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_dimension_preset(
+    session: Session, preset: DimensionPreset, **fields
+) -> DimensionPreset:
+    for key, value in fields.items():
+        setattr(preset, key, value)
+    session.add(preset)
+    session.commit()
+    session.refresh(preset)
+    return preset
+
+
+def delete_dimension_preset(session: Session, preset: DimensionPreset) -> None:
+    session.delete(preset)
+    session.commit()
 
 
 def update_model_config(

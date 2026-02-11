@@ -245,6 +245,7 @@ def generate_page(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
+    dimension_presets = crud.list_dimension_presets(session)
     gallery_folders = crud.list_gallery_folders(session)
     enhancement_config = crud.get_enhancement_config(session)
     active_generations = list(
@@ -260,6 +261,7 @@ def generate_page(
         {
             "request": request,
             "profiles": profiles,
+            "dimension_presets": dimension_presets,
             "gallery_folders": gallery_folders,
             "active_generations": active_generations,
             "enhancement_ready": bool(
@@ -444,6 +446,7 @@ def admin_page(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     model_configs = crud.list_model_configs(session)
+    dimension_presets = crud.list_dimension_presets(session)
     enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
 
@@ -452,6 +455,7 @@ def admin_page(
         {
             "request": request,
             "model_configs": model_configs,
+            "dimension_presets": dimension_presets,
             "enhancement_config": enhancement_config,
             "providers": provider_registry.provider_names(),
             "error": error or "",
@@ -459,6 +463,85 @@ def admin_page(
             "encryption_ready": encryption_ready,
         },
     )
+
+
+@app.post("/admin/dimension-presets")
+def admin_create_dimension_preset(
+    name: str = Form(...),
+    width: str = Form(...),
+    height: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    try:
+        name_value = name.strip()
+        if not name_value:
+            raise ValueError("Name is required")
+        width_value = parse_optional_int(width)
+        height_value = parse_optional_int(height)
+        if width_value is None or width_value <= 0:
+            raise ValueError("Width must be > 0")
+        if height_value is None or height_value <= 0:
+            raise ValueError("Height must be > 0")
+
+        crud.create_dimension_preset(
+            session,
+            name=name_value,
+            width=width_value,
+            height=height_value,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/admin/dimension-presets/{preset_id}/update")
+def admin_update_dimension_preset(
+    preset_id: int,
+    name: str = Form(...),
+    width: str = Form(...),
+    height: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    preset = crud.get_dimension_preset(session, preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Dimension preset not found")
+
+    try:
+        name_value = name.strip()
+        if not name_value:
+            raise ValueError("Name is required")
+        width_value = parse_optional_int(width)
+        height_value = parse_optional_int(height)
+        if width_value is None or width_value <= 0:
+            raise ValueError("Width must be > 0")
+        if height_value is None or height_value <= 0:
+            raise ValueError("Height must be > 0")
+
+        crud.update_dimension_preset(
+            session,
+            preset,
+            name=name_value,
+            width=width_value,
+            height=height_value,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/admin/dimension-presets/{preset_id}/delete")
+def admin_delete_dimension_preset(
+    preset_id: int,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    preset = crud.get_dimension_preset(session, preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Dimension preset not found")
+
+    crud.delete_dimension_preset(session, preset)
+    return RedirectResponse(url="/admin?message=Deleted", status_code=303)
 
 
 @app.post("/admin/model-configs")

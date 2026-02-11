@@ -82,47 +82,134 @@
       </tbody>
     </table>
   </div>
-  
 
-{% for config in model_configs %}
-<dialog id="edit-model-config-{{ config.id }}">
-  <article>
-    <header>
-      <button type="button" class="close" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()"></button>
-      <h3>Edit model: {{ config.name }}</h3>
-    </header>
-    <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="stack">
-      <label for="edit-model-name-{{ config.id }}">Name</label>
-      <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" required>
+  {% for config in model_configs %}
+  <dialog id="edit-model-config-{{ config.id }}">
+    <article>
+      <header>
+        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()"></button>
+        <h3>Edit model: {{ config.name }}</h3>
+      </header>
+      <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="stack">
+        <label for="edit-model-name-{{ config.id }}">Name</label>
+        <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" required>
 
-      <label for="edit-model-provider-{{ config.id }}">Provider</label>
-      <select id="edit-model-provider-{{ config.id }}" name="provider" required>
-        {% for provider in providers %}
-          <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
-        {% endfor %}
-      </select>
+        <label for="edit-model-provider-{{ config.id }}">Provider</label>
+        <select id="edit-model-provider-{{ config.id }}" name="provider" required>
+          {% for provider in providers %}
+            <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
+          {% endfor %}
+        </select>
 
-      <label for="edit-model-id-{{ config.id }}">Model</label>
-      <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required>
+        <label for="edit-model-id-{{ config.id }}">Model</label>
+        <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required>
 
-      <label for="edit-model-enhancement-{{ config.id }}">Enhancement prompt (optional)</label>
-      <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
+        <label for="edit-model-enhancement-{{ config.id }}">Enhancement prompt (optional)</label>
+        <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
 
-      <label for="edit-model-key-{{ config.id }}">API key</label>
-      <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep">
+        <label for="edit-model-key-{{ config.id }}">API key</label>
+        <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep">
 
-      <label>
-        <input type="checkbox" name="clear_api_key">
-        Clear stored key
-      </label>
+        <label>
+          <input type="checkbox" name="clear_api_key">
+          Clear stored key
+        </label>
 
-      <div class="actions">
-        <button type="submit">Save</button>
-      </div>
-    </form>
-  </article>
-</dialog>
-{% endfor %}
+        <div class="actions">
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </article>
+  </dialog>
+  {% endfor %}
+
+  <details id="create-dimension-preset-panel" class="subdialog">
+    <summary>New dimension preset</summary>
+    <div class="subdialog-body">
+      <form action="/admin/dimension-presets" method="post" class="stack">
+        <label for="new-dimension-name">Name</label>
+        <input id="new-dimension-name" type="text" name="name" required>
+
+        <div class="grid">
+          <div>
+            <label for="new-dimension-width">Width</label>
+            <input id="new-dimension-width" type="number" name="width" min="1" required>
+          </div>
+          <div>
+            <label for="new-dimension-height">Height</label>
+            <input id="new-dimension-height" type="number" name="height" min="1" required>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Width</th>
+          <th>Height</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for preset in dimension_presets %}
+        <tr>
+          <td>{{ preset.name }}</td>
+          <td>{{ preset.width }}</td>
+          <td>{{ preset.height }}</td>
+          <td class="table-actions">
+            <button type="button" class="secondary" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
+            <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" onsubmit="return confirm('Delete this dimension preset?');" class="inline-form">
+              <button class="contrast" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4">No dimension presets yet.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% for preset in dimension_presets %}
+  <dialog id="edit-dimension-preset-{{ preset.id }}">
+    <article>
+      <header>
+        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()"></button>
+        <h3>Edit dimension preset: {{ preset.name }}</h3>
+      </header>
+      <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="stack">
+        <label for="edit-dimension-name-{{ preset.id }}">Name</label>
+        <input id="edit-dimension-name-{{ preset.id }}" type="text" name="name" value="{{ preset.name }}" required>
+
+        <div class="grid">
+          <div>
+            <label for="edit-dimension-width-{{ preset.id }}">Width</label>
+            <input id="edit-dimension-width-{{ preset.id }}" type="number" name="width" min="1" value="{{ preset.width }}" required>
+          </div>
+          <div>
+            <label for="edit-dimension-height-{{ preset.id }}">Height</label>
+            <input id="edit-dimension-height-{{ preset.id }}" type="number" name="height" min="1" value="{{ preset.height }}" required>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </article>
+  </dialog>
+  {% endfor %}
+</article>
 
 <article>
   <header class="section-head">
