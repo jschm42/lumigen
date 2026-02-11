@@ -26,10 +26,16 @@ docker build --pull -t "$IMAGE_NAME" "$ROOT_DIR"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
 echo "Restarting container $CONTAINER_NAME on port 7003..."
+DOCKER_ENV_ARGS=()
+if [[ -n "${PROVIDER_CONFIG_KEY:-}" ]]; then
+  DOCKER_ENV_ARGS+=("-e" "PROVIDER_CONFIG_KEY=$PROVIDER_CONFIG_KEY")
+fi
+
 docker run -d --name "$CONTAINER_NAME" \
   -p 7003:7003 \
   -e HOST=0.0.0.0 \
   -e PORT=7003 \
+  "${DOCKER_ENV_ARGS[@]}" \
   -v "$DATA_DIR:/app/data" \
   "$IMAGE_NAME" >/dev/null
 

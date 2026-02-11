@@ -39,10 +39,18 @@ try {
 }
 
 Write-Host "Starting container $Container on port 7003..."
+$EnvArgs = @()
+$ProviderConfigKey = $EnvMap["PROVIDER_CONFIG_KEY"]
+if (-not [string]::IsNullOrWhiteSpace($ProviderConfigKey)) {
+  $EnvArgs += "-e"
+  $EnvArgs += "PROVIDER_CONFIG_KEY=$ProviderConfigKey"
+}
+
 docker run -d --name $Container `
   -p 7003:7003 `
   -e HOST=0.0.0.0 `
   -e PORT=7003 `
+  $EnvArgs `
   -v "$($DataDir):/app/data" `
   $Image | Out-Null
 
