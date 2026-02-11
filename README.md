@@ -50,6 +50,30 @@ Open http://127.0.0.1:8010
 
 If port `8000` is already in use on your machine (common on Windows with other local tools), pick another port (for example `8010`).
 
+## Docker
+
+Build and run with a shared local `data/` folder and port `7003`:
+
+```bash
+scripts/docker_run.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+scripts\docker_run.ps1
+```
+
+Update the container after pulling a new version:
+
+```bash
+scripts/docker_update.sh
+```
+
+```powershell
+scripts\docker_update.ps1
+```
+
 ## Notes
 
 - Create at least one profile in **Profiles** before generating.
