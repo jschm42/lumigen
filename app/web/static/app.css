@@ -96,6 +96,18 @@ main.main-stack {
   box-shadow: var(--app-shadow);
 }
 
+.brand-mark.logo {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.brand-mark.logo svg {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
 .brand-text {
   display: grid;
   gap: 0.1rem;

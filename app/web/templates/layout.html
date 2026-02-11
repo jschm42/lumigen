@@ -15,7 +15,55 @@
       <ul>
         <li>
           <a class="brand" href="/">
-            <span class="brand-mark">img</span>
+            <span class="brand-mark logo" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" focusable="false">
+                <defs>
+                  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                  <filter id="glowStrong" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+                    <feMerge>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                  <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#00f5ff"/>
+                    <stop offset="60%" style="stop-color:#bf00ff"/>
+                    <stop offset="100%" style="stop-color:#ff00aa"/>
+                  </radialGradient>
+                  <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#00f5ff"/>
+                    <stop offset="100%" style="stop-color:#bf00ff"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="100" cy="100" r="95" fill="#0a0a0f"/>
+                <circle cx="100" cy="100" r="90" fill="none" stroke="url(#ringGrad)" stroke-width="2" filter="url(#glow)"/>
+                <path d="M30,100 Q100,45 170,100 Q100,155 30,100 Z" fill="none" stroke="#00f5ff" stroke-width="2.5" filter="url(#glow)"/>
+                <circle cx="100" cy="100" r="32" fill="none" stroke="url(#irisGrad)" stroke-width="3" filter="url(#glowStrong)"/>
+                <circle cx="100" cy="100" r="24" fill="none" stroke="#bf00ff" stroke-width="1" opacity="0.6" filter="url(#glow)"/>
+                <circle cx="100" cy="100" r="12" fill="#0a0a0f"/>
+                <circle cx="100" cy="100" r="12" fill="none" stroke="#00f5ff" stroke-width="1.5" filter="url(#glow)"/>
+                <circle cx="100" cy="100" r="5" fill="#00f5ff" filter="url(#glowStrong)"/>
+                <circle cx="92" cy="88" r="4" fill="white" opacity="0.8"/>
+                <circle cx="110" cy="108" r="2" fill="white" opacity="0.4"/>
+                <line x1="100" y1="68" x2="100" y2="78" stroke="#00f5ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
+                <line x1="100" y1="122" x2="100" y2="132" stroke="#00f5ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
+                <line x1="68" y1="100" x2="78" y2="100" stroke="#bf00ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
+                <line x1="122" y1="100" x2="132" y2="100" stroke="#bf00ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
+                <path d="M160,50 L162,45 L164,50 L169,52 L164,54 L162,59 L160,54 L155,52 Z" fill="#00f5ff" filter="url(#glow)"/>
+                <circle cx="45" cy="65" r="2" fill="#ff00aa" filter="url(#glow)"/>
+                <circle cx="155" cy="140" r="1.5" fill="#bf00ff" filter="url(#glow)"/>
+              </svg>
+            </span>
             <span class="brand-text">
               <strong>img-hub</strong>
               <small>Local image generation control room</small>
