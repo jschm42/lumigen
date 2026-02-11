@@ -23,6 +23,7 @@ from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
+from app.services.upscale_service import UpscaleService
 from app.utils.paths import ensure_dir
 
 
@@ -39,6 +40,7 @@ class GenerationService:
         thumbnail_service: ThumbnailService,
         sidecar_service: SidecarService,
         model_config_service: ModelConfigService | None = None,
+        upscale_service: UpscaleService | None = None,
     ) -> None:
         self.settings = settings
         self.registry = registry
@@ -46,6 +48,7 @@ class GenerationService:
         self.thumbnail_service = thumbnail_service
         self.sidecar_service = sidecar_service
         self.model_config_service = model_config_service
+        self.upscale_service = upscale_service
 
     def create_generation_from_profile(
         self,
@@ -69,6 +72,7 @@ class GenerationService:
         aspect_ratio = effective_overrides.get("aspect_ratio", profile.aspect_ratio)
         n_images = int(effective_overrides.get("n_images", profile.n_images) or 1)
         seed = effective_overrides.get("seed", profile.seed)
+        upscale_model = effective_overrides.get("upscale_model")
         gallery_folder_id = effective_overrides.get("gallery_folder_id")
         gallery_folder_path = effective_overrides.get("gallery_folder_path")
         input_images = effective_overrides.get("input_images")
@@ -107,6 +111,7 @@ class GenerationService:
             "aspect_ratio": aspect_ratio,
             "n_images": max(1, n_images),
             "seed": seed,
+            "upscale_model": upscale_model,
             "output_format": profile.output_format,
             "provider": profile.provider,
             "model": profile.model,
@@ -122,6 +127,7 @@ class GenerationService:
                 "aspect_ratio": "aspect_ratio" in effective_overrides,
                 "n_images": "n_images" in effective_overrides,
                 "seed": "seed" in effective_overrides,
+                "upscale_model": "upscale_model" in effective_overrides,
                 "gallery_folder_id": "gallery_folder_id" in effective_overrides,
                 "gallery_folder_path": "gallery_folder_path" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
@@ -229,10 +235,38 @@ class GenerationService:
                     .lower()
                     .lstrip(".")
                 )
+                upscale_model = str(
+                    generation.request_snapshot_json.get("upscale_model") or ""
+                ).strip()
+                upscale_enabled = bool(upscale_model)
+                if upscale_enabled and not self.upscale_service:
+                    raise ProviderError("Upscale service is not available.")
+                if upscale_enabled and not self.upscale_service.is_available():
+                    raise ProviderError("Upscaler is not configured on this server.")
                 folder_path = self._resolve_gallery_folder_path(session, generation)
 
                 for idx, image in enumerate(result.images, start=1):
                     self._raise_if_cancelled(session, generation_id)
+                    image_data = image.data
+                    image_width = image.width
+                    image_height = image.height
+                    image_mime = image.mime
+                    upscale_meta = None
+                    if upscale_enabled and self.upscale_service:
+                        (
+                            image_data,
+                            image_width,
+                            image_height,
+                            image_mime,
+                        ) = self.upscale_service.upscale_bytes(
+                            image.data,
+                            output_format,
+                            upscale_model,
+                        )
+                        upscale_meta = {
+                            "model": upscale_model,
+                            "tool": "realesrgan",
+                        }
                     rendered_rel_path = self.storage_service.render_relative_path(
                         template=storage_template,
                         profile_name=generation.profile_name,
@@ -249,7 +283,7 @@ class GenerationService:
                     abs_path = self.storage_service.resolve_managed_path(
                         base_dir, rel_path
                     )
-                    self.storage_service.write_bytes_atomic(abs_path, image.data)
+                    self.storage_service.write_bytes_atomic(abs_path, image_data)
                     created_files.append(rel_path.as_posix())
 
                     thumb_rel = self.thumbnail_service.create_thumbnail(
@@ -264,9 +298,9 @@ class GenerationService:
                         thumbnail_rel=thumb_rel.as_posix(),
                         provider_meta=image.meta,
                         raw_meta=result.raw_meta,
-                        image_width=image.width,
-                        image_height=image.height,
-                        image_mime=image.mime,
+                        image_width=image_width,
+                        image_height=image_height,
+                        image_mime=image_mime,
                     )
                     sidecar_rel = self.sidecar_service.write_asset_sidecar(
                         base_dir, rel_path, sidecar_payload
@@ -284,13 +318,14 @@ class GenerationService:
                             file_path=rel_path.as_posix(),
                             sidecar_path=sidecar_rel.as_posix(),
                             thumbnail_path=thumb_rel.as_posix(),
-                            width=image.width,
-                            height=image.height,
-                            mime=image.mime,
+                            width=image_width,
+                            height=image_height,
+                            mime=image_mime,
                             meta_json={
                                 "provider_meta": image.meta,
                                 "raw_meta": result.raw_meta,
                                 "prompt_final": generation.prompt_final,
+                                "upscale": upscale_meta,
                             },
                         )
                     )

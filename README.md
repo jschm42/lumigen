@@ -87,3 +87,61 @@ scripts\docker_update.ps1
 - OpenAI adapter works with `OPENAI_API_KEY`.
 - OpenRouter adapter works with `OPENROUTER_API_KEY` and sends image-generation requests through `/chat/completions` (`modalities: ["image","text"]`).
 - Generated files are managed via DB-indexed relative paths only; no arbitrary path browsing is exposed.
+
+## Upscaling (Linux, local Real-ESRGAN)
+
+Lumigen can upscale generated images locally using Real-ESRGAN (NCNN Vulkan). The app calls the binary directly, so you only need to install the executable and the model files.
+
+### 1) Download the binary
+
+- Real-ESRGAN releases: https://github.com/xinntao/Real-ESRGAN/releases
+- Download the Linux build (for example `realesrgan-ncnn-vulkan`), extract it, and make it executable:
+
+```bash
+chmod +x realesrgan-ncnn-vulkan
+sudo cp realesrgan-ncnn-vulkan /usr/local/bin/
+```
+
+### 2) Download the models
+
+- Model weights are available in the repo under `weights/` or in the release assets:
+	- https://github.com/xinntao/Real-ESRGAN/tree/master/weights
+- Hugging Face hosts mirrors too (search for Real-ESRGAN weights):
+	- https://huggingface.co/models?search=Real-ESRGAN
+
+The app expects model names (not full paths), so place the model files next to the binary or in the `models` directory that Real-ESRGAN uses by default (for example `/usr/local/bin/models`).
+
+Recommended model files:
+- `realesrgan-x2plus` (x2)
+- `realesrgan-x4plus` (x4)
+
+For x8, Lumigen runs x4 then x2 sequentially.
+
+### 3) Configure .env
+
+```dotenv
+UPSCALER_COMMAND=/usr/local/bin/realesrgan-ncnn-vulkan
+UPSCALER_MODEL_X2=realesrgan-x2plus
+UPSCALER_MODEL_X4=realesrgan-x4plus
+```
+
+Restart the app and enable the upscale option in the Generate form.
+
+### Optional: auto-download models from Hugging Face
+
+Lumigen can auto-download Real-ESRGAN NCNN model files (`.param` and `.bin`) from a Hugging Face repo. You need a repo that actually contains those NCNN files.
+
+Example `.env`:
+
+```dotenv
+UPSCALER_AUTO_DOWNLOAD=true
+UPSCALER_HF_REPO=ai-forever/Real-ESRGAN
+UPSCALER_HF_REVISION=main
+UPSCALER_MODEL_DIR=./data/models/realesrgan
+```
+
+Expected files in the repo:
+- `realesrgan-x2plus.param`
+- `realesrgan-x2plus.bin`
+- `realesrgan-x4plus.param`
+- `realesrgan-x4plus.bin`

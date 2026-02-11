@@ -40,6 +40,7 @@ from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
+from app.services.upscale_service import UpscaleService
 from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
@@ -84,6 +85,7 @@ thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_
 sidecar_service = SidecarService(storage_service)
 model_config_service = ModelConfigService(settings)
 enhancement_service = EnhancementService(settings, model_config_service)
+upscale_service = UpscaleService(settings)
 provider_registry = ProviderRegistry(settings)
 generation_service = GenerationService(
     settings=settings,
@@ -92,6 +94,7 @@ generation_service = GenerationService(
     thumbnail_service=thumbnail_service,
     sidecar_service=sidecar_service,
     model_config_service=model_config_service,
+    upscale_service=upscale_service,
 )
 gallery_service = GalleryService(default_page_size=settings.default_page_size)
 
@@ -267,6 +270,8 @@ def generate_page(
             "enhancement_ready": bool(
                 enhancement_config and enhancement_config.api_key_encrypted
             ),
+            "upscale_ready": upscale_service.is_available(),
+            "upscale_models": upscale_service.list_available_models(),
             "error": error or "",
         },
     )
@@ -283,6 +288,8 @@ def generate_submit(
     aspect_ratio: str = Form(default=""),
     n_images: str = Form(default=""),
     seed: str = Form(default=""),
+    upscale_enable: bool = Form(default=False),
+    upscale_model: str = Form(default=""),
     override_negative_prompt: bool = Form(default=False),
     negative_prompt: str = Form(default=""),
     gallery_folder_id: str = Form(default=""),
@@ -343,6 +350,17 @@ def generate_submit(
 
         if override_negative_prompt:
             overrides["negative_prompt"] = negative_prompt.strip() or None
+
+        if upscale_enable:
+            if not upscale_service.is_available():
+                raise ValueError("Upscaler is not configured on this server")
+            model_value = upscale_model.strip()
+            if not model_value:
+                raise ValueError("Upscale model is required")
+            available = upscale_service.list_available_models()
+            if available and model_value not in available:
+                raise ValueError("Selected upscale model is not available")
+            overrides["upscale_model"] = model_value
 
         folder_id_value = parse_optional_int(gallery_folder_id)
         if folder_id_value is not None:

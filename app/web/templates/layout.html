@@ -211,6 +211,8 @@
         var inputFileState = [];
         var enhanceBtn = form.querySelector("[data-enhance-prompt]");
         var promptInput = form.querySelector("[name='prompt_user']");
+        var upscaleEnable = form.querySelector("[data-upscale-enable]");
+        var upscaleModel = form.querySelector("[data-upscale-model]");
 
         function applyProfileDefaults() {
           var selected = profileSelect.options[profileSelect.selectedIndex];
@@ -257,6 +259,17 @@
           ratioInput.addEventListener("input", function () {
             syncRatioPreset(ratioInput, ratioPreset);
           });
+        }
+
+        if (upscaleEnable && upscaleModel) {
+          function syncUpscaleToggle() {
+            upscaleModel.disabled = !upscaleEnable.checked;
+            if (!upscaleEnable.checked) {
+              upscaleModel.value = "";
+            }
+          }
+          upscaleEnable.addEventListener("change", syncUpscaleToggle);
+          syncUpscaleToggle();
         }
 
         function syncInputFiles() {

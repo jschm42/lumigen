@@ -125,6 +125,22 @@
       </div>
     </div>
 
+    <div>
+      <label>
+        <input id="upscale_enable" type="checkbox" name="upscale_enable" data-upscale-enable {% if not upscale_ready %}disabled{% endif %}>
+        Upscale after generation
+      </label>
+      <select id="upscale_model" name="upscale_model" data-upscale-model {% if not upscale_ready %}disabled{% endif %}>
+        <option value="">Select model</option>
+        {% for model in upscale_models %}
+          <option value="{{ model }}">{{ model }}</option>
+        {% endfor %}
+      </select>
+      {% if not upscale_ready %}
+        <small class="muted">Configure UPSCALER_COMMAND to enable upscaling.</small>
+      {% endif %}
+    </div>
+
     <datalist id="width-presets">
       <option value="512"></option>
       <option value="640"></option>
