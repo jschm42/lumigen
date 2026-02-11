@@ -1,9 +1,30 @@
 $ErrorActionPreference = "Stop"
 
 $Root = Resolve-Path "$PSScriptRoot\.."
-$Image = "img-hub:latest"
-$Container = "img-hub"
-$DataDir = Join-Path $Root "data"
+$Image = "pixelforge:latest"
+$Container = "pixelforge"
+$EnvFile = Join-Path $Root ".env"
+$EnvMap = @{}
+
+if (Test-Path $EnvFile) {
+  Get-Content $EnvFile | ForEach-Object { $_.Trim() } | Where-Object {
+    $_ -and -not $_.StartsWith("#")
+  } | ForEach-Object {
+    $parts = $_ -split "=", 2
+    if ($parts.Length -eq 2) {
+      $EnvMap[$parts[0].Trim()] = $parts[1].Trim()
+    }
+  }
+}
+
+$DataDirValue = $EnvMap["DOCKER_DATA_DIR"]
+if ([string]::IsNullOrWhiteSpace($DataDirValue)) {
+  $DataDir = Join-Path $Root "data"
+} elseif ([System.IO.Path]::IsPathRooted($DataDirValue)) {
+  $DataDir = $DataDirValue
+} else {
+  $DataDir = Join-Path $Root $DataDirValue
+}
 
 if (-not (Test-Path $DataDir)) {
   New-Item -ItemType Directory -Path $DataDir | Out-Null

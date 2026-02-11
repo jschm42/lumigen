@@ -2,9 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE_NAME="img-hub:latest"
-CONTAINER_NAME="img-hub"
-DATA_DIR="$ROOT_DIR/data"
+IMAGE_NAME="pixelforge:latest"
+CONTAINER_NAME="pixelforge"
+ENV_FILE="$ROOT_DIR/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+DATA_DIR="${DOCKER_DATA_DIR:-$ROOT_DIR/data}"
+if [[ "$DATA_DIR" != /* ]]; then
+  DATA_DIR="$ROOT_DIR/$DATA_DIR"
+fi
 
 mkdir -p "$DATA_DIR"
 

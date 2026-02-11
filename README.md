@@ -1,4 +1,4 @@
-# img-hub
+# Pixelforge
 
 Local-first FastAPI app for image generation with provider adapters (stub, OpenAI, OpenRouter) and SQLite-first storage.
 
@@ -62,6 +62,12 @@ On Windows PowerShell:
 
 ```powershell
 scripts\docker_run.ps1
+```
+
+Configure the host data directory via `.env`:
+
+```dotenv
+DOCKER_DATA_DIR=./data
 ```
 
 Update the container after pulling a new version:

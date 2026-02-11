@@ -6,7 +6,12 @@ from io import BytesIO
 from PIL import Image, ImageDraw
 
 from app.config import Settings
-from app.providers.base import ProviderAdapter, ProviderGenerationRequest, ProviderGenerationResult, ProviderImage
+from app.providers.base import (
+    ProviderAdapter,
+    ProviderGenerationRequest,
+    ProviderGenerationResult,
+    ProviderImage,
+)
 
 
 class StubAdapter(ProviderAdapter):
@@ -16,7 +21,9 @@ class StubAdapter(ProviderAdapter):
         _ = settings
         return ["stub-v1"]
 
-    async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
+    async def generate(
+        self, request: ProviderGenerationRequest, settings: Settings
+    ) -> ProviderGenerationResult:
         n_images = max(1, request.n_images)
         width = request.width or 768
         height = request.height or 768
@@ -37,7 +44,9 @@ class StubAdapter(ProviderAdapter):
         }.get(ext, "image/png")
 
         images: list[ProviderImage] = []
-        seed = request.seed if request.seed is not None else random.randint(0, 9_999_999)
+        seed = (
+            request.seed if request.seed is not None else random.randint(0, 9_999_999)
+        )
         rng = random.Random(seed)
 
         for idx in range(1, n_images + 1):
@@ -50,7 +59,7 @@ class StubAdapter(ProviderAdapter):
             draw = ImageDraw.Draw(image)
 
             prompt_preview = request.prompt.strip().replace("\n", " ")[:180]
-            text = f"img-hub stub\nmodel={request.model}\nseed={seed} idx={idx}\n{prompt_preview}"
+            text = f"Pixelforge stub\nmodel={request.model}\nseed={seed} idx={idx}\n{prompt_preview}"
             draw.text((24, 24), text, fill=(255, 255, 255))
 
             output = BytesIO()
@@ -66,4 +75,6 @@ class StubAdapter(ProviderAdapter):
                 )
             )
 
-        return ProviderGenerationResult(images=images, raw_meta={"adapter": self.name, "seed": seed})
+        return ProviderGenerationResult(
+            images=images, raw_meta={"adapter": self.name, "seed": seed}
+        )
