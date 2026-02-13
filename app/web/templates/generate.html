@@ -15,14 +15,14 @@
         <span class="block truncate text-xs text-slate-400">Image Workspace</span>
       </span>
     </a>
-    <a href="/?conversation=new" class="{{ btn_primary }} w-full">New Session</a>
+    <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
 
     <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-      <a href="/?conversation=all" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == 'all' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
+      <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
         All Sessions
       </a>
       {% for item in session_items %}
-        <a href="/?conversation={{ item.token | urlencode }}" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == item.token %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
+        <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
           <span class="block truncate font-semibold">{{ item.label }}</span>
           <span class="mt-0.5 block text-xs text-slate-400">{{ item.count }} prompts</span>
         </a>
@@ -32,14 +32,20 @@
     </div>
 
     <nav class="mt-4 border-t border-white/5 pt-3">
-      <a href="/profiles" class="mb-2 block rounded-xl bg-white/6 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/12">Profiles</a>
-      <a href="/gallery" class="mb-2 block rounded-xl bg-white/6 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/12">Gallery</a>
-      <a href="/admin" class="block rounded-xl bg-white/6 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/12">Admin</a>
+      <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Profiles</a>
+      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Gallery</a>
+      <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Admin</a>
     </nav>
   </aside>
 
   <section class="{{ panel_class }} relative h-full min-h-0 overflow-hidden" data-chat-shell>
-    {% if not profiles %}
+    {% if workspace_view != "chat" %}
+      <iframe
+        title="workspace"
+        src="{% if workspace_view == 'profiles' %}/profiles?embedded=1{% elif workspace_view == 'gallery' %}/gallery?embedded=1{% elif workspace_view == 'admin' %}/admin?embedded=1{% endif %}"
+        class="h-full w-full border-0"
+      ></iframe>
+    {% elif not profiles %}
       <div class="h-full p-5">
         <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
           Keine Profile vorhanden. Erstelle zuerst ein Profil unter <a href="/profiles" class="font-semibold underline">Profiles</a>.
@@ -80,8 +86,8 @@
         <input type="hidden" name="conversation" value="{{ active_conversation }}">
 
         <div class="pointer-events-auto bg-transparent px-4 py-3 sm:px-5" data-chat-top-panel>
-          <div class="flex flex-wrap items-end justify-between gap-2">
-            <div class="w-full max-w-sm">
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="w-full max-w-md">
               <select id="profile_id" name="profile_id" data-generation-profile required aria-label="Profilauswahl" class="{{ input_class }}">
                 {% for profile in profiles %}
                   <option
@@ -97,15 +103,22 @@
                 {% endfor %}
               </select>
             </div>
-            <button type="button" class="{{ btn_secondary }}" data-enhance-prompt {% if not enhancement_ready %}disabled{% endif %}>Enhance</button>
           </div>
         </div>
 
         <div class="pointer-events-auto bg-transparent px-3 pb-3 pt-2 sm:px-5" data-chat-bottom-panel>
-          <div class="mx-auto w-full max-w-5xl rounded-3xl border border-white/12 bg-slate-900/55 p-3 shadow-xl shadow-slate-950/50 backdrop-blur-xl">
+          <div class="relative mx-auto w-full max-w-5xl rounded-3xl border border-white/12 bg-slate-900/55 p-3 shadow-xl shadow-slate-950/50 backdrop-blur-xl">
+            <button
+              type="button"
+              class="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/6 text-slate-200 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-40"
+              data-enhance-prompt
+              {% if not enhancement_ready %}disabled{% endif %}
+              aria-label="Prompt verbessern"
+              title="Prompt verbessern"
+            ><span class="material-symbols-outlined text-xl" aria-hidden="true">auto_fix_high</span></button>
             <input id="input_images" name="input_images" type="file" accept="image/*" multiple data-input-images class="sr-only">
 
-            <div class="mb-2 min-h-[1.25rem]">
+            <div class="mb-2 min-h-[1.25rem] pr-12">
               <div class="flex flex-wrap gap-2" data-input-preview aria-live="polite"></div>
             </div>
 

@@ -253,6 +253,7 @@ def generate_page(
     request: Request,
     error: Optional[str] = Query(default=None),
     conversation: Optional[str] = Query(default=None),
+    workspace_view: Optional[str] = Query(default="chat"),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
@@ -319,6 +320,10 @@ def generate_page(
             if generation_session_token(generation) == active_conversation
         ]
 
+    active_workspace_view = (workspace_view or "chat").strip().lower()
+    if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
+        active_workspace_view = "chat"
+
     return templates.TemplateResponse(
         "generate.html",
         {
@@ -329,6 +334,7 @@ def generate_page(
             "conversation_generations": conversation_generations,
             "session_items": session_items,
             "active_conversation": active_conversation,
+            "workspace_view": active_workspace_view,
             "hide_footer": True,
             "hide_header": True,
             "enhancement_ready": bool(
