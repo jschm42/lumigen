@@ -88,6 +88,26 @@ scripts\docker_update.ps1
 - OpenRouter adapter works with `OPENROUTER_API_KEY` and sends image-generation requests through `/chat/completions` (`modalities: ["image","text"]`).
 - Generated files are managed via DB-indexed relative paths only; no arbitrary path browsing is exposed.
 
+## React migration frontend (Next.js)
+
+A React/Next.js frontend is available under `./frontend` as a migration path from server-rendered templates.
+
+- Uses `next`, `react`, `next-intl`, `react-hook-form`, `zod`, `clsx`, `tailwind-merge`, `lucide-react`, `@prisma/client`.
+- Reads existing SQLite data through Prisma (`DATABASE_URL=file:../../data/app.db` from `frontend/prisma/schema.prisma`).
+- For generation execution, it forwards requests to the existing FastAPI backend (`FASTAPI_BASE_URL`).
+
+Quick start:
+
+```bash
+cd frontend
+npm install
+copy .env.example .env
+npm run prisma:generate
+npm run dev
+```
+
+Open `http://127.0.0.1:3100/de`.
+
 ## Upscaling (Linux, local Real-ESRGAN)
 
 Lumigen can upscale generated images locally using Real-ESRGAN (NCNN Vulkan). The app calls the binary directly, so you only need to install the executable and the model files.
