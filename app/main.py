@@ -794,36 +794,38 @@ async def enhance_prompt(
 def new_profile_page(
     request: Request,
     error: Optional[str] = Query(default=None),
-    session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    storage_templates = crud.list_storage_templates(session)
-    model_configs = crud.list_model_configs(session)
-
-    return templates.TemplateResponse(
-        "profile_create.html",
-        {
-            "request": request,
-            "storage_templates": storage_templates,
-            "model_configs": model_configs,
-            "error": error,
-        },
-    )
+    params: dict[str, str] = {"create": "1"}
+    if error:
+        params["error"] = error
+    return RedirectResponse(url=f"/profiles?{urlencode(params)}", status_code=303)
 
 
 @app.get("/profiles", response_class=HTMLResponse)
 def profiles_page(
     request: Request,
+    create: bool = Query(default=False),
+    edit_id: Optional[int] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
+    storage_templates = crud.list_storage_templates(session)
+    model_configs = crud.list_model_configs(session)
+    open_edit_id: Optional[int] = None
+    if edit_id is not None and crud.get_profile(session, edit_id):
+        open_edit_id = edit_id
 
     return templates.TemplateResponse(
         "profiles.html",
         {
             "request": request,
             "profiles": profiles,
+            "storage_templates": storage_templates,
+            "model_configs": model_configs,
             "error": error,
+            "open_create_dialog": create,
+            "open_edit_id": open_edit_id,
         },
     )
 
@@ -833,24 +835,11 @@ def edit_profile_page(
     request: Request,
     profile_id: int,
     error: Optional[str] = Query(default=None),
-    session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    profile = crud.get_profile(session, profile_id)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    storage_templates = crud.list_storage_templates(session)
-    model_configs = crud.list_model_configs(session)
-    return templates.TemplateResponse(
-        "profile_edit.html",
-        {
-            "request": request,
-            "form_profile": profile,
-            "storage_templates": storage_templates,
-            "model_configs": model_configs,
-            "error": error,
-        },
-    )
+    params: dict[str, str] = {"edit_id": str(profile_id)}
+    if error:
+        params["error"] = error
+    return RedirectResponse(url=f"/profiles?{urlencode(params)}", status_code=303)
 
 
 @app.post("/profiles")
@@ -894,7 +883,7 @@ def create_profile(
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/profiles/new?error={str(exc)}", status_code=303)
+        return RedirectResponse(url=f"/profiles?create=1&error={str(exc)}", status_code=303)
     return RedirectResponse(url="/profiles", status_code=303)
 
 
@@ -946,7 +935,7 @@ def update_profile(
         )
     except (ValueError, IntegrityError) as exc:
         return RedirectResponse(
-            url=f"/profiles/{profile_id}/edit?error={str(exc)}", status_code=303
+            url=f"/profiles?edit_id={profile_id}&error={str(exc)}", status_code=303
         )
 
     return RedirectResponse(url="/profiles", status_code=303)

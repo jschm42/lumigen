@@ -2,6 +2,7 @@
 {% block content %}
 {% set panel_class = "p-5 sm:p-7" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
 
 <section class="{{ panel_class }}">
   <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
@@ -9,7 +10,7 @@
       <h2 class="text-2xl font-semibold text-white">Profiles</h2>
       <p class="mt-1 text-sm text-slate-400">Verwalte Presets fuer Modell, Groesse, Prompt und Storage.</p>
     </div>
-    <a href="/profiles/new" class="{{ btn_primary }}">New profile</a>
+    <button type="button" class="{{ btn_primary }}" onclick="document.getElementById('create-profile-dialog').showModal()">New profile</button>
   </div>
 
   {% if error %}
@@ -18,4 +19,58 @@
 
   {% include "fragments/profiles_table.html" %}
 </section>
+
+<dialog id="create-profile-dialog">
+  <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+    <header class="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h3 class="text-xl font-semibold text-white">Create profile</h3>
+        <p class="mt-1 text-sm text-slate-400">Lege ein neues Profil fuer deine Generierungen an.</p>
+      </div>
+      <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-profile-dialog').close()">&times;</button>
+    </header>
+    {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url=none %}
+      {% include "profile_form.html" %}
+    {% endwith %}
+  </article>
+</dialog>
+
+{% for profile in profiles %}
+<dialog id="edit-profile-dialog-{{ profile.id }}">
+  <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+    <header class="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h3 class="text-xl font-semibold text-white">Edit profile: {{ profile.name }}</h3>
+        <p class="mt-1 text-sm text-slate-400">Update profile defaults and model binding.</p>
+      </div>
+      <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-profile-dialog-{{ profile.id }}').close()">&times;</button>
+    </header>
+    {% with form_profile=profile, form_action="/profiles/" ~ profile.id ~ "/update", form_dom_id="edit-profile-form-" ~ profile.id, submit_label="Update", cancel_url=none %}
+      {% include "profile_form.html" %}
+    {% endwith %}
+  </article>
+</dialog>
+{% endfor %}
+
+{% if open_create_dialog %}
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    var dialog = document.getElementById("create-profile-dialog");
+    if (dialog) {
+      dialog.showModal();
+    }
+  });
+</script>
+{% endif %}
+
+{% if open_edit_id %}
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    var dialog = document.getElementById("edit-profile-dialog-{{ open_edit_id }}");
+    if (dialog) {
+      dialog.showModal();
+    }
+  });
+</script>
+{% endif %}
 {% endblock %}
