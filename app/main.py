@@ -813,22 +813,40 @@ def new_profile_page(
 @app.get("/profiles", response_class=HTMLResponse)
 def profiles_page(
     request: Request,
-    edit_id: Optional[int] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
-    storage_templates = crud.list_storage_templates(session)
-    model_configs = crud.list_model_configs(session)
-    form_profile = crud.get_profile(session, edit_id) if edit_id else None
 
     return templates.TemplateResponse(
         "profiles.html",
         {
             "request": request,
             "profiles": profiles,
+            "error": error,
+        },
+    )
+
+
+@app.get("/profiles/{profile_id}/edit", response_class=HTMLResponse)
+def edit_profile_page(
+    request: Request,
+    profile_id: int,
+    error: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    profile = crud.get_profile(session, profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    storage_templates = crud.list_storage_templates(session)
+    model_configs = crud.list_model_configs(session)
+    return templates.TemplateResponse(
+        "profile_edit.html",
+        {
+            "request": request,
+            "form_profile": profile,
             "storage_templates": storage_templates,
-            "form_profile": form_profile,
             "model_configs": model_configs,
             "error": error,
         },
@@ -928,7 +946,7 @@ def update_profile(
         )
     except (ValueError, IntegrityError) as exc:
         return RedirectResponse(
-            url=f"/profiles?edit_id={profile_id}&error={str(exc)}", status_code=303
+            url=f"/profiles/{profile_id}/edit?error={str(exc)}", status_code=303
         )
 
     return RedirectResponse(url="/profiles", status_code=303)
@@ -1332,5 +1350,5 @@ def asset_thumbnail(
 if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8010"))
-    reload_enabled = os.getenv("UVICORN_RELOAD", "0") in {"1", "true", "True"}
+    reload_enabled = os.getenv("UVICORN_RELOAD", "1") in {"1", "true", "True"}
     uvicorn.run("app.main:app", host=host, port=port, reload=reload_enabled)

@@ -1,6 +1,6 @@
-<div class="overflow-x-auto rounded-2xl border border-white/10">
-<table class="min-w-full divide-y divide-white/10 text-left text-sm">
-  <thead class="bg-white/5 text-slate-300">
+<div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+<table class="min-w-full divide-y divide-white/6 text-left text-sm">
+  <thead class="bg-white/3 text-slate-300">
     <tr>
       <th class="px-4 py-3 font-semibold">Name</th>
       <th class="px-4 py-3 font-semibold">Provider</th>
@@ -10,7 +10,7 @@
       <th class="px-4 py-3 font-semibold">Actions</th>
     </tr>
   </thead>
-  <tbody class="divide-y divide-white/10 bg-slate-950/50 text-slate-100">
+  <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
   {% for profile in profiles %}
     <tr>
       <td class="px-4 py-3">{{ profile.name }}</td>
@@ -20,9 +20,9 @@
       <td class="px-4 py-3">{{ profile.storage_template.name if profile.storage_template else profile.storage_template_id }}</td>
       <td class="px-4 py-3">
         <div class="flex flex-wrap gap-2">
-          <a href="/profiles?edit_id={{ profile.id }}" class="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10">Edit</a>
+          <a href="/profiles/{{ profile.id }}/edit" class="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/40 hover:bg-white/10">Edit</a>
           <form action="/profiles/{{ profile.id }}/delete" method="post" onsubmit="return confirm('Delete this profile?');" class="inline-flex">
-            <button class="inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" type="submit">Delete</button>
+            <button class="inline-flex items-center justify-center rounded-xl border border-rose-300/25 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200/70 hover:bg-rose-500/20" type="submit">Delete</button>
           </form>
         </div>
       </td>

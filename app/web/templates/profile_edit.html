@@ -6,8 +6,8 @@
 <section class="{{ panel_class }}">
   <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
     <div>
-      <h2 class="text-2xl font-semibold text-white">Create profile</h2>
-      <p class="mt-1 text-sm text-slate-400">Lege ein neues Profil fuer deine Generierungen an.</p>
+      <h2 class="text-2xl font-semibold text-white">Edit profile</h2>
+      <p class="mt-1 text-sm text-slate-400">Bearbeite die Einstellungen fuer {{ form_profile.name }}.</p>
     </div>
     <a href="/profiles" class="{{ btn_secondary }}">Back to list</a>
   </div>
@@ -16,7 +16,7 @@
     <div class="mb-5 rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
   {% endif %}
 
-  {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url="/profiles" %}
+  {% with form_profile=form_profile, form_action="/profiles/" ~ form_profile.id ~ "/update", form_dom_id="edit-profile-form", submit_label="Update", cancel_url="/profiles" %}
     {% include "profile_form.html" %}
   {% endwith %}
 </section>
