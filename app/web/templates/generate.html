@@ -7,31 +7,58 @@
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl bg-white/8 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-50" %}
 
 <div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] gap-4 overflow-hidden lg:grid-cols-[18rem_minmax(0,1fr)]">
-  <aside class="{{ panel_class }} flex h-full min-h-0 flex-col bg-gradient-to-b from-sky-900/20 via-slate-900/72 to-slate-900/68 ring-1 ring-sky-300/20 p-4">
-    <a href="/" class="mb-3 flex items-center gap-3 rounded-2xl bg-white/6 px-3 py-2 transition hover:bg-white/12">
-      <img src="{{ url_for('static', path='favicon.svg') }}" alt="" class="h-10 w-10 rounded-lg bg-slate-900/70 p-1">
-      <span class="min-w-0">
-        <span class="block truncate text-sm font-semibold text-white">Lumigen</span>
-        <span class="block truncate text-xs text-slate-400">Image Workspace</span>
-      </span>
-    </a>
-    <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
+  <aside class="{{ panel_class }} flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-sky-900/20 via-slate-900/72 to-slate-900/68 ring-1 ring-sky-300/20 p-4">
+    <div class="shrink-0">
+      <a href="/" class="mb-3 flex items-center gap-3 rounded-2xl bg-white/6 px-3 py-2 transition hover:bg-white/12">
+        <img src="{{ url_for('static', path='favicon.svg') }}" alt="" class="h-10 w-10 rounded-lg bg-slate-900/70 p-1">
+        <span class="min-w-0">
+          <span class="block truncate text-sm font-semibold text-white">Lumigen</span>
+          <span class="block truncate text-xs text-slate-400">Image Workspace</span>
+        </span>
+      </a>
+      <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
+    </div>
 
-    <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+    <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1" id="session-list">
       <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
         All Sessions
       </a>
       {% for item in session_items %}
-        <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
-          <span class="block truncate font-semibold">{{ item.label }}</span>
-          <span class="mt-0.5 block text-xs text-slate-400">{{ item.count }} prompts</span>
-        </a>
+        <div class="relative rounded-xl px-3 py-2 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
+          <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="block pr-8">
+            <span class="block truncate font-semibold">{{ item.label }}</span>
+            <span class="mt-0.5 block text-xs text-slate-400">{{ item.subtitle if item.subtitle else " " }}</span>
+          </a>
+          <button
+            type="button"
+            class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-slate-950/55 text-slate-300 transition hover:border-white/25 hover:text-white"
+            aria-haspopup="menu"
+            aria-label="Session Aktionen"
+            data-session-menu-toggle
+          ><span class="material-symbols-outlined text-base" aria-hidden="true">more_horiz</span></button>
+          <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-xl shadow-slate-950/60 backdrop-blur-xl" role="menu" data-session-menu>
+            <button
+              type="button"
+              class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+              data-session-rename
+              data-session-token="{{ item.token }}"
+              data-session-title="{{ item.label }}"
+              role="menuitem"
+            >Umbenennen</button>
+            <form action="/sessions/delete" method="post" onsubmit="return confirm('Session und Chatverlauf loeschen? Bilder in der Gallery bleiben erhalten.');">
+              <input type="hidden" name="session_token" value="{{ item.token }}">
+              <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+              <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+              <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-200 transition hover:bg-rose-500/20" role="menuitem">Loeschen</button>
+            </form>
+          </div>
+        </div>
       {% else %}
         <p class="rounded-xl bg-white/6 px-3 py-2 text-sm text-slate-400">Noch keine Sessions vorhanden.</p>
       {% endfor %}
     </div>
 
-    <nav class="mt-4 border-t border-white/5 pt-3">
+    <nav class="mt-4 shrink-0 border-t border-white/5 pt-3">
       <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Profiles</a>
       <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Gallery</a>
       <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Admin</a>
@@ -261,6 +288,13 @@
   </section>
 </div>
 
+<form id="rename-session-form" action="/sessions/rename" method="post" class="hidden">
+  <input type="hidden" name="session_token" value="">
+  <input type="hidden" name="title" value="">
+  <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+  <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+</form>
+
 <script>
   (function () {
     function syncOverlayOffsets() {
@@ -299,8 +333,58 @@
       window.addEventListener("resize", syncOverlayOffsets);
     }
 
+    function setupSessionMenus() {
+      var menuToggles = Array.from(document.querySelectorAll("[data-session-menu-toggle]"));
+      var renameForm = document.getElementById("rename-session-form");
+      var renameTokenInput = renameForm ? renameForm.querySelector("[name='session_token']") : null;
+      var renameTitleInput = renameForm ? renameForm.querySelector("[name='title']") : null;
+
+      function closeAllMenus() {
+        document.querySelectorAll("[data-session-menu]").forEach(function (menu) {
+          menu.classList.add("hidden");
+        });
+      }
+
+      menuToggles.forEach(function (toggle) {
+        toggle.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var container = toggle.parentElement;
+          if (!container) return;
+          var menu = container.querySelector("[data-session-menu]");
+          if (!menu) return;
+          var wasHidden = menu.classList.contains("hidden");
+          closeAllMenus();
+          if (wasHidden) {
+            menu.classList.remove("hidden");
+          }
+        });
+      });
+
+      document.addEventListener("click", function () {
+        closeAllMenus();
+      });
+
+      document.querySelectorAll("[data-session-rename]").forEach(function (button) {
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var token = button.getAttribute("data-session-token") || "";
+          var currentTitle = button.getAttribute("data-session-title") || "";
+          var nextTitle = window.prompt("Session umbenennen", currentTitle);
+          if (nextTitle === null) return;
+          var trimmed = nextTitle.trim();
+          if (!trimmed || !renameForm || !renameTokenInput || !renameTitleInput) return;
+          renameTokenInput.value = token;
+          renameTitleInput.value = trimmed;
+          renameForm.submit();
+        });
+      });
+    }
+
     window.addEventListener("DOMContentLoaded", function () {
       setupOverlayObservers();
+      setupSessionMenus();
       scrollChatToBottom();
     });
     document.body.addEventListener("htmx:afterSwap", function (event) {

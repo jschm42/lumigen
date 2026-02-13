@@ -76,6 +76,7 @@ class GenerationService:
         gallery_folder_id = effective_overrides.get("gallery_folder_id")
         gallery_folder_path = effective_overrides.get("gallery_folder_path")
         input_images = effective_overrides.get("input_images")
+        chat_session_id = str(effective_overrides.get("chat_session_id") or "").strip()
 
         profile_snapshot = {
             "id": profile.id,
@@ -105,6 +106,7 @@ class GenerationService:
         request_snapshot = {
             "prompt_user": prompt_user,
             "prompt_final": prompt_final,
+            "chat_session_id": chat_session_id or None,
             "negative_prompt": negative_prompt,
             "width": width,
             "height": height,
@@ -131,6 +133,7 @@ class GenerationService:
                 "gallery_folder_id": "gallery_folder_id" in effective_overrides,
                 "gallery_folder_path": "gallery_folder_path" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
+                "chat_session_id": "chat_session_id" in effective_overrides,
             },
         }
 

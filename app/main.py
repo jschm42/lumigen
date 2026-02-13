@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -130,9 +131,67 @@ def normalize_thumb_size(value: Optional[str]) -> str:
 
 
 def generation_session_token(generation: Generation) -> str:
+    snapshot = generation.request_snapshot_json or {}
+    raw_token = snapshot.get("chat_session_id")
+    if isinstance(raw_token, str):
+        token = raw_token.strip()
+        if token:
+            return token
     if generation.profile_id is not None:
         return f"profile:{generation.profile_id}"
     return f"profile-name:{slugify(generation.profile_name, max_length=64, fallback='unknown')}"
+
+
+def build_chat_session_token() -> str:
+    return f"session:{uuid.uuid4().hex[:12]}"
+
+
+def format_session_timestamp(value: datetime | None) -> str:
+    if not value or value == datetime.min:
+        return ""
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
+def generation_session_title(generation: Generation) -> str:
+    snapshot = generation.request_snapshot_json or {}
+    raw_title = snapshot.get("chat_session_title")
+    if isinstance(raw_title, str):
+        return raw_title.strip()
+    return ""
+
+
+def generation_chat_hidden(generation: Generation) -> bool:
+    snapshot = generation.request_snapshot_json or {}
+    return bool(snapshot.get("chat_hidden"))
+
+
+def list_generations_for_session_token(
+    db: Session, session_token: str
+) -> list[Generation]:
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        return []
+    candidates = list(
+        db.scalars(
+            select(Generation).order_by(Generation.created_at.asc(), Generation.id.asc())
+        ).all()
+    )
+    return [item for item in candidates if generation_session_token(item) == token]
+
+
+def generate_workspace_redirect(
+    *,
+    conversation: str,
+    workspace_view: str = "chat",
+    error: Optional[str] = None,
+) -> RedirectResponse:
+    view = (workspace_view or "chat").strip().lower()
+    if view not in {"chat", "profiles", "gallery", "admin"}:
+        view = "chat"
+    params: dict[str, str] = {"workspace_view": view, "conversation": conversation}
+    if error:
+        params["error"] = error
+    return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
 def safe_gallery_return_to(value: Optional[str]) -> str:
@@ -268,27 +327,35 @@ def generate_page(
         ).all()
     )
     recent_generations.reverse()
+    recent_generations = [
+        generation
+        for generation in recent_generations
+        if not generation_chat_hidden(generation)
+    ]
 
     session_index: dict[str, dict[str, Any]] = {}
     for generation in recent_generations:
         token = generation_session_token(generation)
+        custom_title = generation_session_title(generation)
         created_at = generation.created_at or datetime.min
         item = session_index.get(token)
         if not item:
             item = {
                 "token": token,
-                "label": generation.profile_name or f"Session #{generation.id}",
-                "count": 0,
+                "profile_label": generation.profile_name or f"Session #{generation.id}",
+                "custom_title": custom_title,
                 "latest_generation_id": generation.id,
+                "started_at": created_at,
                 "latest_created_at": created_at,
                 "latest_status": generation.status,
             }
             session_index[token] = item
-        item["count"] += 1
         if created_at >= item["latest_created_at"]:
             item["latest_generation_id"] = generation.id
             item["latest_created_at"] = created_at
             item["latest_status"] = generation.status
+            if custom_title:
+                item["custom_title"] = custom_title
 
     session_items = sorted(
         session_index.values(),
@@ -298,6 +365,15 @@ def generate_page(
         ),
         reverse=True,
     )
+    for item in session_items:
+        started_at = item.get("started_at")
+        latest_at = item.get("latest_created_at")
+        started_label = format_session_timestamp(started_at)
+        latest_label = format_session_timestamp(latest_at)
+        base_label = str(item.get("profile_label") or "Session")
+        custom_title = str(item.get("custom_title") or "").strip()
+        item["label"] = custom_title or base_label
+        item["subtitle"] = latest_label or started_label
 
     active_conversation = (conversation or "").strip()
     if active_conversation:
@@ -370,6 +446,12 @@ def generate_submit(
 
     try:
         overrides: dict[str, Any] = {}
+        conversation_value = (conversation or "").strip()
+        if not conversation_value or conversation_value in {"new", "all"}:
+            resolved_conversation = build_chat_session_token()
+        else:
+            resolved_conversation = conversation_value
+        overrides["chat_session_id"] = resolved_conversation
 
         if input_images:
             if len(input_images) > MAX_INPUT_IMAGES:
@@ -447,11 +529,23 @@ def generate_submit(
                 },
             )
         params: dict[str, str] = {"error": str(exc)}
-        if conversation.strip():
-            params["conversation"] = conversation.strip()
+        conversation_value = (conversation or "").strip()
+        if conversation_value and conversation_value not in {"new", "all"}:
+            params["conversation"] = conversation_value
         return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
     if is_htmx(request):
+        conversation_value = (conversation or "").strip()
+        if not conversation_value or conversation_value in {"new", "all"}:
+            redirect_target = "/?" + urlencode(
+                {
+                    "conversation": resolved_conversation,
+                    "workspace_view": "chat",
+                }
+            )
+            response = HTMLResponse(content="")
+            response.headers["HX-Redirect"] = redirect_target
+            return response
         return templates.TemplateResponse(
             "fragments/chat_generation_item.html",
             {
@@ -461,6 +555,90 @@ def generate_submit(
             },
         )
     return RedirectResponse(url=f"/jobs/{generation.id}", status_code=303)
+
+
+@app.post("/sessions/rename")
+def rename_chat_session(
+    session_token: str = Form(...),
+    title: str = Form(...),
+    active_conversation: str = Form(default=""),
+    workspace_view: str = Form(default="chat"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Invalid session token",
+        )
+
+    new_title = (title or "").strip()
+    if not new_title:
+        return generate_workspace_redirect(
+            conversation=active_conversation or token,
+            workspace_view=workspace_view,
+            error="Session title must not be empty",
+        )
+
+    generations = list_generations_for_session_token(session, token)
+    if not generations:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Session not found",
+        )
+
+    for generation in generations:
+        snapshot = dict(generation.request_snapshot_json or {})
+        snapshot["chat_session_title"] = new_title
+        generation.request_snapshot_json = snapshot
+        session.add(generation)
+    session.commit()
+
+    target_conversation = (active_conversation or "").strip() or token
+    return generate_workspace_redirect(
+        conversation=target_conversation,
+        workspace_view=workspace_view,
+    )
+
+
+@app.post("/sessions/delete")
+def delete_chat_session(
+    session_token: str = Form(...),
+    active_conversation: str = Form(default=""),
+    workspace_view: str = Form(default="chat"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Invalid session token",
+        )
+
+    generations = list_generations_for_session_token(session, token)
+    if not generations:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Session not found",
+        )
+
+    for generation in generations:
+        snapshot = dict(generation.request_snapshot_json or {})
+        snapshot["chat_hidden"] = True
+        generation.request_snapshot_json = snapshot
+        session.add(generation)
+    session.commit()
+
+    requested_active = (active_conversation or "").strip()
+    next_conversation = "new" if requested_active == token else (requested_active or "new")
+    return generate_workspace_redirect(
+        conversation=next_conversation,
+        workspace_view=workspace_view,
+    )
 
 
 @app.get("/jobs/{generation_id}", response_class=HTMLResponse)
