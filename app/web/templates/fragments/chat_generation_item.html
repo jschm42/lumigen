@@ -50,10 +50,15 @@
       {% endif %}
 
       {% if generation.status == 'succeeded' and assets %}
-        <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="flex flex-col gap-3">
           {% for asset in assets %}
-            <a href="/assets/{{ asset.id }}" class="group block overflow-hidden rounded-xl border border-white/10 bg-slate-900/80">
-              <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="aspect-square w-full object-cover transition group-hover:scale-[1.02]">
+            <a href="/assets/{{ asset.id }}" class="group inline-block max-w-full self-start overflow-hidden rounded-xl border border-white/10 bg-slate-900/80">
+              <img
+                src="/assets/{{ asset.id }}/thumb"
+                alt="thumb {{ asset.id }}"
+                loading="lazy"
+                class="block h-auto w-auto transition group-hover:opacity-95"
+                style="max-height:min(68vh,48rem);max-width:min(100%,70rem);">
             </a>
           {% endfor %}
         </div>
