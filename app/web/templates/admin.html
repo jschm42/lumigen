@@ -30,9 +30,20 @@
     </div>
   {% endif %}
 
-  <details id="create-model-config-panel" class="rounded-2xl bg-slate-950/45">
-    <summary class="flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100">New model <span class="text-slate-500">expand</span></summary>
-    <div class="p-4">
+  <div class="flex items-center justify-between gap-3">
+    <h3 class="text-lg font-semibold text-white">Models</h3>
+    <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-model-config-dialog').showModal()">New model</button>
+  </div>
+
+  <dialog id="create-model-config-dialog">
+    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <header class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-xl font-semibold text-white">New model</h3>
+          <p class="mt-1 text-sm text-slate-400">Neues Modell inklusive Provider und optionalem Key anlegen.</p>
+        </div>
+        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()">&times;</button>
+      </header>
       <form action="/admin/model-configs" method="post" class="space-y-4">
         <div>
           <label for="new-model-name" class="{{ label_class }}">Name</label>
@@ -67,8 +78,8 @@
           <button type="submit" class="{{ btn_primary }}">Save</button>
         </div>
       </form>
-    </div>
-  </details>
+    </article>
+  </dialog>
 
   <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
     <table class="min-w-full divide-y divide-white/6 text-left text-sm">
@@ -159,9 +170,20 @@
   </dialog>
   {% endfor %}
 
-  <details id="create-dimension-preset-panel" class="rounded-2xl bg-slate-950/45">
-    <summary class="flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100">New dimension preset <span class="text-slate-500">expand</span></summary>
-    <div class="p-4">
+  <div class="mt-3 flex items-center justify-between gap-3">
+    <h3 class="text-lg font-semibold text-white">Dimension presets</h3>
+    <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-dimension-preset-dialog').showModal()">New dimension preset</button>
+  </div>
+
+  <dialog id="create-dimension-preset-dialog">
+    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <header class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-xl font-semibold text-white">New dimension preset</h3>
+          <p class="mt-1 text-sm text-slate-400">Neue feste Bildabmessungen anlegen.</p>
+        </div>
+        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-dimension-preset-dialog').close()">&times;</button>
+      </header>
       <form action="/admin/dimension-presets" method="post" class="space-y-4">
         <div>
           <label for="new-dimension-name" class="{{ label_class }}">Name</label>
@@ -183,8 +205,8 @@
           <button type="submit" class="{{ btn_primary }}">Save</button>
         </div>
       </form>
-    </div>
-  </details>
+    </article>
+  </dialog>
 
   <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
     <table class="min-w-full divide-y divide-white/6 text-left text-sm">
