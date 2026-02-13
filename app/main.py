@@ -329,6 +329,8 @@ def generate_page(
             "conversation_generations": conversation_generations,
             "session_items": session_items,
             "active_conversation": active_conversation,
+            "hide_footer": True,
+            "hide_header": True,
             "enhancement_ready": bool(
                 enhancement_config and enhancement_config.api_key_encrypted
             ),

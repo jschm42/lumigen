@@ -15,36 +15,37 @@
         safelist: [
           "group",
           "relative",
-          "aspect-square",
-          "w-36",
+          "h-20",
+          "w-20",
           "overflow-hidden",
-          "rounded-2xl",
+          "rounded-xl",
           "border",
-          "border-white/10",
-          "bg-slate-900/90",
-          "shadow-lg",
+          "border-white/15",
+          "bg-slate-950/80",
+          "shadow-md",
           "shadow-slate-950/60",
           "ring-1",
           "ring-sky-300/25",
           "h-full",
           "w-full",
-          "object-contain",
+          "object-cover",
           "absolute",
-          "right-2",
-          "top-2",
+          "right-1",
+          "top-1",
           "inline-flex",
+          "h-5",
+          "w-5",
           "items-center",
+          "justify-center",
           "rounded-full",
-          "border-rose-300/60",
-          "bg-slate-950/80",
-          "px-2",
-          "py-1",
-          "text-xs",
-          "font-semibold",
-          "text-rose-200",
+          "border-white/35",
+          "bg-slate-900/90",
+          "text-[11px]",
+          "font-bold",
+          "text-white",
           "transition",
           "hover:border-rose-200",
-          "hover:text-rose-100",
+          "hover:bg-rose-500/80",
           "ring-2",
           "ring-sky-300",
           "border-sky-300/70"
@@ -84,6 +85,7 @@
     <div class="absolute left-0 top-1/3 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl"></div>
   </div>
 
+  {% if not hide_header %}
   <header class="sticky top-0 z-30 border-b border-white/10 bg-slate-950/90 backdrop-blur-xl">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 md:flex-row md:items-center md:justify-between">
       <a class="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 transition hover:border-sky-300/50 hover:bg-white/10" href="/">
@@ -160,14 +162,17 @@
       </nav>
     </div>
   </header>
+  {% endif %}
 
-  <main class="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+  <main class="mx-auto w-full max-w-7xl {% if hide_header %}px-4 py-3 sm:px-6 lg:px-8{% else %}space-y-6 px-4 py-8 sm:px-6 lg:px-8{% endif %}">
     {% block content %}{% endblock %}
   </main>
 
+  {% if not hide_footer %}
   <footer class="mx-auto flex w-full max-w-7xl items-center justify-center px-4 pb-10 pt-2 text-sm text-slate-500 sm:px-6 lg:px-8">
     <small>(c) 2026</small>
   </footer>
+  {% endif %}
 
   <script>
     (function () {
@@ -288,11 +293,14 @@
         var inputImages = form.querySelector("[data-input-images]");
         var inputPreview = form.querySelector("[data-input-preview]");
         var inputClear = form.querySelector("[data-input-clear]");
+        var inputTrigger = form.querySelector("[data-input-trigger]");
         var inputFileState = [];
         var enhanceBtn = form.querySelector("[data-enhance-prompt]");
         var promptInput = form.querySelector("[name='prompt_user']");
         var upscaleEnable = form.querySelector("[data-upscale-enable]");
         var upscaleModel = form.querySelector("[data-upscale-model]");
+        var advancedToggle = form.querySelector("[data-advanced-toggle]");
+        var advancedPanel = form.querySelector("[data-advanced-panel]");
 
         function applyProfileDefaults() {
           var selected = profileSelect.options[profileSelect.selectedIndex];
@@ -378,18 +386,18 @@
           inputFileState.slice(0, 5).forEach(function (file, index) {
             var objectUrl = URL.createObjectURL(file);
             var wrapper = document.createElement("div");
-            wrapper.className = "group relative aspect-square w-36 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 shadow-lg shadow-slate-950/60 ring-1 ring-sky-300/25";
+            wrapper.className = "group relative h-20 w-20 overflow-hidden rounded-xl border border-white/15 bg-slate-950/80 shadow-md shadow-slate-950/60 ring-1 ring-sky-300/25";
             var img = document.createElement("img");
             img.src = objectUrl;
             img.alt = file.name || "input image";
-            img.className = "h-full w-full object-contain";
+            img.className = "h-full w-full object-cover";
             img.addEventListener("load", function () {
               URL.revokeObjectURL(objectUrl);
             });
             var removeBtn = document.createElement("button");
             removeBtn.type = "button";
-            removeBtn.className = "absolute right-2 top-2 inline-flex items-center rounded-full border border-rose-300/60 bg-slate-950/80 px-2 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-200 hover:text-rose-100";
-            removeBtn.textContent = "Remove";
+            removeBtn.className = "absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/35 bg-slate-900/90 text-[11px] font-bold text-white transition hover:border-rose-200 hover:bg-rose-500/80";
+            removeBtn.textContent = "x";
             removeBtn.addEventListener("click", function () {
               inputFileState.splice(index, 1);
               syncInputFiles();
@@ -432,12 +440,31 @@
           renderInputPreviews();
         }
 
+        if (inputTrigger && inputImages) {
+          inputTrigger.addEventListener("click", function () {
+            inputImages.click();
+          });
+        }
+
         if (inputClear) {
           inputClear.addEventListener("click", function () {
             inputFileState = [];
             syncInputFiles();
             renderInputPreviews();
           });
+        }
+
+        if (advancedToggle && advancedPanel) {
+          function syncAdvancedState() {
+            var expanded = !advancedPanel.classList.contains("hidden");
+            advancedToggle.textContent = expanded ? "-" : "+";
+            advancedToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+          }
+          advancedToggle.addEventListener("click", function () {
+            advancedPanel.classList.toggle("hidden");
+            syncAdvancedState();
+          });
+          syncAdvancedState();
         }
 
         if (enhanceBtn && promptInput) {
