@@ -1,142 +1,152 @@
 {% extends "layout.html" %}
 {% block content %}
 {% set return_to = '/gallery?page=' ~ page_data.page ~ '&profile_name=' ~ (profile_name | urlencode) ~ '&provider=' ~ (provider | urlencode) ~ '&status=' ~ (status | urlencode) ~ '&q=' ~ (q | urlencode) ~ '&folder=' ~ (folder | urlencode) ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
-<article>
-  <header class="section-head">
-    <h2>Gallery</h2>
-    <form method="post" action="/gallery/folders" class="folder-create-form">
-      <select name="parent_folder_id">
-        <option value="" {% if folder_nav.current_token == 'root' %}selected{% endif %}>Root</option>
-        {% for item in filter_options.folders %}
-          <option value="{{ item.id }}" {% if folder_nav.current_folder_id == item.id %}selected{% endif %}>{{ item.path }}</option>
-        {% endfor %}
-      </select>
-      <input type="text" name="folder_name" placeholder="new subfolder name" required>
-      <input type="hidden" name="return_to" value="{{ return_to }}">
-      <button type="submit">Create folder</button>
+{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
+{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" %}
+{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" %}
+
+<section class="{{ panel_class }} space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold text-white">Gallery</h2>
+      <p class="mt-1 text-sm text-slate-400">Durchsuche Assets, nutze Ordner und fuehre Bulk-Aktionen aus.</p>
+    </div>
+    <form method="post" action="/gallery/folders" class="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[42rem]">
+      <div>
+        <label for="new-parent-folder" class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Parent</label>
+        <select id="new-parent-folder" name="parent_folder_id" class="{{ input_class }} mt-1">
+          <option value="" {% if folder_nav.current_token == 'root' %}selected{% endif %}>Root</option>
+          {% for item in filter_options.folders %}
+            <option value="{{ item.id }}" {% if folder_nav.current_folder_id == item.id %}selected{% endif %}>{{ item.path }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="new-folder-name" class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Folder name</label>
+        <input id="new-folder-name" type="text" name="folder_name" placeholder="new subfolder name" required class="{{ input_class }} mt-1">
+      </div>
+      <div class="flex items-end">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <button type="submit" class="{{ btn_primary }} w-full">Create folder</button>
+      </div>
     </form>
-  </header>
+  </div>
 
   {% if message %}
-    <div class="notice success" role="alert">{{ message }}</div>
+    <div class="rounded-2xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100" role="alert">{{ message }}</div>
   {% endif %}
   {% if error %}
-    <div class="notice error" role="alert">{{ error }}</div>
+    <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
   {% endif %}
 
-  <section class="folder-browser">
-    <div class="folder-browser-head">
-      <div class="folder-breadcrumbs">
+  <section class="rounded-2xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
         {% for crumb in folder_nav.breadcrumbs %}
-          <a class="crumb-link {% if crumb.token == folder_nav.current_token %}active{% endif %}" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ crumb.token }}&thumb_size={{ thumb_size | urlencode }}">{{ crumb.label }}</a>
-          {% if not loop.last %}<span class="crumb-sep">></span>{% endif %}
+          <a class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition {% if crumb.token == folder_nav.current_token %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ crumb.token }}&thumb_size={{ thumb_size | urlencode }}">{{ crumb.label }}</a>
+          {% if not loop.last %}<span class="text-slate-500">/</span>{% endif %}
         {% endfor %}
       </div>
       {% if folder_nav.parent_token %}
-        <a role="button" class="secondary" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder_nav.parent_token }}&thumb_size={{ thumb_size | urlencode }}">Up</a>
+        <a href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder_nav.parent_token }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Up</a>
       {% endif %}
     </div>
+
     {% if folder_nav.children %}
-      <div class="explorer-grid">
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {% for item in folder_nav.children %}
-          <a class="explorer-folder" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ item.id }}&thumb_size={{ thumb_size | urlencode }}">
-            <span class="material-symbols-outlined folder-icon" aria-hidden="true">folder</span>
-            <span class="explorer-folder-text">
-              <strong>{{ item.name }}</strong>
-              <small>{{ item.path }}</small>
+          <a class="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-sky-300/55 hover:bg-white/10" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ item.id }}&thumb_size={{ thumb_size | urlencode }}">
+            <span class="material-symbols-outlined text-2xl text-sky-200" aria-hidden="true">folder</span>
+            <span class="min-w-0">
+              <strong class="block truncate text-sm font-semibold text-white">{{ item.name }}</strong>
+              <small class="block truncate text-xs text-slate-400">{{ item.path }}</small>
             </span>
           </a>
         {% endfor %}
       </div>
     {% else %}
-      <p class="muted">No subfolders in this folder.</p>
+      <p class="text-sm text-slate-400">No subfolders in this folder.</p>
     {% endif %}
   </section>
 
-  <form method="get" action="/gallery" class="filter-grid">
-    <div>
-      <label>Profile
-        <select name="profile_name">
-          <option value="">All profiles</option>
-          {% for item in filter_options.profile_names %}
-            <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
-          {% endfor %}
-        </select>
-      </label>
+  <form method="get" action="/gallery" class="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/45 p-4 sm:grid-cols-2 xl:grid-cols-7">
+    <div class="xl:col-span-1">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Profile</label>
+      <select name="profile_name" class="{{ input_class }} mt-1">
+        <option value="">All profiles</option>
+        {% for item in filter_options.profile_names %}
+          <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
     </div>
-    <div>
-      <label>Provider
-        <select name="provider">
-          <option value="">All providers</option>
-          {% for item in filter_options.providers %}
-            <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
-          {% endfor %}
-        </select>
-      </label>
+    <div class="xl:col-span-1">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Provider</label>
+      <select name="provider" class="{{ input_class }} mt-1">
+        <option value="">All providers</option>
+        {% for item in filter_options.providers %}
+          <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
     </div>
-    <div>
-      <label>Status
-        <select name="status">
-          <option value="">All statuses</option>
-          {% for item in filter_options.statuses %}
-            <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
-          {% endfor %}
-        </select>
-      </label>
+    <div class="xl:col-span-1">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Status</label>
+      <select name="status" class="{{ input_class }} mt-1">
+        <option value="">All statuses</option>
+        {% for item in filter_options.statuses %}
+          <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
     </div>
-    <div>
-      <label>Folder
-        <select name="folder">
-          <option value="root" {% if folder == 'root' %}selected{% endif %}>Root</option>
-          {% for item in filter_options.folders %}
-            <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
-          {% endfor %}
-        </select>
-      </label>
+    <div class="xl:col-span-1">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Folder</label>
+      <select name="folder" class="{{ input_class }} mt-1">
+        <option value="root" {% if folder == 'root' %}selected{% endif %}>Root</option>
+        {% for item in filter_options.folders %}
+          <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
+        {% endfor %}
+      </select>
     </div>
-    <div>
-      <label>Prompt contains
-        <input type="text" name="q" value="{{ q }}" placeholder="prompt contains">
-      </label>
+    <div class="xl:col-span-2">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Prompt contains</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="prompt contains" class="{{ input_class }} mt-1">
     </div>
-    <div>
-      <label>Thumb size
-        <select name="thumb_size">
-          <option value="sm" {% if thumb_size == 'sm' %}selected{% endif %}>Thumbs S</option>
-          <option value="md" {% if thumb_size == 'md' %}selected{% endif %}>Thumbs M</option>
-          <option value="lg" {% if thumb_size == 'lg' %}selected{% endif %}>Thumbs L</option>
-        </select>
-      </label>
+    <div class="xl:col-span-1">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Thumb size</label>
+      <select name="thumb_size" class="{{ input_class }} mt-1">
+        <option value="sm" {% if thumb_size == 'sm' %}selected{% endif %}>Thumbs S</option>
+        <option value="md" {% if thumb_size == 'md' %}selected{% endif %}>Thumbs M</option>
+        <option value="lg" {% if thumb_size == 'lg' %}selected{% endif %}>Thumbs L</option>
+      </select>
     </div>
-    <div class="filter-actions">
-      <button type="submit">Apply</button>
+    <div class="sm:col-span-2 xl:col-span-7 flex justify-end">
+      <button type="submit" class="{{ btn_primary }}">Apply filters</button>
     </div>
   </form>
 
   {% include "fragments/gallery_grid.html" %}
 
-  <form id="bulk-action-form" method="post" class="bulk-actions" data-gallery-bulk-form>
+  <form id="bulk-action-form" method="post" class="space-y-4 rounded-2xl border border-white/10 bg-slate-950/45 p-4" data-gallery-bulk-form>
     <input type="hidden" name="return_to" value="{{ return_to }}">
-    <div class="bulk-actions-row">
-      <label class="bulk-select-all">
+    <div class="flex flex-wrap items-center gap-4">
+      <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
         <input type="checkbox" data-gallery-select-all>
         Select all
       </label>
-      <small class="muted" data-gallery-selection-count>0 selected</small>
+      <small class="text-sm text-slate-400" data-gallery-selection-count>0 selected</small>
     </div>
-    <div class="bulk-actions-row bulk-actions-controls">
-      <div class="bulk-move-group">
-        <select name="gallery_folder_id">
-          <option value="">Root</option>
-          {% for folder_item in filter_options.folders %}
-            <option value="{{ folder_item.id }}">{{ folder_item.path }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="secondary" formaction="/assets/bulk-move" data-bulk-action disabled>Move selected</button>
-      </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <select name="gallery_folder_id" class="w-full max-w-sm rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35">
+        <option value="">Root</option>
+        {% for folder_item in filter_options.folders %}
+          <option value="{{ folder_item.id }}">{{ folder_item.path }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="{{ btn_secondary }}" formaction="/assets/bulk-move" data-bulk-action disabled>Move selected</button>
       <button
         type="submit"
-        class="contrast"
+        class="{{ btn_danger }}"
         formaction="/assets/bulk-delete"
         data-bulk-action
         onclick="return confirm('Delete selected assets?');"
@@ -146,16 +156,16 @@
     </div>
   </form>
 
-  <div class="pagination">
-    <small class="muted">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</small>
-    <div class="pagination-actions">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+    <small class="text-sm text-slate-400">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</small>
+    <div class="flex flex-wrap gap-2">
       {% if page_data.page > 1 %}
-        <a role="button" class="secondary" href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Prev</a>
+        <a href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Prev</a>
       {% endif %}
       {% if page_data.page < page_data.pages %}
-        <a role="button" class="secondary" href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}">Next</a>
+        <a href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Next</a>
       {% endif %}
     </div>
   </div>
-</article>
+</section>
 {% endblock %}

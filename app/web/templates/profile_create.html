@@ -1,17 +1,23 @@
 {% extends "layout.html" %}
 {% block content %}
-<article>
-  <header class="section-head">
-    <h2>Create profile</h2>
-    <a role="button" class="secondary" href="/profiles">Back to list</a>
-  </header>
+{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
+
+<section class="{{ panel_class }}">
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold text-white">Create profile</h2>
+      <p class="mt-1 text-sm text-slate-400">Lege ein neues Profil fuer deine Generierungen an.</p>
+    </div>
+    <a href="/profiles" class="{{ btn_secondary }}">Back to list</a>
+  </div>
 
   {% if error %}
-    <div class="notice error" role="alert">{{ error }}</div>
+    <div class="mb-5 rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
   {% endif %}
 
   {% with form_profile=none, form_action="/profiles", form_dom_id="create-profile-form", submit_label="Create", cancel_url="/profiles" %}
     {% include "profile_form.html" %}
   {% endwith %}
-</article>
+</section>
 {% endblock %}

@@ -1,47 +1,72 @@
+{% if generation.status in ['queued', 'running'] %}
+  {% set card_border = 'border-sky-300/55' %}
+  {% set status_badge = 'bg-sky-300/20 text-sky-100' %}
+{% elif generation.status == 'succeeded' %}
+  {% set card_border = 'border-emerald-300/55' %}
+  {% set status_badge = 'bg-emerald-300/20 text-emerald-100' %}
+{% elif generation.status == 'failed' %}
+  {% set card_border = 'border-rose-300/55' %}
+  {% set status_badge = 'bg-rose-300/20 text-rose-100' %}
+{% elif generation.status == 'cancelled' %}
+  {% set card_border = 'border-amber-300/55' %}
+  {% set status_badge = 'bg-amber-300/20 text-amber-100' %}
+{% else %}
+  {% set card_border = 'border-white/15' %}
+  {% set status_badge = 'bg-white/10 text-slate-200' %}
+{% endif %}
+
 <div id="job-{{ generation.id }}"
-     class="job-box status-{{ generation.status }}"
+     class="job-box rounded-2xl border {{ card_border }} bg-slate-950/55 p-4 shadow-lg shadow-slate-950/60"
      {% if generation.status in ['queued', 'running'] %}
      aria-busy="true"
      hx-get="/jobs/{{ generation.id }}"
      hx-trigger="every 1s"
      hx-swap="outerHTML"
      {% endif %}>
-  <div class="job-head">
-    <h3>Job #{{ generation.id }}</h3>
+  <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h3 class="text-lg font-semibold text-white">Job #{{ generation.id }}</h3>
+      <p class="mt-1 text-xs text-slate-400">Status updates are live.</p>
+    </div>
     {% if generation.status in ['queued', 'running'] %}
       <form method="post"
             action="/jobs/{{ generation.id }}/cancel"
             hx-post="/jobs/{{ generation.id }}/cancel"
             hx-target="closest .job-box"
-            hx-swap="outerHTML">
-        <button type="submit" class="secondary">Cancel</button>
+            hx-swap="outerHTML"
+            class="inline-flex">
+        <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10">Cancel</button>
       </form>
     {% endif %}
   </div>
-  <p class="job-status-line">
-    <span class="status-pill">{{ generation.status }}</span>
-    Status: <strong>{{ generation.status }}</strong>
+
+  <p class="mb-3 flex items-center gap-2 text-sm text-slate-300">
+    <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide {{ status_badge }}">{{ generation.status }}</span>
+    Status: <strong class="text-white">{{ generation.status }}</strong>
   </p>
+
   {% if generation.error %}
-    <div class="notice error" role="alert">{{ generation.error }}</div>
+    <div class="mb-3 rounded-xl border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" role="alert">{{ generation.error }}</div>
   {% endif %}
   {% if generation.failure_sidecar_path %}
-    <p class="muted">Failure sidecar: {{ generation.failure_sidecar_path }}</p>
+    <p class="mb-3 text-xs text-slate-400">Failure sidecar: <span class="break-all font-mono">{{ generation.failure_sidecar_path }}</span></p>
   {% endif %}
 
   {% if generation.status == 'succeeded' and assets %}
-    <div class="thumb-grid">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {% for asset in assets %}
-      <article class="thumb-card">
-        <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
-        <div class="thumb-meta">
-          <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
-          <small>{{ asset.width }}x{{ asset.height }}</small>
+      <article class="overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 p-2">
+        <a href="/assets/{{ asset.id }}" class="block overflow-hidden rounded-lg border border-white/10">
+          <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="aspect-square w-full object-cover">
+        </a>
+        <div class="mt-2 space-y-1">
+          <a href="/assets/{{ asset.id }}" class="block text-sm font-semibold text-white hover:text-sky-200">Asset #{{ asset.id }}</a>
+          <small class="block text-xs text-slate-400">{{ asset.width }}x{{ asset.height }}</small>
         </div>
       </article>
       {% endfor %}
     </div>
   {% elif generation.status == 'succeeded' %}
-    <p class="muted">Job completed but produced no assets.</p>
+    <p class="text-sm text-slate-400">Job completed but produced no assets.</p>
   {% endif %}
 </div>

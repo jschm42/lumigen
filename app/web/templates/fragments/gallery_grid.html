@@ -1,7 +1,7 @@
-<div class="thumb-grid thumb-size-{{ thumb_size }}">
+<div class="grid gap-3 {% if thumb_size == 'sm' %}grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6{% elif thumb_size == 'lg' %}grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4{% else %}grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5{% endif %}">
   {% for asset in page_data.items %}
-  <article class="thumb-card" data-gallery-card>
-    <div class="thumb-select">
+  <article class="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-950/55 p-3 shadow-lg shadow-slate-950/70 ring-offset-0 transition" data-gallery-card>
+    <label class="absolute right-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 bg-slate-950/80">
       <input
         type="checkbox"
         name="asset_ids"
@@ -9,29 +9,34 @@
         form="bulk-action-form"
         data-gallery-select
         aria-label="Select asset {{ asset.id }}">
+    </label>
+
+    <a href="/assets/{{ asset.id }}" class="block overflow-hidden rounded-xl border border-white/10 bg-slate-900/80">
+      <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.02]">
+    </a>
+
+    <div class="mt-3 space-y-1">
+      <a href="/assets/{{ asset.id }}" class="block truncate text-sm font-semibold text-white hover:text-sky-200">Asset #{{ asset.id }}</a>
+      <p class="truncate text-xs text-slate-400">{{ asset.generation.profile_name }} | {{ asset.generation.provider }}</p>
+      <p class="truncate text-xs text-slate-500">{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</p>
     </div>
-    <a href="/assets/{{ asset.id }}"><img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}"></a>
-    <div class="thumb-meta">
-      <a href="/assets/{{ asset.id }}">Asset #{{ asset.id }}</a>
-      <small>{{ asset.generation.profile_name }} | {{ asset.generation.provider }}</small>
-      <small>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</small>
-    </div>
-    <div class="thumb-actions">
-      <a role="button" class="secondary icon-button" href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download">
+
+    <div class="mt-3 flex items-center gap-2">
+      <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-slate-100 transition hover:border-sky-300/60 hover:text-sky-100">
         <span class="material-symbols-outlined" aria-hidden="true">download</span>
       </a>
-      <a role="button" class="secondary icon-button" href="/assets/{{ asset.id }}" aria-label="View details" title="Details">
+      <a href="/assets/{{ asset.id }}" aria-label="View details" title="Details" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-white/5 text-slate-100 transition hover:border-sky-300/60 hover:text-sky-100">
         <span class="material-symbols-outlined" aria-hidden="true">info</span>
       </a>
-      <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-form" onsubmit="return confirm('Delete this asset?');">
+      <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" onsubmit="return confirm('Delete this asset?');">
         <input type="hidden" name="return_to" value="{{ return_to }}">
-        <button type="submit" class="contrast icon-button danger" aria-label="Delete asset" title="Delete">
+        <button type="submit" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300/40 bg-rose-500/10 text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" aria-label="Delete asset" title="Delete">
           <span class="material-symbols-outlined" aria-hidden="true">delete</span>
         </button>
       </form>
     </div>
   </article>
   {% else %}
-    <p class="muted">No assets found for current filters.</p>
+    <p class="col-span-full rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-slate-400">No assets found for current filters.</p>
   {% endfor %}
 </div>

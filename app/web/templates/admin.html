@@ -1,82 +1,105 @@
 {% extends "layout.html" %}
 {% block content %}
-<article>
-  <header class="section-head">
-    <h2>Admin</h2>
+{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
+{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set label_class = "block text-sm font-semibold text-slate-200" %}
+{% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
+{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
+
+<section class="{{ panel_class }} space-y-5">
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold text-white">Admin</h2>
+      <p class="mt-1 text-sm text-slate-400">Modelle, Presets und Enhancement-Config verwalten.</p>
+    </div>
   </header>
 
   {% if message %}
-    <div class="notice success" role="status">{{ message }}</div>
+    <div class="rounded-2xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100" role="status">{{ message }}</div>
   {% endif %}
 
   {% if error %}
-    <div class="notice error" role="alert">{{ error }}</div>
+    <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
   {% endif %}
 
   {% if not encryption_ready %}
-    <div class="notice error" role="alert">
+    <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">
       PROVIDER_CONFIG_KEY is missing. API keys cannot be saved or decrypted.
     </div>
   {% endif %}
 
-  <details id="create-model-config-panel" class="subdialog">
-    <summary>New model</summary>
-    <div class="subdialog-body">
-      <form action="/admin/model-configs" method="post" class="stack">
-        <label for="new-model-name">Name</label>
-        <input id="new-model-name" type="text" name="name" required>
+  <details id="create-model-config-panel" class="rounded-2xl border border-white/10 bg-slate-950/45">
+    <summary class="flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100">New model <span class="text-slate-500">expand</span></summary>
+    <div class="border-t border-white/10 p-4">
+      <form action="/admin/model-configs" method="post" class="space-y-4">
+        <div>
+          <label for="new-model-name" class="{{ label_class }}">Name</label>
+          <input id="new-model-name" type="text" name="name" required class="{{ input_class }}">
+        </div>
 
-        <label for="new-model-provider">Provider</label>
-        <select id="new-model-provider" name="provider" required>
-          {% for provider in providers %}
-            <option value="{{ provider }}">{{ provider }}</option>
-          {% endfor %}
-        </select>
+        <div>
+          <label for="new-model-provider" class="{{ label_class }}">Provider</label>
+          <select id="new-model-provider" name="provider" required class="{{ input_class }}">
+            {% for provider in providers %}
+              <option value="{{ provider }}">{{ provider }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-        <label for="new-model-id">Model</label>
-        <input id="new-model-id" type="text" name="model" required>
+        <div>
+          <label for="new-model-id" class="{{ label_class }}">Model</label>
+          <input id="new-model-id" type="text" name="model" required class="{{ input_class }}">
+        </div>
 
-        <label for="new-model-enhancement">Enhancement prompt (optional)</label>
-        <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3"></textarea>
+        <div>
+          <label for="new-model-enhancement" class="{{ label_class }}">Enhancement prompt (optional)</label>
+          <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3" class="{{ text_class }}"></textarea>
+        </div>
 
-        <label for="new-model-key">API key</label>
-        <input id="new-model-key" type="password" name="api_key" placeholder="optional">
+        <div>
+          <label for="new-model-key" class="{{ label_class }}">API key</label>
+          <input id="new-model-key" type="password" name="api_key" placeholder="optional" class="{{ input_class }}">
+        </div>
 
-        <div class="actions">
-          <button type="submit">Save</button>
+        <div class="flex justify-end">
+          <button type="submit" class="{{ btn_primary }}">Save</button>
         </div>
       </form>
     </div>
   </details>
 
-  <div class="table-scroll">
-    <table>
-      <thead>
+  <div class="overflow-x-auto rounded-2xl border border-white/10">
+    <table class="min-w-full divide-y divide-white/10 text-left text-sm">
+      <thead class="bg-white/5 text-slate-300">
         <tr>
-          <th>Name</th>
-          <th>Provider</th>
-          <th>Model</th>
-          <th>API key</th>
-          <th>Actions</th>
+          <th class="px-4 py-3 font-semibold">Name</th>
+          <th class="px-4 py-3 font-semibold">Provider</th>
+          <th class="px-4 py-3 font-semibold">Model</th>
+          <th class="px-4 py-3 font-semibold">API key</th>
+          <th class="px-4 py-3 font-semibold">Actions</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-white/10 bg-slate-950/50 text-slate-100">
       {% for config in model_configs %}
         <tr>
-          <td>{{ config.name }}</td>
-          <td>{{ config.provider }}</td>
-          <td>{{ config.model }}</td>
-          <td>{{ "stored" if config.api_key_encrypted else "none" }}</td>
-          <td class="table-actions">
-            <button type="button" class="secondary" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
-            <form action="/admin/model-configs/{{ config.id }}/delete" method="post" onsubmit="return confirm('Delete this model config?');" class="inline-form">
-              <button class="contrast" type="submit">Delete</button>
-            </form>
+          <td class="px-4 py-3">{{ config.name }}</td>
+          <td class="px-4 py-3">{{ config.provider }}</td>
+          <td class="px-4 py-3">{{ config.model }}</td>
+          <td class="px-4 py-3 text-slate-400">{{ "stored" if config.api_key_encrypted else "none" }}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
+              <form action="/admin/model-configs/{{ config.id }}/delete" method="post" onsubmit="return confirm('Delete this model config?');" class="inline-flex">
+                <button class="{{ btn_danger }}" type="submit">Delete</button>
+              </form>
+            </div>
           </td>
         </tr>
       {% else %}
         <tr>
-          <td colspan="5">No model configs yet.</td>
+          <td colspan="5" class="px-4 py-4 text-slate-400">No model configs yet.</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -85,95 +108,112 @@
 
   {% for config in model_configs %}
   <dialog id="edit-model-config-{{ config.id }}">
-    <article>
-      <header>
-        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()"></button>
-        <h3>Edit model: {{ config.name }}</h3>
+    <article class="rounded-3xl border border-white/15 bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <header class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-xl font-semibold text-white">Edit model: {{ config.name }}</h3>
+          <p class="mt-1 text-sm text-slate-400">Passe Provider-, Modell- und Key-Werte an.</p>
+        </div>
+        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()">&times;</button>
       </header>
-      <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="stack">
-        <label for="edit-model-name-{{ config.id }}">Name</label>
-        <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" required>
+      <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="space-y-4">
+        <div>
+          <label for="edit-model-name-{{ config.id }}" class="{{ label_class }}">Name</label>
+          <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" required class="{{ input_class }}">
+        </div>
 
-        <label for="edit-model-provider-{{ config.id }}">Provider</label>
-        <select id="edit-model-provider-{{ config.id }}" name="provider" required>
-          {% for provider in providers %}
-            <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
-          {% endfor %}
-        </select>
+        <div>
+          <label for="edit-model-provider-{{ config.id }}" class="{{ label_class }}">Provider</label>
+          <select id="edit-model-provider-{{ config.id }}" name="provider" required class="{{ input_class }}">
+            {% for provider in providers %}
+              <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-        <label for="edit-model-id-{{ config.id }}">Model</label>
-        <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required>
+        <div>
+          <label for="edit-model-id-{{ config.id }}" class="{{ label_class }}">Model</label>
+          <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required class="{{ input_class }}">
+        </div>
 
-        <label for="edit-model-enhancement-{{ config.id }}">Enhancement prompt (optional)</label>
-        <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
+        <div>
+          <label for="edit-model-enhancement-{{ config.id }}" class="{{ label_class }}">Enhancement prompt (optional)</label>
+          <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3" class="{{ text_class }}">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
+        </div>
 
-        <label for="edit-model-key-{{ config.id }}">API key</label>
-        <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep">
+        <div>
+          <label for="edit-model-key-{{ config.id }}" class="{{ label_class }}">API key</label>
+          <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
+        </div>
 
-        <label>
+        <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
           <input type="checkbox" name="clear_api_key">
           Clear stored key
         </label>
 
-        <div class="actions">
-          <button type="submit">Save</button>
+        <div class="flex justify-end">
+          <button type="submit" class="{{ btn_primary }}">Save</button>
         </div>
       </form>
     </article>
   </dialog>
   {% endfor %}
 
-  <details id="create-dimension-preset-panel" class="subdialog">
-    <summary>New dimension preset</summary>
-    <div class="subdialog-body">
-      <form action="/admin/dimension-presets" method="post" class="stack">
-        <label for="new-dimension-name">Name</label>
-        <input id="new-dimension-name" type="text" name="name" required>
+  <details id="create-dimension-preset-panel" class="rounded-2xl border border-white/10 bg-slate-950/45">
+    <summary class="flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100">New dimension preset <span class="text-slate-500">expand</span></summary>
+    <div class="border-t border-white/10 p-4">
+      <form action="/admin/dimension-presets" method="post" class="space-y-4">
+        <div>
+          <label for="new-dimension-name" class="{{ label_class }}">Name</label>
+          <input id="new-dimension-name" type="text" name="name" required class="{{ input_class }}">
+        </div>
 
-        <div class="grid">
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label for="new-dimension-width">Width</label>
-            <input id="new-dimension-width" type="number" name="width" min="1" required>
+            <label for="new-dimension-width" class="{{ label_class }}">Width</label>
+            <input id="new-dimension-width" type="number" name="width" min="1" required class="{{ input_class }}">
           </div>
           <div>
-            <label for="new-dimension-height">Height</label>
-            <input id="new-dimension-height" type="number" name="height" min="1" required>
+            <label for="new-dimension-height" class="{{ label_class }}">Height</label>
+            <input id="new-dimension-height" type="number" name="height" min="1" required class="{{ input_class }}">
           </div>
         </div>
 
-        <div class="actions">
-          <button type="submit">Save</button>
+        <div class="flex justify-end">
+          <button type="submit" class="{{ btn_primary }}">Save</button>
         </div>
       </form>
     </div>
   </details>
 
-  <div class="table-scroll">
-    <table>
-      <thead>
+  <div class="overflow-x-auto rounded-2xl border border-white/10">
+    <table class="min-w-full divide-y divide-white/10 text-left text-sm">
+      <thead class="bg-white/5 text-slate-300">
         <tr>
-          <th>Name</th>
-          <th>Width</th>
-          <th>Height</th>
-          <th>Actions</th>
+          <th class="px-4 py-3 font-semibold">Name</th>
+          <th class="px-4 py-3 font-semibold">Width</th>
+          <th class="px-4 py-3 font-semibold">Height</th>
+          <th class="px-4 py-3 font-semibold">Actions</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-white/10 bg-slate-950/50 text-slate-100">
       {% for preset in dimension_presets %}
         <tr>
-          <td>{{ preset.name }}</td>
-          <td>{{ preset.width }}</td>
-          <td>{{ preset.height }}</td>
-          <td class="table-actions">
-            <button type="button" class="secondary" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
-            <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" onsubmit="return confirm('Delete this dimension preset?');" class="inline-form">
-              <button class="contrast" type="submit">Delete</button>
-            </form>
+          <td class="px-4 py-3">{{ preset.name }}</td>
+          <td class="px-4 py-3">{{ preset.width }}</td>
+          <td class="px-4 py-3">{{ preset.height }}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
+              <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" onsubmit="return confirm('Delete this dimension preset?');" class="inline-flex">
+                <button class="{{ btn_danger }}" type="submit">Delete</button>
+              </form>
+            </div>
           </td>
         </tr>
       {% else %}
         <tr>
-          <td colspan="4">No dimension presets yet.</td>
+          <td colspan="4" class="px-4 py-4 text-slate-400">No dimension presets yet.</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -182,61 +222,73 @@
 
   {% for preset in dimension_presets %}
   <dialog id="edit-dimension-preset-{{ preset.id }}">
-    <article>
-      <header>
-        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()"></button>
-        <h3>Edit dimension preset: {{ preset.name }}</h3>
+    <article class="rounded-3xl border border-white/15 bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <header class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-xl font-semibold text-white">Edit dimension preset: {{ preset.name }}</h3>
+          <p class="mt-1 text-sm text-slate-400">Name und Abmessungen anpassen.</p>
+        </div>
+        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()">&times;</button>
       </header>
-      <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="stack">
-        <label for="edit-dimension-name-{{ preset.id }}">Name</label>
-        <input id="edit-dimension-name-{{ preset.id }}" type="text" name="name" value="{{ preset.name }}" required>
+      <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="space-y-4">
+        <div>
+          <label for="edit-dimension-name-{{ preset.id }}" class="{{ label_class }}">Name</label>
+          <input id="edit-dimension-name-{{ preset.id }}" type="text" name="name" value="{{ preset.name }}" required class="{{ input_class }}">
+        </div>
 
-        <div class="grid">
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label for="edit-dimension-width-{{ preset.id }}">Width</label>
-            <input id="edit-dimension-width-{{ preset.id }}" type="number" name="width" min="1" value="{{ preset.width }}" required>
+            <label for="edit-dimension-width-{{ preset.id }}" class="{{ label_class }}">Width</label>
+            <input id="edit-dimension-width-{{ preset.id }}" type="number" name="width" min="1" value="{{ preset.width }}" required class="{{ input_class }}">
           </div>
           <div>
-            <label for="edit-dimension-height-{{ preset.id }}">Height</label>
-            <input id="edit-dimension-height-{{ preset.id }}" type="number" name="height" min="1" value="{{ preset.height }}" required>
+            <label for="edit-dimension-height-{{ preset.id }}" class="{{ label_class }}">Height</label>
+            <input id="edit-dimension-height-{{ preset.id }}" type="number" name="height" min="1" value="{{ preset.height }}" required class="{{ input_class }}">
           </div>
         </div>
 
-        <div class="actions">
-          <button type="submit">Save</button>
+        <div class="flex justify-end">
+          <button type="submit" class="{{ btn_primary }}">Save</button>
         </div>
       </form>
     </article>
   </dialog>
   {% endfor %}
-</article>
+</section>
 
-<article>
-  <header class="section-head">
-    <h3>Enhancement LLM</h3>
+<section class="{{ panel_class }}">
+  <header class="mb-5">
+    <h3 class="text-xl font-semibold text-white">Enhancement LLM</h3>
+    <p class="mt-1 text-sm text-slate-400">Konfiguration fuer Prompt-Enhancement.</p>
   </header>
-  <form action="/admin/enhancement" method="post" class="stack">
-    <label for="enhancement-provider">Provider</label>
-    <select id="enhancement-provider" name="provider" required>
-      {% for provider in providers %}
-        <option value="{{ provider }}" {% if enhancement_config and enhancement_config.provider == provider %}selected{% endif %}>{{ provider }}</option>
-      {% endfor %}
-    </select>
+  <form action="/admin/enhancement" method="post" class="space-y-4">
+    <div>
+      <label for="enhancement-provider" class="{{ label_class }}">Provider</label>
+      <select id="enhancement-provider" name="provider" required class="{{ input_class }}">
+        {% for provider in providers %}
+          <option value="{{ provider }}" {% if enhancement_config and enhancement_config.provider == provider %}selected{% endif %}>{{ provider }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-    <label for="enhancement-model">Model</label>
-    <input id="enhancement-model" type="text" name="model" value="{{ enhancement_config.model if enhancement_config else '' }}" required>
+    <div>
+      <label for="enhancement-model" class="{{ label_class }}">Model</label>
+      <input id="enhancement-model" type="text" name="model" value="{{ enhancement_config.model if enhancement_config else '' }}" required class="{{ input_class }}">
+    </div>
 
-    <label for="enhancement-key">API key</label>
-    <input id="enhancement-key" type="password" name="api_key" placeholder="leave blank to keep">
+    <div>
+      <label for="enhancement-key" class="{{ label_class }}">API key</label>
+      <input id="enhancement-key" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
+    </div>
 
-    <label>
+    <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
       <input type="checkbox" name="clear_api_key">
       Clear stored key
     </label>
 
-    <div class="actions">
-      <button type="submit">Save</button>
+    <div class="flex justify-end">
+      <button type="submit" class="{{ btn_primary }}">Save</button>
     </div>
   </form>
-</article>
+</section>
 {% endblock %}

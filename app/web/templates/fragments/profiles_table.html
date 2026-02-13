@@ -1,33 +1,35 @@
-<div class="table-scroll">
-<table>
-  <thead>
+<div class="overflow-x-auto rounded-2xl border border-white/10">
+<table class="min-w-full divide-y divide-white/10 text-left text-sm">
+  <thead class="bg-white/5 text-slate-300">
     <tr>
-      <th>Name</th>
-      <th>Provider</th>
-      <th>Model</th>
-      <th>Format</th>
-      <th>Storage</th>
-      <th>Actions</th>
+      <th class="px-4 py-3 font-semibold">Name</th>
+      <th class="px-4 py-3 font-semibold">Provider</th>
+      <th class="px-4 py-3 font-semibold">Model</th>
+      <th class="px-4 py-3 font-semibold">Format</th>
+      <th class="px-4 py-3 font-semibold">Storage</th>
+      <th class="px-4 py-3 font-semibold">Actions</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody class="divide-y divide-white/10 bg-slate-950/50 text-slate-100">
   {% for profile in profiles %}
     <tr>
-      <td>{{ profile.name }}</td>
-      <td>{{ profile.provider }}</td>
-      <td>{{ profile.model_config.name if profile.model_config else profile.model }}</td>
-      <td>{{ profile.output_format }}</td>
-      <td>{{ profile.storage_template.name if profile.storage_template else profile.storage_template_id }}</td>
-      <td class="table-actions">
-        <a role="button" class="secondary" href="/profiles?edit_id={{ profile.id }}">Edit</a>
-        <form action="/profiles/{{ profile.id }}/delete" method="post" onsubmit="return confirm('Delete this profile?');" class="inline-form">
-          <button class="contrast" type="submit">Delete</button>
-        </form>
+      <td class="px-4 py-3">{{ profile.name }}</td>
+      <td class="px-4 py-3">{{ profile.provider }}</td>
+      <td class="px-4 py-3">{{ profile.model_config.name if profile.model_config else profile.model }}</td>
+      <td class="px-4 py-3 uppercase text-slate-300">{{ profile.output_format }}</td>
+      <td class="px-4 py-3">{{ profile.storage_template.name if profile.storage_template else profile.storage_template_id }}</td>
+      <td class="px-4 py-3">
+        <div class="flex flex-wrap gap-2">
+          <a href="/profiles?edit_id={{ profile.id }}" class="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10">Edit</a>
+          <form action="/profiles/{{ profile.id }}/delete" method="post" onsubmit="return confirm('Delete this profile?');" class="inline-flex">
+            <button class="inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" type="submit">Delete</button>
+          </form>
+        </div>
       </td>
     </tr>
   {% else %}
     <tr>
-      <td colspan="6">No profiles yet.</td>
+      <td colspan="6" class="px-4 py-4 text-slate-400">No profiles yet.</td>
     </tr>
   {% endfor %}
   </tbody>

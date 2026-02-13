@@ -2,75 +2,94 @@
 {% set action = form_action if form_action else '/profiles' %}
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
 {% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
+{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set label_class = "block text-sm font-semibold text-slate-200" %}
+{% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
 
-<form action="{{ action }}" method="post" class="stack profile-form" id="{{ form_dom_id }}">
-  <label for="{{ form_dom_id }}-name">Name</label>
-  <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" required>
+<form action="{{ action }}" method="post" class="space-y-5" id="{{ form_dom_id }}">
+  <div>
+    <label for="{{ form_dom_id }}-name" class="{{ label_class }}">Name</label>
+    <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" required class="{{ input_class }}">
+  </div>
 
-  <label for="{{ model_field_id }}">Model</label>
-  <select id="{{ model_field_id }}" name="model_config_id" required>
-    <option value="">Select a model</option>
-    {% for config in model_configs %}
-      <option value="{{ config.id }}" {% if p and p.model_config_id == config.id %}selected{% endif %}>
-        {{ config.name }} ({{ config.provider }} / {{ config.model }})
-      </option>
-    {% endfor %}
-  </select>
+  <div>
+    <label for="{{ model_field_id }}" class="{{ label_class }}">Model</label>
+    <select id="{{ model_field_id }}" name="model_config_id" required class="{{ input_class }}">
+      <option value="">Select a model</option>
+      {% for config in model_configs %}
+        <option value="{{ config.id }}" {% if p and p.model_config_id == config.id %}selected{% endif %}>
+          {{ config.name }} ({{ config.provider }} / {{ config.model }})
+        </option>
+      {% endfor %}
+    </select>
+  </div>
 
-  <label for="{{ form_dom_id }}-base-prompt">Base prompt (optional)</label>
-  <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3">{{ p.base_prompt if p else '' }}</textarea>
+  <div>
+    <label for="{{ form_dom_id }}-base-prompt" class="{{ label_class }}">Base prompt (optional)</label>
+    <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3" class="{{ text_class }}">{{ p.base_prompt if p else '' }}</textarea>
+  </div>
 
-  <label for="{{ form_dom_id }}-negative-prompt">Negative prompt</label>
-  <textarea id="{{ form_dom_id }}-negative-prompt" name="negative_prompt" rows="2">{{ p.negative_prompt if p and p.negative_prompt else '' }}</textarea>
+  <div>
+    <label for="{{ form_dom_id }}-negative-prompt" class="{{ label_class }}">Negative prompt</label>
+    <textarea id="{{ form_dom_id }}-negative-prompt" name="negative_prompt" rows="2" class="{{ text_class }}">{{ p.negative_prompt if p and p.negative_prompt else '' }}</textarea>
+  </div>
 
-  <div class="grid">
+  <div class="grid gap-4 md:grid-cols-3">
     <div>
-      <label for="{{ form_dom_id }}-width">Width</label>
-      <input id="{{ form_dom_id }}-width" type="number" name="width" value="{{ p.width if p and p.width else '' }}">
+      <label for="{{ form_dom_id }}-width" class="{{ label_class }}">Width</label>
+      <input id="{{ form_dom_id }}-width" type="number" name="width" value="{{ p.width if p and p.width else '' }}" class="{{ input_class }}">
     </div>
     <div>
-      <label for="{{ form_dom_id }}-height">Height</label>
-      <input id="{{ form_dom_id }}-height" type="number" name="height" value="{{ p.height if p and p.height else '' }}">
+      <label for="{{ form_dom_id }}-height" class="{{ label_class }}">Height</label>
+      <input id="{{ form_dom_id }}-height" type="number" name="height" value="{{ p.height if p and p.height else '' }}" class="{{ input_class }}">
     </div>
     <div>
-      <label for="{{ form_dom_id }}-aspect">Aspect ratio</label>
-      <input id="{{ form_dom_id }}-aspect" type="text" name="aspect_ratio" value="{{ p.aspect_ratio if p and p.aspect_ratio else '' }}" placeholder="1:1">
+      <label for="{{ form_dom_id }}-aspect" class="{{ label_class }}">Aspect ratio</label>
+      <input id="{{ form_dom_id }}-aspect" type="text" name="aspect_ratio" value="{{ p.aspect_ratio if p and p.aspect_ratio else '' }}" placeholder="1:1" class="{{ input_class }}">
     </div>
   </div>
 
-  <div class="grid">
+  <div class="grid gap-4 md:grid-cols-2">
     <div>
-      <label for="{{ form_dom_id }}-n-images">Images per generation</label>
-      <input id="{{ form_dom_id }}-n-images" type="number" min="1" max="8" name="n_images" value="{{ p.n_images if p else 1 }}" required>
+      <label for="{{ form_dom_id }}-n-images" class="{{ label_class }}">Images per generation</label>
+      <input id="{{ form_dom_id }}-n-images" type="number" min="1" max="8" name="n_images" value="{{ p.n_images if p else 1 }}" required class="{{ input_class }}">
     </div>
     <div>
-      <label for="{{ form_dom_id }}-seed">Seed</label>
-      <input id="{{ form_dom_id }}-seed" type="number" name="seed" value="{{ p.seed if p and p.seed is not none else '' }}">
+      <label for="{{ form_dom_id }}-seed" class="{{ label_class }}">Seed</label>
+      <input id="{{ form_dom_id }}-seed" type="number" name="seed" value="{{ p.seed if p and p.seed is not none else '' }}" class="{{ input_class }}">
     </div>
   </div>
 
-  <label for="{{ form_dom_id }}-format">Output format</label>
-  <select id="{{ form_dom_id }}-format" name="output_format" required>
-    {% set selected_format = p.output_format if p else 'png' %}
-    <option value="png" {% if selected_format == 'png' %}selected{% endif %}>png</option>
-    <option value="jpg" {% if selected_format == 'jpg' %}selected{% endif %}>jpg</option>
-    <option value="webp" {% if selected_format == 'webp' %}selected{% endif %}>webp</option>
-  </select>
+  <div>
+    <label for="{{ form_dom_id }}-format" class="{{ label_class }}">Output format</label>
+    <select id="{{ form_dom_id }}-format" name="output_format" required class="{{ input_class }}">
+      {% set selected_format = p.output_format if p else 'png' %}
+      <option value="png" {% if selected_format == 'png' %}selected{% endif %}>png</option>
+      <option value="jpg" {% if selected_format == 'jpg' %}selected{% endif %}>jpg</option>
+      <option value="webp" {% if selected_format == 'webp' %}selected{% endif %}>webp</option>
+    </select>
+  </div>
 
-  <label for="{{ form_dom_id }}-params">params_json</label>
-  <textarea id="{{ form_dom_id }}-params" name="params_json" rows="4">{{ p.params_json | tojson if p else '{}' }}</textarea>
+  <div>
+    <label for="{{ form_dom_id }}-params" class="{{ label_class }}">params_json</label>
+    <textarea id="{{ form_dom_id }}-params" name="params_json" rows="4" class="{{ text_class }} font-mono text-xs">{{ p.params_json | tojson if p else '{}' }}</textarea>
+  </div>
 
-  <label for="{{ form_dom_id }}-storage">Storage template</label>
-  <select id="{{ form_dom_id }}-storage" name="storage_template_id" required>
-    {% for st in storage_templates %}
-    <option value="{{ st.id }}" {% if p and p.storage_template_id == st.id %}selected{% endif %}>{{ st.name }} :: {{ st.base_dir }}</option>
-    {% endfor %}
-  </select>
+  <div>
+    <label for="{{ form_dom_id }}-storage" class="{{ label_class }}">Storage template</label>
+    <select id="{{ form_dom_id }}-storage" name="storage_template_id" required class="{{ input_class }}">
+      {% for st in storage_templates %}
+      <option value="{{ st.id }}" {% if p and p.storage_template_id == st.id %}selected{% endif %}>{{ st.name }} :: {{ st.base_dir }}</option>
+      {% endfor %}
+    </select>
+  </div>
 
-  <div class="actions">
-    <button type="submit">{{ submit_label if submit_label else ("Update" if p else "Create") }}</button>
+  <div class="flex flex-wrap justify-end gap-3 pt-2">
+    <button type="submit" class="{{ btn_primary }}">{{ submit_label if submit_label else ("Update" if p else "Create") }}</button>
     {% if cancel_url %}
-      <a role="button" class="secondary" href="{{ cancel_url }}">Cancel</a>
+      <a href="{{ cancel_url }}" class="{{ btn_secondary }}">Cancel</a>
     {% endif %}
   </div>
 </form>
