@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
-{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
+{% set panel_class = "p-5 sm:p-7" %}
 {% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
 {% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
 {% set label_class = "block text-sm font-semibold text-slate-200" %}
@@ -30,9 +30,9 @@
     </div>
   {% endif %}
 
-  <details id="create-model-config-panel" class="rounded-2xl border border-white/10 bg-slate-950/45">
+  <details id="create-model-config-panel" class="rounded-2xl bg-slate-950/45">
     <summary class="flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100">New model <span class="text-slate-500">expand</span></summary>
-    <div class="border-t border-white/10 p-4">
+    <div class="p-4">
       <form action="/admin/model-configs" method="post" class="space-y-4">
         <div>
           <label for="new-model-name" class="{{ label_class }}">Name</label>
@@ -70,8 +70,8 @@
     </div>
   </details>
 
-  <div class="overflow-x-auto rounded-2xl border border-white/10">
-    <table class="min-w-full divide-y divide-white/10 text-left text-sm">
+  <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+    <table class="min-w-full divide-y divide-white/6 text-left text-sm">
       <thead class="bg-white/5 text-slate-300">
         <tr>
           <th class="px-4 py-3 font-semibold">Name</th>
@@ -81,7 +81,7 @@
           <th class="px-4 py-3 font-semibold">Actions</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-white/10 bg-slate-950/50 text-slate-100">
+      <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
       {% for config in model_configs %}
         <tr>
           <td class="px-4 py-3">{{ config.name }}</td>
@@ -108,7 +108,7 @@
 
   {% for config in model_configs %}
   <dialog id="edit-model-config-{{ config.id }}">
-    <article class="rounded-3xl border border-white/15 bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
       <header class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h3 class="text-xl font-semibold text-white">Edit model: {{ config.name }}</h3>
@@ -159,9 +159,9 @@
   </dialog>
   {% endfor %}
 
-  <details id="create-dimension-preset-panel" class="rounded-2xl border border-white/10 bg-slate-950/45">
+  <details id="create-dimension-preset-panel" class="rounded-2xl bg-slate-950/45">
     <summary class="flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100">New dimension preset <span class="text-slate-500">expand</span></summary>
-    <div class="border-t border-white/10 p-4">
+    <div class="p-4">
       <form action="/admin/dimension-presets" method="post" class="space-y-4">
         <div>
           <label for="new-dimension-name" class="{{ label_class }}">Name</label>
@@ -186,8 +186,8 @@
     </div>
   </details>
 
-  <div class="overflow-x-auto rounded-2xl border border-white/10">
-    <table class="min-w-full divide-y divide-white/10 text-left text-sm">
+  <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+    <table class="min-w-full divide-y divide-white/6 text-left text-sm">
       <thead class="bg-white/5 text-slate-300">
         <tr>
           <th class="px-4 py-3 font-semibold">Name</th>
@@ -196,7 +196,7 @@
           <th class="px-4 py-3 font-semibold">Actions</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-white/10 bg-slate-950/50 text-slate-100">
+      <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
       {% for preset in dimension_presets %}
         <tr>
           <td class="px-4 py-3">{{ preset.name }}</td>
@@ -222,7 +222,7 @@
 
   {% for preset in dimension_presets %}
   <dialog id="edit-dimension-preset-{{ preset.id }}">
-    <article class="rounded-3xl border border-white/15 bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
       <header class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h3 class="text-xl font-semibold text-white">Edit dimension preset: {{ preset.name }}</h3>
