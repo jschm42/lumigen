@@ -1,234 +1,264 @@
 {% extends "layout.html" %}
 {% block content %}
-{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
-{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set label_class = "block text-sm font-semibold text-slate-200" %}
+{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 shadow-panel backdrop-blur" %}
+{% set input_class = "w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set textarea_class = "w-full rounded-2xl border border-white/15 bg-slate-950/75 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" %}
 
-<section class="{{ panel_class }}">
-  <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h2 class="text-2xl font-semibold text-white">Generate</h2>
-      <p class="mt-1 text-sm text-slate-400">Prompt, profile und optionale Overrides.</p>
+<div class="grid min-h-[calc(100vh-11rem)] gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+  <aside class="{{ panel_class }} flex min-h-[32rem] flex-col p-4">
+    <a href="/?conversation=new" class="{{ btn_primary }} w-full">New Session</a>
+
+    <div class="mt-4 space-y-2 overflow-y-auto pr-1">
+      <a href="/?conversation=all" class="block rounded-xl border px-3 py-2 text-sm transition {% if active_conversation == 'all' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/10 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:bg-white/10 hover:text-white{% endif %}">
+        All Sessions
+      </a>
+      {% for item in session_items %}
+        <a href="/?conversation={{ item.token | urlencode }}" class="block rounded-xl border px-3 py-2 text-sm transition {% if active_conversation == item.token %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/10 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:bg-white/10 hover:text-white{% endif %}">
+          <span class="block truncate font-semibold">{{ item.label }}</span>
+          <span class="mt-0.5 block text-xs text-slate-400">{{ item.count }} prompts</span>
+        </a>
+      {% else %}
+        <p class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400">Noch keine Sessions vorhanden.</p>
+      {% endfor %}
     </div>
-  </div>
+  </aside>
 
-  {% if error %}
-    <div class="mb-5 rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
-  {% endif %}
+  <section class="{{ panel_class }} flex min-h-[32rem] flex-col overflow-hidden">
+    <header class="border-b border-white/10 px-4 py-3 sm:px-5">
+      <h2 class="text-lg font-semibold text-white">Image Chat</h2>
+      <p class="mt-1 text-xs text-slate-400">Verlauf aus Prompts und generierten Bildern.</p>
+    </header>
 
-  {% if not profiles %}
-    <p class="text-sm text-slate-300">No profiles yet. Create one in <a href="/profiles" class="font-semibold text-sky-200 hover:text-sky-100">Profiles</a>.</p>
-  {% else %}
-  <form
-    action="/generate"
-    hx-post="/generate"
-    hx-target="#job-list"
-    hx-swap="afterbegin"
-    hx-encoding="multipart/form-data"
-    method="post"
-    enctype="multipart/form-data"
-    class="space-y-6"
-    data-generation-form
-  >
-    <div>
-      <div class="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <label for="prompt_user" class="{{ label_class }}">Prompt</label>
-        <button type="button" class="{{ btn_secondary }}" data-enhance-prompt {% if not enhancement_ready %}disabled{% endif %}>Enhance</button>
-      </div>
-      <textarea id="prompt_user" name="prompt_user" rows="5" required class="{{ text_class }}"></textarea>
-      {% if not enhancement_ready %}
-        <p class="mt-2 text-xs text-slate-400">Enhancement LLM is not configured.</p>
+    <div id="chat-history" class="flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
+      {% if error %}
+        {% with error_message=error %}
+          {% include "fragments/chat_error_item.html" %}
+        {% endwith %}
+      {% endif %}
+
+      {% if conversation_generations %}
+        {% for generation in conversation_generations %}
+          {% set assets = generation.assets | sort(attribute='id') %}
+          {% include "fragments/chat_generation_item.html" %}
+        {% endfor %}
+      {% else %}
+        <div class="rounded-2xl border border-dashed border-white/20 bg-white/5 px-5 py-8 text-center text-sm text-slate-400">
+          Starte eine neue Session mit einem Prompt im Eingabefeld unten.
+        </div>
       {% endif %}
     </div>
 
-    <div>
-      <label for="input_images" class="{{ label_class }}">Input images (1-5)</label>
-      <input id="input_images" name="input_images" type="file" accept="image/*" multiple data-input-images class="{{ input_class }} file:mr-4 file:rounded-lg file:border-0 file:bg-sky-300 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-950 hover:file:bg-sky-200">
-      <p class="mt-2 text-xs text-slate-400">Used as visual guidance for the model.</p>
-      <div class="mt-3 flex justify-end">
-        <button type="button" class="{{ btn_secondary }}" data-input-clear>Remove all</button>
-      </div>
-      <div class="mt-3 flex flex-wrap gap-3" data-input-preview aria-live="polite"></div>
+    <div class="border-t border-white/10 bg-slate-900/85 p-4 sm:p-5">
+      {% if not profiles %}
+        <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          Keine Profile vorhanden. Erstelle zuerst ein Profil unter <a href="/profiles" class="font-semibold underline">Profiles</a>.
+        </div>
+      {% else %}
+      <form
+        action="/generate"
+        hx-post="/generate"
+        hx-target="#chat-history"
+        hx-swap="beforeend"
+        hx-encoding="multipart/form-data"
+        hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}var clearBtn=this.querySelector('[data-input-clear]');if(clearBtn){clearBtn.click();}}"
+        method="post"
+        enctype="multipart/form-data"
+        class="space-y-3"
+        data-generation-form
+      >
+        <input type="hidden" name="conversation" value="{{ active_conversation }}">
+
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_17rem]">
+          <textarea id="prompt_user" name="prompt_user" rows="3" required class="{{ textarea_class }}" placeholder="Beschreibe dein Bild..."></textarea>
+          <div>
+            <label for="profile_id" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Profilauswahl</label>
+            <select id="profile_id" name="profile_id" data-generation-profile required class="{{ input_class }}">
+              {% for profile in profiles %}
+                <option
+                  value="{{ profile.id }}"
+                  data-model-config-id="{{ profile.model_config_id if profile.model_config_id is not none else '' }}"
+                  data-width="{{ profile.width if profile.width is not none else '' }}"
+                  data-height="{{ profile.height if profile.height is not none else '' }}"
+                  data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"
+                  data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
+                  data-seed="{{ profile.seed if profile.seed is not none else '' }}"
+                  data-negative-prompt="{{ profile.negative_prompt if profile.negative_prompt else '' }}"
+                >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class="{{ btn_secondary }}" data-enhance-prompt {% if not enhancement_ready %}disabled{% endif %}>Enhance</button>
+            <button type="button" class="{{ btn_secondary }}" data-input-clear>Remove images</button>
+            <span class="text-xs text-slate-400">Input images (1-5)</span>
+          </div>
+          <button type="submit" class="{{ btn_primary }}">Generieren</button>
+        </div>
+
+        <input id="input_images" name="input_images" type="file" accept="image/*" multiple data-input-images class="{{ input_class }} file:mr-4 file:rounded-lg file:border-0 file:bg-sky-300 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-950 hover:file:bg-sky-200">
+        <div class="flex flex-wrap gap-3" data-input-preview aria-live="polite"></div>
+
+        <details class="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
+          <summary class="cursor-pointer text-sm font-semibold text-slate-200">Erweiterte Optionen</summary>
+          <div class="mt-3 space-y-4">
+            <div class="grid gap-3 md:grid-cols-3">
+              <div>
+                <label for="dimension_preset" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Dimension preset</label>
+                <select id="dimension_preset" data-dimension-preset class="{{ input_class }}">
+                  <option value="512x512">512 x 512</option>
+                  <option value="768x768">768 x 768</option>
+                  <option value="1024x1024">1024 x 1024</option>
+                  <option value="1152x896">1152 x 896</option>
+                  <option value="896x1152">896 x 1152</option>
+                  <option value="1216x832">1216 x 832</option>
+                  <option value="832x1216">832 x 1216</option>
+                  <option value="1344x768">1344 x 768</option>
+                  <option value="768x1344">768 x 1344</option>
+                  <option value="1536x640">1536 x 640</option>
+                  <option value="640x1536">640 x 1536</option>
+                  <option disabled>----------</option>
+                  <option value="">Custom / from profile</option>
+                  {% for preset in dimension_presets %}
+                    <option value="{{ preset.width }}x{{ preset.height }}">{{ preset.name }} ({{ preset.width }} x {{ preset.height }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="width" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Width</label>
+                <input id="width" type="text" name="width" inputmode="numeric" list="width-presets" placeholder="from profile" class="{{ input_class }}">
+              </div>
+              <div>
+                <label for="height" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Height</label>
+                <input id="height" type="text" name="height" inputmode="numeric" list="height-presets" placeholder="from profile" class="{{ input_class }}">
+              </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-3">
+              <div>
+                <label for="aspect_ratio_preset" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Ratio preset</label>
+                <select id="aspect_ratio_preset" data-ratio-preset class="{{ input_class }}">
+                  <option value="">Custom / from profile</option>
+                  <option value="1:1">1:1</option>
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="4:3">4:3</option>
+                  <option value="3:4">3:4</option>
+                  <option value="3:2">3:2</option>
+                  <option value="2:3">2:3</option>
+                  <option value="21:9">21:9</option>
+                </select>
+              </div>
+              <div>
+                <label for="aspect_ratio" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Ratio</label>
+                <input id="aspect_ratio" type="text" name="aspect_ratio" list="ratio-presets" placeholder="e.g. 16:9" class="{{ input_class }}">
+              </div>
+              <div>
+                <label for="n_images" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Number of images</label>
+                <input id="n_images" type="number" min="1" max="8" name="n_images" placeholder="from profile" class="{{ input_class }}">
+              </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2">
+              <div>
+                <label for="seed" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Seed</label>
+                <div class="flex gap-2">
+                  <input id="seed" type="number" name="seed" placeholder="from profile" class="{{ input_class }}">
+                  <button type="button" class="{{ btn_secondary }} whitespace-nowrap" data-random-seed-btn data-seed-target="seed">Random</button>
+                </div>
+              </div>
+              <div>
+                <label for="gallery_folder_id" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Target folder</label>
+                <select id="gallery_folder_id" name="gallery_folder_id" class="{{ input_class }}">
+                  <option value="">Root</option>
+                  {% for folder in gallery_folders %}
+                    <option value="{{ folder.id }}">{{ folder.path }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+              <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <input id="upscale_enable" type="checkbox" name="upscale_enable" data-upscale-enable {% if not upscale_ready %}disabled{% endif %}>
+                Upscale after generation
+              </label>
+              <select id="upscale_model" name="upscale_model" data-upscale-model {% if not upscale_ready %}disabled{% endif %} class="{{ input_class }} mt-2">
+                <option value="">Select model</option>
+                {% for model in upscale_models %}
+                  <option value="{{ model }}">{{ model }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <input id="override_negative_prompt" type="checkbox" name="override_negative_prompt">
+                Override negative prompt
+              </label>
+              <textarea name="negative_prompt" rows="3" placeholder="used only when checkbox is enabled" class="{{ textarea_class }} mt-2"></textarea>
+            </div>
+          </div>
+        </details>
+
+        <datalist id="width-presets">
+          <option value="512"></option>
+          <option value="640"></option>
+          <option value="768"></option>
+          <option value="832"></option>
+          <option value="896"></option>
+          <option value="1024"></option>
+          <option value="1152"></option>
+          <option value="1216"></option>
+          <option value="1344"></option>
+          <option value="1536"></option>
+        </datalist>
+        <datalist id="height-presets">
+          <option value="512"></option>
+          <option value="640"></option>
+          <option value="768"></option>
+          <option value="832"></option>
+          <option value="896"></option>
+          <option value="1024"></option>
+          <option value="1152"></option>
+          <option value="1216"></option>
+          <option value="1344"></option>
+          <option value="1536"></option>
+        </datalist>
+        <datalist id="ratio-presets">
+          <option value="1:1"></option>
+          <option value="16:9"></option>
+          <option value="9:16"></option>
+          <option value="4:3"></option>
+          <option value="3:4"></option>
+          <option value="3:2"></option>
+          <option value="2:3"></option>
+          <option value="21:9"></option>
+        </datalist>
+      </form>
+      {% endif %}
     </div>
+  </section>
+</div>
 
-    <div>
-      <label for="profile_id" class="{{ label_class }}">Profile</label>
-      <select id="profile_id" name="profile_id" data-generation-profile required class="{{ input_class }}">
-        {% for profile in profiles %}
-          <option
-            value="{{ profile.id }}"
-            data-model-config-id="{{ profile.model_config_id if profile.model_config_id is not none else '' }}"
-            data-width="{{ profile.width if profile.width is not none else '' }}"
-            data-height="{{ profile.height if profile.height is not none else '' }}"
-            data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"
-            data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
-            data-seed="{{ profile.seed if profile.seed is not none else '' }}"
-            data-negative-prompt="{{ profile.negative_prompt if profile.negative_prompt else '' }}"
-          >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
-        {% endfor %}
-      </select>
-    </div>
+<script>
+  (function () {
+    function scrollChatToBottom() {
+      var chat = document.getElementById("chat-history");
+      if (!chat) return;
+      chat.scrollTop = chat.scrollHeight;
+    }
 
-    <div class="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-      <h3 class="text-sm font-semibold uppercase tracking-wide text-sky-100/90">Override profile defaults (optional)</h3>
-
-      <div class="mt-4 grid gap-4 md:grid-cols-3">
-        <div>
-          <label for="dimension_preset" class="{{ label_class }}">Dimension preset</label>
-          <select id="dimension_preset" data-dimension-preset class="{{ input_class }}">
-            <option value="512x512">512 x 512</option>
-            <option value="768x768">768 x 768</option>
-            <option value="1024x1024">1024 x 1024</option>
-            <option value="1152x896">1152 x 896</option>
-            <option value="896x1152">896 x 1152</option>
-            <option value="1216x832">1216 x 832</option>
-            <option value="832x1216">832 x 1216</option>
-            <option value="1344x768">1344 x 768</option>
-            <option value="768x1344">768 x 1344</option>
-            <option value="1536x640">1536 x 640</option>
-            <option value="640x1536">640 x 1536</option>
-            <option disabled>----------</option>
-            <option value="">Custom / from profile</option>
-            {% for preset in dimension_presets %}
-              <option value="{{ preset.width }}x{{ preset.height }}">{{ preset.name }} ({{ preset.width }} x {{ preset.height }})</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label for="width" class="{{ label_class }}">Width</label>
-          <input id="width" type="text" name="width" inputmode="numeric" list="width-presets" placeholder="from profile" class="{{ input_class }}">
-        </div>
-        <div>
-          <label for="height" class="{{ label_class }}">Height</label>
-          <input id="height" type="text" name="height" inputmode="numeric" list="height-presets" placeholder="from profile" class="{{ input_class }}">
-        </div>
-      </div>
-
-      <div class="mt-4 grid gap-4 md:grid-cols-3">
-        <div>
-          <label for="aspect_ratio_preset" class="{{ label_class }}">Ratio preset</label>
-          <select id="aspect_ratio_preset" data-ratio-preset class="{{ input_class }}">
-            <option value="">Custom / from profile</option>
-            <option value="1:1">1:1</option>
-            <option value="16:9">16:9</option>
-            <option value="9:16">9:16</option>
-            <option value="4:3">4:3</option>
-            <option value="3:4">3:4</option>
-            <option value="3:2">3:2</option>
-            <option value="2:3">2:3</option>
-            <option value="21:9">21:9</option>
-          </select>
-        </div>
-        <div>
-          <label for="aspect_ratio" class="{{ label_class }}">Ratio</label>
-          <input id="aspect_ratio" type="text" name="aspect_ratio" list="ratio-presets" placeholder="e.g. 16:9 (from profile)" class="{{ input_class }}">
-        </div>
-        <div>
-          <label for="n_images" class="{{ label_class }}">Number of images</label>
-          <input id="n_images" type="number" min="1" max="8" name="n_images" placeholder="from profile" class="{{ input_class }}">
-        </div>
-      </div>
-
-      <div class="mt-4">
-        <label for="seed" class="{{ label_class }}">Seed</label>
-        <div class="mt-2 flex gap-2">
-          <input id="seed" type="number" name="seed" placeholder="from profile" class="w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35">
-          <button type="button" class="{{ btn_secondary }} whitespace-nowrap" data-random-seed-btn data-seed-target="seed">Random</button>
-        </div>
-      </div>
-
-      <div class="mt-4 rounded-2xl border border-white/10 bg-slate-900/45 p-4">
-        <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <input id="upscale_enable" type="checkbox" name="upscale_enable" data-upscale-enable {% if not upscale_ready %}disabled{% endif %}>
-          Upscale after generation
-        </label>
-        <select id="upscale_model" name="upscale_model" data-upscale-model {% if not upscale_ready %}disabled{% endif %} class="{{ input_class }}">
-          <option value="">Select model</option>
-          {% for model in upscale_models %}
-            <option value="{{ model }}">{{ model }}</option>
-          {% endfor %}
-        </select>
-        {% if not upscale_ready %}
-          <p class="mt-2 text-xs text-slate-400">Configure UPSCALER_COMMAND to enable upscaling.</p>
-        {% endif %}
-      </div>
-
-      <div class="mt-4">
-        <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <input id="override_negative_prompt" type="checkbox" name="override_negative_prompt">
-          Override negative prompt
-        </label>
-        <textarea name="negative_prompt" rows="3" placeholder="used only when checkbox is enabled" class="{{ text_class }}"></textarea>
-      </div>
-
-      <div class="mt-4">
-        <label for="gallery_folder_id" class="{{ label_class }}">Target folder in gallery</label>
-        <select id="gallery_folder_id" name="gallery_folder_id" class="{{ input_class }}">
-          <option value="">Root</option>
-          {% for folder in gallery_folders %}
-            <option value="{{ folder.id }}">{{ folder.path }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <datalist id="width-presets">
-      <option value="512"></option>
-      <option value="640"></option>
-      <option value="768"></option>
-      <option value="832"></option>
-      <option value="896"></option>
-      <option value="1024"></option>
-      <option value="1152"></option>
-      <option value="1216"></option>
-      <option value="1344"></option>
-      <option value="1536"></option>
-    </datalist>
-    <datalist id="height-presets">
-      <option value="512"></option>
-      <option value="640"></option>
-      <option value="768"></option>
-      <option value="832"></option>
-      <option value="896"></option>
-      <option value="1024"></option>
-      <option value="1152"></option>
-      <option value="1216"></option>
-      <option value="1344"></option>
-      <option value="1536"></option>
-    </datalist>
-    <datalist id="ratio-presets">
-      <option value="1:1"></option>
-      <option value="16:9"></option>
-      <option value="9:16"></option>
-      <option value="4:3"></option>
-      <option value="3:4"></option>
-      <option value="3:2"></option>
-      <option value="2:3"></option>
-      <option value="21:9"></option>
-    </datalist>
-
-    <div class="flex justify-end">
-      <button type="submit" class="{{ btn_primary }}">Generate</button>
-    </div>
-  </form>
-  {% endif %}
-</section>
-
-<section class="{{ panel_class }}">
-  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h2 class="text-2xl font-semibold text-white">Jobs</h2>
-      <p class="mt-1 text-sm text-slate-400">Queued and running tasks update live.</p>
-    </div>
-  </div>
-  <div id="job-list" class="space-y-4">
-    {% for generation in active_generations %}
-      {% set assets = [] %}
-      {% include "fragments/job_status.html" %}
-    {% endfor %}
-  </div>
-</section>
+    window.addEventListener("DOMContentLoaded", scrollChatToBottom);
+    document.body.addEventListener("htmx:afterSwap", function (event) {
+      if (event.target && event.target.id === "chat-history") {
+        scrollChatToBottom();
+      }
+    });
+  })();
+</script>
 {% endblock %}

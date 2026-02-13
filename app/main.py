@@ -4,6 +4,7 @@ import base64
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlencode
@@ -128,6 +129,12 @@ def normalize_thumb_size(value: Optional[str]) -> str:
     return "md"
 
 
+def generation_session_token(generation: Generation) -> str:
+    if generation.profile_id is not None:
+        return f"profile:{generation.profile_id}"
+    return f"profile-name:{slugify(generation.profile_name, max_length=64, fallback='unknown')}"
+
+
 def safe_gallery_return_to(value: Optional[str]) -> str:
     candidate = (value or "/gallery").strip()
     if candidate.startswith("/gallery"):
@@ -245,20 +252,73 @@ def build_folder_navigation(
 def generate_page(
     request: Request,
     error: Optional[str] = Query(default=None),
+    conversation: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     dimension_presets = crud.list_dimension_presets(session)
     gallery_folders = crud.list_gallery_folders(session)
     enhancement_config = crud.get_enhancement_config(session)
-    active_generations = list(
+    recent_generations = list(
         session.scalars(
             select(Generation)
-            .where(Generation.status.in_(["queued", "running"]))
-            .order_by(Generation.id.desc())
-            .limit(20)
+            .options(selectinload(Generation.assets))
+            .order_by(Generation.created_at.desc(), Generation.id.desc())
+            .limit(250)
         ).all()
     )
+    recent_generations.reverse()
+
+    session_index: dict[str, dict[str, Any]] = {}
+    for generation in recent_generations:
+        token = generation_session_token(generation)
+        created_at = generation.created_at or datetime.min
+        item = session_index.get(token)
+        if not item:
+            item = {
+                "token": token,
+                "label": generation.profile_name or f"Session #{generation.id}",
+                "count": 0,
+                "latest_generation_id": generation.id,
+                "latest_created_at": created_at,
+                "latest_status": generation.status,
+            }
+            session_index[token] = item
+        item["count"] += 1
+        if created_at >= item["latest_created_at"]:
+            item["latest_generation_id"] = generation.id
+            item["latest_created_at"] = created_at
+            item["latest_status"] = generation.status
+
+    session_items = sorted(
+        session_index.values(),
+        key=lambda item: (
+            item.get("latest_created_at") or datetime.min,
+            item.get("latest_generation_id") or 0,
+        ),
+        reverse=True,
+    )
+
+    active_conversation = (conversation or "").strip()
+    if active_conversation:
+        if active_conversation not in {"all", "new"} and active_conversation not in {
+            item["token"] for item in session_items
+        }:
+            active_conversation = ""
+    if not active_conversation:
+        active_conversation = session_items[0]["token"] if session_items else "new"
+
+    if active_conversation == "all":
+        conversation_generations = recent_generations
+    elif active_conversation == "new":
+        conversation_generations = []
+    else:
+        conversation_generations = [
+            generation
+            for generation in recent_generations
+            if generation_session_token(generation) == active_conversation
+        ]
+
     return templates.TemplateResponse(
         "generate.html",
         {
@@ -266,7 +326,9 @@ def generate_page(
             "profiles": profiles,
             "dimension_presets": dimension_presets,
             "gallery_folders": gallery_folders,
-            "active_generations": active_generations,
+            "conversation_generations": conversation_generations,
+            "session_items": session_items,
+            "active_conversation": active_conversation,
             "enhancement_ready": bool(
                 enhancement_config and enhancement_config.api_key_encrypted
             ),
@@ -283,6 +345,7 @@ def generate_submit(
     background_tasks: BackgroundTasks,
     prompt_user: str = Form(...),
     profile_id: int = Form(...),
+    conversation: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
     aspect_ratio: str = Form(default=""),
@@ -380,14 +443,20 @@ def generate_submit(
     except ValueError as exc:
         if is_htmx(request):
             return templates.TemplateResponse(
-                "fragments/flash.html",
-                {"request": request, "message": f"Error: {str(exc)}"},
+                "fragments/chat_error_item.html",
+                {
+                    "request": request,
+                    "error_message": str(exc),
+                },
             )
-        return RedirectResponse(url=f"/?error={str(exc)}", status_code=303)
+        params: dict[str, str] = {"error": str(exc)}
+        if conversation.strip():
+            params["conversation"] = conversation.strip()
+        return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
     if is_htmx(request):
         return templates.TemplateResponse(
-            "fragments/job_status.html",
+            "fragments/chat_generation_item.html",
             {
                 "request": request,
                 "generation": generation,
@@ -401,6 +470,7 @@ def generate_submit(
 def job_status(
     request: Request,
     generation_id: int,
+    view: str = Query(default="default"),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     generation = session.scalar(
@@ -412,8 +482,13 @@ def job_status(
         raise HTTPException(status_code=404, detail="Job not found")
 
     assets = sorted(generation.assets, key=lambda item: item.id)
+    template_name = (
+        "fragments/chat_generation_item.html"
+        if view.strip().lower() == "chat"
+        else "fragments/job_status.html"
+    )
     return templates.TemplateResponse(
-        "fragments/job_status.html",
+        template_name,
         {
             "request": request,
             "generation": generation,
@@ -426,6 +501,7 @@ def job_status(
 def job_cancel(
     request: Request,
     generation_id: int,
+    view: str = Query(default="default"),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     generation = generation_service.cancel_generation(session, generation_id)
@@ -436,8 +512,13 @@ def job_cancel(
         sorted(generation.assets, key=lambda item: item.id) if generation.assets else []
     )
     if is_htmx(request):
+        template_name = (
+            "fragments/chat_generation_item.html"
+            if view.strip().lower() == "chat"
+            else "fragments/job_status.html"
+        )
         return templates.TemplateResponse(
-            "fragments/job_status.html",
+            template_name,
             {
                 "request": request,
                 "generation": generation,
