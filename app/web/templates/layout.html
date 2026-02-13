@@ -80,13 +80,14 @@
 </head>
 <body class="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
   {% set embedded = request.query_params.get('embedded') == '1' %}
+  {% set show_top_navigation = false %}
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
     <div class="absolute -top-40 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-sky-400/15 blur-3xl"></div>
     <div class="absolute bottom-0 right-0 h-[30rem] w-[30rem] rounded-full bg-blue-600/15 blur-3xl"></div>
     <div class="absolute left-0 top-1/3 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl"></div>
   </div>
 
-  {% if not hide_header and not embedded %}
+  {% if show_top_navigation and not hide_header and not embedded %}
   <header class="sticky top-0 z-30 border-b border-white/10 bg-slate-950/90 backdrop-blur-xl">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 md:flex-row md:items-center md:justify-between">
       <a class="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 transition hover:border-sky-300/50 hover:bg-white/10" href="/">

@@ -258,7 +258,6 @@ def generate_page(
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     dimension_presets = crud.list_dimension_presets(session)
-    gallery_folders = crud.list_gallery_folders(session)
     enhancement_config = crud.get_enhancement_config(session)
     recent_generations = list(
         session.scalars(
@@ -330,7 +329,6 @@ def generate_page(
             "request": request,
             "profiles": profiles,
             "dimension_presets": dimension_presets,
-            "gallery_folders": gallery_folders,
             "conversation_generations": conversation_generations,
             "session_items": session_items,
             "active_conversation": active_conversation,
@@ -363,7 +361,6 @@ def generate_submit(
     upscale_model: str = Form(default=""),
     override_negative_prompt: bool = Form(default=False),
     negative_prompt: str = Form(default=""),
-    gallery_folder_id: str = Form(default=""),
     input_images: list[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -432,14 +429,6 @@ def generate_submit(
             if available and model_value not in available:
                 raise ValueError("Selected upscale model is not available")
             overrides["upscale_model"] = model_value
-
-        folder_id_value = parse_optional_int(gallery_folder_id)
-        if folder_id_value is not None:
-            folder = crud.get_gallery_folder(session, folder_id_value)
-            if not folder:
-                raise ValueError("Selected gallery folder does not exist")
-            overrides["gallery_folder_id"] = folder.id
-            overrides["gallery_folder_path"] = folder.path
 
         generation = generation_service.create_generation_from_profile(
             session,
@@ -970,28 +959,11 @@ def gallery_page(
     provider: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
-    folder: Optional[str] = Query(default=None),
     thumb_size: Optional[str] = Query(default="md"),
     message: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    selected_folder_raw = (folder or "").strip()
-    if selected_folder_raw.lower() in {"", "root"}:
-        selected_folder_raw = "root"
-
-    selected_folder: Optional[GalleryFolder] = None
-    folder_id: Optional[int] = None
-    if selected_folder_raw != "root":
-        try:
-            folder_id = int(selected_folder_raw)
-        except ValueError:
-            folder_id = None
-    if folder_id is not None:
-        selected_folder = crud.get_gallery_folder(session, folder_id)
-        if not selected_folder:
-            folder_id = None
-
     page_data = gallery_service.list_assets(
         session,
         page=page,
@@ -999,11 +971,9 @@ def gallery_page(
         provider=provider or None,
         status=status or None,
         prompt_query=q or None,
-        gallery_folder_id=folder_id,
-        root_only=folder_id is None,
+        root_only=False,
     )
     options = gallery_service.list_filter_options(session)
-    folder_nav = build_folder_navigation(options.folders, selected_folder)
     return templates.TemplateResponse(
         "gallery.html",
         {
@@ -1013,59 +983,14 @@ def gallery_page(
             "provider": provider or "",
             "status": status or "",
             "q": q or "",
-            "folder": folder_nav["current_token"],
             "thumb_size": normalize_thumb_size(thumb_size),
             "filter_options": options,
-            "folder_nav": folder_nav,
             "message": message or "",
             "error": error or "",
+            "hide_header": True,
+            "hide_footer": True,
         },
     )
-
-
-@app.post("/gallery/folders")
-def create_gallery_folder(
-    parent_folder_id: str = Form(default=""),
-    folder_name: str = Form(...),
-    return_to: str = Form(default="/gallery"),
-    session: Session = Depends(get_session),
-) -> RedirectResponse:
-    try:
-        parent_id = parse_optional_int(parent_folder_id)
-    except ValueError:
-        return gallery_redirect(return_to, error="Invalid parent folder")
-    parent_path = ""
-    if parent_id is not None:
-        parent = crud.get_gallery_folder(session, parent_id)
-        if not parent:
-            return gallery_redirect(return_to, error="Parent folder not found")
-        parent_path = parent.path
-
-    folder_segment = normalize_folder_segment(folder_name)
-    if not folder_segment:
-        return gallery_redirect(return_to, error="Folder name is empty or invalid")
-
-    path = f"{parent_path}/{folder_segment}" if parent_path else folder_segment
-    path = normalize_folder_path(path)
-    if not path:
-        return gallery_redirect(return_to, error="Folder path is empty or invalid")
-    if crud.get_gallery_folder_by_path(session, path):
-        return gallery_redirect(return_to, error=f"Folder already exists: {path}")
-
-    try:
-        folder_abs_path = storage_service.resolve_managed_path(
-            settings.default_base_dir, Path(path)
-        )
-        ensure_dir(folder_abs_path)
-    except ValueError:
-        return gallery_redirect(return_to, error="Folder path escapes gallery root")
-
-    try:
-        crud.create_gallery_folder(session, path=path)
-    except IntegrityError:
-        return gallery_redirect(return_to, error=f"Folder already exists: {path}")
-
-    return gallery_redirect(return_to, message=f"Folder created: {path}")
 
 
 def move_asset_to_folder_internal(

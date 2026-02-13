@@ -188,22 +188,13 @@
                 </div>
               </div>
 
-              <div class="mt-2 grid gap-2 md:grid-cols-2">
+              <div class="mt-2">
                 <div>
                   <label for="seed" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Seed</label>
                   <div class="flex gap-2">
                     <input id="seed" type="number" name="seed" placeholder="from profile" class="{{ input_class }}">
                     <button type="button" class="{{ btn_secondary }} whitespace-nowrap" data-random-seed-btn data-seed-target="seed">Random</button>
                   </div>
-                </div>
-                <div>
-                  <label for="gallery_folder_id" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Target folder</label>
-                  <select id="gallery_folder_id" name="gallery_folder_id" class="{{ input_class }}">
-                    <option value="">Root</option>
-                    {% for folder in gallery_folders %}
-                      <option value="{{ folder.id }}">{{ folder.path }}</option>
-                    {% endfor %}
-                  </select>
                 </div>
               </div>
 

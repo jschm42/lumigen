@@ -1,149 +1,79 @@
 {% extends "layout.html" %}
 {% block content %}
-{% set return_to = '/gallery?page=' ~ page_data.page ~ '&profile_name=' ~ (profile_name | urlencode) ~ '&provider=' ~ (provider | urlencode) ~ '&status=' ~ (status | urlencode) ~ '&q=' ~ (q | urlencode) ~ '&folder=' ~ (folder | urlencode) ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
-{% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
-{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
-{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" %}
-{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" %}
+{% set return_to = '/gallery?page=' ~ page_data.page ~ '&profile_name=' ~ (profile_name | urlencode) ~ '&provider=' ~ (provider | urlencode) ~ '&status=' ~ (status | urlencode) ~ '&q=' ~ (q | urlencode) ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
+{% set panel_class = "h-full space-y-3" %}
+{% set input_class = "w-full rounded-lg border border-white/12 bg-slate-900/55 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30" %}
+{% set btn_primary = "inline-flex items-center justify-center rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/50 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" %}
+{% set btn_danger = "inline-flex items-center justify-center rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" %}
+{% set size_btn = "inline-flex h-9 w-9 items-center justify-center rounded-lg border transition" %}
 
-<section class="{{ panel_class }} space-y-6">
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h2 class="text-2xl font-semibold text-white">Gallery</h2>
-      <p class="mt-1 text-sm text-slate-400">Durchsuche Assets, nutze Ordner und fuehre Bulk-Aktionen aus.</p>
-    </div>
-    <form method="post" action="/gallery/folders" class="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[42rem]">
-      <div>
-        <label for="new-parent-folder" class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Parent</label>
-        <select id="new-parent-folder" name="parent_folder_id" class="{{ input_class }} mt-1">
-          <option value="" {% if folder_nav.current_token == 'root' %}selected{% endif %}>Root</option>
-          {% for item in filter_options.folders %}
-            <option value="{{ item.id }}" {% if folder_nav.current_folder_id == item.id %}selected{% endif %}>{{ item.path }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="new-folder-name" class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Folder name</label>
-        <input id="new-folder-name" type="text" name="folder_name" placeholder="new subfolder name" required class="{{ input_class }} mt-1">
-      </div>
-      <div class="flex items-end">
-        <input type="hidden" name="return_to" value="{{ return_to }}">
-        <button type="submit" class="{{ btn_primary }} w-full">Create folder</button>
-      </div>
-    </form>
-  </div>
-
-  {% if message %}
-    <div class="rounded-2xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100" role="alert">{{ message }}</div>
-  {% endif %}
-  {% if error %}
-    <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
-  {% endif %}
-
-  <section class="rounded-2xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-2">
-        {% for crumb in folder_nav.breadcrumbs %}
-          <a class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition {% if crumb.token == folder_nav.current_token %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ crumb.token }}&thumb_size={{ thumb_size | urlencode }}">{{ crumb.label }}</a>
-          {% if not loop.last %}<span class="text-slate-500">/</span>{% endif %}
-        {% endfor %}
-      </div>
-      {% if folder_nav.parent_token %}
-        <a href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder_nav.parent_token }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Up</a>
-      {% endif %}
-    </div>
-
-    {% if folder_nav.children %}
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {% for item in folder_nav.children %}
-          <a class="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-sky-300/55 hover:bg-white/10" href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ item.id }}&thumb_size={{ thumb_size | urlencode }}">
-            <span class="material-symbols-outlined text-2xl text-sky-200" aria-hidden="true">folder</span>
-            <span class="min-w-0">
-              <strong class="block truncate text-sm font-semibold text-white">{{ item.name }}</strong>
-              <small class="block truncate text-xs text-slate-400">{{ item.path }}</small>
-            </span>
-          </a>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="text-sm text-slate-400">No subfolders in this folder.</p>
-    {% endif %}
-  </section>
-
-  <form method="get" action="/gallery" class="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/45 p-4 sm:grid-cols-2 xl:grid-cols-7">
-    <div class="xl:col-span-1">
-      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Profile</label>
-      <select name="profile_name" class="{{ input_class }} mt-1">
-        <option value="">All profiles</option>
+<section class="{{ panel_class }}">
+  <form method="get" action="/gallery" class="rounded-2xl bg-slate-900/35 p-3">
+    <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(0,1.8fr)_auto_auto]">
+      <select name="profile_name" aria-label="Profile filter" class="{{ input_class }}">
+        <option value="">Alle Profile</option>
         {% for item in filter_options.profile_names %}
           <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
       </select>
-    </div>
-    <div class="xl:col-span-1">
-      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Provider</label>
-      <select name="provider" class="{{ input_class }} mt-1">
-        <option value="">All providers</option>
+      <select name="provider" aria-label="Provider filter" class="{{ input_class }}">
+        <option value="">Alle Provider</option>
         {% for item in filter_options.providers %}
           <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
       </select>
-    </div>
-    <div class="xl:col-span-1">
-      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Status</label>
-      <select name="status" class="{{ input_class }} mt-1">
-        <option value="">All statuses</option>
+      <select name="status" aria-label="Status filter" class="{{ input_class }}">
+        <option value="">Alle Status</option>
         {% for item in filter_options.statuses %}
           <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
       </select>
-    </div>
-    <div class="xl:col-span-1">
-      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Folder</label>
-      <select name="folder" class="{{ input_class }} mt-1">
-        <option value="root" {% if folder == 'root' %}selected{% endif %}>Root</option>
-        {% for item in filter_options.folders %}
-          <option value="{{ item.id }}" {% if folder == (item.id | string) %}selected{% endif %}>{{ item.path }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="xl:col-span-2">
-      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Prompt contains</label>
-      <input type="text" name="q" value="{{ q }}" placeholder="prompt contains" class="{{ input_class }} mt-1">
-    </div>
-    <div class="xl:col-span-1">
-      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Thumb size</label>
-      <select name="thumb_size" class="{{ input_class }} mt-1">
-        <option value="sm" {% if thumb_size == 'sm' %}selected{% endif %}>Thumbs S</option>
-        <option value="md" {% if thumb_size == 'md' %}selected{% endif %}>Thumbs M</option>
-        <option value="lg" {% if thumb_size == 'lg' %}selected{% endif %}>Thumbs L</option>
-      </select>
-    </div>
-    <div class="sm:col-span-2 xl:col-span-7 flex justify-end">
-      <button type="submit" class="{{ btn_primary }}">Apply filters</button>
+      <input type="text" name="q" value="{{ q }}" placeholder="Prompt durchsuchen..." aria-label="Prompt filter" class="{{ input_class }}">
+      <div class="flex items-center gap-2">
+        <button type="submit" class="{{ btn_primary }}">Filter</button>
+        <a href="/gallery" class="{{ btn_secondary }}">Reset</a>
+      </div>
+      <div class="flex items-center justify-end gap-1 rounded-lg border border-white/10 bg-slate-900/45 px-1 py-1">
+        <a
+          href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size=sm"
+          class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
+          title="Kleine Thumbnails"
+          aria-label="Kleine Thumbnails"
+        ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span></a>
+        <a
+          href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size=md"
+          class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
+          title="Mittlere Thumbnails"
+          aria-label="Mittlere Thumbnails"
+        ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_on</span></a>
+        <a
+          href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size=lg"
+          class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
+          title="Große Thumbnails"
+          aria-label="Große Thumbnails"
+        ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">crop_square</span></a>
+      </div>
     </div>
   </form>
 
+  {% if message %}
+    <div class="rounded-xl border border-emerald-300/35 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100" role="alert">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+    <div class="rounded-xl border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" role="alert">{{ error }}</div>
+  {% endif %}
+
   {% include "fragments/gallery_grid.html" %}
 
-  <form id="bulk-action-form" method="post" class="space-y-4 rounded-2xl border border-white/10 bg-slate-950/45 p-4" data-gallery-bulk-form>
+  <form id="bulk-action-form" method="post" class="rounded-2xl bg-slate-900/30 p-3" data-gallery-bulk-form>
     <input type="hidden" name="return_to" value="{{ return_to }}">
-    <div class="flex flex-wrap items-center gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
         <input type="checkbox" data-gallery-select-all>
         Select all
       </label>
       <small class="text-sm text-slate-400" data-gallery-selection-count>0 selected</small>
-    </div>
-    <div class="flex flex-wrap items-center gap-3">
-      <select name="gallery_folder_id" class="w-full max-w-sm rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35">
-        <option value="">Root</option>
-        {% for folder_item in filter_options.folders %}
-          <option value="{{ folder_item.id }}">{{ folder_item.path }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="{{ btn_secondary }}" formaction="/assets/bulk-move" data-bulk-action disabled>Move selected</button>
       <button
         type="submit"
         class="{{ btn_danger }}"
@@ -156,14 +86,14 @@
     </div>
   </form>
 
-  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-3">
     <small class="text-sm text-slate-400">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</small>
     <div class="flex flex-wrap gap-2">
       {% if page_data.page > 1 %}
-        <a href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Prev</a>
+        <a href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Prev</a>
       {% endif %}
       {% if page_data.page < page_data.pages %}
-        <a href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&folder={{ folder | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Next</a>
+        <a href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Next</a>
       {% endif %}
     </div>
   </div>
