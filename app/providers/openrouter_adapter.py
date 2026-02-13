@@ -84,6 +84,13 @@ class OpenRouterAdapter(ProviderAdapter):
                 retry_payload["modalities"] = ["image"]
                 response = await client.post(url, headers=headers, json=retry_payload)
                 payload = retry_payload
+            if self._should_retry_without_explicit_dimensions(response, payload):
+                retry_payload = dict(payload)
+                retry_payload.pop("width", None)
+                retry_payload.pop("height", None)
+                retry_payload.pop("size", None)
+                response = await client.post(url, headers=headers, json=retry_payload)
+                payload = retry_payload
 
             if response.status_code == 429:
                 raise ProviderRateLimitError("OpenRouter rate limit reached (429).")
@@ -168,6 +175,13 @@ class OpenRouterAdapter(ProviderAdapter):
             "stream": False,
             "n": max(1, int(request.n_images)),
         }
+
+        explicit_dimensions = self._explicit_dimensions(request)
+        if explicit_dimensions:
+            width, height = explicit_dimensions
+            payload["width"] = width
+            payload["height"] = height
+            payload["size"] = f"{width}x{height}"
 
         aspect_ratio = self._resolve_aspect_ratio(request)
         if aspect_ratio:
@@ -472,19 +486,32 @@ class OpenRouterAdapter(ProviderAdapter):
     def _resolve_aspect_ratio(
         self, request: ProviderGenerationRequest
     ) -> Optional[str]:
+        explicit_dimensions = self._explicit_dimensions(request)
+        if explicit_dimensions:
+            width, height = explicit_dimensions
+            divisor = gcd(width, height)
+            return f"{width // divisor}:{height // divisor}"
+
         if request.aspect_ratio:
             ratio = str(request.aspect_ratio).strip()
             if self._is_ratio(ratio):
                 return ratio
 
-        if request.width and request.height:
+        return None
+
+    def _explicit_dimensions(
+        self, request: ProviderGenerationRequest
+    ) -> Optional[tuple[int, int]]:
+        if request.width is None or request.height is None:
+            return None
+        try:
             width = int(request.width)
             height = int(request.height)
-            if width > 0 and height > 0:
-                divisor = gcd(width, height)
-                return f"{width // divisor}:{height // divisor}"
-
-        return None
+        except (TypeError, ValueError):
+            return None
+        if width <= 0 or height <= 0:
+            return None
+        return width, height
 
     def _resolve_dimensions(
         self, request: ProviderGenerationRequest
@@ -568,6 +595,32 @@ class OpenRouterAdapter(ProviderAdapter):
         return (
             "no endpoints found that support the requested output modalities" in message
         )
+
+    def _should_retry_without_explicit_dimensions(
+        self, response: httpx.Response, payload: dict[str, Any]
+    ) -> bool:
+        if response.status_code != 400:
+            return False
+        has_explicit_dimensions = any(
+            key in payload for key in ("width", "height", "size")
+        )
+        if not has_explicit_dimensions:
+            return False
+        message = self._extract_error_message(response).lower()
+        keywords = (
+            "unknown",
+            "unsupported",
+            "invalid",
+            "not allowed",
+            "not supported",
+            "unexpected",
+            "unrecognized",
+        )
+        touches_dimensions = any(
+            token in message for token in ("width", "height", "size")
+        )
+        is_param_validation = any(token in message for token in keywords)
+        return touches_dimensions and is_param_validation
 
     def _summarize_empty_image_response(self, body: dict[str, Any]) -> str:
         summary: list[str] = [f"top_keys={sorted(body.keys())}"]
