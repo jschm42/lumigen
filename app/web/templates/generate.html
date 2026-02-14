@@ -276,6 +276,17 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
+    function setupChatAutoScroll() {
+      var chat = document.getElementById("chat-history");
+      if (!chat) return;
+      chat.addEventListener("load", function (event) {
+        var target = event.target;
+        if (target && target.tagName === "IMG") {
+          scrollChatToBottom();
+        }
+      }, true);
+    }
+
     function setupOverlayObservers() {
       var topPanel = document.querySelector("[data-chat-top-panel]");
       var bottomPanel = document.querySelector("[data-chat-bottom-panel]");
@@ -345,10 +356,22 @@
     window.addEventListener("DOMContentLoaded", function () {
       setupOverlayObservers();
       setupSessionMenus();
+      setupChatAutoScroll();
       scrollChatToBottom();
     });
     document.body.addEventListener("htmx:afterSwap", function (event) {
-      if (event.target && event.target.id === "chat-history") {
+      var chat = document.getElementById("chat-history");
+      if (!chat) return;
+      var target = event.target;
+      var detailTarget = event.detail && event.detail.target ? event.detail.target : null;
+      var inChat = false;
+      if (target && (target.id === "chat-history" || chat.contains(target))) {
+        inChat = true;
+      }
+      if (!inChat && detailTarget && (detailTarget.id === "chat-history" || chat.contains(detailTarget))) {
+        inChat = true;
+      }
+      if (inChat) {
         syncOverlayOffsets();
         scrollChatToBottom();
       }

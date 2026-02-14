@@ -467,6 +467,20 @@
           syncAdvancedState();
         }
 
+        if (promptInput) {
+          promptInput.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter") return;
+            if (event.shiftKey) return;
+            if (event.isComposing || event.keyCode === 229) return;
+            event.preventDefault();
+            if (typeof form.requestSubmit === "function") {
+              form.requestSubmit();
+            } else {
+              form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+            }
+          });
+        }
+
         if (enhanceBtn && promptInput) {
           enhanceBtn.addEventListener("click", async function () {
             var selected = profileSelect.options[profileSelect.selectedIndex];
