@@ -139,17 +139,6 @@ class OpenAIAdapter(ProviderAdapter):
     def _size_string(self, request: ProviderGenerationRequest) -> str:
         if request.width and request.height:
             return f"{int(request.width)}x{int(request.height)}"
-        if request.aspect_ratio:
-            ratio = request.aspect_ratio.strip()
-            ratio_map = {
-                "1:1": "1024x1024",
-                "4:3": "1024x768",
-                "3:4": "768x1024",
-                "16:9": "1536x864",
-                "9:16": "864x1536",
-            }
-            if ratio in ratio_map:
-                return ratio_map[ratio]
         return "1024x1024"
 
     def _resolve_dimensions(self, request: ProviderGenerationRequest) -> tuple[int, int]:

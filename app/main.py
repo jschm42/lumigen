@@ -430,13 +430,10 @@ def generate_submit(
     conversation: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
-    aspect_ratio: str = Form(default=""),
     n_images: str = Form(default=""),
     seed: str = Form(default=""),
     upscale_enable: bool = Form(default=False),
     upscale_model: str = Form(default=""),
-    override_negative_prompt: bool = Form(default=False),
-    negative_prompt: str = Form(default=""),
     input_images: list[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -486,10 +483,6 @@ def generate_submit(
                 raise ValueError("Height must be > 0")
             overrides["height"] = height_value
 
-        aspect_ratio_value = aspect_ratio.strip()
-        if aspect_ratio_value:
-            overrides["aspect_ratio"] = aspect_ratio_value
-
         n_images_value = parse_optional_int(n_images)
         if n_images_value is not None:
             overrides["n_images"] = max(1, min(8, n_images_value))
@@ -497,9 +490,6 @@ def generate_submit(
         seed_value = parse_optional_int(seed)
         if seed_value is not None:
             overrides["seed"] = seed_value
-
-        if override_negative_prompt:
-            overrides["negative_prompt"] = negative_prompt.strip() or None
 
         if upscale_enable:
             if not upscale_service.is_available():
@@ -1025,10 +1015,8 @@ def create_profile(
     name: str = Form(...),
     model_config_id: str = Form(...),
     base_prompt: str = Form(default=""),
-    negative_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
-    aspect_ratio: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -1043,6 +1031,12 @@ def create_profile(
         model_config = crud.get_model_config(session, model_config_value)
         if not model_config:
             raise ValueError("Selected model does not exist")
+        width_value = parse_optional_int(width)
+        height_value = parse_optional_int(height)
+        if width_value is not None and width_value <= 0:
+            raise ValueError("Width must be > 0")
+        if height_value is not None and height_value <= 0:
+            raise ValueError("Height must be > 0")
         crud.create_profile(
             session,
             name=name.strip(),
@@ -1050,10 +1044,10 @@ def create_profile(
             model=model_config.model,
             model_config_id=model_config.id,
             base_prompt=base_prompt.strip() or None,
-            negative_prompt=negative_prompt.strip() or None,
-            width=parse_optional_int(width),
-            height=parse_optional_int(height),
-            aspect_ratio=aspect_ratio.strip() or None,
+            negative_prompt=None,
+            width=width_value,
+            height=height_value,
+            aspect_ratio=None,
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
@@ -1071,10 +1065,8 @@ def update_profile(
     name: str = Form(...),
     model_config_id: str = Form(...),
     base_prompt: str = Form(default=""),
-    negative_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
-    aspect_ratio: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -1093,6 +1085,12 @@ def update_profile(
         model_config = crud.get_model_config(session, model_config_value)
         if not model_config:
             raise ValueError("Selected model does not exist")
+        width_value = parse_optional_int(width)
+        height_value = parse_optional_int(height)
+        if width_value is not None and width_value <= 0:
+            raise ValueError("Width must be > 0")
+        if height_value is not None and height_value <= 0:
+            raise ValueError("Height must be > 0")
         crud.update_profile(
             session,
             profile,
@@ -1101,10 +1099,10 @@ def update_profile(
             model=model_config.model,
             model_config_id=model_config.id,
             base_prompt=base_prompt.strip() or None,
-            negative_prompt=negative_prompt.strip() or None,
-            width=parse_optional_int(width),
-            height=parse_optional_int(height),
-            aspect_ratio=aspect_ratio.strip() or None,
+            negative_prompt=None,
+            width=width_value,
+            height=height_value,
+            aspect_ratio=None,
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),

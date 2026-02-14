@@ -31,23 +31,14 @@
     <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3" class="{{ text_class }}">{{ p.base_prompt if p else '' }}</textarea>
   </div>
 
-  <div>
-    <label for="{{ form_dom_id }}-negative-prompt" class="{{ label_class }}">Negative prompt</label>
-    <textarea id="{{ form_dom_id }}-negative-prompt" name="negative_prompt" rows="2" class="{{ text_class }}">{{ p.negative_prompt if p and p.negative_prompt else '' }}</textarea>
-  </div>
-
-  <div class="grid gap-4 md:grid-cols-3">
+  <div class="grid gap-4 md:grid-cols-2">
     <div>
-      <label for="{{ form_dom_id }}-width" class="{{ label_class }}">Width</label>
+      <label for="{{ form_dom_id }}-width" class="{{ label_class }}">Width (px)</label>
       <input id="{{ form_dom_id }}-width" type="number" name="width" value="{{ p.width if p and p.width else '' }}" class="{{ input_class }}">
     </div>
     <div>
-      <label for="{{ form_dom_id }}-height" class="{{ label_class }}">Height</label>
+      <label for="{{ form_dom_id }}-height" class="{{ label_class }}">Height (px)</label>
       <input id="{{ form_dom_id }}-height" type="number" name="height" value="{{ p.height if p and p.height else '' }}" class="{{ input_class }}">
-    </div>
-    <div>
-      <label for="{{ form_dom_id }}-aspect" class="{{ label_class }}">Aspect ratio</label>
-      <input id="{{ form_dom_id }}-aspect" type="text" name="aspect_ratio" value="{{ p.aspect_ratio if p and p.aspect_ratio else '' }}" placeholder="1:1" class="{{ input_class }}">
     </div>
   </div>
 

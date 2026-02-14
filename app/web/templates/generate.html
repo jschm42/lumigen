@@ -122,10 +122,8 @@
                     data-model-config-id="{{ profile.model_config_id if profile.model_config_id is not none else '' }}"
                     data-width="{{ profile.width if profile.width is not none else '' }}"
                     data-height="{{ profile.height if profile.height is not none else '' }}"
-                    data-aspect-ratio="{{ profile.aspect_ratio if profile.aspect_ratio else '' }}"
                     data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
                     data-seed="{{ profile.seed if profile.seed is not none else '' }}"
-                    data-negative-prompt="{{ profile.negative_prompt if profile.negative_prompt else '' }}"
                   >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
                 {% endfor %}
               </select>
@@ -190,32 +188,11 @@
                 </div>
               </div>
 
-              <div class="mt-2 grid gap-2 md:grid-cols-3">
-                <div>
-                  <label for="aspect_ratio_preset" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ratio preset</label>
-                  <select id="aspect_ratio_preset" data-ratio-preset class="{{ input_class }}">
-                    <option value="">Custom / from profile</option>
-                    <option value="1:1">1:1</option>
-                    <option value="16:9">16:9</option>
-                    <option value="9:16">9:16</option>
-                    <option value="4:3">4:3</option>
-                    <option value="3:4">3:4</option>
-                    <option value="3:2">3:2</option>
-                    <option value="2:3">2:3</option>
-                    <option value="21:9">21:9</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="aspect_ratio" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ratio</label>
-                  <input id="aspect_ratio" type="text" name="aspect_ratio" list="ratio-presets" placeholder="e.g. 16:9" class="{{ input_class }}">
-                </div>
+              <div class="mt-2 grid gap-2 md:grid-cols-2">
                 <div>
                   <label for="n_images" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Images</label>
                   <input id="n_images" type="number" min="1" max="8" name="n_images" placeholder="from profile" class="{{ input_class }}">
                 </div>
-              </div>
-
-              <div class="mt-2">
                 <div>
                   <label for="seed" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Seed</label>
                   <div class="flex gap-2">
@@ -236,14 +213,6 @@
                     <option value="{{ model }}">{{ model }}</option>
                   {% endfor %}
                 </select>
-              </div>
-
-              <div class="mt-2">
-                <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
-                  <input id="override_negative_prompt" type="checkbox" name="override_negative_prompt">
-                  Override negative prompt
-                </label>
-                <textarea name="negative_prompt" rows="2" placeholder="optional" class="{{ textarea_class }} mt-2"></textarea>
               </div>
             </div>
 
@@ -270,16 +239,6 @@
               <option value="1216"></option>
               <option value="1344"></option>
               <option value="1536"></option>
-            </datalist>
-            <datalist id="ratio-presets">
-              <option value="1:1"></option>
-              <option value="16:9"></option>
-              <option value="9:16"></option>
-              <option value="4:3"></option>
-              <option value="3:4"></option>
-              <option value="3:2"></option>
-              <option value="2:3"></option>
-              <option value="21:9"></option>
             </datalist>
           </div>
         </div>

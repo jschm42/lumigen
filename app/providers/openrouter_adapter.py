@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import re
 from io import BytesIO
-from math import gcd
 from typing import Any, Optional
 
 import httpx
@@ -183,15 +182,8 @@ class OpenRouterAdapter(ProviderAdapter):
             payload["height"] = height
             payload["size"] = f"{width}x{height}"
 
-        aspect_ratio = self._resolve_aspect_ratio(request)
-        if aspect_ratio:
-            payload["aspect_ratio"] = aspect_ratio
-
         if request.seed is not None:
             payload["seed"] = int(request.seed)
-
-        if request.negative_prompt:
-            payload["negative_prompt"] = str(request.negative_prompt).strip()
 
         output_format = self._normalize_output_format(request.output_format)
         if output_format:
@@ -483,22 +475,6 @@ class OpenRouterAdapter(ProviderAdapter):
 
         return image_bytes, mime
 
-    def _resolve_aspect_ratio(
-        self, request: ProviderGenerationRequest
-    ) -> Optional[str]:
-        explicit_dimensions = self._explicit_dimensions(request)
-        if explicit_dimensions:
-            width, height = explicit_dimensions
-            divisor = gcd(width, height)
-            return f"{width // divisor}:{height // divisor}"
-
-        if request.aspect_ratio:
-            ratio = str(request.aspect_ratio).strip()
-            if self._is_ratio(ratio):
-                return ratio
-
-        return None
-
     def _explicit_dimensions(
         self, request: ProviderGenerationRequest
     ) -> Optional[tuple[int, int]]:
@@ -521,19 +497,6 @@ class OpenRouterAdapter(ProviderAdapter):
             height = int(request.height)
             if width > 0 and height > 0:
                 return width, height
-
-        ratio = self._resolve_aspect_ratio(request)
-        if ratio and ":" in ratio:
-            left_raw, right_raw = ratio.split(":", 1)
-            try:
-                left = int(left_raw)
-                right = int(right_raw)
-            except ValueError:
-                return 1024, 1024
-            if left > 0 and right > 0:
-                if left >= right:
-                    return 1024, max(1, round(1024 * right / left))
-                return max(1, round(1024 * left / right)), 1024
 
         return 1024, 1024
 
@@ -563,15 +526,6 @@ class OpenRouterAdapter(ProviderAdapter):
         if output_format == "webp":
             return "image/webp"
         return "image/png"
-
-    def _is_ratio(self, value: str) -> bool:
-        parts = value.split(":")
-        if len(parts) != 2:
-            return False
-        left, right = parts
-        if not left.isdigit() or not right.isdigit():
-            return False
-        return int(left) > 0 and int(right) > 0
 
     def _should_retry_with_image_only(
         self, response: httpx.Response, payload: dict[str, Any]

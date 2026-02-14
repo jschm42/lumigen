@@ -10,10 +10,8 @@ from app.config import Settings
 @dataclass
 class ProviderGenerationRequest:
     prompt: str
-    negative_prompt: Optional[str]
     width: Optional[int]
     height: Optional[int]
-    aspect_ratio: Optional[str]
     n_images: int
     seed: Optional[int]
     output_format: str

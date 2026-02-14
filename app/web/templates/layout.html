@@ -256,15 +256,6 @@
         });
       });
 
-      function syncRatioPreset(ratioInput, ratioPreset) {
-        if (!ratioInput || !ratioPreset) return;
-        var value = ratioInput.value.trim();
-        var hasMatch = Array.from(ratioPreset.options).some(function (option) {
-          return option.value === value;
-        });
-        ratioPreset.value = hasMatch ? value : "";
-      }
-
       function syncDimensionPreset(widthInput, heightInput, dimensionPreset) {
         if (!widthInput || !heightInput || !dimensionPreset) return;
         var width = widthInput.value.trim();
@@ -286,11 +277,8 @@
 
         var widthInput = form.querySelector("[name='width']");
         var heightInput = form.querySelector("[name='height']");
-        var ratioInput = form.querySelector("[name='aspect_ratio']");
         var imagesInput = form.querySelector("[name='n_images']");
         var seedInput = form.querySelector("[name='seed']");
-        var negativePromptInput = form.querySelector("[name='negative_prompt']");
-        var ratioPreset = form.querySelector("[data-ratio-preset]");
         var dimensionPreset = form.querySelector("[data-dimension-preset]");
         var inputImages = form.querySelector("[data-input-images]");
         var inputPreview = form.querySelector("[data-input-preview]");
@@ -310,12 +298,9 @@
 
           if (widthInput) widthInput.value = selected.dataset.width || "";
           if (heightInput) heightInput.value = selected.dataset.height || "";
-          if (ratioInput) ratioInput.value = selected.dataset.aspectRatio || "";
           if (imagesInput) imagesInput.value = selected.dataset.nImages || "";
           if (seedInput) seedInput.value = selected.dataset.seed || "";
-          if (negativePromptInput) negativePromptInput.value = selected.dataset.negativePrompt || "";
 
-          syncRatioPreset(ratioInput, ratioPreset);
           syncDimensionPreset(widthInput, heightInput, dimensionPreset);
         }
 
@@ -337,17 +322,6 @@
           });
           heightInput.addEventListener("input", function () {
             syncDimensionPreset(widthInput, heightInput, dimensionPreset);
-          });
-        }
-
-        if (ratioPreset && ratioInput) {
-          ratioPreset.addEventListener("change", function () {
-            if (!ratioPreset.value) return;
-            ratioInput.value = ratioPreset.value;
-            syncRatioPreset(ratioInput, ratioPreset);
-          });
-          ratioInput.addEventListener("input", function () {
-            syncRatioPreset(ratioInput, ratioPreset);
           });
         }
 

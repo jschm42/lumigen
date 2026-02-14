@@ -63,13 +63,8 @@ class GenerationService:
             raise ValueError("Profile has no storage template")
         effective_overrides = overrides or {}
 
-        negative_prompt = profile.negative_prompt
-        if "negative_prompt" in effective_overrides:
-            negative_prompt = effective_overrides.get("negative_prompt")
-
         width = effective_overrides.get("width", profile.width)
         height = effective_overrides.get("height", profile.height)
-        aspect_ratio = effective_overrides.get("aspect_ratio", profile.aspect_ratio)
         n_images = int(effective_overrides.get("n_images", profile.n_images) or 1)
         seed = effective_overrides.get("seed", profile.seed)
         upscale_model = effective_overrides.get("upscale_model")
@@ -85,10 +80,8 @@ class GenerationService:
             "model": profile.model,
             "model_config_id": profile.model_config_id,
             "base_prompt": profile.base_prompt,
-            "negative_prompt": profile.negative_prompt,
             "width": profile.width,
             "height": profile.height,
-            "aspect_ratio": profile.aspect_ratio,
             "n_images": profile.n_images,
             "seed": profile.seed,
             "output_format": profile.output_format,
@@ -107,10 +100,8 @@ class GenerationService:
             "prompt_user": prompt_user,
             "prompt_final": prompt_final,
             "chat_session_id": chat_session_id or None,
-            "negative_prompt": negative_prompt,
             "width": width,
             "height": height,
-            "aspect_ratio": aspect_ratio,
             "n_images": max(1, n_images),
             "seed": seed,
             "upscale_model": upscale_model,
@@ -123,10 +114,8 @@ class GenerationService:
             "gallery_folder_path": gallery_folder_path,
             "input_images": input_images or [],
             "overrides": {
-                "negative_prompt": "negative_prompt" in effective_overrides,
                 "width": "width" in effective_overrides,
                 "height": "height" in effective_overrides,
-                "aspect_ratio": "aspect_ratio" in effective_overrides,
                 "n_images": "n_images" in effective_overrides,
                 "seed": "seed" in effective_overrides,
                 "upscale_model": "upscale_model" in effective_overrides,
@@ -468,10 +457,8 @@ class GenerationService:
                 input_images.append(ProviderInputImage(data=image_bytes, mime=mime))
         return ProviderGenerationRequest(
             prompt=generation.prompt_final,
-            negative_prompt=request_data.get("negative_prompt"),
             width=request_data.get("width"),
             height=request_data.get("height"),
-            aspect_ratio=request_data.get("aspect_ratio"),
             n_images=int(request_data.get("n_images") or 1),
             seed=request_data.get("seed"),
             output_format=str(request_data.get("output_format") or "png"),
