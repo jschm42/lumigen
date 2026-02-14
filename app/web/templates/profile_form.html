@@ -2,13 +2,14 @@
 {% set action = form_action if form_action else '/profiles' %}
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
 {% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
+{% set openrouter_cfg = p.params_json.get('image_config') if p and p.params_json and (p.params_json.get('image_config') is mapping) else {} %}
 {% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
 {% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
 {% set label_class = "block text-sm font-semibold text-slate-200" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
 
-<form action="{{ action }}" method="post" class="space-y-5" id="{{ form_dom_id }}">
+<form action="{{ action }}" method="post" class="space-y-5" id="{{ form_dom_id }}" data-profile-form>
   <div>
     <label for="{{ form_dom_id }}-name" class="{{ label_class }}">Name</label>
     <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" required class="{{ input_class }}">
@@ -16,10 +17,10 @@
 
   <div>
     <label for="{{ model_field_id }}" class="{{ label_class }}">Model</label>
-    <select id="{{ model_field_id }}" name="model_config_id" required class="{{ input_class }}">
+    <select id="{{ model_field_id }}" name="model_config_id" required class="{{ input_class }}" data-profile-model-select>
       <option value="">Select a model</option>
       {% for config in model_configs %}
-        <option value="{{ config.id }}" {% if p and p.model_config_id == config.id %}selected{% endif %}>
+        <option value="{{ config.id }}" data-provider="{{ config.provider }}" {% if p and p.model_config_id == config.id %}selected{% endif %}>
           {{ config.name }} ({{ config.provider }} / {{ config.model }})
         </option>
       {% endfor %}
@@ -31,7 +32,7 @@
     <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3" class="{{ text_class }}">{{ p.base_prompt if p else '' }}</textarea>
   </div>
 
-  <div class="grid gap-4 md:grid-cols-2">
+  <div class="grid gap-4 md:grid-cols-2" data-profile-dimensions>
     <div>
       <label for="{{ form_dom_id }}-width" class="{{ label_class }}">Width (px)</label>
       <input id="{{ form_dom_id }}-width" type="number" name="width" value="{{ p.width if p and p.width else '' }}" class="{{ input_class }}">
@@ -39,6 +40,40 @@
     <div>
       <label for="{{ form_dom_id }}-height" class="{{ label_class }}">Height (px)</label>
       <input id="{{ form_dom_id }}-height" type="number" name="height" value="{{ p.height if p and p.height else '' }}" class="{{ input_class }}">
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-white/8 bg-slate-900/40 p-4 hidden" data-profile-openrouter>
+    <p class="mb-3 text-xs text-slate-400">OpenRouter verwendet `image_config` statt fixer Pixel-Dimensionen.</p>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label for="{{ form_dom_id }}-openrouter-ratio" class="{{ label_class }}">OpenRouter ratio</label>
+        <select id="{{ form_dom_id }}-openrouter-ratio" name="openrouter_aspect_ratio" class="{{ input_class }}" data-profile-openrouter-ratio>
+          {% set selected_ratio = openrouter_cfg.get('aspect_ratio', '') if openrouter_cfg else '' %}
+          <option value="">Use provider default</option>
+          <option value="1:1" {% if selected_ratio == '1:1' %}selected{% endif %}>1:1</option>
+          <option value="2:3" {% if selected_ratio == '2:3' %}selected{% endif %}>2:3</option>
+          <option value="3:2" {% if selected_ratio == '3:2' %}selected{% endif %}>3:2</option>
+          <option value="3:4" {% if selected_ratio == '3:4' %}selected{% endif %}>3:4</option>
+          <option value="4:3" {% if selected_ratio == '4:3' %}selected{% endif %}>4:3</option>
+          <option value="4:5" {% if selected_ratio == '4:5' %}selected{% endif %}>4:5</option>
+          <option value="5:4" {% if selected_ratio == '5:4' %}selected{% endif %}>5:4</option>
+          <option value="9:16" {% if selected_ratio == '9:16' %}selected{% endif %}>9:16</option>
+          <option value="9:21" {% if selected_ratio == '9:21' %}selected{% endif %}>9:21</option>
+          <option value="16:9" {% if selected_ratio == '16:9' %}selected{% endif %}>16:9</option>
+          <option value="21:9" {% if selected_ratio == '21:9' %}selected{% endif %}>21:9</option>
+        </select>
+      </div>
+      <div>
+        <label for="{{ form_dom_id }}-openrouter-size" class="{{ label_class }}">OpenRouter image size</label>
+        <select id="{{ form_dom_id }}-openrouter-size" name="openrouter_image_size" class="{{ input_class }}" data-profile-openrouter-size>
+          {% set selected_size = openrouter_cfg.get('image_size', '') if openrouter_cfg else '' %}
+          <option value="">Use provider default</option>
+          <option value="1K" {% if selected_size == '1K' %}selected{% endif %}>1K</option>
+          <option value="2K" {% if selected_size == '2K' %}selected{% endif %}>2K</option>
+          <option value="4K" {% if selected_size == '4K' %}selected{% endif %}>4K</option>
+        </select>
+      </div>
     </div>
   </div>
 

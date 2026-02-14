@@ -175,11 +175,23 @@ class OpenRouterAdapter(ProviderAdapter):
             "n": max(1, int(request.n_images)),
         }
 
+        image_config = (
+            request.params.get("image_config")
+            if isinstance(request.params, dict)
+            else None
+        )
+        has_image_config_dimensions = (
+            isinstance(image_config, dict)
+            and (
+                str(image_config.get("aspect_ratio") or "").strip() != ""
+                or str(image_config.get("image_size") or "").strip() != ""
+            )
+        )
         explicit_dimensions = self._explicit_dimensions(request)
-        if explicit_dimensions:
+        if explicit_dimensions and not has_image_config_dimensions:
             width, height = explicit_dimensions
-            payload["width"] = width
-            payload["height"] = height
+            # OpenRouter models are most consistent with a single `size` value.
+            # Sending both `width`/`height` and `size` can lead to ambiguous handling.
             payload["size"] = f"{width}x{height}"
 
         if request.seed is not None:

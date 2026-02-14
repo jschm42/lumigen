@@ -280,6 +280,7 @@
         var imagesInput = form.querySelector("[name='n_images']");
         var seedInput = form.querySelector("[name='seed']");
         var dimensionPreset = form.querySelector("[data-dimension-preset]");
+        var dimensionControls = form.querySelector("[data-dimension-controls]");
         var inputImages = form.querySelector("[data-input-images]");
         var inputPreview = form.querySelector("[data-input-preview]");
         var inputClear = form.querySelector("[data-input-clear]");
@@ -292,6 +293,28 @@
         var advancedToggle = form.querySelector("[data-advanced-toggle]");
         var advancedPanel = form.querySelector("[data-advanced-panel]");
 
+        function syncProviderSpecificOptions(selected) {
+          var provider = selected ? String(selected.dataset.provider || "").trim().toLowerCase() : "";
+          var isOpenRouter = provider === "openrouter";
+          if (dimensionControls) {
+            dimensionControls.classList.toggle("hidden", isOpenRouter);
+          }
+          if (widthInput) {
+            widthInput.disabled = isOpenRouter;
+            if (isOpenRouter) widthInput.value = "";
+          }
+          if (heightInput) {
+            heightInput.disabled = isOpenRouter;
+            if (isOpenRouter) heightInput.value = "";
+          }
+          if (dimensionPreset) {
+            dimensionPreset.disabled = isOpenRouter;
+            if (isOpenRouter) {
+              dimensionPreset.value = "";
+            }
+          }
+        }
+
         function applyProfileDefaults() {
           var selected = profileSelect.options[profileSelect.selectedIndex];
           if (!selected) return;
@@ -300,6 +323,7 @@
           if (heightInput) heightInput.value = selected.dataset.height || "";
           if (imagesInput) imagesInput.value = selected.dataset.nImages || "";
           if (seedInput) seedInput.value = selected.dataset.seed || "";
+          syncProviderSpecificOptions(selected);
 
           syncDimensionPreset(widthInput, heightInput, dimensionPreset);
         }
@@ -490,6 +514,54 @@
       }
 
       document.querySelectorAll("[data-generation-form]").forEach(setupGenerationForm);
+
+      function setupProfileForm(form) {
+        if (!form) return;
+        var modelSelect = form.querySelector("[data-profile-model-select]");
+        if (!modelSelect) return;
+
+        var dimensionsSection = form.querySelector("[data-profile-dimensions]");
+        var widthInput = form.querySelector("[name='width']");
+        var heightInput = form.querySelector("[name='height']");
+        var openrouterSection = form.querySelector("[data-profile-openrouter]");
+        var openrouterRatio = form.querySelector("[data-profile-openrouter-ratio]");
+        var openrouterSize = form.querySelector("[data-profile-openrouter-size]");
+
+        function syncProfileProviderState() {
+          var selected = modelSelect.options[modelSelect.selectedIndex];
+          var provider = selected ? String(selected.dataset.provider || "").trim().toLowerCase() : "";
+          var isOpenRouter = provider === "openrouter";
+
+          if (dimensionsSection) {
+            dimensionsSection.classList.toggle("hidden", isOpenRouter);
+          }
+          if (widthInput) {
+            widthInput.disabled = isOpenRouter;
+            if (isOpenRouter) widthInput.value = "";
+          }
+          if (heightInput) {
+            heightInput.disabled = isOpenRouter;
+            if (isOpenRouter) heightInput.value = "";
+          }
+
+          if (openrouterSection) {
+            openrouterSection.classList.toggle("hidden", !isOpenRouter);
+          }
+          if (openrouterRatio) {
+            openrouterRatio.disabled = !isOpenRouter;
+            if (!isOpenRouter) openrouterRatio.value = "";
+          }
+          if (openrouterSize) {
+            openrouterSize.disabled = !isOpenRouter;
+            if (!isOpenRouter) openrouterSize.value = "";
+          }
+        }
+
+        modelSelect.addEventListener("change", syncProfileProviderState);
+        syncProfileProviderState();
+      }
+
+      document.querySelectorAll("[data-profile-form]").forEach(setupProfileForm);
 
       function setupGallerySelection() {
         var bulkForm = document.getElementById("bulk-action-form");

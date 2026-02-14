@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import os
 import uuid
@@ -50,6 +51,20 @@ from app.utils.slugify import slugify
 settings = get_settings()
 
 MAX_INPUT_IMAGES = 5
+OPENROUTER_ALLOWED_ASPECT_RATIOS = {
+    "1:1",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:3",
+    "4:5",
+    "5:4",
+    "9:16",
+    "9:21",
+    "16:9",
+    "21:9",
+}
+OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
 
 
 @asynccontextmanager
@@ -121,6 +136,54 @@ def parse_params_json(raw: Optional[str]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("params_json must be a JSON object")
     return parsed
+
+
+def apply_openrouter_image_config(
+    *,
+    params_json: dict[str, Any],
+    provider: str,
+    aspect_ratio: str,
+    image_size: str,
+) -> dict[str, Any]:
+    merged = copy.deepcopy(params_json or {})
+    provider_value = (provider or "").strip().lower()
+    image_config_raw = merged.get("image_config")
+    image_config = (
+        copy.deepcopy(image_config_raw) if isinstance(image_config_raw, dict) else {}
+    )
+
+    if provider_value != "openrouter":
+        image_config.pop("aspect_ratio", None)
+        image_config.pop("image_size", None)
+        if image_config:
+            merged["image_config"] = image_config
+        else:
+            merged.pop("image_config", None)
+        return merged
+
+    ratio_value = (aspect_ratio or "").strip()
+    image_size_value = (image_size or "").strip().upper()
+
+    if ratio_value and ratio_value not in OPENROUTER_ALLOWED_ASPECT_RATIOS:
+        raise ValueError("Invalid OpenRouter aspect ratio")
+    if image_size_value and image_size_value not in OPENROUTER_ALLOWED_IMAGE_SIZES:
+        raise ValueError("Invalid OpenRouter image size")
+
+    if ratio_value:
+        image_config["aspect_ratio"] = ratio_value
+    else:
+        image_config.pop("aspect_ratio", None)
+
+    if image_size_value:
+        image_config["image_size"] = image_size_value
+    else:
+        image_config.pop("image_size", None)
+
+    if image_config:
+        merged["image_config"] = image_config
+    else:
+        merged.pop("image_config", None)
+    return merged
 
 
 def normalize_thumb_size(value: Optional[str]) -> str:
@@ -471,17 +534,19 @@ def generate_submit(
             if encoded_images:
                 overrides["input_images"] = encoded_images
 
-        width_value = parse_optional_int(width)
-        if width_value is not None:
-            if width_value <= 0:
-                raise ValueError("Width must be > 0")
-            overrides["width"] = width_value
+        provider_value = str(profile.provider or "").strip().lower()
+        if provider_value != "openrouter":
+            width_value = parse_optional_int(width)
+            if width_value is not None:
+                if width_value <= 0:
+                    raise ValueError("Width must be > 0")
+                overrides["width"] = width_value
 
-        height_value = parse_optional_int(height)
-        if height_value is not None:
-            if height_value <= 0:
-                raise ValueError("Height must be > 0")
-            overrides["height"] = height_value
+            height_value = parse_optional_int(height)
+            if height_value is not None:
+                if height_value <= 0:
+                    raise ValueError("Height must be > 0")
+                overrides["height"] = height_value
 
         n_images_value = parse_optional_int(n_images)
         if n_images_value is not None:
@@ -1017,6 +1082,8 @@ def create_profile(
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
+    openrouter_aspect_ratio: str = Form(default=""),
+    openrouter_image_size: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -1031,12 +1098,23 @@ def create_profile(
         model_config = crud.get_model_config(session, model_config_value)
         if not model_config:
             raise ValueError("Selected model does not exist")
-        width_value = parse_optional_int(width)
-        height_value = parse_optional_int(height)
-        if width_value is not None and width_value <= 0:
-            raise ValueError("Width must be > 0")
-        if height_value is not None and height_value <= 0:
-            raise ValueError("Height must be > 0")
+        provider_value = str(model_config.provider or "").strip().lower()
+        if provider_value == "openrouter":
+            width_value = None
+            height_value = None
+        else:
+            width_value = parse_optional_int(width)
+            height_value = parse_optional_int(height)
+            if width_value is not None and width_value <= 0:
+                raise ValueError("Width must be > 0")
+            if height_value is not None and height_value <= 0:
+                raise ValueError("Height must be > 0")
+        params_value = apply_openrouter_image_config(
+            params_json=parse_params_json(params_json),
+            provider=provider_value,
+            aspect_ratio=openrouter_aspect_ratio,
+            image_size=openrouter_image_size,
+        )
         crud.create_profile(
             session,
             name=name.strip(),
@@ -1051,7 +1129,7 @@ def create_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
-            params_json=parse_params_json(params_json),
+            params_json=params_value,
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
@@ -1067,6 +1145,8 @@ def update_profile(
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
+    openrouter_aspect_ratio: str = Form(default=""),
+    openrouter_image_size: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -1085,12 +1165,23 @@ def update_profile(
         model_config = crud.get_model_config(session, model_config_value)
         if not model_config:
             raise ValueError("Selected model does not exist")
-        width_value = parse_optional_int(width)
-        height_value = parse_optional_int(height)
-        if width_value is not None and width_value <= 0:
-            raise ValueError("Width must be > 0")
-        if height_value is not None and height_value <= 0:
-            raise ValueError("Height must be > 0")
+        provider_value = str(model_config.provider or "").strip().lower()
+        if provider_value == "openrouter":
+            width_value = None
+            height_value = None
+        else:
+            width_value = parse_optional_int(width)
+            height_value = parse_optional_int(height)
+            if width_value is not None and width_value <= 0:
+                raise ValueError("Width must be > 0")
+            if height_value is not None and height_value <= 0:
+                raise ValueError("Height must be > 0")
+        params_value = apply_openrouter_image_config(
+            params_json=parse_params_json(params_json),
+            provider=provider_value,
+            aspect_ratio=openrouter_aspect_ratio,
+            image_size=openrouter_image_size,
+        )
         crud.update_profile(
             session,
             profile,
@@ -1106,7 +1197,7 @@ def update_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
-            params_json=parse_params_json(params_json),
+            params_json=params_value,
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:

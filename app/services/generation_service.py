@@ -3,10 +3,12 @@ from __future__ import annotations
 import base64
 import copy
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from fastapi import BackgroundTasks
+from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -67,6 +69,11 @@ class GenerationService:
         height = effective_overrides.get("height", profile.height)
         n_images = int(effective_overrides.get("n_images", profile.n_images) or 1)
         seed = effective_overrides.get("seed", profile.seed)
+        params_json_override = effective_overrides.get("params_json")
+        if isinstance(params_json_override, dict):
+            params_json = copy.deepcopy(params_json_override)
+        else:
+            params_json = copy.deepcopy(profile.params_json or {})
         upscale_model = effective_overrides.get("upscale_model")
         gallery_folder_id = effective_overrides.get("gallery_folder_id")
         gallery_folder_path = effective_overrides.get("gallery_folder_path")
@@ -109,7 +116,7 @@ class GenerationService:
             "provider": profile.provider,
             "model": profile.model,
             "model_config_id": profile.model_config_id,
-            "params_json": profile.params_json or {},
+            "params_json": params_json,
             "gallery_folder_id": gallery_folder_id,
             "gallery_folder_path": gallery_folder_path,
             "input_images": input_images or [],
@@ -118,6 +125,7 @@ class GenerationService:
                 "height": "height" in effective_overrides,
                 "n_images": "n_images" in effective_overrides,
                 "seed": "seed" in effective_overrides,
+                "params_json": "params_json" in effective_overrides,
                 "upscale_model": "upscale_model" in effective_overrides,
                 "gallery_folder_id": "gallery_folder_id" in effective_overrides,
                 "gallery_folder_path": "gallery_folder_path" in effective_overrides,
@@ -259,6 +267,18 @@ class GenerationService:
                             "model": upscale_model,
                             "tool": "realesrgan",
                         }
+                    (
+                        image_data,
+                        image_width,
+                        image_height,
+                        image_mime,
+                    ) = self._normalize_image_for_output(
+                        data=image_data,
+                        output_format=output_format,
+                        fallback_mime=image_mime,
+                        fallback_width=image_width,
+                        fallback_height=image_height,
+                    )
                     rendered_rel_path = self.storage_service.render_relative_path(
                         template=storage_template,
                         profile_name=generation.profile_name,
@@ -531,6 +551,60 @@ class GenerationService:
 
     def _truncate_error(self, value: str, max_len: int = 2048) -> str:
         return value[:max_len]
+
+    def _normalize_image_for_output(
+        self,
+        *,
+        data: bytes,
+        output_format: str,
+        fallback_mime: str,
+        fallback_width: int,
+        fallback_height: int,
+    ) -> tuple[bytes, int, int, str]:
+        if not data:
+            return data, fallback_width, fallback_height, fallback_mime
+
+        try:
+            with Image.open(BytesIO(data)) as source:
+                normalized = ImageOps.exif_transpose(source)
+                width, height = normalized.size
+                target = self._normalized_output_format(output_format)
+                pil_format = self._pil_format_from_output(target)
+                if pil_format == "JPEG" and normalized.mode not in {"RGB", "L"}:
+                    normalized = normalized.convert("RGB")
+
+                buffer = BytesIO()
+                normalized.save(buffer, format=pil_format)
+                return (
+                    buffer.getvalue(),
+                    int(width),
+                    int(height),
+                    self._mime_from_output(target),
+                )
+        except Exception:
+            return data, fallback_width, fallback_height, fallback_mime
+
+    def _normalized_output_format(self, value: str) -> str:
+        raw = (value or "png").strip().lower().lstrip(".")
+        if raw in {"jpg", "jpeg"}:
+            return "jpeg"
+        if raw in {"png", "webp"}:
+            return raw
+        return "png"
+
+    def _pil_format_from_output(self, output_format: str) -> str:
+        if output_format == "jpeg":
+            return "JPEG"
+        if output_format == "webp":
+            return "WEBP"
+        return "PNG"
+
+    def _mime_from_output(self, output_format: str) -> str:
+        if output_format == "jpeg":
+            return "image/jpeg"
+        if output_format == "webp":
+            return "image/webp"
+        return "image/png"
 
     def _parse_optional_int(self, value: Any) -> Optional[int]:
         if value is None:
