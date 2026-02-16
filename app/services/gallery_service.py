@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Asset, GalleryFolder, Generation
+from app.db.models import Asset, Category, Generation
 
 
 @dataclass
@@ -24,7 +24,7 @@ class GalleryFilterOptions:
     profile_names: list[str]
     providers: list[str]
     statuses: list[str]
-    folders: list[GalleryFolder]
+    categories: list[Category]
 
 
 class GalleryService:
@@ -41,8 +41,7 @@ class GalleryService:
         provider: Optional[str] = None,
         status: Optional[str] = None,
         prompt_query: Optional[str] = None,
-        gallery_folder_id: Optional[int] = None,
-        root_only: bool = False,
+        category_ids: Optional[list[int]] = None,
     ) -> GalleryPage:
         safe_page_size = max(1, min(200, page_size or self.default_page_size))
         safe_page = max(1, page)
@@ -56,10 +55,9 @@ class GalleryService:
             filters.append(Generation.status == status)
         if prompt_query:
             filters.append(Generation.prompt_user.ilike(f"%{prompt_query}%"))
-        if root_only:
-            filters.append(Asset.gallery_folder_id.is_(None))
-        elif gallery_folder_id is not None:
-            filters.append(Asset.gallery_folder_id == gallery_folder_id)
+        normalized_category_ids = sorted({item for item in (category_ids or []) if item > 0})
+        if normalized_category_ids:
+            filters.append(Asset.categories.any(Category.id.in_(normalized_category_ids)))
 
         count_stmt = select(func.count()).select_from(Asset).join(Generation)
         if filters:
@@ -69,7 +67,7 @@ class GalleryService:
         stmt = (
             select(Asset)
             .join(Generation)
-            .options(selectinload(Asset.generation), selectinload(Asset.gallery_folder))
+            .options(selectinload(Asset.generation), selectinload(Asset.categories))
             .order_by(Asset.created_at.desc())
             .offset((safe_page - 1) * safe_page_size)
             .limit(safe_page_size)
@@ -100,16 +98,16 @@ class GalleryService:
             .distinct()
             .order_by(Generation.status.asc())
         )
-        folder_stmt = select(GalleryFolder).order_by(GalleryFolder.path.asc())
+        categories_stmt = select(Category).order_by(Category.name.asc())
 
         profile_names = [item for item in session.scalars(profile_stmt).all() if item]
         providers = [item for item in session.scalars(provider_stmt).all() if item]
         statuses = [item for item in session.scalars(status_stmt).all() if item]
-        folders = list(session.scalars(folder_stmt).all())
+        categories = list(session.scalars(categories_stmt).all())
 
         return GalleryFilterOptions(
             profile_names=profile_names,
             providers=providers,
             statuses=statuses,
-            folders=folders,
+            categories=categories,
         )

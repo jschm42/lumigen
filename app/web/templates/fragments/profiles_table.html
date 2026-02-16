@@ -5,6 +5,7 @@
       <th class="px-4 py-3 font-semibold">Name</th>
       <th class="px-4 py-3 font-semibold">Provider</th>
       <th class="px-4 py-3 font-semibold">Model</th>
+      <th class="px-4 py-3 font-semibold">Categories</th>
       <th class="px-4 py-3 font-semibold">Format</th>
       <th class="px-4 py-3 font-semibold">Storage</th>
       <th class="px-4 py-3 font-semibold">Actions</th>
@@ -16,6 +17,13 @@
       <td class="px-4 py-3">{{ profile.name }}</td>
       <td class="px-4 py-3">{{ profile.provider }}</td>
       <td class="px-4 py-3">{{ profile.model_config.name if profile.model_config else profile.model }}</td>
+      <td class="px-4 py-3">
+        {% if profile.categories %}
+          {{ profile.categories | map(attribute='name') | join(', ') }}
+        {% else %}
+          <span class="text-slate-400">-</span>
+        {% endif %}
+      </td>
       <td class="px-4 py-3 uppercase text-slate-300">{{ profile.output_format }}</td>
       <td class="px-4 py-3">{{ profile.storage_template.name if profile.storage_template else profile.storage_template_id }}</td>
       <td class="px-4 py-3">
@@ -29,7 +37,7 @@
     </tr>
   {% else %}
     <tr>
-      <td colspan="6" class="px-4 py-4 text-slate-400">No profiles yet.</td>
+      <td colspan="7" class="px-4 py-4 text-slate-400">No profiles yet.</td>
     </tr>
   {% endfor %}
   </tbody>

@@ -1,6 +1,5 @@
 {% extends "layout.html" %}
 {% block content %}
-{% set return_to = '/gallery?page=' ~ page_data.page ~ '&profile_name=' ~ (profile_name | urlencode) ~ '&provider=' ~ (provider | urlencode) ~ '&status=' ~ (status | urlencode) ~ '&q=' ~ (q | urlencode) ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
 {% set panel_class = "h-full space-y-3" %}
 {% set input_class = "w-full rounded-lg border border-white/12 bg-slate-900/55 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
@@ -10,7 +9,8 @@
 
 <section class="{{ panel_class }}">
   <form method="get" action="/gallery" class="rounded-2xl bg-slate-900/35 p-3">
-    <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(0,1.8fr)_auto_auto]">
+    <input type="hidden" name="thumb_size" value="{{ thumb_size }}">
+    <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(0,1.8fr)_auto_auto_auto]">
       <select name="profile_name" aria-label="Profile filter" class="{{ input_class }}">
         <option value="">Alle Profile</option>
         {% for item in filter_options.profile_names %}
@@ -30,28 +30,69 @@
         {% endfor %}
       </select>
       <input type="text" name="q" value="{{ q }}" placeholder="Prompt durchsuchen..." aria-label="Prompt filter" class="{{ input_class }}">
+      <div class="relative" data-category-popover>
+        <button
+          type="button"
+          class="flex h-full min-h-[42px] w-full items-center justify-between rounded-lg border border-white/12 bg-slate-900/55 px-3 py-2 text-left text-sm text-slate-100 transition hover:border-sky-300/45 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+          data-category-popover-toggle
+          aria-haspopup="dialog"
+          aria-expanded="false"
+        >
+          <span class="min-w-0">
+            <span class="block text-[11px] uppercase tracking-wide text-slate-400">Kategorie-Filter</span>
+            <span class="block truncate font-semibold text-slate-100">
+              {% if selected_category_ids %}
+                {{ selected_category_ids | length }} ausgewaehlt
+              {% else %}
+                Alle Kategorien
+              {% endif %}
+            </span>
+          </span>
+          <span class="material-symbols-outlined text-base text-slate-300" aria-hidden="true">expand_more</span>
+        </button>
+        <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-white/15 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
+          <div class="mb-2 flex items-center justify-between">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Kategorien</p>
+            {% if selected_category_ids %}
+              <p class="text-xs text-sky-200">{{ selected_category_ids | length }} aktiv</p>
+            {% endif %}
+          </div>
+          {% if filter_options.categories %}
+            <div class="max-h-56 space-y-2 overflow-y-auto pr-1">
+              {% for item in filter_options.categories %}
+                <label class="flex items-center gap-2 text-sm text-slate-200">
+                  <input type="checkbox" name="category_ids" value="{{ item.id }}" {% if item.id in selected_category_ids %}checked{% endif %}>
+                  <span class="truncate">{{ item.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-sm text-slate-400">Keine Kategorien vorhanden.</p>
+          {% endif %}
+        </div>
+      </div>
       <div class="flex items-center gap-2">
         <button type="submit" class="{{ btn_primary }}">Filter</button>
         <a href="/gallery" class="{{ btn_secondary }}">Reset</a>
       </div>
       <div class="flex items-center justify-end gap-1 rounded-lg border border-white/10 bg-slate-900/45 px-1 py-1">
         <a
-          href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size=sm"
+          href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=sm"
           class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Kleine Thumbnails"
           aria-label="Kleine Thumbnails"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span></a>
         <a
-          href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size=md"
+          href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=md"
           class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Mittlere Thumbnails"
           aria-label="Mittlere Thumbnails"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_on</span></a>
         <a
-          href="/gallery?page=1&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size=lg"
+          href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=lg"
           class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
-          title="Große Thumbnails"
-          aria-label="Große Thumbnails"
+          title="Groesse Thumbnails"
+          aria-label="Groesse Thumbnails"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">crop_square</span></a>
       </div>
     </div>
@@ -74,6 +115,39 @@
         Select all
       </label>
       <small class="text-sm text-slate-400" data-gallery-selection-count>0 selected</small>
+      <div class="relative" data-category-popover>
+        <button
+          type="button"
+          class="{{ btn_secondary }}"
+          data-category-popover-toggle
+          aria-haspopup="dialog"
+          aria-expanded="false"
+        >
+          Kategorien zuweisen
+        </button>
+        <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-white/15 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Kategorien fuer Auswahl</p>
+          {% if filter_options.categories %}
+            <div class="max-h-56 space-y-2 overflow-y-auto pr-1">
+              {% for item in filter_options.categories %}
+                <label class="flex items-center gap-2 text-sm text-slate-200">
+                  <input type="checkbox" name="category_ids" value="{{ item.id }}">
+                  <span class="truncate">{{ item.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-sm text-slate-400">Keine Kategorien vorhanden.</p>
+          {% endif %}
+        </div>
+      </div>
+      <button
+        type="submit"
+        class="{{ btn_secondary }}"
+        formaction="/assets/bulk-set-categories"
+        data-bulk-action>
+        Kategorien setzen
+      </button>
       <button
         type="submit"
         class="{{ btn_danger }}"
@@ -90,12 +164,52 @@
     <small class="text-sm text-slate-400">Page {{ page_data.page }} / {{ page_data.pages }} ({{ page_data.total }} assets)</small>
     <div class="flex flex-wrap gap-2">
       {% if page_data.page > 1 %}
-        <a href="/gallery?page={{ page_data.page - 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Prev</a>
+        <a href="/gallery?page={{ page_data.page - 1 }}{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Prev</a>
       {% endif %}
       {% if page_data.page < page_data.pages %}
-        <a href="/gallery?page={{ page_data.page + 1 }}&profile_name={{ profile_name | urlencode }}&provider={{ provider | urlencode }}&status={{ status | urlencode }}&q={{ q | urlencode }}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Next</a>
+        <a href="/gallery?page={{ page_data.page + 1 }}{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size={{ thumb_size | urlencode }}" class="{{ btn_secondary }}">Next</a>
       {% endif %}
     </div>
   </div>
 </section>
+<script>
+  (function () {
+    var popovers = Array.from(document.querySelectorAll("[data-category-popover]"));
+    if (!popovers.length) return;
+
+    function closeAll(exceptRoot) {
+      popovers.forEach(function (root) {
+        if (exceptRoot && root === exceptRoot) return;
+        var toggle = root.querySelector("[data-category-popover-toggle]");
+        var panel = root.querySelector("[data-category-popover-panel]");
+        if (!toggle || !panel) return;
+        panel.classList.add("hidden");
+        toggle.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    popovers.forEach(function (root) {
+      var toggle = root.querySelector("[data-category-popover-toggle]");
+      var panel = root.querySelector("[data-category-popover-panel]");
+      if (!toggle || !panel) return;
+
+      toggle.addEventListener("click", function (event) {
+        event.preventDefault();
+        var willOpen = panel.classList.contains("hidden");
+        closeAll(root);
+        panel.classList.toggle("hidden", !willOpen);
+        toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      });
+    });
+
+    document.addEventListener("click", function (event) {
+      var clickedInside = popovers.some(function (root) {
+        return root.contains(event.target);
+      });
+      if (!clickedInside) {
+        closeAll();
+      }
+    });
+  })();
+</script>
 {% endblock %}

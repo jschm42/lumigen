@@ -40,7 +40,7 @@
     <dt class="font-semibold text-slate-400">Status</dt><dd>{{ asset.generation.status }}</dd>
     <dt class="font-semibold text-slate-400">Provider</dt><dd>{{ asset.generation.provider }}</dd>
     <dt class="font-semibold text-slate-400">Model</dt><dd>{{ asset.generation.model }}</dd>
-    <dt class="font-semibold text-slate-400">Gallery folder</dt><dd>{{ asset.gallery_folder.path if asset.gallery_folder else "Root" }}</dd>
+    <dt class="font-semibold text-slate-400">Categories</dt><dd>{{ asset.categories | map(attribute='name') | join(', ') if asset.categories else "-" }}</dd>
     <dt class="font-semibold text-slate-400">Size</dt><dd>{{ asset.width }}x{{ asset.height }}</dd>
     <dt class="font-semibold text-slate-400">MIME</dt><dd>{{ asset.mime }}</dd>
     <dt class="font-semibold text-slate-400">File path (relative)</dt><dd class="break-all">{{ asset.file_path }}</dd>

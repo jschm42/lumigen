@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
     Asset,
+    Category,
     DimensionPreset,
     EnhancementConfig,
-    GalleryFolder,
     Generation,
     ModelConfig,
     Profile,
@@ -49,7 +49,9 @@ def list_profiles(session: Session) -> list[Profile]:
     stmt = (
         select(Profile)
         .options(
-            selectinload(Profile.storage_template), selectinload(Profile.model_config)
+            selectinload(Profile.storage_template),
+            selectinload(Profile.model_config),
+            selectinload(Profile.categories),
         )
         .order_by(Profile.name.asc())
     )
@@ -64,6 +66,45 @@ def list_model_configs(session: Session) -> list[ModelConfig]:
 def list_dimension_presets(session: Session) -> list[DimensionPreset]:
     stmt = select(DimensionPreset).order_by(DimensionPreset.name.asc())
     return list(session.scalars(stmt).all())
+
+
+def list_categories(session: Session) -> list[Category]:
+    stmt = select(Category).order_by(Category.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def list_categories_by_ids(session: Session, category_ids: list[int]) -> list[Category]:
+    if not category_ids:
+        return []
+    stmt = select(Category).where(Category.id.in_(category_ids)).order_by(Category.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def get_category(session: Session, category_id: int) -> Optional[Category]:
+    stmt = select(Category).where(Category.id == category_id)
+    return session.scalar(stmt)
+
+
+def create_category(session: Session, **fields) -> Category:
+    row = Category(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_category(session: Session, category: Category, **fields) -> Category:
+    for key, value in fields.items():
+        setattr(category, key, value)
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
+
+
+def delete_category(session: Session, category: Category) -> None:
+    session.delete(category)
+    session.commit()
 
 
 def get_model_config(session: Session, model_config_id: int) -> Optional[ModelConfig]:
@@ -167,7 +208,9 @@ def get_profile(session: Session, profile_id: int) -> Optional[Profile]:
     stmt = (
         select(Profile)
         .options(
-            selectinload(Profile.storage_template), selectinload(Profile.model_config)
+            selectinload(Profile.storage_template),
+            selectinload(Profile.model_config),
+            selectinload(Profile.categories),
         )
         .where(Profile.id == profile_id)
     )
@@ -220,29 +263,6 @@ def get_asset(
     stmt: Select[tuple[Asset]] = select(Asset).where(Asset.id == asset_id)
     if with_generation:
         stmt = stmt.options(
-            selectinload(Asset.generation), selectinload(Asset.gallery_folder)
+            selectinload(Asset.generation), selectinload(Asset.categories)
         )
     return session.scalar(stmt)
-
-
-def list_gallery_folders(session: Session) -> list[GalleryFolder]:
-    stmt = select(GalleryFolder).order_by(GalleryFolder.path.asc())
-    return list(session.scalars(stmt).all())
-
-
-def get_gallery_folder(session: Session, folder_id: int) -> Optional[GalleryFolder]:
-    stmt = select(GalleryFolder).where(GalleryFolder.id == folder_id)
-    return session.scalar(stmt)
-
-
-def get_gallery_folder_by_path(session: Session, path: str) -> Optional[GalleryFolder]:
-    stmt = select(GalleryFolder).where(GalleryFolder.path == path)
-    return session.scalar(stmt)
-
-
-def create_gallery_folder(session: Session, path: str) -> GalleryFolder:
-    folder = GalleryFolder(path=path)
-    session.add(folder)
-    session.commit()
-    session.refresh(folder)
-    return folder

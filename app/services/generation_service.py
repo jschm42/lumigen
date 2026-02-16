@@ -4,7 +4,7 @@ import base64
 import copy
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import BackgroundTasks
@@ -75,10 +75,12 @@ class GenerationService:
         else:
             params_json = copy.deepcopy(profile.params_json or {})
         upscale_model = effective_overrides.get("upscale_model")
-        gallery_folder_id = effective_overrides.get("gallery_folder_id")
-        gallery_folder_path = effective_overrides.get("gallery_folder_path")
         input_images = effective_overrides.get("input_images")
         chat_session_id = str(effective_overrides.get("chat_session_id") or "").strip()
+        profile_category_ids = [item.id for item in profile.categories]
+        category_ids = self._parse_int_list(
+            effective_overrides.get("category_ids", profile_category_ids)
+        )
 
         profile_snapshot = {
             "id": profile.id,
@@ -94,6 +96,8 @@ class GenerationService:
             "output_format": profile.output_format,
             "params_json": profile.params_json or {},
             "storage_template_id": profile.storage_template_id,
+            "category_ids": profile_category_ids,
+            "category_names": [item.name for item in profile.categories],
         }
 
         storage_snapshot = {
@@ -117,8 +121,7 @@ class GenerationService:
             "model": profile.model,
             "model_config_id": profile.model_config_id,
             "params_json": params_json,
-            "gallery_folder_id": gallery_folder_id,
-            "gallery_folder_path": gallery_folder_path,
+            "category_ids": category_ids,
             "input_images": input_images or [],
             "overrides": {
                 "width": "width" in effective_overrides,
@@ -127,8 +130,7 @@ class GenerationService:
                 "seed": "seed" in effective_overrides,
                 "params_json": "params_json" in effective_overrides,
                 "upscale_model": "upscale_model" in effective_overrides,
-                "gallery_folder_id": "gallery_folder_id" in effective_overrides,
-                "gallery_folder_path": "gallery_folder_path" in effective_overrides,
+                "category_ids": "category_ids" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
                 "chat_session_id": "chat_session_id" in effective_overrides,
             },
@@ -243,7 +245,10 @@ class GenerationService:
                     raise ProviderError("Upscale service is not available.")
                 if upscale_enabled and not self.upscale_service.is_available():
                     raise ProviderError("Upscaler is not configured on this server.")
-                folder_path = self._resolve_gallery_folder_path(session, generation)
+                category_ids = self._parse_int_list(
+                    generation.request_snapshot_json.get("category_ids")
+                )
+                categories = crud.list_categories_by_ids(session, category_ids)
 
                 for idx, image in enumerate(result.images, start=1):
                     self._raise_if_cancelled(session, generation_id)
@@ -287,11 +292,7 @@ class GenerationService:
                         idx=idx,
                         ext=output_format,
                     )
-                    rel_path = (
-                        Path(folder_path) / rendered_rel_path.name
-                        if folder_path
-                        else rendered_rel_path
-                    )
+                    rel_path = rendered_rel_path
                     abs_path = self.storage_service.resolve_managed_path(
                         base_dir, rel_path
                     )
@@ -322,17 +323,13 @@ class GenerationService:
                     session.add(
                         Asset(
                             generation_id=generation.id,
-                            gallery_folder_id=self._parse_optional_int(
-                                generation.request_snapshot_json.get(
-                                    "gallery_folder_id"
-                                )
-                            ),
                             file_path=rel_path.as_posix(),
                             sidecar_path=sidecar_rel.as_posix(),
                             thumbnail_path=thumb_rel.as_posix(),
                             width=image_width,
                             height=image_height,
                             mime=image_mime,
+                            categories=list(categories),
                             meta_json={
                                 "provider_meta": image.meta,
                                 "raw_meta": result.raw_meta,
@@ -614,34 +611,15 @@ class GenerationService:
         except (TypeError, ValueError):
             return None
 
-    def _resolve_gallery_folder_path(
-        self, session: Session, generation: Generation
-    ) -> Optional[str]:
-        request = generation.request_snapshot_json or {}
-        normalized = self._normalize_folder_path(request.get("gallery_folder_path"))
-        if normalized:
-            return normalized
-
-        folder_id = self._parse_optional_int(request.get("gallery_folder_id"))
-        if folder_id is None:
-            return None
-        folder = crud.get_gallery_folder(session, folder_id)
-        if not folder:
-            return None
-        return self._normalize_folder_path(folder.path)
-
-    def _normalize_folder_path(self, value: Any) -> Optional[str]:
+    def _parse_int_list(self, value: Any) -> list[int]:
         if value is None:
-            return None
-        raw = str(value).strip().replace("\\", "/").strip("/")
-        if not raw:
-            return None
-        posix_path = PurePosixPath(raw)
-        if posix_path.is_absolute() or ".." in posix_path.parts:
-            return None
-        parts = [
-            part.strip() for part in posix_path.parts if part.strip() and part != "."
-        ]
-        if not parts:
-            return None
-        return PurePosixPath(*parts).as_posix()
+            return []
+        if not isinstance(value, list):
+            return []
+        parsed: list[int] = []
+        for item in value:
+            try:
+                parsed.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        return sorted({item for item in parsed if item > 0})

@@ -3,12 +3,38 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+profile_categories = Table(
+    "profile_categories",
+    Base.metadata,
+    Column("profile_id", ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "category_id",
+        ForeignKey("categories.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    ),
+)
+
+
+asset_categories = Table(
+    "asset_categories",
+    Base.metadata,
+    Column("asset_id", ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "category_id",
+        ForeignKey("categories.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    ),
+)
 
 
 class TimestampMixin:
@@ -38,7 +64,7 @@ class Profile(Base, TimestampMixin):
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     model_config_id: Mapped[Optional[int]] = mapped_column(
@@ -69,22 +95,17 @@ class Profile(Base, TimestampMixin):
         back_populates="profiles"
     )
     generations: Mapped[list["Generation"]] = relationship(back_populates="profile")
-
-
-class GalleryFolder(Base, TimestampMixin):
-    __tablename__ = "gallery_folders"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    path: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
-
-    assets: Mapped[list["Asset"]] = relationship(back_populates="gallery_folder")
+    categories: Mapped[list["Category"]] = relationship(
+        secondary=profile_categories,
+        back_populates="profiles",
+    )
 
 
 class ModelConfig(Base, TimestampMixin):
     __tablename__ = "model_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     enhancement_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -113,6 +134,22 @@ class DimensionPreset(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class Category(Base, TimestampMixin):
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+
+    profiles: Mapped[list[Profile]] = relationship(
+        secondary=profile_categories,
+        back_populates="categories",
+    )
+    assets: Mapped[list["Asset"]] = relationship(
+        secondary=asset_categories,
+        back_populates="categories",
+    )
 
 
 class Generation(Base):
@@ -164,10 +201,6 @@ class Asset(Base):
         ForeignKey("generations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    gallery_folder_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("gallery_folders.id", ondelete="SET NULL"),
-        nullable=True,
-    )
     file_path: Mapped[str] = mapped_column(String(1024), unique=True, nullable=False)
     sidecar_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     thumbnail_path: Mapped[str] = mapped_column(String(1024), nullable=False)
@@ -182,6 +215,7 @@ class Asset(Base):
     )
 
     generation: Mapped[Generation] = relationship(back_populates="assets")
-    gallery_folder: Mapped[Optional[GalleryFolder]] = relationship(
-        back_populates="assets"
+    categories: Mapped[list[Category]] = relationship(
+        secondary=asset_categories,
+        back_populates="assets",
     )

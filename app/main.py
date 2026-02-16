@@ -7,7 +7,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlencode
 
@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
-from app.db.models import Asset, GalleryFolder, Generation
+from app.db.models import Asset, Generation
 from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
 from app.services.enhancement_service import EnhancementService
@@ -51,6 +51,9 @@ from app.utils.slugify import slugify
 settings = get_settings()
 
 MAX_INPUT_IMAGES = 5
+MAX_CATEGORY_NAME_LENGTH = 30
+MAX_PROFILE_NAME_LENGTH = 50
+MAX_MODEL_CONFIG_NAME_LENGTH = 50
 OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "1:1",
     "2:3",
@@ -78,14 +81,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             base_dir=settings.default_base_dir,
             template=settings.default_storage_template,
         )
-        for folder in crud.list_gallery_folders(session):
-            normalized = normalize_folder_path(folder.path)
-            if not normalized:
-                continue
-            folder_abs_path = storage_service.resolve_managed_path(
-                settings.default_base_dir, Path(normalized)
-            )
-            ensure_dir(folder_abs_path)
     yield
 
 
@@ -282,92 +277,41 @@ def gallery_redirect(
     return RedirectResponse(url=target, status_code=303)
 
 
-def normalize_folder_segment(value: str) -> str:
-    return slugify(value, max_length=64, fallback="")
+def normalize_category_ids(values: list[int]) -> list[int]:
+    return sorted({value for value in values if value > 0})
 
 
-def normalize_folder_path(value: str) -> str:
-    raw = (value or "").strip().replace("\\", "/").strip("/")
-    if not raw:
-        return ""
-    posix_path = PurePosixPath(raw)
-    if posix_path.is_absolute() or ".." in posix_path.parts:
-        return ""
-    parts = [normalize_folder_segment(part) for part in posix_path.parts]
-    parts = [part for part in parts if part]
-    return PurePosixPath(*parts).as_posix() if parts else ""
-
-
-def build_folder_navigation(
-    folders: list[GalleryFolder],
-    selected_folder: Optional[GalleryFolder],
-) -> dict[str, Any]:
-    normalized_rows: list[tuple[GalleryFolder, str]] = []
-    by_path: dict[str, GalleryFolder] = {}
-    for folder in folders:
-        normalized = normalize_folder_path(folder.path)
-        if not normalized:
-            continue
-        normalized_rows.append((folder, normalized))
-        by_path[normalized] = folder
-
-    selected_path = ""
-    if selected_folder:
-        selected_path = normalize_folder_path(selected_folder.path)
-    selected_depth = selected_path.count("/") + 1 if selected_path else 0
-    selected_prefix = f"{selected_path}/" if selected_path else ""
-
-    children: list[dict[str, Any]] = []
-    for folder, path in normalized_rows:
-        depth = path.count("/") + 1
-        if selected_path:
-            if not path.startswith(selected_prefix):
-                continue
-            if depth != selected_depth + 1:
-                continue
-        else:
-            if depth != 1:
-                continue
-        children.append(
-            {
-                "id": folder.id,
-                "name": path.rsplit("/", maxsplit=1)[-1],
-                "path": path,
-            }
+def normalize_category_name(value: str) -> str:
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Name is required")
+    if len(normalized) > MAX_CATEGORY_NAME_LENGTH:
+        raise ValueError(
+            f"Category name must be at most {MAX_CATEGORY_NAME_LENGTH} characters"
         )
-    children.sort(key=lambda item: item["path"])
+    return normalized
 
-    breadcrumbs: list[dict[str, Any]] = [{"label": "Root", "token": "root"}]
-    if selected_path:
-        cumulative: list[str] = []
-        for segment in selected_path.split("/"):
-            cumulative.append(segment)
-            segment_path = "/".join(cumulative)
-            folder = by_path.get(segment_path)
-            if not folder:
-                continue
-            breadcrumbs.append({"label": segment, "token": str(folder.id)})
 
-    parent_token: Optional[str] = None
-    if selected_path:
-        parent_path = (
-            selected_path.rsplit("/", maxsplit=1)[0] if "/" in selected_path else ""
+def normalize_profile_name(value: str) -> str:
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Profile name is required")
+    if len(normalized) > MAX_PROFILE_NAME_LENGTH:
+        raise ValueError(
+            f"Profile name must be at most {MAX_PROFILE_NAME_LENGTH} characters"
         )
-        if parent_path:
-            parent = by_path.get(parent_path)
-            if parent:
-                parent_token = str(parent.id)
-        else:
-            parent_token = "root"
+    return normalized
 
-    return {
-        "current_token": str(selected_folder.id) if selected_folder else "root",
-        "current_label": selected_path or "Root",
-        "current_folder_id": selected_folder.id if selected_folder else None,
-        "breadcrumbs": breadcrumbs,
-        "parent_token": parent_token,
-        "children": children,
-    }
+
+def normalize_model_config_name(value: str) -> str:
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Model name is required")
+    if len(normalized) > MAX_MODEL_CONFIG_NAME_LENGTH:
+        raise ValueError(
+            f"Model name must be at most {MAX_MODEL_CONFIG_NAME_LENGTH} characters"
+        )
+    return normalized
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -776,6 +720,7 @@ def admin_page(
 ) -> HTMLResponse:
     model_configs = crud.list_model_configs(session)
     dimension_presets = crud.list_dimension_presets(session)
+    categories = crud.list_categories(session)
     enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
 
@@ -785,6 +730,7 @@ def admin_page(
             "request": request,
             "model_configs": model_configs,
             "dimension_presets": dimension_presets,
+            "categories": categories,
             "enhancement_config": enhancement_config,
             "providers": provider_registry.provider_names(),
             "error": error or "",
@@ -873,6 +819,52 @@ def admin_delete_dimension_preset(
     return RedirectResponse(url="/admin?message=Deleted", status_code=303)
 
 
+@app.post("/admin/categories")
+def admin_create_category(
+    name: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    try:
+        name_value = normalize_category_name(name)
+        crud.create_category(session, name=name_value)
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/admin/categories/{category_id}/update")
+def admin_update_category(
+    category_id: int,
+    name: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    category = crud.get_category(session, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    try:
+        name_value = normalize_category_name(name)
+        crud.update_category(session, category, name=name_value)
+    except (ValueError, IntegrityError) as exc:
+        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+
+    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+
+
+@app.post("/admin/categories/{category_id}/delete")
+def admin_delete_category(
+    category_id: int,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    category = crud.get_category(session, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    crud.delete_category(session, category)
+    return RedirectResponse(url="/admin?message=Deleted", status_code=303)
+
+
 @app.post("/admin/model-configs")
 def admin_create_model_config(
     name: str = Form(...),
@@ -887,6 +879,7 @@ def admin_create_model_config(
         raise HTTPException(status_code=404, detail="Unknown provider")
 
     try:
+        name_value = normalize_model_config_name(name)
         api_key_encrypted = None
         api_key_value = api_key.strip()
         if api_key_value:
@@ -894,7 +887,7 @@ def admin_create_model_config(
 
         crud.create_model_config(
             session,
-            name=name.strip(),
+            name=name_value,
             provider=provider,
             model=model.strip(),
             enhancement_prompt=enhancement_prompt.strip() or None,
@@ -926,6 +919,7 @@ def admin_update_model_config(
         raise HTTPException(status_code=404, detail="Model config not found")
 
     try:
+        name_value = normalize_model_config_name(name)
         api_key_encrypted = config.api_key_encrypted
         if clear_api_key:
             api_key_encrypted = None
@@ -937,7 +931,7 @@ def admin_update_model_config(
         crud.update_model_config(
             session,
             config,
-            name=name.strip(),
+            name=name_value,
             provider=provider,
             model=model.strip(),
             enhancement_prompt=enhancement_prompt.strip() or None,
@@ -1045,6 +1039,7 @@ def profiles_page(
     profiles = crud.list_profiles(session)
     storage_templates = crud.list_storage_templates(session)
     model_configs = crud.list_model_configs(session)
+    categories = crud.list_categories(session)
     open_edit_id: Optional[int] = None
     if edit_id is not None and crud.get_profile(session, edit_id):
         open_edit_id = edit_id
@@ -1056,6 +1051,7 @@ def profiles_page(
             "profiles": profiles,
             "storage_templates": storage_templates,
             "model_configs": model_configs,
+            "categories": categories,
             "error": error,
             "open_create_dialog": create,
             "open_edit_id": open_edit_id,
@@ -1088,10 +1084,12 @@ def create_profile(
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
     params_json: str = Form(default="{}"),
+    category_ids: list[int] = Form(default=[]),
     storage_template_id: int = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     try:
+        name_value = normalize_profile_name(name)
         model_config_value = parse_optional_int(model_config_id)
         if model_config_value is None:
             raise ValueError("Model selection is required")
@@ -1115,9 +1113,13 @@ def create_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
+        normalized_category_ids = normalize_category_ids(category_ids)
+        categories = crud.list_categories_by_ids(session, normalized_category_ids)
+        if len(categories) != len(normalized_category_ids):
+            raise ValueError("One or more selected categories do not exist")
         crud.create_profile(
             session,
-            name=name.strip(),
+            name=name_value,
             provider=model_config.provider,
             model=model_config.model,
             model_config_id=model_config.id,
@@ -1130,6 +1132,7 @@ def create_profile(
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
             params_json=params_value,
+            categories=categories,
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
@@ -1151,6 +1154,7 @@ def update_profile(
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
     params_json: str = Form(default="{}"),
+    category_ids: list[int] = Form(default=[]),
     storage_template_id: int = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -1159,6 +1163,7 @@ def update_profile(
         raise HTTPException(status_code=404, detail="Profile not found")
 
     try:
+        name_value = normalize_profile_name(name)
         model_config_value = parse_optional_int(model_config_id)
         if model_config_value is None:
             raise ValueError("Model selection is required")
@@ -1182,10 +1187,14 @@ def update_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
+        normalized_category_ids = normalize_category_ids(category_ids)
+        categories = crud.list_categories_by_ids(session, normalized_category_ids)
+        if len(categories) != len(normalized_category_ids):
+            raise ValueError("One or more selected categories do not exist")
         crud.update_profile(
             session,
             profile,
-            name=name.strip(),
+            name=name_value,
             provider=model_config.provider,
             model=model_config.model,
             model_config_id=model_config.id,
@@ -1198,6 +1207,7 @@ def update_profile(
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
             params_json=params_value,
+            categories=categories,
             storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
@@ -1233,11 +1243,14 @@ def gallery_page(
     provider: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
+    category_ids: list[int] = Query(default=[]),
     thumb_size: Optional[str] = Query(default="md"),
     message: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    normalized_category_ids = normalize_category_ids(category_ids)
+    thumb_size_value = normalize_thumb_size(thumb_size)
     page_data = gallery_service.list_assets(
         session,
         page=page,
@@ -1245,9 +1258,27 @@ def gallery_page(
         provider=provider or None,
         status=status or None,
         prompt_query=q or None,
-        root_only=False,
+        category_ids=normalized_category_ids or None,
     )
     options = gallery_service.list_filter_options(session)
+
+    filter_params: dict[str, Any] = {}
+    if profile_name:
+        filter_params["profile_name"] = profile_name
+    if provider:
+        filter_params["provider"] = provider
+    if status:
+        filter_params["status"] = status
+    if q:
+        filter_params["q"] = q
+    if normalized_category_ids:
+        filter_params["category_ids"] = normalized_category_ids
+    gallery_query = urlencode(filter_params, doseq=True)
+
+    return_to_params: dict[str, Any] = {"page": page, "thumb_size": thumb_size_value}
+    return_to_params.update(filter_params)
+    return_to = f"/gallery?{urlencode(return_to_params, doseq=True)}"
+
     return templates.TemplateResponse(
         "gallery.html",
         {
@@ -1257,7 +1288,10 @@ def gallery_page(
             "provider": provider or "",
             "status": status or "",
             "q": q or "",
-            "thumb_size": normalize_thumb_size(thumb_size),
+            "selected_category_ids": normalized_category_ids,
+            "thumb_size": thumb_size_value,
+            "gallery_query": gallery_query,
+            "return_to": return_to,
             "filter_options": options,
             "message": message or "",
             "error": error or "",
@@ -1267,161 +1301,59 @@ def gallery_page(
     )
 
 
-def move_asset_to_folder_internal(
-    session: Session,
-    asset: Asset,
-    folder_id: Optional[int],
-) -> str:
-    if not asset.generation:
-        raise ValueError("Asset not found")
-
-    target_folder_path = ""
-    if folder_id is None:
-        asset.gallery_folder_id = None
-    else:
-        folder = crud.get_gallery_folder(session, folder_id)
-        if not folder:
-            raise ValueError("Target folder not found")
-        asset.gallery_folder_id = folder.id
-        target_folder_path = folder.path
-
-    target_folder_path = normalize_folder_path(target_folder_path)
-
-    snapshot = asset.generation.storage_template_snapshot_json or {}
-    base_dir_raw = snapshot.get("base_dir")
-    base_dir = (
-        Path(str(base_dir_raw)).resolve()
-        if base_dir_raw
-        else settings.default_base_dir.resolve()
-    )
-
-    old_image_rel = Path(asset.file_path)
-    old_sidecar_rel = Path(asset.sidecar_path)
-    old_thumb_rel = Path(asset.thumbnail_path)
-
-    target_image_rel = (
-        (Path(target_folder_path) / old_image_rel.name)
-        if target_folder_path
-        else Path(old_image_rel.name)
-    )
-    target_sidecar_rel = sidecar_service.asset_sidecar_relative_path(target_image_rel)
-    target_thumb_rel = thumbnail_service.thumbnail_relative_path(target_image_rel)
-    target_image_rel_str = target_image_rel.as_posix()
-
-    existing = session.scalar(
-        select(Asset.id).where(
-            Asset.file_path == target_image_rel_str, Asset.id != asset.id
-        )
-    )
-    if existing is not None:
-        raise ValueError(f"Target already assigned to asset #{existing}")
-
-    try:
-        pairs = (
-            (old_image_rel, target_image_rel),
-            (old_sidecar_rel, target_sidecar_rel),
-            (old_thumb_rel, target_thumb_rel),
-        )
-
-        old_image_abs = storage_service.resolve_managed_path(base_dir, old_image_rel)
-        if not old_image_abs.exists():
-            raise ValueError(f"Source image missing: {old_image_rel.as_posix()}")
-
-        for old_rel, target_rel in pairs:
-            old_abs = storage_service.resolve_managed_path(base_dir, old_rel)
-            target_abs = storage_service.resolve_managed_path(base_dir, target_rel)
-            if old_abs != target_abs and target_abs.exists():
-                raise ValueError(f"Target already exists: {target_rel.as_posix()}")
-
-        for old_rel, target_rel in pairs:
-            storage_service.move_relative_file(base_dir, old_rel, target_rel)
-    except ValueError as exc:
-        raise ValueError(str(exc))
-    except FileExistsError as exc:
-        raise ValueError(str(exc))
-
-    asset.file_path = target_image_rel.as_posix()
-    asset.sidecar_path = target_sidecar_rel.as_posix()
-    asset.thumbnail_path = target_thumb_rel.as_posix()
-
-    try:
-        session.add(asset)
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise ValueError(f"Target already assigned: {target_image_rel_str}")
-
-    return target_folder_path or "root"
-
-
-@app.post("/assets/{asset_id}/move-folder")
-def move_asset_to_folder(
-    asset_id: int,
-    gallery_folder_id: str = Form(default=""),
-    return_to: str = Form(default="/gallery"),
-    session: Session = Depends(get_session),
-) -> RedirectResponse:
-    asset = crud.get_asset(session, asset_id, with_generation=True)
-    if not asset or not asset.generation:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
-    try:
-        folder_id = parse_optional_int(gallery_folder_id)
-    except ValueError:
-        return gallery_redirect(return_to, error="Invalid target folder")
-
-    try:
-        moved_to = move_asset_to_folder_internal(session, asset, folder_id)
-    except ValueError as exc:
-        return gallery_redirect(return_to, error=str(exc))
-
-    return gallery_redirect(return_to, message=f"Asset #{asset.id} moved to {moved_to}")
-
-
-@app.post("/assets/bulk-move")
-def bulk_move_assets(
-    gallery_folder_id: str = Form(default=""),
+@app.post("/assets/bulk-set-categories")
+def bulk_set_asset_categories(
     asset_ids: list[int] = Form(default=[]),
+    category_ids: list[int] = Form(default=[]),
     return_to: str = Form(default="/gallery"),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
-    if not asset_ids:
+    requested_asset_ids = sorted({item for item in asset_ids if item > 0})
+    if not requested_asset_ids:
         return gallery_redirect(return_to, error="No assets selected")
 
-    try:
-        folder_id = parse_optional_int(gallery_folder_id)
-    except ValueError:
-        return gallery_redirect(return_to, error="Invalid target folder")
+    normalized_category_ids = normalize_category_ids(category_ids)
+    if not normalized_category_ids:
+        return gallery_redirect(return_to, error="Select at least one category")
 
-    moved_to_label = "root"
-    if folder_id is not None:
-        folder = crud.get_gallery_folder(session, folder_id)
-        if not folder:
-            return gallery_redirect(return_to, error="Target folder not found")
-        moved_to_label = folder.path
+    categories = crud.list_categories_by_ids(session, normalized_category_ids)
+    if len(categories) != len(normalized_category_ids):
+        return gallery_redirect(return_to, error="One or more categories do not exist")
 
-    moved = 0
-    errors: list[str] = []
+    assets = list(
+        session.scalars(
+            select(Asset)
+            .options(selectinload(Asset.categories))
+            .where(Asset.id.in_(requested_asset_ids))
+        ).all()
+    )
+    by_id = {asset.id: asset for asset in assets}
 
-    for asset_id in asset_ids:
-        asset = crud.get_asset(session, asset_id, with_generation=True)
-        if not asset or not asset.generation:
-            errors.append(f"Asset #{asset_id} not found")
+    updated = 0
+    missing = 0
+    for asset_id in requested_asset_ids:
+        asset = by_id.get(asset_id)
+        if not asset:
+            missing += 1
             continue
-        try:
-            move_asset_to_folder_internal(session, asset, folder_id)
-            moved += 1
-        except ValueError as exc:
-            errors.append(str(exc))
+        asset.categories = list(categories)
+        session.add(asset)
+        updated += 1
+
+    if updated:
+        session.commit()
 
     message = None
     error = None
-    if moved:
-        message = f"Moved {moved} asset(s) to {moved_to_label}"
-    if errors:
-        error = f"{len(errors)} asset(s) failed. First error: {errors[0]}"
-    if not moved and not errors:
-        error = "No assets moved"
+    if updated:
+        message = (
+            f"Updated categories for {updated} asset(s) "
+            f"({len(normalized_category_ids)} categories)"
+        )
+    if missing:
+        error = f"{missing} asset(s) not found"
+    if not updated and not missing:
+        error = "No assets updated"
 
     return gallery_redirect(return_to, message=message, error=error)
 
@@ -1464,7 +1396,7 @@ def asset_detail(
 ) -> HTMLResponse:
     asset = session.scalar(
         select(Asset)
-        .options(selectinload(Asset.generation), selectinload(Asset.gallery_folder))
+        .options(selectinload(Asset.generation), selectinload(Asset.categories))
         .where(Asset.id == asset_id)
     )
     if not asset:

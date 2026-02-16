@@ -12,7 +12,7 @@
 <form action="{{ action }}" method="post" class="space-y-5" id="{{ form_dom_id }}" data-profile-form>
   <div>
     <label for="{{ form_dom_id }}-name" class="{{ label_class }}">Name</label>
-    <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" required class="{{ input_class }}">
+    <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" maxlength="50" required class="{{ input_class }}">
   </div>
 
   <div>
@@ -30,6 +30,24 @@
   <div>
     <label for="{{ form_dom_id }}-base-prompt" class="{{ label_class }}">Base prompt (optional)</label>
     <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3" class="{{ text_class }}">{{ p.base_prompt if p else '' }}</textarea>
+  </div>
+
+  {% set selected_category_ids = (p.categories | map(attribute='id') | list) if p else [] %}
+  <div>
+    <label class="{{ label_class }}">Categories</label>
+    <div class="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-xl border border-white/15 bg-slate-950/70 px-3 py-3">
+      {% if categories %}
+        {% for category in categories %}
+          <label class="flex items-center gap-2 text-sm text-slate-200">
+            <input type="checkbox" name="category_ids" value="{{ category.id }}" {% if category.id in selected_category_ids %}checked{% endif %}>
+            <span class="truncate">{{ category.name }}</span>
+          </label>
+        {% endfor %}
+      {% else %}
+        <p class="text-sm text-slate-400">No categories available.</p>
+      {% endif %}
+    </div>
+    <p class="mt-2 text-xs text-slate-400">Ausgewaehlte Kategorien werden neuen Bildern aus diesem Profil zugewiesen.</p>
   </div>
 
   <div class="grid gap-4 md:grid-cols-2" data-profile-dimensions>
