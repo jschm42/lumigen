@@ -7,12 +7,16 @@
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
 {% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
+{% set nav_tab_base = "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold transition" %}
+{% set nav_tab_active = "bg-sky-300 text-slate-950" %}
+{% set nav_tab_inactive = "border border-white/20 bg-white/5 text-slate-200 hover:border-sky-300/60 hover:bg-white/10 hover:text-white" %}
+{% set embedded_suffix = "&embedded=1" if request.query_params.get("embedded") == "1" else "" %}
 
 <section class="{{ panel_class }} space-y-5">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h2 class="text-2xl font-semibold text-white">Admin</h2>
-      <p class="mt-1 text-sm text-slate-400">Modelle, Presets und Enhancement-Config verwalten.</p>
+      <p class="mt-1 text-sm text-slate-400">Modelle, Presets, Kategorien und Enhancement-Config verwalten.</p>
     </div>
   </header>
 
@@ -30,330 +34,373 @@
     </div>
   {% endif %}
 
-  <div class="flex items-center justify-between gap-3">
-    <h3 class="text-lg font-semibold text-white">Models</h3>
-    <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-model-config-dialog').showModal()">New model</button>
-  </div>
+  <nav class="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 p-2" aria-label="Admin sections">
+    <a href="/admin?section=models{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'models' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Models</a>
+    <a href="/admin?section=dimensions{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
+    <a href="/admin?section=categories{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
+    <a href="/admin?section=enhancement{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'enhancement' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancement LLM</a>
+  </nav>
 
-  <dialog id="create-model-config-dialog">
-    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
-      <header class="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h3 class="text-xl font-semibold text-white">New model</h3>
-          <p class="mt-1 text-sm text-slate-400">Neues Modell inklusive Provider und optionalem Key anlegen.</p>
-        </div>
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()">&times;</button>
-      </header>
-      <form action="/admin/model-configs" method="post" class="space-y-4">
-        <div>
-          <label for="new-model-name" class="{{ label_class }}">Name</label>
-          <input id="new-model-name" type="text" name="name" maxlength="50" required class="{{ input_class }}">
-        </div>
+  {% if active_admin_section == "models" %}
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold text-white">Models</h3>
+      <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-model-config-dialog').showModal()">New model</button>
+    </div>
 
-        <div>
-          <label for="new-model-provider" class="{{ label_class }}">Provider</label>
-          <select id="new-model-provider" name="provider" required class="{{ input_class }}">
-            {% for provider in providers %}
-              <option value="{{ provider }}">{{ provider }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div>
-          <label for="new-model-id" class="{{ label_class }}">Model</label>
-          <input id="new-model-id" type="text" name="model" required class="{{ input_class }}">
-        </div>
-
-        <div>
-          <label for="new-model-enhancement" class="{{ label_class }}">Enhancement prompt (optional)</label>
-          <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3" class="{{ text_class }}"></textarea>
-        </div>
-
-        <div>
-          <label for="new-model-key" class="{{ label_class }}">API key</label>
-          <input id="new-model-key" type="password" name="api_key" placeholder="optional" class="{{ input_class }}">
-        </div>
-
-        <div class="flex justify-end">
-          <button type="submit" class="{{ btn_primary }}">Save</button>
-        </div>
-      </form>
-    </article>
-  </dialog>
-
-  <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-    <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-      <thead class="bg-white/5 text-slate-300">
-        <tr>
-          <th class="px-4 py-3 font-semibold">Name</th>
-          <th class="px-4 py-3 font-semibold">Provider</th>
-          <th class="px-4 py-3 font-semibold">Model</th>
-          <th class="px-4 py-3 font-semibold">API key</th>
-          <th class="px-4 py-3 font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
-      {% for config in model_configs %}
-        <tr>
-          <td class="px-4 py-3">{{ config.name }}</td>
-          <td class="px-4 py-3">{{ config.provider }}</td>
-          <td class="px-4 py-3">{{ config.model }}</td>
-          <td class="px-4 py-3 text-slate-400">{{ "stored" if config.api_key_encrypted else "none" }}</td>
-          <td class="px-4 py-3">
-            <div class="flex flex-wrap gap-2">
-              <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
-              <form action="/admin/model-configs/{{ config.id }}/delete" method="post" onsubmit="return confirm('Delete this model config?');" class="inline-flex">
-                <button class="{{ btn_danger }}" type="submit">Delete</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-      {% else %}
-        <tr>
-          <td colspan="5" class="px-4 py-4 text-slate-400">No model configs yet.</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  {% for config in model_configs %}
-  <dialog id="edit-model-config-{{ config.id }}">
-    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
-      <header class="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h3 class="text-xl font-semibold text-white">Edit model: {{ config.name }}</h3>
-          <p class="mt-1 text-sm text-slate-400">Passe Provider-, Modell- und Key-Werte an.</p>
-        </div>
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()">&times;</button>
-      </header>
-      <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="space-y-4">
-        <div>
-          <label for="edit-model-name-{{ config.id }}" class="{{ label_class }}">Name</label>
-          <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" maxlength="50" required class="{{ input_class }}">
-        </div>
-
-        <div>
-          <label for="edit-model-provider-{{ config.id }}" class="{{ label_class }}">Provider</label>
-          <select id="edit-model-provider-{{ config.id }}" name="provider" required class="{{ input_class }}">
-            {% for provider in providers %}
-              <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div>
-          <label for="edit-model-id-{{ config.id }}" class="{{ label_class }}">Model</label>
-          <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required class="{{ input_class }}">
-        </div>
-
-        <div>
-          <label for="edit-model-enhancement-{{ config.id }}" class="{{ label_class }}">Enhancement prompt (optional)</label>
-          <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3" class="{{ text_class }}">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
-        </div>
-
-        <div>
-          <label for="edit-model-key-{{ config.id }}" class="{{ label_class }}">API key</label>
-          <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
-        </div>
-
-        <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
-          <input type="checkbox" name="clear_api_key">
-          Clear stored key
-        </label>
-
-        <div class="flex justify-end">
-          <button type="submit" class="{{ btn_primary }}">Save</button>
-        </div>
-      </form>
-    </article>
-  </dialog>
-  {% endfor %}
-
-  <div class="mt-3 flex items-center justify-between gap-3">
-    <h3 class="text-lg font-semibold text-white">Dimension presets</h3>
-    <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-dimension-preset-dialog').showModal()">New dimension preset</button>
-  </div>
-
-  <dialog id="create-dimension-preset-dialog">
-    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
-      <header class="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h3 class="text-xl font-semibold text-white">New dimension preset</h3>
-          <p class="mt-1 text-sm text-slate-400">Neue feste Bildabmessungen anlegen.</p>
-        </div>
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-dimension-preset-dialog').close()">&times;</button>
-      </header>
-      <form action="/admin/dimension-presets" method="post" class="space-y-4">
-        <div>
-          <label for="new-dimension-name" class="{{ label_class }}">Name</label>
-          <input id="new-dimension-name" type="text" name="name" required class="{{ input_class }}">
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2">
+    <dialog id="create-model-config-dialog">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <label for="new-dimension-width" class="{{ label_class }}">Width</label>
-            <input id="new-dimension-width" type="number" name="width" min="1" required class="{{ input_class }}">
+            <h3 class="text-xl font-semibold text-white">New model</h3>
+            <p class="mt-1 text-sm text-slate-400">Neues Modell inklusive Provider und optionalem Key anlegen.</p>
           </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()">&times;</button>
+        </header>
+        <form action="/admin/model-configs" method="post" class="space-y-4">
           <div>
-            <label for="new-dimension-height" class="{{ label_class }}">Height</label>
-            <input id="new-dimension-height" type="number" name="height" min="1" required class="{{ input_class }}">
+            <label for="new-model-name" class="{{ label_class }}">Name</label>
+            <input id="new-model-name" type="text" name="name" maxlength="50" required class="{{ input_class }}">
           </div>
-        </div>
 
-        <div class="flex justify-end">
-          <button type="submit" class="{{ btn_primary }}">Save</button>
-        </div>
-      </form>
-    </article>
-  </dialog>
-
-  <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-    <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-      <thead class="bg-white/5 text-slate-300">
-        <tr>
-          <th class="px-4 py-3 font-semibold">Name</th>
-          <th class="px-4 py-3 font-semibold">Width</th>
-          <th class="px-4 py-3 font-semibold">Height</th>
-          <th class="px-4 py-3 font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
-      {% for preset in dimension_presets %}
-        <tr>
-          <td class="px-4 py-3">{{ preset.name }}</td>
-          <td class="px-4 py-3">{{ preset.width }}</td>
-          <td class="px-4 py-3">{{ preset.height }}</td>
-          <td class="px-4 py-3">
-            <div class="flex flex-wrap gap-2">
-              <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
-              <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" onsubmit="return confirm('Delete this dimension preset?');" class="inline-flex">
-                <button class="{{ btn_danger }}" type="submit">Delete</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-      {% else %}
-        <tr>
-          <td colspan="4" class="px-4 py-4 text-slate-400">No dimension presets yet.</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  {% for preset in dimension_presets %}
-  <dialog id="edit-dimension-preset-{{ preset.id }}">
-    <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
-      <header class="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h3 class="text-xl font-semibold text-white">Edit dimension preset: {{ preset.name }}</h3>
-          <p class="mt-1 text-sm text-slate-400">Name und Abmessungen anpassen.</p>
-        </div>
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()">&times;</button>
-      </header>
-      <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="space-y-4">
-        <div>
-          <label for="edit-dimension-name-{{ preset.id }}" class="{{ label_class }}">Name</label>
-          <input id="edit-dimension-name-{{ preset.id }}" type="text" name="name" value="{{ preset.name }}" required class="{{ input_class }}">
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label for="edit-dimension-width-{{ preset.id }}" class="{{ label_class }}">Width</label>
-            <input id="edit-dimension-width-{{ preset.id }}" type="number" name="width" min="1" value="{{ preset.width }}" required class="{{ input_class }}">
+            <label for="new-model-provider" class="{{ label_class }}">Provider</label>
+            <select id="new-model-provider" name="provider" required class="{{ input_class }}">
+              {% for provider in providers %}
+                <option value="{{ provider }}">{{ provider }}</option>
+              {% endfor %}
+            </select>
           </div>
+
           <div>
-            <label for="edit-dimension-height-{{ preset.id }}" class="{{ label_class }}">Height</label>
-            <input id="edit-dimension-height-{{ preset.id }}" type="number" name="height" min="1" value="{{ preset.height }}" required class="{{ input_class }}">
+            <label for="new-model-id" class="{{ label_class }}">Model</label>
+            <input id="new-model-id" type="text" name="model" required class="{{ input_class }}">
           </div>
-        </div>
 
-        <div class="flex justify-end">
-          <button type="submit" class="{{ btn_primary }}">Save</button>
-        </div>
-      </form>
-    </article>
-  </dialog>
-  {% endfor %}
+          <div>
+            <label for="new-model-enhancement" class="{{ label_class }}">Enhancement prompt (optional)</label>
+            <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3" class="{{ text_class }}"></textarea>
+          </div>
 
-  <div class="mt-3 flex items-center justify-between gap-3">
-    <h3 class="text-lg font-semibold text-white">Categories</h3>
-  </div>
+          <div>
+            <label for="new-model-key" class="{{ label_class }}">API key</label>
+            <input id="new-model-key" type="password" name="api_key" placeholder="optional" class="{{ input_class }}">
+          </div>
 
-  <div class="rounded-2xl border border-white/8 bg-slate-950/35 p-4">
-    <form action="/admin/categories" method="post" class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-      <input type="text" name="name" required maxlength="30" placeholder="New category name (max 30 chars)" class="{{ input_class }} mt-0">
-      <button type="submit" class="{{ btn_primary }}">Create category</button>
-    </form>
-  </div>
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
 
-  <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-    <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-      <thead class="bg-white/5 text-slate-300">
-        <tr>
-          <th class="px-4 py-3 font-semibold">Name</th>
-          <th class="px-4 py-3 font-semibold">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
-      {% for category in categories %}
-        <tr>
-          <td class="px-4 py-3">
-            <form action="/admin/categories/{{ category.id }}/update" method="post" class="flex gap-2">
-              <input type="text" name="name" value="{{ category.name }}" required maxlength="30" class="{{ input_class }} mt-0">
-              <button type="submit" class="{{ btn_secondary }}">Save</button>
-            </form>
-          </td>
-          <td class="px-4 py-3">
-            <form action="/admin/categories/{{ category.id }}/delete" method="post" onsubmit="return confirm('Delete this category?');" class="inline-flex">
-              <button class="{{ btn_danger }}" type="submit">Delete</button>
-            </form>
-          </td>
-        </tr>
-      {% else %}
-        <tr>
-          <td colspan="2" class="px-4 py-4 text-slate-400">No categories yet.</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="{{ panel_class }}">
-  <header class="mb-5">
-    <h3 class="text-xl font-semibold text-white">Enhancement LLM</h3>
-    <p class="mt-1 text-sm text-slate-400">Konfiguration fuer Prompt-Enhancement.</p>
-  </header>
-  <form action="/admin/enhancement" method="post" class="space-y-4">
-    <div>
-      <label for="enhancement-provider" class="{{ label_class }}">Provider</label>
-      <select id="enhancement-provider" name="provider" required class="{{ input_class }}">
-        {% for provider in providers %}
-          <option value="{{ provider }}" {% if enhancement_config and enhancement_config.provider == provider %}selected{% endif %}>{{ provider }}</option>
+    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
+        <thead class="bg-white/5 text-slate-300">
+          <tr>
+            <th class="px-4 py-3 font-semibold">Name</th>
+            <th class="px-4 py-3 font-semibold">Provider</th>
+            <th class="px-4 py-3 font-semibold">Model</th>
+            <th class="px-4 py-3 font-semibold">API key</th>
+            <th class="px-4 py-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        {% for config in model_configs %}
+          <tr>
+            <td class="px-4 py-3">{{ config.name }}</td>
+            <td class="px-4 py-3">{{ config.provider }}</td>
+            <td class="px-4 py-3">{{ config.model }}</td>
+            <td class="px-4 py-3 text-slate-400">{{ "stored" if config.api_key_encrypted else "none" }}</td>
+            <td class="px-4 py-3">
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
+                <form action="/admin/model-configs/{{ config.id }}/delete" method="post" onsubmit="return confirm('Delete this model config?');" class="inline-flex">
+                  <button class="{{ btn_danger }}" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5" class="px-4 py-4 text-slate-400">No model configs yet.</td>
+          </tr>
         {% endfor %}
-      </select>
+        </tbody>
+      </table>
     </div>
 
-    <div>
-      <label for="enhancement-model" class="{{ label_class }}">Model</label>
-      <input id="enhancement-model" type="text" name="model" value="{{ enhancement_config.model if enhancement_config else '' }}" required class="{{ input_class }}">
+    {% for config in model_configs %}
+    <dialog id="edit-model-config-{{ config.id }}">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">Edit model: {{ config.name }}</h3>
+            <p class="mt-1 text-sm text-slate-400">Passe Provider-, Modell- und Key-Werte an.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()">&times;</button>
+        </header>
+        <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="space-y-4">
+          <div>
+            <label for="edit-model-name-{{ config.id }}" class="{{ label_class }}">Name</label>
+            <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" maxlength="50" required class="{{ input_class }}">
+          </div>
+
+          <div>
+            <label for="edit-model-provider-{{ config.id }}" class="{{ label_class }}">Provider</label>
+            <select id="edit-model-provider-{{ config.id }}" name="provider" required class="{{ input_class }}">
+              {% for provider in providers %}
+                <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="edit-model-id-{{ config.id }}" class="{{ label_class }}">Model</label>
+            <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required class="{{ input_class }}">
+          </div>
+
+          <div>
+            <label for="edit-model-enhancement-{{ config.id }}" class="{{ label_class }}">Enhancement prompt (optional)</label>
+            <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3" class="{{ text_class }}">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
+          </div>
+
+          <div>
+            <label for="edit-model-key-{{ config.id }}" class="{{ label_class }}">API key</label>
+            <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
+          </div>
+
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+            <input type="checkbox" name="clear_api_key">
+            Clear stored key
+          </label>
+
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+    {% endfor %}
+  {% elif active_admin_section == "dimensions" %}
+    <div class="mt-1 flex items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold text-white">Dimension presets</h3>
+      <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-dimension-preset-dialog').showModal()">New dimension preset</button>
     </div>
 
-    <div>
-      <label for="enhancement-key" class="{{ label_class }}">API key</label>
-      <input id="enhancement-key" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
+    <dialog id="create-dimension-preset-dialog">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">New dimension preset</h3>
+            <p class="mt-1 text-sm text-slate-400">Neue feste Bildabmessungen anlegen.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-dimension-preset-dialog').close()">&times;</button>
+        </header>
+        <form action="/admin/dimension-presets" method="post" class="space-y-4">
+          <div>
+            <label for="new-dimension-name" class="{{ label_class }}">Name</label>
+            <input id="new-dimension-name" type="text" name="name" required class="{{ input_class }}">
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="new-dimension-width" class="{{ label_class }}">Width</label>
+              <input id="new-dimension-width" type="number" name="width" min="1" required class="{{ input_class }}">
+            </div>
+            <div>
+              <label for="new-dimension-height" class="{{ label_class }}">Height</label>
+              <input id="new-dimension-height" type="number" name="height" min="1" required class="{{ input_class }}">
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+
+    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
+        <thead class="bg-white/5 text-slate-300">
+          <tr>
+            <th class="px-4 py-3 font-semibold">Name</th>
+            <th class="px-4 py-3 font-semibold">Width</th>
+            <th class="px-4 py-3 font-semibold">Height</th>
+            <th class="px-4 py-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        {% for preset in dimension_presets %}
+          <tr>
+            <td class="px-4 py-3">{{ preset.name }}</td>
+            <td class="px-4 py-3">{{ preset.width }}</td>
+            <td class="px-4 py-3">{{ preset.height }}</td>
+            <td class="px-4 py-3">
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
+                <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" onsubmit="return confirm('Delete this dimension preset?');" class="inline-flex">
+                  <button class="{{ btn_danger }}" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4" class="px-4 py-4 text-slate-400">No dimension presets yet.</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
     </div>
 
-    <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
-      <input type="checkbox" name="clear_api_key">
-      Clear stored key
-    </label>
+    {% for preset in dimension_presets %}
+    <dialog id="edit-dimension-preset-{{ preset.id }}">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">Edit dimension preset: {{ preset.name }}</h3>
+            <p class="mt-1 text-sm text-slate-400">Name und Abmessungen anpassen.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()">&times;</button>
+        </header>
+        <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="space-y-4">
+          <div>
+            <label for="edit-dimension-name-{{ preset.id }}" class="{{ label_class }}">Name</label>
+            <input id="edit-dimension-name-{{ preset.id }}" type="text" name="name" value="{{ preset.name }}" required class="{{ input_class }}">
+          </div>
 
-    <div class="flex justify-end">
-      <button type="submit" class="{{ btn_primary }}">Save</button>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="edit-dimension-width-{{ preset.id }}" class="{{ label_class }}">Width</label>
+              <input id="edit-dimension-width-{{ preset.id }}" type="number" name="width" min="1" value="{{ preset.width }}" required class="{{ input_class }}">
+            </div>
+            <div>
+              <label for="edit-dimension-height-{{ preset.id }}" class="{{ label_class }}">Height</label>
+              <input id="edit-dimension-height-{{ preset.id }}" type="number" name="height" min="1" value="{{ preset.height }}" required class="{{ input_class }}">
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+    {% endfor %}
+  {% elif active_admin_section == "categories" %}
+    <div class="mt-1 flex items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold text-white">Categories</h3>
+      <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-category-dialog').showModal()">New category</button>
     </div>
-  </form>
+
+    <dialog id="create-category-dialog">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">New category</h3>
+            <p class="mt-1 text-sm text-slate-400">Neue Kategorie anlegen.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-category-dialog').close()">&times;</button>
+        </header>
+        <form action="/admin/categories" method="post" class="space-y-4">
+          <div>
+            <label for="new-category-name" class="{{ label_class }}">Name</label>
+            <input id="new-category-name" type="text" name="name" required maxlength="30" placeholder="Max 30 chars" class="{{ input_class }}">
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Create category</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+
+    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
+        <thead class="bg-white/5 text-slate-300">
+          <tr>
+            <th class="px-4 py-3 font-semibold">Name</th>
+            <th class="px-4 py-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        {% for category in categories %}
+          <tr>
+            <td class="px-4 py-3">{{ category.name }}</td>
+            <td class="px-4 py-3">
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-category-{{ category.id }}').showModal()">Edit</button>
+                <form action="/admin/categories/{{ category.id }}/delete" method="post" onsubmit="return confirm('Delete this category?');" class="inline-flex">
+                  <button class="{{ btn_danger }}" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="2" class="px-4 py-4 text-slate-400">No categories yet.</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% for category in categories %}
+    <dialog id="edit-category-{{ category.id }}">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">Edit category: {{ category.name }}</h3>
+            <p class="mt-1 text-sm text-slate-400">Kategoriename aktualisieren.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-category-{{ category.id }}').close()">&times;</button>
+        </header>
+        <form action="/admin/categories/{{ category.id }}/update" method="post" class="space-y-4">
+          <div>
+            <label for="edit-category-name-{{ category.id }}" class="{{ label_class }}">Name</label>
+            <input id="edit-category-name-{{ category.id }}" type="text" name="name" value="{{ category.name }}" required maxlength="30" class="{{ input_class }}">
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+    {% endfor %}
+  {% elif active_admin_section == "enhancement" %}
+    <header class="mb-1">
+      <h3 class="text-xl font-semibold text-white">Enhancement LLM</h3>
+      <p class="mt-1 text-sm text-slate-400">Konfiguration fuer Prompt-Enhancement.</p>
+    </header>
+    <form action="/admin/enhancement" method="post" class="space-y-4 rounded-2xl border border-white/8 bg-slate-950/35 p-4">
+      <div>
+        <label for="enhancement-provider" class="{{ label_class }}">Provider</label>
+        <select id="enhancement-provider" name="provider" required class="{{ input_class }}">
+          {% for provider in providers %}
+            <option value="{{ provider }}" {% if enhancement_config and enhancement_config.provider == provider %}selected{% endif %}>{{ provider }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="enhancement-model" class="{{ label_class }}">Model</label>
+        <input id="enhancement-model" type="text" name="model" value="{{ enhancement_config.model if enhancement_config else '' }}" required class="{{ input_class }}">
+      </div>
+
+      <div>
+        <label for="enhancement-key" class="{{ label_class }}">API key</label>
+        <input id="enhancement-key" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
+      </div>
+
+      <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+        <input type="checkbox" name="clear_api_key">
+        Clear stored key
+      </label>
+
+      <div class="flex justify-end">
+        <button type="submit" class="{{ btn_primary }}">Save</button>
+      </div>
+    </form>
+  {% endif %}
 </section>
 {% endblock %}

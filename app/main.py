@@ -54,6 +54,7 @@ MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
+ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement"}
 OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "1:1",
     "2:3",
@@ -312,6 +313,27 @@ def normalize_model_config_name(value: str) -> str:
             f"Model name must be at most {MAX_MODEL_CONFIG_NAME_LENGTH} characters"
         )
     return normalized
+
+
+def normalize_admin_section(value: Optional[str]) -> str:
+    candidate = (value or "models").strip().lower()
+    if candidate in ADMIN_SECTIONS:
+        return candidate
+    return "models"
+
+
+def admin_redirect(
+    section: str,
+    *,
+    message: Optional[str] = None,
+    error: Optional[str] = None,
+) -> RedirectResponse:
+    params: dict[str, str] = {"section": normalize_admin_section(section)}
+    if message:
+        params["message"] = message
+    if error:
+        params["error"] = error
+    return RedirectResponse(url=f"/admin?{urlencode(params)}", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -714,6 +736,7 @@ async def provider_models(provider: str) -> JSONResponse:
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(
     request: Request,
+    section: Optional[str] = Query(default="models"),
     error: Optional[str] = Query(default=None),
     message: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
@@ -723,6 +746,7 @@ def admin_page(
     categories = crud.list_categories(session)
     enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
+    active_admin_section = normalize_admin_section(section)
 
     return templates.TemplateResponse(
         "admin.html",
@@ -736,6 +760,7 @@ def admin_page(
             "error": error or "",
             "message": message or "",
             "encryption_ready": encryption_ready,
+            "active_admin_section": active_admin_section,
         },
     )
 
@@ -765,9 +790,9 @@ def admin_create_dimension_preset(
             height=height_value,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("dimensions", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("dimensions", message="Saved")
 
 
 @app.post("/admin/dimension-presets/{preset_id}/update")
@@ -801,9 +826,9 @@ def admin_update_dimension_preset(
             height=height_value,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("dimensions", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("dimensions", message="Saved")
 
 
 @app.post("/admin/dimension-presets/{preset_id}/delete")
@@ -816,7 +841,7 @@ def admin_delete_dimension_preset(
         raise HTTPException(status_code=404, detail="Dimension preset not found")
 
     crud.delete_dimension_preset(session, preset)
-    return RedirectResponse(url="/admin?message=Deleted", status_code=303)
+    return admin_redirect("dimensions", message="Deleted")
 
 
 @app.post("/admin/categories")
@@ -828,9 +853,9 @@ def admin_create_category(
         name_value = normalize_category_name(name)
         crud.create_category(session, name=name_value)
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("categories", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("categories", message="Saved")
 
 
 @app.post("/admin/categories/{category_id}/update")
@@ -847,9 +872,9 @@ def admin_update_category(
         name_value = normalize_category_name(name)
         crud.update_category(session, category, name=name_value)
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("categories", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("categories", message="Saved")
 
 
 @app.post("/admin/categories/{category_id}/delete")
@@ -862,7 +887,7 @@ def admin_delete_category(
         raise HTTPException(status_code=404, detail="Category not found")
 
     crud.delete_category(session, category)
-    return RedirectResponse(url="/admin?message=Deleted", status_code=303)
+    return admin_redirect("categories", message="Deleted")
 
 
 @app.post("/admin/model-configs")
@@ -894,9 +919,9 @@ def admin_create_model_config(
             api_key_encrypted=api_key_encrypted,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("models", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("models", message="Saved")
 
 
 @app.post("/admin/model-configs/{model_config_id}/update")
@@ -938,9 +963,9 @@ def admin_update_model_config(
             api_key_encrypted=api_key_encrypted,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("models", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("models", message="Saved")
 
 
 @app.post("/admin/model-configs/{model_config_id}/delete")
@@ -952,7 +977,7 @@ def admin_delete_model_config(
         raise HTTPException(status_code=404, detail="Model config not found")
 
     crud.delete_model_config(session, config)
-    return RedirectResponse(url="/admin?message=Deleted", status_code=303)
+    return admin_redirect("models", message="Deleted")
 
 
 @app.post("/admin/enhancement")
@@ -984,9 +1009,9 @@ def admin_update_enhancement(
             api_key_encrypted=api_key_encrypted,
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/admin?error={str(exc)}", status_code=303)
+        return admin_redirect("enhancement", error=str(exc))
 
-    return RedirectResponse(url="/admin?message=Saved", status_code=303)
+    return admin_redirect("enhancement", message="Saved")
 
 
 @app.post("/api/enhance", response_class=JSONResponse)
