@@ -136,18 +136,20 @@
                 </label>
               {% endfor %}
             </div>
+            <div class="mt-3 flex justify-end">
+              <button
+                type="submit"
+                class="{{ btn_primary }}"
+                formaction="/assets/bulk-set-categories"
+                data-bulk-action>
+                Kategorien speichern
+              </button>
+            </div>
           {% else %}
             <p class="text-sm text-slate-400">Keine Kategorien vorhanden.</p>
           {% endif %}
         </div>
       </div>
-      <button
-        type="submit"
-        class="{{ btn_secondary }}"
-        formaction="/assets/bulk-set-categories"
-        data-bulk-action>
-        Kategorien setzen
-      </button>
       <button
         type="submit"
         class="{{ btn_danger }}"
