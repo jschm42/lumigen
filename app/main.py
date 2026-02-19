@@ -600,7 +600,11 @@ def generate_submit(
                 "assets": [],
             },
         )
-    return RedirectResponse(url=f"/jobs/{generation.id}", status_code=303)
+    # Redirect to chat interface with the original session conversation
+    return RedirectResponse(
+        url=f"/?{urlencode({'workspace_view': 'chat', 'conversation': resolved_conversation})}",
+        status_code=303,
+    )
 
 
 @app.post("/sessions/rename")
@@ -1453,6 +1457,7 @@ def asset_detail(
         raise HTTPException(status_code=404, detail="Asset not found")
 
     profiles = crud.list_profiles(session)
+    session_token = generation_session_token(asset.generation) if asset.generation else ""
 
     return templates.TemplateResponse(
         "asset_detail.html",
@@ -1460,6 +1465,7 @@ def asset_detail(
             "request": request,
             "asset": asset,
             "profiles": profiles,
+            "session_token": session_token,
             "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
             "profile_snapshot_pretty": (
                 dumps_json(asset.generation.profile_snapshot_json, pretty=True)

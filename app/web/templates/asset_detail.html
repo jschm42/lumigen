@@ -76,7 +76,7 @@
     <h3 class="mb-3 text-lg font-semibold text-white">Neugenerierung mit diesem Bild</h3>
     <div class="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
       <form method="post" action="/generate" enctype="multipart/form-data" class="space-y-4">
-        <input type="hidden" name="conversation" value="new">
+        <input type="hidden" name="conversation" value="{{ session_token }}">
         
         <!-- Profile Selection -->
         <div>
