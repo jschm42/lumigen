@@ -97,3 +97,22 @@ pre {
   background: rgba(148, 163, 184, 0.4);
   background-clip: padding-box;
 }
+
+/* Image container with download button on hover */
+.image-container {
+  position: relative;
+}
+
+.image-container .download-button {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.image-container:hover .download-button {
+  opacity: 1;
+}
+
+.download-button:hover {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.3);
+}

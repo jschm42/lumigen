@@ -464,6 +464,7 @@ def generate_submit(
     upscale_enable: bool = Form(default=False),
     upscale_model: str = Form(default=""),
     input_images: list[UploadFile] = File(default=[]),
+    input_image_asset_id: str = Form(default=""),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profile = crud.get_profile(session, profile_id)
@@ -479,10 +480,33 @@ def generate_submit(
             resolved_conversation = conversation_value
         overrides["chat_session_id"] = resolved_conversation
 
+        encoded_images: list[dict[str, str]] = []
+        
+        # Handle input_image_asset_id (from asset detail page)
+        asset_id_value = parse_optional_int(input_image_asset_id)
+        if asset_id_value is not None:
+            asset = session.scalar(
+                select(Asset)
+                .options(selectinload(Asset.generation))
+                .where(Asset.id == asset_id_value)
+            )
+            if asset and asset.generation:
+                absolute_path = generation_service.asset_absolute_path(asset, which="file")
+                if absolute_path.exists():
+                    with open(absolute_path, "rb") as f:
+                        image_data = f.read()
+                    encoded_images.append(
+                        {
+                            "name": f"asset_{asset.id}",
+                            "mime": asset.mime,
+                            "b64": base64.b64encode(image_data).decode("ascii"),
+                        }
+                    )
+
+        # Handle uploaded input_images
         if input_images:
-            if len(input_images) > MAX_INPUT_IMAGES:
+            if len(input_images) + len(encoded_images) > MAX_INPUT_IMAGES:
                 raise ValueError(f"Upload up to {MAX_INPUT_IMAGES} input images.")
-            encoded_images: list[dict[str, str]] = []
             for upload in input_images:
                 content_type = (upload.content_type or "").lower()
                 if not content_type.startswith("image/"):
@@ -497,8 +521,9 @@ def generate_submit(
                         "b64": base64.b64encode(data).decode("ascii"),
                     }
                 )
-            if encoded_images:
-                overrides["input_images"] = encoded_images
+        
+        if encoded_images:
+            overrides["input_images"] = encoded_images
 
         provider_value = str(profile.provider or "").strip().lower()
         if provider_value != "openrouter":
@@ -1427,11 +1452,14 @@ def asset_detail(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
+    profiles = crud.list_profiles(session)
+
     return templates.TemplateResponse(
         "asset_detail.html",
         {
             "request": request,
             "asset": asset,
+            "profiles": profiles,
             "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
             "profile_snapshot_pretty": (
                 dumps_json(asset.generation.profile_snapshot_json, pretty=True)

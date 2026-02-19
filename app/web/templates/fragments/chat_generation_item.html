@@ -29,7 +29,9 @@
     <article class="max-w-[94%] rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 sm:max-w-[82%]">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex flex-wrap items-center gap-2">
+          {% if generation.status != 'succeeded' %}
           <span class="rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide {{ status_badge }}">{{ generation.status }}</span>
+          {% endif %}
           <span class="text-xs text-slate-400">{{ generation.profile_name }} | {{ generation.provider }} | {{ generation.model }}</span>
         </div>
         {% if generation.status in ['queued', 'running'] %}
@@ -51,14 +53,21 @@
       {% if generation.status == 'succeeded' and assets %}
         <div class="flex flex-col gap-3">
           {% for asset in assets %}
-            <a href="/assets/{{ asset.id }}" class="group inline-block max-w-full self-start overflow-hidden rounded-xl border border-white/10 bg-slate-900/80">
-              <img
-                src="/assets/{{ asset.id }}/thumb"
-                alt="thumb {{ asset.id }}"
-                loading="lazy"
-                class="block h-auto w-auto transition group-hover:opacity-95"
-                style="max-height:min(68vh,48rem);max-width:min(100%,70rem);">
-            </a>
+            <div class="image-container group relative inline-block max-w-full self-start overflow-hidden rounded-xl border border-white/10 bg-slate-900/80">
+              <a href="/assets/{{ asset.id }}">
+                <img
+                  src="/assets/{{ asset.id }}/thumb"
+                  alt="thumb {{ asset.id }}"
+                  loading="lazy"
+                  class="block h-auto w-auto transition group-hover:opacity-95"
+                  style="max-height:min(68vh,48rem);max-width:min(100%,70rem);">
+              </a>
+              <a href="/assets/{{ asset.id }}/download" 
+                 download
+                 class="download-button absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-white opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-slate-800 group-hover:opacity-100">
+                <span class="material-symbols-outlined">download</span>
+              </a>
+            </div>
           {% endfor %}
         </div>
       {% elif generation.status == 'succeeded' %}

@@ -1,9 +1,9 @@
 {% extends "layout.html" %}
 {% block content %}
 {% set panel_class = "rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-panel backdrop-blur sm:p-7" %}
-{% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
-{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
-{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
+{% set btn_primary = "inline-flex items-center justify-center gap-2 rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+{% set btn_secondary = "inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
+{% set btn_danger = "inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
 
 <section class="{{ panel_class }}">
   <header class="mb-5">
@@ -11,29 +11,116 @@
     <p class="mt-1 text-sm text-slate-400">Details, Metadaten und Aktionen fuer dieses Asset.</p>
   </header>
 
-  <img class="mb-5 w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-950/70" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}">
+  <!-- Image -->
+  <img class="mb-5 w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-950/70" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}" id="asset-image-{{ asset.id }}">
 
-  <div class="mb-5 flex flex-wrap items-center gap-2">
-    <button type="button" class="{{ btn_secondary }}" onclick='navigator.clipboard.writeText({{ asset.generation.prompt_final | tojson }})'>Copy prompt_final</button>
-    <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">Download</a>
-    <button
-      hx-post="/generations/{{ asset.generation.id }}/rerun"
-      hx-target="#rerun-status"
-      hx-swap="innerHTML"
-      type="button"
-      class="{{ btn_primary }}"
-    >Re-run</button>
-    <form method="post" action="/assets/{{ asset.id }}/delete" onsubmit="return confirm('Delete this asset?');" class="inline-flex">
-      <button class="{{ btn_danger }}" type="submit">Delete asset</button>
-    </form>
-    <form method="post" action="/generations/{{ asset.generation.id }}/delete" onsubmit="return confirm('Delete full generation and all assets?');" class="inline-flex">
-      <button class="{{ btn_danger }}" type="submit">Delete generation</button>
-    </form>
-    <a href="/gallery" class="{{ btn_secondary }}">Back to gallery</a>
+  <!-- Complete Prompt (including injections) -->
+  <div class="mb-6">
+    <h3 class="mb-2 text-lg font-semibold text-white">Vollständiger Prompt</h3>
+    <div class="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+      <p class="whitespace-pre-wrap text-sm text-slate-200">{{ asset.generation.prompt_final }}</p>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="mb-6">
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Primary Actions -->
+      <button type="button" class="{{ btn_secondary }}" onclick="navigator.clipboard.writeText(this.dataset.prompt);" data-prompt="{{ asset.generation.prompt_final }}">
+        <span class="material-symbols-outlined" style="font-size: 18px;">content_copy</span>
+        Prompt kopieren
+      </button>
+      <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">
+        <span class="material-symbols-outlined" style="font-size: 18px;">download</span>
+        Download
+      </a>
+      <button
+        hx-post="/generations/{{ asset.generation.id }}/rerun"
+        hx-target="#rerun-status"
+        hx-swap="innerHTML"
+        type="button"
+        class="{{ btn_primary }}"
+      >
+        <span class="material-symbols-outlined" style="font-size: 18px;">refresh</span>
+        Re-run
+      </button>
+      
+      <!-- Destructive Actions -->
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <form method="post" action="/assets/{{ asset.id }}/delete" onsubmit="return confirm('Delete this asset?');" class="inline-flex">
+          <button class="{{ btn_danger }}" type="submit">
+            <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+            Asset löschen
+          </button>
+        </form>
+        <form method="post" action="/generations/{{ asset.generation.id }}/delete" onsubmit="return confirm('Delete full generation and all assets?');" class="inline-flex">
+          <button class="{{ btn_danger }}" type="submit">
+            <span class="material-symbols-outlined" style="font-size: 18px;">delete_forever</span>
+            Generation löschen
+          </button>
+        </form>
+      </div>
+      
+      <!-- Back Button -->
+      <a href="/gallery" class="{{ btn_secondary }}">
+        <span class="material-symbols-outlined" style="font-size: 18px;">arrow_back</span>
+        Zurück zur Galerie
+      </a>
+    </div>
   </div>
 
   <div id="rerun-status" class="mb-6"></div>
 
+  <!-- Image-to-Image Generation -->
+  <div class="mb-8">
+    <h3 class="mb-3 text-lg font-semibold text-white">Neugenerierung mit diesem Bild</h3>
+    <div class="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+      <form method="post" action="/generate" enctype="multipart/form-data" class="space-y-4">
+        <input type="hidden" name="conversation" value="new">
+        
+        <!-- Profile Selection -->
+        <div>
+          <label class="mb-1 block text-sm font-semibold text-slate-300">Profil</label>
+          <select name="profile_id" required class="w-full rounded-lg border border-white/20 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300">
+            {% for profile in profiles %}
+              <option value="{{ profile.id }}" {% if asset.generation.profile_id == profile.id %}selected{% endif %}>
+                {{ profile.name }}{% if asset.generation.profile_id == profile.id %} (aktuell){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Prompt Input -->
+        <div>
+          <label class="mb-1 block text-sm font-semibold text-slate-300">Neuer Prompt</label>
+          <textarea 
+            name="prompt_user" 
+            rows="3" 
+            required
+            placeholder="Beschreibe die gewünschte Variation..."
+            class="w-full rounded-lg border border-white/20 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300"
+          ></textarea>
+        </div>
+
+        <!-- Hidden input for the image -->
+        <input type="hidden" name="input_image_asset_id" value="{{ asset.id }}">
+
+        <!-- Preview -->
+        <div>
+          <p class="mb-2 text-xs font-semibold text-slate-400">Eingabebild:</p>
+          <img src="/assets/{{ asset.id }}/thumb" alt="Input preview" class="h-24 w-24 rounded-lg border border-white/10 object-cover">
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="{{ btn_primary }} w-full">
+          <span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span>
+          Mit diesem Bild neu generieren
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Metadata -->
   <h3 class="mb-3 text-lg font-semibold text-white">Metadata</h3>
   <dl class="mb-8 grid gap-x-6 gap-y-2 rounded-2xl border border-white/10 bg-slate-950/45 p-4 text-sm sm:grid-cols-[12rem_1fr]">
     <dt class="font-semibold text-slate-400">Generation</dt><dd>{{ asset.generation.id }}</dd>
@@ -51,16 +138,55 @@
     {% endif %}
   </dl>
 
-  <h3 class="mb-2 text-lg font-semibold text-white">asset.meta_json</h3>
-  <pre class="mb-6 border border-white/10 bg-slate-950/80 p-4 text-xs text-slate-200">{{ asset_meta_pretty }}</pre>
+  <!-- JSON Data (Collapsible) -->
+  <div class="space-y-4">
+    <details class="group rounded-2xl border border-white/10 bg-slate-950/45">
+      <summary class="cursor-pointer list-none p-4 font-semibold text-white hover:bg-white/5">
+        <div class="flex items-center justify-between">
+          <span>asset.meta_json</span>
+          <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        </div>
+      </summary>
+      <div class="border-t border-white/10 p-4">
+        <pre class="text-xs text-slate-200">{{ asset_meta_pretty }}</pre>
+      </div>
+    </details>
 
-  <h3 class="mb-2 text-lg font-semibold text-white">profile_snapshot_json</h3>
-  <pre class="mb-6 border border-white/10 bg-slate-950/80 p-4 text-xs text-slate-200">{{ profile_snapshot_pretty }}</pre>
+    <details class="group rounded-2xl border border-white/10 bg-slate-950/45">
+      <summary class="cursor-pointer list-none p-4 font-semibold text-white hover:bg-white/5">
+        <div class="flex items-center justify-between">
+          <span>profile_snapshot_json</span>
+          <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        </div>
+      </summary>
+      <div class="border-t border-white/10 p-4">
+        <pre class="text-xs text-slate-200">{{ profile_snapshot_pretty }}</pre>
+      </div>
+    </details>
 
-  <h3 class="mb-2 text-lg font-semibold text-white">storage_template_snapshot_json</h3>
-  <pre class="mb-6 border border-white/10 bg-slate-950/80 p-4 text-xs text-slate-200">{{ storage_snapshot_pretty }}</pre>
+    <details class="group rounded-2xl border border-white/10 bg-slate-950/45">
+      <summary class="cursor-pointer list-none p-4 font-semibold text-white hover:bg-white/5">
+        <div class="flex items-center justify-between">
+          <span>storage_template_snapshot_json</span>
+          <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        </div>
+      </summary>
+      <div class="border-t border-white/10 p-4">
+        <pre class="text-xs text-slate-200">{{ storage_snapshot_pretty }}</pre>
+      </div>
+    </details>
 
-  <h3 class="mb-2 text-lg font-semibold text-white">request_snapshot_json</h3>
-  <pre class="border border-white/10 bg-slate-950/80 p-4 text-xs text-slate-200">{{ request_snapshot_pretty }}</pre>
+    <details class="group rounded-2xl border border-white/10 bg-slate-950/45">
+      <summary class="cursor-pointer list-none p-4 font-semibold text-white hover:bg-white/5">
+        <div class="flex items-center justify-between">
+          <span>request_snapshot_json</span>
+          <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        </div>
+      </summary>
+      <div class="border-t border-white/10 p-4">
+        <pre class="text-xs text-slate-200">{{ request_snapshot_pretty }}</pre>
+      </div>
+    </details>
+  </div>
 </section>
 {% endblock %}
