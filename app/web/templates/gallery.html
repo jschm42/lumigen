@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block content %}
 {% set panel_class = "h-full space-y-3" %}
-{% set input_class = "w-full rounded-lg border border-white/12 bg-slate-900/55 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30" %}
+{% set input_class = "w-full rounded-lg border border-slate-700/35 bg-slate-900/55 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-lg bg-sky-300 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/50 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" %}
 {% set btn_danger = "inline-flex items-center justify-center rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" %}
@@ -33,7 +33,7 @@
       <div class="relative" data-category-popover>
         <button
           type="button"
-          class="flex h-full min-h-[42px] w-full items-center justify-between rounded-lg border border-white/12 bg-slate-900/55 px-3 py-2 text-left text-sm text-slate-100 transition hover:border-sky-300/45 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+          class="flex h-full min-h-[42px] w-full items-center justify-between rounded-lg border border-slate-700/35 bg-slate-900/55 px-3 py-2 text-left text-sm text-slate-100 transition hover:border-sky-300/45 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
           data-category-popover-toggle
           aria-haspopup="dialog"
           aria-expanded="false"
@@ -50,7 +50,7 @@
           </span>
           <span class="material-symbols-outlined text-base text-slate-300" aria-hidden="true">expand_more</span>
         </button>
-        <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-white/15 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
+        <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-slate-700/40 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
           <div class="mb-2 flex items-center justify-between">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Kategorien</p>
             {% if selected_category_ids %}
@@ -75,22 +75,22 @@
         <button type="submit" class="{{ btn_primary }}">Filter</button>
         <a href="/gallery" class="{{ btn_secondary }}">Reset</a>
       </div>
-      <div class="flex items-center justify-end gap-1 rounded-lg border border-white/10 bg-slate-900/45 px-1 py-1">
+      <div class="flex items-center justify-end gap-1 rounded-lg border border-slate-700/30 bg-slate-900/45 px-1 py-1">
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=sm"
-          class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
+          class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Kleine Thumbnails"
           aria-label="Kleine Thumbnails"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=md"
-          class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
+          class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Mittlere Thumbnails"
           aria-label="Mittlere Thumbnails"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_on</span></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=lg"
-          class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-white/15 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
+          class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Groesse Thumbnails"
           aria-label="Groesse Thumbnails"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">crop_square</span></a>
@@ -125,7 +125,7 @@
         >
           Kategorien zuweisen
         </button>
-        <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-white/15 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
+        <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-slate-700/40 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
           <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Kategorien fuer Auswahl</p>
           {% if filter_options.categories %}
             <div class="max-h-56 space-y-2 overflow-y-auto pr-1">
