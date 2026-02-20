@@ -19,43 +19,69 @@
       <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
     </div>
 
-    <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1" id="session-list">
-      <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-2 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
+    <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" id="session-list">
+      <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
         All Sessions
       </a>
+      
+      {# Group sessions by time category #}
+      {% set ns = namespace(today=[], last7days=[], last30days=[]) %}
       {% for item in session_items %}
-        <div class="relative rounded-xl px-3 py-2 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
-          <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="block pr-8">
-            <span class="block truncate font-semibold">{{ item.label }}</span>
-            <span class="mt-0.5 block text-xs text-slate-400">{{ item.subtitle if item.subtitle else " " }}</span>
-          </a>
-          <button
-            type="button"
-            class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-slate-950/55 text-slate-300 transition hover:border-white/25 hover:text-white"
-            aria-haspopup="menu"
-            aria-label="Session Aktionen"
-            data-session-menu-toggle
-          ><span class="material-symbols-outlined text-base" aria-hidden="true">more_horiz</span></button>
-          <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-xl shadow-slate-950/60 backdrop-blur-xl" role="menu" data-session-menu>
-            <button
-              type="button"
-              class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
-              data-session-rename
-              data-session-token="{{ item.token }}"
-              data-session-title="{{ item.label }}"
-              role="menuitem"
-            >Umbenennen</button>
-            <form action="/sessions/delete" method="post" onsubmit="return confirm('Session und Chatverlauf loeschen? Bilder in der Gallery bleiben erhalten.');">
-              <input type="hidden" name="session_token" value="{{ item.token }}">
-              <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
-              <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
-              <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-200 transition hover:bg-rose-500/20" role="menuitem">Loeschen</button>
-            </form>
-          </div>
-        </div>
-      {% else %}
-        <p class="rounded-xl bg-white/6 px-3 py-2 text-sm text-slate-400">Noch keine Sessions vorhanden.</p>
+        {% if item.time_category == 'today' %}
+          {% set ns.today = ns.today + [item] %}
+        {% elif item.time_category == 'last7days' %}
+          {% set ns.last7days = ns.last7days + [item] %}
+        {% else %}
+          {% set ns.last30days = ns.last30days + [item] %}
+        {% endif %}
       {% endfor %}
+      
+      {# Today #}
+      {% if ns.today %}
+      <div class="mb-1 mt-2 first:mt-0">
+        <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Today</span>
+      </div>
+      {% for item in ns.today %}
+        {% include 'fragments/session_item.html' %}
+      {% endfor %}
+      {% endif %}
+      
+      {# Last 7 days #}
+      {% if ns.last7days %}
+      <div class="mb-1 mt-2">
+        <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Last 7 days</span>
+      </div>
+      {% for item in ns.last7days %}
+        {% include 'fragments/session_item.html' %}
+      {% endfor %}
+      {% endif %}
+      
+      {# Last 30 days #}
+      {% if ns.last30days %}
+      <div class="mb-1 mt-2">
+        <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Last 30 days</span>
+      </div>
+      {% for item in ns.last30days %}
+        {% include 'fragments/session_item.html' %}
+      {% endfor %}
+      {% endif %}
+      
+      {# Load more button #}
+      {% if session_has_more %}
+      <button
+        type="button"
+        class="mt-2 block w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-center text-sm text-slate-300 transition hover:bg-white/12 hover:text-white"
+        data-load-more-sessions
+        data-offset="{{ session_offset + 10 }}"
+      >
+        <span class="material-symbols-outlined mr-1 text-base align-bottom" aria-hidden="true">expand_more</span>
+        Load more
+      </button>
+      {% endif %}
+      
+      {% if not session_items %}
+        <p class="rounded-xl bg-white/6 px-3 py-2 text-sm text-slate-400">Noch keine Sessions vorhanden.</p>
+      {% endif %}
     </div>
 
     <nav class="mt-4 shrink-0 border-t border-white/5 pt-3">
@@ -478,6 +504,25 @@
     if (currentThumbSize) {
       applyThumbSize(currentThumbSize);
     }
+    
+    // Load more sessions functionality
+    function setupLoadMoreSessions() {
+      var loadMoreBtn = document.querySelector("[data-load-more-sessions]");
+      if (!loadMoreBtn) return;
+      
+      loadMoreBtn.addEventListener("click", function() {
+        var offset = parseInt(loadMoreBtn.getAttribute("data-offset") || "0", 10);
+        
+        // Simply navigate to the page with updated offset
+        // The server will handle grouping and rendering properly
+        var currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set("session_offset", offset);
+        window.location.href = currentUrl.toString();
+      });
+    }
+    
+    // Initialize load more functionality
+    setupLoadMoreSessions();
   })();
 </script>
 {% endblock %}

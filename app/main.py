@@ -6,7 +6,7 @@ import json
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlencode
@@ -211,6 +211,166 @@ def format_session_timestamp(value: datetime | None) -> str:
     return value.strftime("%d.%m.%Y %H:%M")
 
 
+def format_session_age(created_at: datetime | None) -> str:
+    """Format the age of a session as Xh, Xd, Xw, or Xm."""
+    if not created_at or created_at == datetime.min:
+        return ""
+    
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    delta = now - created_at
+    
+    total_seconds = int(delta.total_seconds())
+    if total_seconds < 0:
+        total_seconds = 0
+    
+    hours = total_seconds // 3600
+    days = total_seconds // 86400
+    weeks = days // 7
+    months = days // 30
+    
+    # Today: show hours (>= 1 hour)
+    if created_at >= today_start:
+        if hours >= 1:
+            return f"{hours}h"
+        else:
+            return "0h"
+    # Yesterday: show hours or 1d
+    elif created_at >= yesterday_start:
+        if hours >= 1:
+            return f"{hours}h"
+        else:
+            return "1d"
+    # Less than 7 days
+    elif days < 7:
+        return f"{days}d"
+    # Less than 30 days
+    elif weeks < 4:
+        return f"{weeks}w"
+    # Older
+    else:
+        return f"{months}m"
+
+
+def get_session_time_category(created_at: datetime | None) -> str:
+    """Categorize a session by its creation time: 'today', 'last7days', or 'last30days'."""
+    if not created_at or created_at == datetime.min:
+        return "last30days"
+    
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seven_days_ago = today_start - timedelta(days=7)
+    
+    if created_at >= today_start:
+        return "today"
+    elif created_at >= seven_days_ago:
+        return "last7days"
+    else:
+        return "last30days"
+
+
+SESSION_MAX_DAYS = 30
+SESSION_PAGE_SIZE = 10
+
+
+def build_session_items(
+    session: Session,
+    offset: int = 0,
+    limit: int = SESSION_PAGE_SIZE,
+    max_days: int = SESSION_MAX_DAYS,
+) -> tuple[list[dict[str, Any]], bool]:
+    """
+    Build session items with pagination and time categorization.
+    Returns (session_items, has_more).
+    """
+    from sqlalchemy import and_
+    
+    now = datetime.now()
+    cutoff_date = now - timedelta(days=max_days)
+    
+    # Get generations within the time range
+    query = (
+        select(Generation)
+        .options(selectinload(Generation.assets))
+        .where(
+            and_(
+                Generation.created_at >= cutoff_date,
+            )
+        )
+        .order_by(Generation.created_at.desc(), Generation.id.desc())
+    )
+    
+    # First, get all generations to build session index
+    all_generations = list(session.scalars(query).all())
+    all_generations = [
+        g for g in all_generations
+        if not generation_chat_hidden(g)
+    ]
+    
+    # Build session index
+    session_index: dict[str, dict[str, Any]] = {}
+    for generation in all_generations:
+        token = generation_session_token(generation)
+        custom_title = generation_session_title(generation)
+        created_at = generation.created_at or datetime.min
+        item = session_index.get(token)
+        if not item:
+            item = {
+                "token": token,
+                "profile_label": generation.profile_name or f"Session #{generation.id}",
+                "custom_title": custom_title,
+                "latest_generation_id": generation.id,
+                "started_at": created_at,
+                "latest_created_at": created_at,
+                "latest_status": generation.status,
+            }
+            session_index[token] = item
+        if created_at >= item["latest_created_at"]:
+            item["latest_generation_id"] = generation.id
+            item["latest_created_at"] = created_at
+            item["latest_status"] = generation.status
+            if custom_title:
+                item["custom_title"] = custom_title
+    
+    # Get all unique sessions sorted by latest_created_at
+    all_sessions = sorted(
+        session_index.values(),
+        key=lambda item: (
+            item.get("latest_created_at") or datetime.min,
+            item.get("latest_generation_id") or 0,
+        ),
+        reverse=True,
+    )
+    
+    # Check if there are more sessions beyond the requested range
+    has_more = len(all_sessions) > offset + limit
+    
+    # Get the requested slice
+    session_slice = all_sessions[offset:offset + limit]
+    
+    # Build session items with time categories
+    session_items = []
+    for item in session_slice:
+        started_at = item.get("started_at")
+        latest_at = item.get("latest_created_at")
+        started_label = format_session_timestamp(started_at)
+        latest_label = format_session_timestamp(latest_at)
+        base_label = str(item.get("profile_label") or "Session")
+        custom_title = str(item.get("custom_title") or "").strip()
+        
+        session_items.append({
+            "token": item["token"],
+            "label": custom_title or base_label,
+            "subtitle": latest_label or started_label,
+            "age": format_session_age(latest_at),
+            "time_category": get_session_time_category(latest_at),
+            "latest_created_at": latest_at,
+        })
+    
+    return session_items, has_more
+
+
 def generation_session_title(generation: Generation) -> str:
     snapshot = generation.request_snapshot_json or {}
     raw_title = snapshot.get("chat_session_title")
@@ -342,6 +502,7 @@ def generate_page(
     error: Optional[str] = Query(default=None),
     conversation: Optional[str] = Query(default=None),
     workspace_view: Optional[str] = Query(default="chat"),
+    session_offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
@@ -358,6 +519,16 @@ def generate_page(
         if chat_session_prefs:
             last_profile_id = chat_session_prefs.last_profile_id
             last_thumb_size = chat_session_prefs.last_thumb_size or "md"
+    
+    # Use the new build_session_items function with pagination
+    session_items, session_has_more = build_session_items(
+        session,
+        offset=session_offset,
+        limit=SESSION_PAGE_SIZE,
+        max_days=SESSION_MAX_DAYS,
+    )
+    
+    # Get recent generations for the chat view (all generations, not limited by time)
     recent_generations = list(
         session.scalars(
             select(Generation)
@@ -372,54 +543,20 @@ def generate_page(
         for generation in recent_generations
         if not generation_chat_hidden(generation)
     ]
-
-    session_index: dict[str, dict[str, Any]] = {}
-    for generation in recent_generations:
-        token = generation_session_token(generation)
-        custom_title = generation_session_title(generation)
-        created_at = generation.created_at or datetime.min
-        item = session_index.get(token)
-        if not item:
-            item = {
-                "token": token,
-                "profile_label": generation.profile_name or f"Session #{generation.id}",
-                "custom_title": custom_title,
-                "latest_generation_id": generation.id,
-                "started_at": created_at,
-                "latest_created_at": created_at,
-                "latest_status": generation.status,
-            }
-            session_index[token] = item
-        if created_at >= item["latest_created_at"]:
-            item["latest_generation_id"] = generation.id
-            item["latest_created_at"] = created_at
-            item["latest_status"] = generation.status
-            if custom_title:
-                item["custom_title"] = custom_title
-
-    session_items = sorted(
-        session_index.values(),
-        key=lambda item: (
-            item.get("latest_created_at") or datetime.min,
-            item.get("latest_generation_id") or 0,
-        ),
-        reverse=True,
+    
+    # Build full session list for active conversation check
+    # (we need all sessions to find the active one, not just the paginated ones)
+    all_sessions, _ = build_session_items(
+        session,
+        offset=0,
+        limit=9999,  # Get all to check active conversation
+        max_days=SESSION_MAX_DAYS,
     )
-    for item in session_items:
-        started_at = item.get("started_at")
-        latest_at = item.get("latest_created_at")
-        started_label = format_session_timestamp(started_at)
-        latest_label = format_session_timestamp(latest_at)
-        base_label = str(item.get("profile_label") or "Session")
-        custom_title = str(item.get("custom_title") or "").strip()
-        item["label"] = custom_title or base_label
-        item["subtitle"] = latest_label or started_label
+    all_session_tokens = {item["token"] for item in all_sessions}
 
     active_conversation = (conversation or "").strip()
     if active_conversation:
-        if active_conversation not in {"all", "new"} and active_conversation not in {
-            item["token"] for item in session_items
-        }:
+        if active_conversation not in {"all", "new"} and active_conversation not in all_session_tokens:
             active_conversation = ""
     if not active_conversation:
         active_conversation = session_items[0]["token"] if session_items else "new"
@@ -447,6 +584,8 @@ def generate_page(
             "dimension_presets": dimension_presets,
             "conversation_generations": conversation_generations,
             "session_items": session_items,
+            "session_has_more": session_has_more,
+            "session_offset": session_offset,
             "active_conversation": active_conversation,
             "workspace_view": active_workspace_view,
             "hide_footer": True,
@@ -1143,6 +1282,32 @@ async def update_session_preferences(
     except Exception as exc:
         return JSONResponse(
             {"success": False, "error": str(exc)}, status_code=500
+        )
+
+
+@app.get("/api/sessions", response_class=JSONResponse)
+def list_sessions(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=SESSION_PAGE_SIZE, ge=1, le=50),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """API endpoint to fetch paginated sessions with time categories."""
+    try:
+        session_items, has_more = build_session_items(
+            session,
+            offset=offset,
+            limit=limit,
+            max_days=SESSION_MAX_DAYS,
+        )
+        return JSONResponse({
+            "sessions": session_items,
+            "has_more": has_more,
+            "offset": offset,
+            "limit": limit,
+        })
+    except Exception as exc:
+        return JSONResponse(
+            {"sessions": [], "has_more": False, "error": str(exc)}, status_code=500
         )
 
 

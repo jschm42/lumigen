@@ -1,0 +1,29 @@
+<div class="relative rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}" title="{{ item.label }} - {{ item.subtitle }}">
+  <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="flex items-center justify-between pr-8">
+    <span class="truncate font-semibold">{{ item.label }}</span>
+    <span class="ml-2 shrink-0 text-xs text-slate-400">{{ item.age if item.age else " " }}</span>
+  </a>
+  <button
+    type="button"
+    class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-slate-950/55 text-slate-300 transition hover:border-white/25 hover:text-white"
+    aria-haspopup="menu"
+    aria-label="Session Aktionen"
+    data-session-menu-toggle
+  ><span class="material-symbols-outlined text-base" aria-hidden="true">more_horiz</span></button>
+  <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-xl shadow-slate-950/60 backdrop-blur-xl" role="menu" data-session-menu>
+    <button
+      type="button"
+      class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+      data-session-rename
+      data-session-token="{{ item.token }}"
+      data-session-title="{{ item.label }}"
+      role="menuitem"
+    >Umbenennen</button>
+    <form action="/sessions/delete" method="post" onsubmit="return confirm('Session und Chatverlauf loeschen? Bilder in der Gallery bleiben erhalten.');">
+      <input type="hidden" name="session_token" value="{{ item.token }}">
+      <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+      <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+      <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-200 transition hover:bg-rose-500/20" role="menuitem">Loeschen</button>
+    </form>
+  </div>
+</div>
