@@ -119,6 +119,7 @@
                 {% for profile in profiles %}
                   <option
                     value="{{ profile.id }}"
+                    {% if last_profile_id and profile.id == last_profile_id %}selected{% endif %}
                     data-model-config-id="{{ profile.model_config_id if profile.model_config_id is not none else '' }}"
                     data-provider="{{ profile.provider }}"
                     data-width="{{ profile.width if profile.width is not none else '' }}"
@@ -128,6 +129,26 @@
                   >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
                 {% endfor %}
               </select>
+            </div>
+            <div class="flex gap-1" data-thumb-size-buttons>
+              <button
+                type="button"
+                data-thumb-size-btn="sm"
+                title="Kleine Vorschau"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border transition {% if last_thumb_size == 'sm' %}border-sky-300/60 bg-sky-300/20 text-sky-100{% else %}border-white/10 bg-white/6 text-slate-300 hover:bg-white/12{% endif %}"
+              ><span class="material-symbols-outlined text-base" aria-hidden="true">view_agenda</span></button>
+              <button
+                type="button"
+                data-thumb-size-btn="md"
+                title="Mittlere Vorschau"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border transition {% if last_thumb_size == 'md' %}border-sky-300/60 bg-sky-300/20 text-sky-100{% else %}border-white/10 bg-white/6 text-slate-300 hover:bg-white/12{% endif %}"
+              ><span class="material-symbols-outlined text-base" aria-hidden="true">grid_view</span></button>
+              <button
+                type="button"
+                data-thumb-size-btn="lg"
+                title="Große Vorschau"
+                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border transition {% if last_thumb_size == 'lg' %}border-sky-300/60 bg-sky-300/20 text-sky-100{% else %}border-white/10 bg-white/6 text-slate-300 hover:bg-white/12{% endif %}"
+              ><span class="material-symbols-outlined text-base" aria-hidden="true">image</span></button>
             </div>
           </div>
         </div>
@@ -374,8 +395,89 @@
       if (inChat) {
         syncOverlayOffsets();
         scrollChatToBottom();
+        // Reapply thumbnail size to new content
+        if (currentThumbSize) {
+          applyThumbSize(currentThumbSize);
+        }
       }
     });
+
+    // Session preferences: save profile and thumb size
+    function saveSessionPreference(data) {
+      var conversationInput = document.querySelector('[name="conversation"]');
+      if (!conversationInput) return;
+      var chatSessionId = conversationInput.value.trim();
+      if (!chatSessionId || chatSessionId === "all" || chatSessionId === "new") return;
+      
+      var payload = { chat_session_id: chatSessionId };
+      if (data.profile_id !== undefined) {
+        payload.last_profile_id = data.profile_id;
+      }
+      if (data.thumb_size !== undefined) {
+        payload.last_thumb_size = data.thumb_size;
+      }
+
+      fetch("/api/session-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).catch(function (err) {
+        console.error("Failed to save session preference:", err);
+      });
+    }
+
+    // Profile selection: save to DB
+    var profileSelect = document.querySelector("[data-generation-profile]");
+    if (profileSelect) {
+      profileSelect.addEventListener("change", function () {
+        var profileId = parseInt(profileSelect.value, 10);
+        if (!isNaN(profileId) && profileId > 0) {
+          saveSessionPreference({ profile_id: profileId });
+        }
+      });
+    }
+
+    // Thumbnail size buttons: save to DB and update UI
+    var thumbSizeButtons = document.querySelectorAll("[data-thumb-size-btn]");
+    var currentThumbSize = "{{ last_thumb_size }}";
+
+    function applyThumbSize(size) {
+      var chatHistory = document.getElementById("chat-history");
+      if (!chatHistory) return;
+      
+      // Remove old classes
+      chatHistory.classList.remove("thumb-size-sm", "thumb-size-md", "thumb-size-lg");
+      // Add new class
+      chatHistory.classList.add("thumb-size-" + size);
+      
+      // Update button states
+      thumbSizeButtons.forEach(function (btn) {
+        var btnSize = btn.getAttribute("data-thumb-size-btn");
+        if (btnSize === size) {
+          btn.classList.remove("border-white/10", "bg-white/6", "text-slate-300");
+          btn.classList.add("border-sky-300/60", "bg-sky-300/20", "text-sky-100");
+        } else {
+          btn.classList.remove("border-sky-300/60", "bg-sky-300/20", "text-sky-100");
+          btn.classList.add("border-white/10", "bg-white/6", "text-slate-300");
+        }
+      });
+    }
+
+    thumbSizeButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var size = btn.getAttribute("data-thumb-size-btn");
+        if (size && (size === "sm" || size === "md" || size === "lg")) {
+          currentThumbSize = size;
+          applyThumbSize(size);
+          saveSessionPreference({ thumb_size: size });
+        }
+      });
+    });
+
+    // Apply initial thumb size
+    if (currentThumbSize) {
+      applyThumbSize(currentThumbSize);
+    }
   })();
 </script>
 {% endblock %}

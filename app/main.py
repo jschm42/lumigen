@@ -347,6 +347,17 @@ def generate_page(
     profiles = crud.list_profiles(session)
     dimension_presets = crud.list_dimension_presets(session)
     enhancement_config = crud.get_enhancement_config(session)
+    
+    # Load chat session preferences
+    active_conversation = (conversation or "").strip()
+    chat_session_prefs = None
+    last_profile_id = None
+    last_thumb_size = "md"
+    if active_conversation and active_conversation not in {"all", "new"}:
+        chat_session_prefs = crud.get_chat_session(session, active_conversation)
+        if chat_session_prefs:
+            last_profile_id = chat_session_prefs.last_profile_id
+            last_thumb_size = chat_session_prefs.last_thumb_size or "md"
     recent_generations = list(
         session.scalars(
             select(Generation)
@@ -446,6 +457,8 @@ def generate_page(
             "upscale_ready": upscale_service.is_available(),
             "upscale_models": upscale_service.list_available_models(),
             "error": error or "",
+            "last_profile_id": last_profile_id,
+            "last_thumb_size": last_thumb_size,
         },
     )
 
@@ -1087,6 +1100,50 @@ async def enhance_prompt(
         return JSONResponse({"prompt": enhanced, "error": None})
     except ValueError as exc:
         return JSONResponse({"prompt": "", "error": str(exc)}, status_code=400)
+
+
+@app.post("/api/session-preferences", response_class=JSONResponse)
+async def update_session_preferences(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    payload = await request.json()
+    chat_session_id = str(payload.get("chat_session_id") or "").strip()
+    
+    if not chat_session_id or chat_session_id in {"all", "new"}:
+        return JSONResponse(
+            {"success": False, "error": "Invalid session ID"}, status_code=400
+        )
+    
+    last_profile_id = payload.get("last_profile_id")
+    last_thumb_size = payload.get("last_thumb_size")
+    
+    # Validate profile_id if provided
+    if last_profile_id is not None:
+        if not isinstance(last_profile_id, int) or last_profile_id <= 0:
+            return JSONResponse(
+                {"success": False, "error": "Invalid profile ID"}, status_code=400
+            )
+    
+    # Validate thumb_size if provided
+    if last_thumb_size is not None:
+        if last_thumb_size not in {"sm", "md", "lg"}:
+            return JSONResponse(
+                {"success": False, "error": "Invalid thumb size"}, status_code=400
+            )
+    
+    try:
+        crud.upsert_chat_session_preferences(
+            session,
+            chat_session_id=chat_session_id,
+            last_profile_id=last_profile_id,
+            last_thumb_size=last_thumb_size,
+        )
+        return JSONResponse({"success": True, "error": None})
+    except Exception as exc:
+        return JSONResponse(
+            {"success": False, "error": str(exc)}, status_code=500
+        )
 
 
 @app.get("/profiles/new", response_class=HTMLResponse)

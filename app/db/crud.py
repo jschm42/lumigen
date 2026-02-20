@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.models import (
     Asset,
     Category,
+    ChatSession,
     DimensionPreset,
     EnhancementConfig,
     Generation,
@@ -266,3 +267,40 @@ def get_asset(
             selectinload(Asset.generation), selectinload(Asset.categories)
         )
     return session.scalar(stmt)
+
+
+def get_chat_session(session: Session, chat_session_id: str) -> Optional[ChatSession]:
+    stmt = (
+        select(ChatSession)
+        .options(selectinload(ChatSession.last_profile))
+        .where(ChatSession.chat_session_id == chat_session_id)
+    )
+    return session.scalar(stmt)
+
+
+def upsert_chat_session_preferences(
+    session: Session,
+    chat_session_id: str,
+    last_profile_id: Optional[int] = None,
+    last_thumb_size: Optional[str] = None,
+) -> ChatSession:
+    existing = get_chat_session(session, chat_session_id)
+    if existing:
+        if last_profile_id is not None:
+            existing.last_profile_id = last_profile_id
+        if last_thumb_size is not None:
+            existing.last_thumb_size = last_thumb_size
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
+
+    row = ChatSession(
+        chat_session_id=chat_session_id,
+        last_profile_id=last_profile_id,
+        last_thumb_size=last_thumb_size or "md",
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row

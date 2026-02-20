@@ -116,3 +116,19 @@ pre {
   background: rgba(15, 23, 42, 0.95) !important;
   border-color: rgba(255, 255, 255, 0.3);
 }
+
+/* Chat thumbnail sizes */
+#chat-history.thumb-size-sm .image-container img {
+  max-height: min(40vh, 24rem) !important;
+  max-width: min(100%, 36rem) !important;
+}
+
+#chat-history.thumb-size-md .image-container img {
+  max-height: min(68vh, 48rem) !important;
+  max-width: min(100%, 70rem) !important;
+}
+
+#chat-history.thumb-size-lg .image-container img {
+  max-height: min(85vh, 68rem) !important;
+  max-width: min(100%, 90rem) !important;
+}

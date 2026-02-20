@@ -152,6 +152,24 @@ class Category(Base, TimestampMixin):
     )
 
 
+class ChatSession(Base, TimestampMixin):
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chat_session_id: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True
+    )
+    last_profile_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    last_thumb_size: Mapped[str] = mapped_column(
+        String(10), default="md", nullable=False
+    )
+
+    last_profile: Mapped[Optional[Profile]] = relationship()
+
+
 class Generation(Base):
     __tablename__ = "generations"
 
