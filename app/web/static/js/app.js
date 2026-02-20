@@ -451,70 +451,113 @@
     document.querySelectorAll('[data-profile-form]').forEach(setupProfileForm);
   }
 
-  // ==========================================================================
-  // Gallery Selection
-  // ==========================================================================
+// ==========================================================================
+// Gallery Selection
+// ==========================================================================
 
-  function setupGallerySelection() {
-    var bulkForm = document.getElementById('bulk-action-form');
-    if (!bulkForm) return;
+function setupGallerySelection() {
+  var bulkForm = document.getElementById('bulk-action-form');
+  if (!bulkForm) return;
 
-    var checkboxes = Array.from(document.querySelectorAll('[data-gallery-select]'));
-    var selectAll = document.querySelector('[data-gallery-select-all]');
-    var countLabel = document.querySelector('[data-gallery-selection-count]');
-    var actionButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
+  var cards = Array.from(document.querySelectorAll('[data-gallery-card][data-gallery-select]'));
+  var selectAll = document.querySelector('[data-gallery-select-all]');
+  var countLabel = document.querySelector('[data-gallery-selection-count]');
+  var actionButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
 
-    function updateState() {
-      var selected = 0;
-      checkboxes.forEach(function (checkbox) {
-        var card = checkbox.closest('[data-gallery-card]');
-        if (checkbox.checked) {
-          selected += 1;
-        }
-        if (card) {
-          card.classList.toggle('ring-2', checkbox.checked);
-          card.classList.toggle('ring-sky-300', checkbox.checked);
-          card.classList.toggle('border-sky-300/70', checkbox.checked);
-        }
-      });
+  // Create hidden inputs for form submission
+  var hiddenInputsContainer = bulkForm;
+  var hiddenInputs = {};
 
-      if (countLabel) {
-        countLabel.textContent = selected + ' selected';
+  function createOrUpdateHiddenInput(assetId, checked) {
+    var inputName = 'asset_ids';
+    if (checked) {
+      if (!hiddenInputs[assetId]) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = inputName;
+        input.value = assetId;
+        hiddenInputsContainer.appendChild(input);
+        hiddenInputs[assetId] = input;
       }
-
-      actionButtons.forEach(function (button) {
-        button.disabled = selected === 0;
-      });
-
-      if (selectAll) {
-        if (selected === 0) {
-          selectAll.checked = false;
-          selectAll.indeterminate = false;
-        } else if (selected === checkboxes.length) {
-          selectAll.checked = true;
-          selectAll.indeterminate = false;
-        } else {
-          selectAll.checked = false;
-          selectAll.indeterminate = true;
-        }
+    } else {
+      if (hiddenInputs[assetId]) {
+        hiddenInputs[assetId].remove();
+        delete hiddenInputs[assetId];
       }
     }
+  }
 
-    checkboxes.forEach(function (checkbox) {
-      checkbox.addEventListener('change', updateState);
+  function updateState() {
+    var selected = 0;
+    cards.forEach(function (card) {
+      var isSelected = card.dataset.selected === 'true';
+      if (isSelected) {
+        selected += 1;
+      }
+      // Toggle ring styling for selected cards
+      card.classList.toggle('ring-sky-300', isSelected);
+      card.classList.toggle('ring-2', isSelected);
+    });
+
+    if (countLabel) {
+      countLabel.textContent = selected + ' selected';
+    }
+
+    actionButtons.forEach(function (button) {
+      button.disabled = selected === 0;
     });
 
     if (selectAll) {
-      selectAll.addEventListener('change', function () {
-        checkboxes.forEach(function (checkbox) {
-          checkbox.checked = selectAll.checked;
-        });
-        updateState();
-      });
+      if (selected === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      } else if (selected === cards.length) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+      } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+      }
     }
-
-    updateState();
   }
+
+  // Click on card to toggle selection
+  cards.forEach(function (card) {
+    var clickArea = card.querySelector('[data-gallery-card-click]');
+    if (!clickArea) return;
+
+    clickArea.addEventListener('click', function (e) {
+      // Don't toggle if clicking on a link or button or form
+      var target = e.target;
+      if (target.closest('a') || target.closest('button') || target.closest('form')) {
+        // Let default behavior happen for links (navigation) and buttons (actions)
+        return;
+      }
+
+      // Toggle selection on click on the image area
+      var assetId = card.dataset.assetId;
+      var isSelected = card.dataset.selected === 'true';
+      card.dataset.selected = (!isSelected).toString();
+      createOrUpdateHiddenInput(assetId, !isSelected);
+      updateState();
+    });
+  });
+
+  // Select all toggle
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      var shouldSelect = selectAll.checked;
+      cards.forEach(function (card) {
+        card.dataset.selected = shouldSelect.toString();
+        var assetId = card.dataset.assetId;
+        createOrUpdateHiddenInput(assetId, shouldSelect);
+      });
+      updateState();
+    });
+  }
+
+  updateState();
+}
 
   // ==========================================================================
   // Initialization

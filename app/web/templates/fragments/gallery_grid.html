@@ -1,35 +1,26 @@
 <div class="grid gap-2 {% if thumb_size == 'sm' %}grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6{% elif thumb_size == 'lg' %}grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4{% else %}grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5{% endif %}">
   {% for asset in page_data.items %}
-  <article class="group relative overflow-hidden rounded-xl bg-slate-900/50 p-2.5 shadow-md shadow-slate-950/45 ring-offset-0 transition" data-gallery-card>
-    <label class="absolute right-2 top-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-slate-950/80">
-      <input
-        type="checkbox"
-        name="asset_ids"
-        value="{{ asset.id }}"
-        form="bulk-action-form"
-        data-gallery-select
-        aria-label="Select asset {{ asset.id }}">
-    </label>
-
-    <div class="relative overflow-hidden rounded-lg bg-slate-900/75">
-      <a href="/assets/{{ asset.id }}" class="block">
-        <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="aspect-square w-full object-cover transition duration-300 group-hover:scale-[1.02]">
-      </a>
+  <article class="group relative overflow-hidden rounded-xl bg-slate-900/50 p-2.5 shadow-md shadow-slate-950/45 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}">
+    <div class="relative aspect-square overflow-hidden rounded-lg bg-slate-900/75 cursor-pointer" data-gallery-card-click>
+      <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
       
-      <!-- Hover Overlay with Buttons -->
-      <div class="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-slate-950/70 opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-70">
-        <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100">
-          <span class="material-symbols-outlined text-xl" aria-hidden="true">download</span>
-        </a>
-        <a href="/assets/{{ asset.id }}" aria-label="View details" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100">
-          <span class="material-symbols-outlined text-xl" aria-hidden="true">info</span>
-        </a>
-        <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" onsubmit="return confirm('Delete this asset?');">
-          <input type="hidden" name="return_to" value="{{ return_to }}">
-          <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-300/50 bg-slate-900/80 text-rose-100 transition hover:border-rose-300 hover:bg-rose-500/30" aria-label="Delete asset" title="Delete">
-            <span class="material-symbols-outlined text-xl" aria-hidden="true">delete</span>
-          </button>
-        </form>
+      <!-- Full Overlay with Blur -->
+      <div class="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100">
+        <!-- Buttons at Bottom -->
+        <div class="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-2 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent p-3 pt-12">
+          <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100">
+            <span class="material-symbols-outlined text-xl" aria-hidden="true">download</span>
+          </a>
+          <a href="/assets/{{ asset.id }}" aria-label="View details" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100">
+            <span class="material-symbols-outlined text-xl" aria-hidden="true">info</span>
+          </a>
+          <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" onsubmit="return confirm('Delete this asset?');">
+            <input type="hidden" name="return_to" value="{{ return_to }}">
+            <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-300/50 bg-slate-900/80 text-rose-100 transition hover:border-rose-300 hover:bg-rose-500/30" aria-label="Delete asset" title="Delete">
+              <span class="material-symbols-outlined text-xl" aria-hidden="true">delete</span>
+            </button>
+          </form>
+        </div>
       </div>
     </div>
 
