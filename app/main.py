@@ -934,16 +934,24 @@ def admin_create_model_config(
 
     try:
         name_value = normalize_model_config_name(name)
-        api_key_encrypted = None
+        
+        # Validate model is required
+        model_value = model.strip()
+        if not model_value:
+            raise ValueError("Model is required")
+        
+        # Validate API key is required
         api_key_value = api_key.strip()
-        if api_key_value:
-            api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+        if not api_key_value:
+            raise ValueError("API key is required")
+        
+        api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
 
         crud.create_model_config(
             session,
             name=name_value,
             provider=provider,
-            model=model.strip(),
+            model=model_value,
             enhancement_prompt=enhancement_prompt.strip() or None,
             api_key_encrypted=api_key_encrypted,
         )
@@ -974,6 +982,12 @@ def admin_update_model_config(
 
     try:
         name_value = normalize_model_config_name(name)
+        
+        # Validate model is required
+        model_value = model.strip()
+        if not model_value:
+            raise ValueError("Model is required")
+        
         api_key_encrypted = config.api_key_encrypted
         if clear_api_key:
             api_key_encrypted = None
@@ -981,13 +995,17 @@ def admin_update_model_config(
             api_key_value = api_key.strip()
             if api_key_value:
                 api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+        
+        # Validate that API key is set (either existing or new)
+        if not api_key_encrypted:
+            raise ValueError("API key is required. Please provide an API key or uncheck 'Clear stored key'.")
 
         crud.update_model_config(
             session,
             config,
             name=name_value,
             provider=provider,
-            model=model.strip(),
+            model=model_value,
             enhancement_prompt=enhancement_prompt.strip() or None,
             api_key_encrypted=api_key_encrypted,
         )

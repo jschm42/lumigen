@@ -453,10 +453,28 @@ class GenerationService:
         self, generation: Generation
     ) -> ProviderGenerationRequest:
         request_data = generation.request_snapshot_json or {}
+        
+        # Validate model is set
+        model = str(request_data.get("model") or generation.model or "").strip()
+        if not model:
+            raise ProviderError(
+                "Model configuration error: Model not specified. "
+                "Please check the profile's model configuration in Admin settings."
+            )
+        
+        # Get API key
         api_key = None
         model_config_id = self._parse_optional_int(request_data.get("model_config_id"))
         if model_config_id is not None and self.model_config_service:
             api_key = self.model_config_service.get_api_key(model_config_id)
+        
+        # Validate API key is available
+        if not api_key:
+            raise ProviderError(
+                "Model configuration error: API key not found. "
+                "Please configure the API key for this model in Admin settings."
+            )
+        
         input_images: list[ProviderInputImage] = []
         raw_input_images = request_data.get("input_images")
         if isinstance(raw_input_images, list):
@@ -479,7 +497,7 @@ class GenerationService:
             n_images=int(request_data.get("n_images") or 1),
             seed=request_data.get("seed"),
             output_format=str(request_data.get("output_format") or "png"),
-            model=str(request_data.get("model") or generation.model),
+            model=model,
             api_key=api_key,
             params=request_data.get("params_json") or {},
             input_images=input_images,
@@ -504,6 +522,32 @@ class GenerationService:
         image_height: int,
         image_mime: str,
     ) -> dict[str, Any]:
+        # Build request snapshot without API key (security)
+        request_snapshot = copy.deepcopy(generation.request_snapshot_json or {})
+        # Remove any base64 encoded images from request to keep file size manageable
+        if "input_images" in request_snapshot:
+            sanitized_images = []
+            for img in request_snapshot.get("input_images", []):
+                if isinstance(img, dict):
+                    sanitized_img = {
+                        "name": img.get("name", ""),
+                        "mime": img.get("mime", ""),
+                        # Omit b64 data to keep sidecar file small
+                    }
+                    sanitized_images.append(sanitized_img)
+            request_snapshot["input_images"] = sanitized_images
+        
+        # Build response snapshot with provider metadata
+        response_snapshot = {
+            "provider_meta": provider_meta,
+            "raw_meta": raw_meta,
+            "image": {
+                "width": image_width,
+                "height": image_height,
+                "mime": image_mime,
+            },
+        }
+        
         return {
             "type": "asset_success",
             "generated_at": datetime.utcnow().isoformat(),
@@ -520,7 +564,8 @@ class GenerationService:
             "raw_meta": raw_meta,
             "profile_snapshot_json": generation.profile_snapshot_json,
             "storage_template_snapshot_json": generation.storage_template_snapshot_json,
-            "request_snapshot_json": generation.request_snapshot_json,
+            "request_snapshot_json": request_snapshot,
+            "response_snapshot_json": response_snapshot,
         }
 
     def _build_failure_sidecar_payload(
