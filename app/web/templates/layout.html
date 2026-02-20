@@ -171,8 +171,9 @@
   </main>
 
   {% if not hide_footer and not embedded %}
-  <footer class="mx-auto flex w-full max-w-7xl items-center justify-center px-4 pb-10 pt-2 text-sm text-slate-500 sm:px-6 lg:px-8">
-    <small>(c) 2026</small>
+  <footer class="mx-auto flex w-full max-w-7xl flex-col items-center justify-center gap-1 px-4 pb-10 pt-2 text-sm text-slate-500 sm:px-6 lg:px-8">
+    <small>(c) 2026 by Jean Schmitz</small>
+    <small class="text-xs">v{{ app_version }}</small>
   </footer>
   {% endif %}
 

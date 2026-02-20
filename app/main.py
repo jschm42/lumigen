@@ -89,7 +89,12 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 template_dir = Path(__file__).resolve().parent / "web" / "templates"
 static_dir = Path(__file__).resolve().parent / "web" / "static"
+# Add version to all templates via context processor
+def version_context(request):
+    return {"app_version": settings.app_version}
+
 templates = Jinja2Templates(directory=str(template_dir))
+templates.env.globals["app_version"] = settings.app_version
 
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 

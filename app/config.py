@@ -7,6 +7,10 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# App version
+VERSION = "1.0.0"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -15,6 +19,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Lumigen"
+    app_version: str = VERSION
 
     data_dir: Path = Path("./data")
     sqlite_path: Path = Path("./data/app.db")
