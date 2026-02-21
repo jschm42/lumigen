@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -111,6 +111,9 @@ class ModelConfig(Base, TimestampMixin):
     enhancement_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     api_key_encrypted: Mapped[Optional[str]] = mapped_column(
         String(4096), nullable=True
+    )
+    use_custom_api_key: Mapped[bool] = mapped_column(
+        Boolean(), default=False, nullable=False
     )
 
     profiles: Mapped[list["Profile"]] = relationship(back_populates="model_config")

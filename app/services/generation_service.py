@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import logging
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -374,6 +375,10 @@ class GenerationService:
                     except Exception:
                         pass
 
+                # Reload the storage snapshot after rollback to get base_dir
+                storage_snapshot = generation.storage_template_snapshot_json
+                failure_base_dir = self._base_dir_from_snapshot(storage_snapshot)
+
                 generation.status = "failed"
                 generation.error = self._truncate_error(str(exc))
                 generation.finished_at = datetime.utcnow()
@@ -381,7 +386,7 @@ class GenerationService:
                 failure_payload = self._build_failure_sidecar_payload(generation, exc)
                 try:
                     failure_rel = self.sidecar_service.write_failure_sidecar(
-                        base_dir,
+                        failure_base_dir,
                         generation.profile_name,
                         generation.id,
                         failure_payload,
@@ -389,8 +394,10 @@ class GenerationService:
                     generation.failure_sidecar_path = failure_rel.as_posix()
                 except Exception as sidecar_exc:
                     generation.failure_sidecar_path = None
-                    generation.error = self._truncate_error(
-                        f"{generation.error}; failure-sidecar-write={sidecar_exc}"
+                    # Log the error for debugging but don't add to generation.error
+                    # since we already have the main error
+                    logging.getLogger(__name__).error(
+                        f"Failed to write failure sidecar for generation {generation.id}: {sidecar_exc}"
                     )
 
                 session.commit()
@@ -462,11 +469,25 @@ class GenerationService:
                 "Please check the profile's model configuration in Admin settings."
             )
         
-        # Get API key
+        # Get API key - check model config to decide which key to use
         api_key = None
         model_config_id = self._parse_optional_int(request_data.get("model_config_id"))
+        provider = str(request_data.get("provider") or generation.provider or "").strip()
+        
         if model_config_id is not None and self.model_config_service:
-            api_key = self.model_config_service.get_api_key(model_config_id)
+            # Get the model config to check if custom API key is enabled
+            config = self.model_config_service.get_model_config(model_config_id)
+            
+            if config and config.use_custom_api_key:
+                # Use custom API key if enabled
+                api_key = self.model_config_service.get_api_key(model_config_id)
+            else:
+                # Fall back to environment variable
+                if provider:
+                    api_key = self.model_config_service.get_default_api_key(provider)
+        elif provider and self.model_config_service:
+            # No model config, try to use env variable directly
+            api_key = self.model_config_service.get_default_api_key(provider)
         
         # Validate API key is available
         if not api_key:
@@ -604,7 +625,7 @@ class GenerationService:
         fallback_height: int,
     ) -> tuple[bytes, int, int, str]:
         if not data:
-            return data, fallback_width, fallback_height, fallback_mime
+            raise ProviderError("No image data provided")
 
         try:
             with Image.open(BytesIO(data)) as source:
@@ -623,8 +644,10 @@ class GenerationService:
                     int(height),
                     self._mime_from_output(target),
                 )
-        except Exception:
-            return data, fallback_width, fallback_height, fallback_mime
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise ProviderError(f"Cannot process image: {exc}") from exc
 
     def _normalized_output_format(self, value: str) -> str:
         raw = (value or "png").strip().lower().lstrip(".")

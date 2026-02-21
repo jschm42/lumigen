@@ -81,7 +81,12 @@
             <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3" class="{{ text_class }}"></textarea>
           </div>
 
-          <div>
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+            <input type="checkbox" name="use_custom_api_key" id="new-use-custom-api-key" onchange="toggleApiKeyField('new')">
+            Use custom API key
+          </label>
+
+          <div id="new-api-key-field" class="hidden">
             <label for="new-model-key" class="{{ label_class }}">API key</label>
             <input id="new-model-key" type="password" name="api_key" placeholder="optional" class="{{ input_class }}">
           </div>
@@ -110,7 +115,7 @@
             <td class="px-4 py-3">{{ config.name }}</td>
             <td class="px-4 py-3">{{ config.provider }}</td>
             <td class="px-4 py-3">{{ config.model }}</td>
-            <td class="px-4 py-3 text-slate-400">{{ "stored" if config.api_key_encrypted else "none" }}</td>
+            <td class="px-4 py-3 text-slate-400">{% if config.use_custom_api_key %}{{ "stored" if config.api_key_encrypted else "custom (none)" }}{% else %}default (env){% endif %}</td>
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
@@ -164,9 +169,14 @@
             <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3" class="{{ text_class }}">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
           </div>
 
-          <div>
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+            <input type="checkbox" name="use_custom_api_key" id="edit-{{ config.id }}-use-custom-api-key" {% if config.use_custom_api_key %}checked{% endif %} onchange="toggleApiKeyField('edit-{{ config.id }}')">
+            Use custom API key
+          </label>
+
+          <div id="edit-{{ config.id }}-api-key-field" {% if not config.use_custom_api_key %}class="hidden"{% endif %}>
             <label for="edit-model-key-{{ config.id }}" class="{{ label_class }}">API key</label>
-            <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
+            <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" value="{{ '••••••••' if config.api_key_encrypted else '' }}" placeholder="leave blank to keep" class="{{ input_class }}">
           </div>
 
           <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
@@ -403,4 +413,18 @@
     </form>
   {% endif %}
 </section>
+
+<script>
+function toggleApiKeyField(prefix) {
+  const checkbox = document.getElementById(prefix + '-use-custom-api-key');
+  const field = document.getElementById(prefix + '-api-key-field');
+  if (checkbox && field) {
+    if (checkbox.checked) {
+      field.classList.remove('hidden');
+    } else {
+      field.classList.add('hidden');
+    }
+  }
+}
+</script>
 {% endblock %}

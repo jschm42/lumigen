@@ -27,6 +27,7 @@ class ModelConfigRequest(BaseModel):
     model: str = Field(..., min_length=1)
     enhancement_prompt: str = ""
     api_key: str = ""
+    use_custom_api_key: bool = False
 
 
 class EnhancementConfigRequest(BaseModel):

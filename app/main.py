@@ -1083,6 +1083,7 @@ def admin_create_model_config(
     model: str = Form(...),
     enhancement_prompt: str = Form(default=""),
     api_key: str = Form(default=""),
+    use_custom_api_key: bool = Form(default=False),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     provider = provider.strip()
@@ -1097,12 +1098,13 @@ def admin_create_model_config(
         if not model_value:
             raise ValueError("Model is required")
         
-        # Validate API key is required
+        # Validate API key if custom key is enabled
+        api_key_encrypted = None
         api_key_value = api_key.strip()
-        if not api_key_value:
-            raise ValueError("API key is required")
-        
-        api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+        if use_custom_api_key:
+            if not api_key_value:
+                raise ValueError("API key is required when using custom API key")
+            api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
 
         crud.create_model_config(
             session,
@@ -1111,6 +1113,7 @@ def admin_create_model_config(
             model=model_value,
             enhancement_prompt=enhancement_prompt.strip() or None,
             api_key_encrypted=api_key_encrypted,
+            use_custom_api_key=use_custom_api_key,
         )
     except (ValueError, IntegrityError) as exc:
         return admin_redirect("models", error=str(exc))
@@ -1126,6 +1129,7 @@ def admin_update_model_config(
     model: str = Form(...),
     enhancement_prompt: str = Form(default=""),
     api_key: str = Form(default=""),
+    use_custom_api_key: bool = Form(default=False),
     clear_api_key: bool = Form(default=False),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -1145,18 +1149,19 @@ def admin_update_model_config(
         if not model_value:
             raise ValueError("Model is required")
         
-        api_key_encrypted = config.api_key_encrypted
-        if clear_api_key:
-            api_key_encrypted = None
-        else:
-            api_key_value = api_key.strip()
-            if api_key_value:
-                api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+        # Handle API key based on use_custom_api_key flag
+        api_key_encrypted = None
+        if use_custom_api_key:
+            if clear_api_key:
+                api_key_encrypted = None
+            else:
+                api_key_value = api_key.strip()
+                if api_key_value:
+                    api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
+                elif config.api_key_encrypted:
+                    # Keep existing key if no new key provided
+                    api_key_encrypted = config.api_key_encrypted
         
-        # Validate that API key is set (either existing or new)
-        if not api_key_encrypted:
-            raise ValueError("API key is required. Please provide an API key or uncheck 'Clear stored key'.")
-
         crud.update_model_config(
             session,
             config,
@@ -1165,6 +1170,7 @@ def admin_update_model_config(
             model=model_value,
             enhancement_prompt=enhancement_prompt.strip() or None,
             api_key_encrypted=api_key_encrypted,
+            use_custom_api_key=use_custom_api_key,
         )
     except (ValueError, IntegrityError) as exc:
         return admin_redirect("models", error=str(exc))
