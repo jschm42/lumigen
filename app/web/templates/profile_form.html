@@ -106,14 +106,28 @@
     </div>
   </div>
 
-  <div>
-    <label for="{{ form_dom_id }}-format" class="{{ label_class }}">Output format</label>
-    <select id="{{ form_dom_id }}-format" name="output_format" required class="{{ input_class }}">
-      {% set selected_format = p.output_format if p else 'png' %}
-      <option value="png" {% if selected_format == 'png' %}selected{% endif %}>png</option>
-      <option value="jpg" {% if selected_format == 'jpg' %}selected{% endif %}>jpg</option>
-      <option value="webp" {% if selected_format == 'webp' %}selected{% endif %}>webp</option>
-    </select>
+  <div class="grid gap-4 md:grid-cols-2">
+    <div>
+      <label for="{{ form_dom_id }}-format" class="{{ label_class }}">Output format</label>
+      <select id="{{ form_dom_id }}-format" name="output_format" required class="{{ input_class }}">
+        {% set selected_format = p.output_format if p else 'png' %}
+        <option value="png" {% if selected_format == 'png' %}selected{% endif %}>png</option>
+        <option value="jpg" {% if selected_format == 'jpg' %}selected{% endif %}>jpg</option>
+        <option value="webp" {% if selected_format == 'webp' %}selected{% endif %}>webp</option>
+      </select>
+    </div>
+    {% if upscale_ready and upscale_models %}
+    <div>
+      <label for="{{ form_dom_id }}-upscale-model" class="{{ label_class }}">Upscale model</label>
+      <select id="{{ form_dom_id }}-upscale-model" name="upscale_model" class="{{ input_class }}">
+        {% set selected_upscale = p.params_json.get('upscale_model') if p and p.params_json else '' %}
+        <option value="">Use default (or select per generation)</option>
+        {% for model in upscale_models %}
+          <option value="{{ model }}" {% if selected_upscale == model %}selected{% endif %}>{{ model }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
   </div>
 
   <div>

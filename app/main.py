@@ -618,6 +618,8 @@ def generate_submit(
     height: str = Form(default=""),
     n_images: str = Form(default=""),
     seed: str = Form(default=""),
+    aspect_ratio: str = Form(default=""),
+    image_size: str = Form(default=""),
     upscale_enable: bool = Form(default=False),
     upscale_model: str = Form(default=""),
     input_images: list[UploadFile] = File(default=[]),
@@ -683,7 +685,20 @@ def generate_submit(
             overrides["input_images"] = encoded_images
 
         provider_value = str(profile.provider or "").strip().lower()
-        if provider_value != "openrouter":
+        
+        # Apply OpenRouter-specific or standard dimension overrides
+        if provider_value == "openrouter":
+            # For OpenRouter: process aspect_ratio and image_size
+            params_json_copy = dict(profile.params_json or {})
+            params_json_with_overrides = apply_openrouter_image_config(
+                params_json=params_json_copy,
+                provider=provider_value,
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
+            )
+            overrides["params_json"] = params_json_with_overrides
+        else:
+            # For other providers: use width/height
             width_value = parse_optional_int(width)
             if width_value is not None:
                 if width_value <= 0:
@@ -1357,6 +1372,8 @@ def profiles_page(
             "storage_templates": storage_templates,
             "model_configs": model_configs,
             "categories": categories,
+            "upscale_ready": upscale_service.is_available(),
+            "upscale_models": upscale_service.list_available_models(),
             "error": error,
             "open_create_dialog": create,
             "open_edit_id": open_edit_id,
@@ -1389,6 +1406,7 @@ def create_profile(
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
     params_json: str = Form(default="{}"),
+    upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
     storage_template_id: int = Form(...),
     session: Session = Depends(get_session),
@@ -1418,6 +1436,12 @@ def create_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
+        # Store upscale_model in params_json if specified
+        upscale_model_value = upscale_model.strip()
+        if upscale_model_value:
+            if not params_value:
+                params_value = {}
+            params_value["upscale_model"] = upscale_model_value
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -1459,6 +1483,7 @@ def update_profile(
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
     params_json: str = Form(default="{}"),
+    upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
     storage_template_id: int = Form(...),
     session: Session = Depends(get_session),
@@ -1492,6 +1517,12 @@ def update_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
+        # Store upscale_model in params_json if specified
+        upscale_model_value = upscale_model.strip()
+        if upscale_model_value:
+            if not params_value:
+                params_value = {}
+            params_value["upscale_model"] = upscale_model_value
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):

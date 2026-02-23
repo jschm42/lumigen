@@ -162,9 +162,25 @@
     function syncProviderSpecificOptions(selected) {
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
+      
+      var dimensionControls = form.querySelector('[data-dimension-controls]');
+      var standardDimensions = form.querySelector('[data-standard-dimensions]');
+      var openrouterControls = form.querySelector('[data-openrouter-controls]');
+      var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
+      var imageSizeInput = form.querySelector('[name="image_size"]');
+      
+      // Toggle visibility based on provider
       if (dimensionControls) {
         dimensionControls.classList.toggle('hidden', isOpenRouter);
       }
+      if (standardDimensions) {
+        standardDimensions.classList.toggle('hidden', isOpenRouter);
+      }
+      if (openrouterControls) {
+        openrouterControls.classList.toggle('hidden', !isOpenRouter);
+      }
+      
+      // Disable/enable and clear values based on provider
       if (widthInput) {
         widthInput.disabled = isOpenRouter;
         if (isOpenRouter) widthInput.value = '';
@@ -178,6 +194,14 @@
         if (isOpenRouter) {
           dimensionPreset.value = '';
         }
+      }
+      if (aspectRatioInput) {
+        aspectRatioInput.disabled = !isOpenRouter;
+        if (!isOpenRouter) aspectRatioInput.value = '';
+      }
+      if (imageSizeInput) {
+        imageSizeInput.disabled = !isOpenRouter;
+        if (!isOpenRouter) imageSizeInput.value = '';
       }
     }
 
@@ -195,6 +219,9 @@
     }
 
     profileSelect.addEventListener('change', applyProfileDefaults);
+    
+    // Call on initial page load to ensure correct visibility
+    applyProfileDefaults();
 
     if (dimensionPreset && widthInput && heightInput) {
       dimensionPreset.addEventListener('change', function () {

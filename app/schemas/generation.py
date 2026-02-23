@@ -15,6 +15,9 @@ class GenerationCreateRequest(BaseModel):
     height: str = ""
     n_images: str = ""
     seed: str = ""
+    # OpenRouter-specific overrides
+    aspect_ratio: str = ""
+    image_size: str = ""
     upscale_enable: bool = False
     upscale_model: str = ""
     input_images: list = []
