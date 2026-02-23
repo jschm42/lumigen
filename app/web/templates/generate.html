@@ -204,31 +204,32 @@
             </div>
 
             <div data-advanced-panel class="mt-3 hidden rounded-2xl border border-white/8 bg-slate-950/55 p-3 space-y-2">
-              <!-- Dimension Preset (for non-OpenRouter) -->
-              <div data-dimension-controls>
-                <label for="dimension_preset" class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Dimension Preset</label>
-                <select id="dimension_preset" data-dimension-preset class="{{ input_class }}">
-                  <option value="512x512">512 x 512</option>
-                  <option value="768x768">768 x 768</option>
-                  <option value="1024x1024">1024 x 1024</option>
-                  <option value="1152x896">1152 x 896</option>
-                  <option value="896x1152">896 x 1152</option>
-                  <option value="1216x832">1216 x 832</option>
-                  <option value="832x1216">832 x 1216</option>
-                  <option value="1344x768">1344 x 768</option>
-                  <option value="768x1344">768 x 1344</option>
-                  <option value="1536x640">1536 x 640</option>
-                  <option value="640x1536">640 x 1536</option>
-                  <option disabled>-----</option>
-                  <option value="">Custom / from profile</option>
-                  {% for preset in dimension_presets %}
-                    <option value="{{ preset.width }}x{{ preset.height }}">{{ preset.name }} ({{ preset.width }}x{{ preset.height }})</option>
-                  {% endfor %}
-                </select>
-              </div>
+              <!-- All override fields in single row (5 columns on md+) -->
+              <div class="grid grid-cols-2 gap-2 md:grid-cols-5">
+                <!-- Dimension Preset (for non-OpenRouter, first column) -->
+                <div data-dimension-controls class="contents">
+                  <div>
+                    <label for="dimension_preset" class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Preset</label>
+                    <select id="dimension_preset" data-dimension-preset class="{{ input_class }}">
+                      <option value="">from profile</option>
+                      <option value="512x512">512x512</option>
+                      <option value="768x768">768x768</option>
+                      <option value="1024x1024">1024x1024</option>
+                      <option value="1152x896">1152x896</option>
+                      <option value="896x1152">896x1152</option>
+                      <option value="1216x832">1216x832</option>
+                      <option value="832x1216">832x1216</option>
+                      <option value="1344x768">1344x768</option>
+                      <option value="768x1344">768x1344</option>
+                      <option value="1536x640">1536x640</option>
+                      <option value="640x1536">640x1536</option>
+                      {% for preset in dimension_presets %}
+                        <option value="{{ preset.width }}x{{ preset.height }}">{{ preset.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
 
-              <!-- All override fields in single row (4 columns on md+) -->
-              <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
                 <!-- OpenRouter-specific size controls (both in one container, hidden for non-OpenRouter) -->
                 <div data-openrouter-controls class="contents hidden">
                   <div>
