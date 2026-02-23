@@ -17,11 +17,12 @@
 
 <div id="job-{{ generation.id }}"
      class="job-box rounded-2xl border {{ card_border }} bg-slate-950/55 p-4 shadow-lg shadow-slate-950/60"
+     hx-ext="morph"
      {% if generation.status in ['queued', 'running'] %}
      aria-busy="true"
      hx-get="/jobs/{{ generation.id }}"
      hx-trigger="every 1s"
-     hx-swap="outerHTML"
+     hx-swap="morph:outerHTML"
      {% endif %}>
   <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -33,7 +34,7 @@
             action="/jobs/{{ generation.id }}/cancel"
             hx-post="/jobs/{{ generation.id }}/cancel"
             hx-target="closest .job-box"
-            hx-swap="outerHTML"
+            hx-swap="morph:outerHTML"
             class="inline-flex">
         <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10">Cancel</button>
       </form>

@@ -12,11 +12,12 @@
 
 <div id="chat-generation-{{ generation.id }}"
      class="chat-generation space-y-3"
+     hx-ext="morph"
      {% if generation.status in ['queued', 'running'] %}
      aria-busy="true"
      hx-get="/jobs/{{ generation.id }}?view=chat"
      hx-trigger="every 1s"
-     hx-swap="outerHTML"
+     hx-swap="morph:outerHTML"
      {% endif %}>
 
   <div class="flex justify-end">
@@ -29,7 +30,7 @@
     <article class="max-w-[94%] rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 sm:max-w-[82%]">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex flex-wrap items-center gap-2">
-          {% if generation.status != 'succeeded' %}
+          {% if generation.status not in ['succeeded', 'queued', 'running'] %}
           <span class="rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide {{ status_badge }}">{{ generation.status }}</span>
           {% endif %}
           <span class="text-xs text-slate-400">{{ generation.profile_name }} | {{ generation.provider }} | {{ generation.model }}</span>
@@ -39,7 +40,7 @@
                 action="/jobs/{{ generation.id }}/cancel?view=chat"
                 hx-post="/jobs/{{ generation.id }}/cancel?view=chat"
                 hx-target="closest .chat-generation"
-                hx-swap="outerHTML"
+                hx-swap="morph:outerHTML"
                 class="inline-flex">
             <button type="submit" class="inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10">Cancel</button>
           </form>
@@ -72,7 +73,7 @@
       {% elif generation.status == 'succeeded' %}
         <p class="text-sm text-slate-400">Job abgeschlossen, aber keine Assets erzeugt.</p>
       {% elif generation.status in ['queued', 'running'] %}
-        <p class="text-sm text-slate-400">Generierung laeuft...</p>
+        <div class="generation-shimmer rounded-xl" style="width: 320px; height: 320px; max-width: 100%;"></div>
       {% endif %}
 
       {% if generation.failure_sidecar_path %}

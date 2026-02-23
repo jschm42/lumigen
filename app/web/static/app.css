@@ -174,3 +174,29 @@ pre {
   border-color: rgba(255, 200, 200, 0.8);
   background-color: rgba(239, 68, 68, 0.8);
 }
+
+/* Generation pending shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.generation-shimmer {
+  display: block;
+  min-height: 200px;
+  background: linear-gradient(
+    110deg,
+    rgba(30, 41, 59, 0.6) 8%,
+    rgba(56, 189, 248, 0.25) 18%,
+    rgba(56, 189, 248, 0.35) 33%,
+    rgba(30, 41, 59, 0.6) 45%,
+    rgba(30, 41, 59, 0.6) 55%,
+    rgba(56, 189, 248, 0.25) 65%,
+    rgba(56, 189, 248, 0.35) 75%,
+    rgba(30, 41, 59, 0.6) 85%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 8s linear infinite;
+  border: 2px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
+}
