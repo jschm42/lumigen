@@ -23,12 +23,6 @@
           <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
       </select>
-      <select name="status" aria-label="Status filter" class="{{ input_class }}">
-        <option value="">Alle Status</option>
-        {% for item in filter_options.statuses %}
-          <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
-        {% endfor %}
-      </select>
       <input type="text" name="q" value="{{ q }}" placeholder="Prompt durchsuchen..." aria-label="Prompt filter" class="{{ input_class }}">
       <div class="relative" data-category-popover>
         <button
@@ -81,18 +75,21 @@
           class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Kleine Thumbnails"
           aria-label="Kleine Thumbnails"
+          data-gallery-thumb-size="sm"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=md"
           class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Mittlere Thumbnails"
           aria-label="Mittlere Thumbnails"
+          data-gallery-thumb-size="md"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_on</span></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=lg"
           class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Groesse Thumbnails"
           aria-label="Groesse Thumbnails"
+          data-gallery-thumb-size="lg"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">crop_square</span></a>
       </div>
     </div>
@@ -211,6 +208,47 @@
       if (!clickedInside) {
         closeAll();
       }
+    });
+  })();
+  
+  // Gallery thumb size persistence - load on page load
+  (function() {
+    var STORAGE_KEY = 'lumigen_gallery_thumb_size';
+    var form = document.querySelector('form[action="/gallery"]');
+    if (!form) return;
+    
+    // Check if thumb_size is in URL params
+    var urlParams = new URLSearchParams(window.location.search);
+    var hasThumbParam = urlParams.has('thumb_size');
+    
+    // If no thumb_size in URL, check localStorage and redirect
+    if (!hasThumbParam) {
+      try {
+        var savedSize = localStorage.getItem(STORAGE_KEY);
+        if (savedSize && ['sm', 'md', 'lg'].indexOf(savedSize) !== -1) {
+          var separator = window.location.search ? '&' : '?';
+          window.location.href = window.location.pathname + window.location.search + separator + 'thumb_size=' + savedSize;
+          return;
+        }
+      } catch (e) {}
+    } else {
+      // Save the current thumb_size to localStorage
+      try {
+        var currentSize = urlParams.get('thumb_size');
+        if (currentSize && ['sm', 'md', 'lg'].indexOf(currentSize) !== -1) {
+          localStorage.setItem(STORAGE_KEY, currentSize);
+        }
+      } catch (e) {}
+    }
+    
+    // Handle size button clicks - save to localStorage before navigation
+    document.querySelectorAll('[data-gallery-thumb-size]').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        var size = btn.getAttribute('data-gallery-thumb-size');
+        try {
+          localStorage.setItem(STORAGE_KEY, size);
+        } catch (e) {}
+      });
     });
   })();
 </script>

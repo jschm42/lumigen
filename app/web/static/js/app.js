@@ -478,9 +478,161 @@
     document.querySelectorAll('[data-profile-form]').forEach(setupProfileForm);
   }
 
-// ==========================================================================
-// Gallery Selection
-// ==========================================================================
+  // ==========================================================================
+  // Gallery Filter Persistence (localStorage)
+  // ==========================================================================
+
+  var GALLERY_FILTER_KEY = 'lumigen_gallery_filters';
+  var GALLERY_THUMB_SIZE_KEY = 'lumigen_gallery_thumb_size';
+
+  /**
+   * Load gallery filters from localStorage and apply to form
+   */
+  function loadGalleryFilters() {
+    try {
+      var stored = localStorage.getItem(GALLERY_FILTER_KEY);
+      if (!stored) return;
+      var filters = JSON.parse(stored);
+      if (!filters || typeof filters !== 'object') return;
+
+      // Apply to select inputs
+      ['profile_name', 'provider', 'q'].forEach(function (name) {
+        var selectEl = document.querySelector('form[action="/gallery"] [name="' + name + '"]');
+        if (selectEl && filters[name]) {
+          selectEl.value = filters[name];
+        }
+      });
+
+      // Apply to category checkboxes
+      if (filters.category_ids && Array.isArray(filters.category_ids)) {
+        filters.category_ids.forEach(function (catId) {
+          var checkbox = document.querySelector('form[action="/gallery"] input[name="category_ids"][value="' + catId + '"]');
+          if (checkbox) {
+            checkbox.checked = true;
+          }
+        });
+      }
+
+      // Update category popover label
+      updateCategoryLabel();
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }
+
+  /**
+   * Save current gallery filters to localStorage
+   */
+  function saveGalleryFilters() {
+    try {
+      var form = document.querySelector('form[action="/gallery"]');
+      if (!form) return;
+
+      var filters = {};
+
+      // Save select inputs
+      ['profile_name', 'provider', 'q'].forEach(function (name) {
+        var selectEl = form.querySelector('[name="' + name + '"]');
+        if (selectEl && selectEl.value) {
+          filters[name] = selectEl.value;
+        }
+      });
+
+      // Save category checkboxes
+      var checkedCategories = [];
+      form.querySelectorAll('input[name="category_ids"]:checked').forEach(function (checkbox) {
+        var val = parseInt(checkbox.value, 10);
+        if (!isNaN(val)) {
+          checkedCategories.push(val);
+        }
+      });
+      if (checkedCategories.length > 0) {
+        filters.category_ids = checkedCategories;
+      }
+
+      localStorage.setItem(GALLERY_FILTER_KEY, JSON.stringify(filters));
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }
+
+  /**
+   * Save thumb size preference to localStorage
+   */
+  function saveGalleryThumbSize(size) {
+    try {
+      if (size && ['sm', 'md', 'lg'].indexOf(size) !== -1) {
+        localStorage.setItem(GALLERY_THUMB_SIZE_KEY, size);
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }
+
+  /**
+   * Load thumb size preference from localStorage
+   */
+  function loadGalleryThumbSize() {
+    try {
+      return localStorage.getItem(GALLERY_THUMB_SIZE_KEY) || 'md';
+    } catch (e) {
+      return 'md';
+    }
+  }
+
+  /**
+   * Update the category filter label to show selection count
+   */
+  function updateCategoryLabel() {
+    var form = document.querySelector('form[action="/gallery"]');
+    if (!form) return;
+
+    var checkedCount = form.querySelectorAll('input[name="category_ids"]:checked').length;
+    var labelSpan = form.querySelector('[data-category-popover-toggle] span:nth-child(2)');
+    if (labelSpan) {
+      if (checkedCount > 0) {
+        labelSpan.textContent = checkedCount + ' ausgewaehlt';
+      } else {
+        labelSpan.textContent = 'Alle Kategorien';
+      }
+    }
+  }
+
+  /**
+   * Setup gallery filter persistence
+   */
+  function setupGalleryFilters() {
+    var form = document.querySelector('form[action="/gallery"]');
+    if (!form) return;
+
+    // Load saved filters on page load
+    loadGalleryFilters();
+
+    // Save filters on form submit
+    form.addEventListener('submit', function () {
+      saveGalleryFilters();
+    });
+
+    // Save filters when category checkboxes change
+    form.querySelectorAll('input[name="category_ids"]').forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () {
+        updateCategoryLabel();
+        saveGalleryFilters();
+      });
+    });
+
+    // Save thumb size when size buttons are clicked
+    form.querySelectorAll('[data-gallery-thumb-size]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var size = btn.getAttribute('data-gallery-thumb-size');
+        saveGalleryThumbSize(size);
+      });
+    });
+  }
+
+  // ==========================================================================
+  // Gallery Selection
+  // ==========================================================================
 
 function setupGallerySelection() {
   var bulkForm = document.getElementById('bulk-action-form');
@@ -595,6 +747,7 @@ function setupGallerySelection() {
     setupModelSelects();
     setupGenerationForms();
     setupProfileForms();
+    setupGalleryFilters();
     setupGallerySelection();
   }
 

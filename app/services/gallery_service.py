@@ -39,7 +39,6 @@ class GalleryService:
         page_size: Optional[int] = None,
         profile_name: Optional[str] = None,
         provider: Optional[str] = None,
-        status: Optional[str] = None,
         prompt_query: Optional[str] = None,
         category_ids: Optional[list[int]] = None,
     ) -> GalleryPage:
@@ -51,8 +50,6 @@ class GalleryService:
             filters.append(Generation.profile_name == profile_name)
         if provider:
             filters.append(Generation.provider == provider)
-        if status:
-            filters.append(Generation.status == status)
         if prompt_query:
             filters.append(Generation.prompt_user.ilike(f"%{prompt_query}%"))
         normalized_category_ids = sorted({item for item in (category_ids or []) if item > 0})

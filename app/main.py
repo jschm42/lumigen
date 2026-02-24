@@ -1586,7 +1586,6 @@ def gallery_page(
     page: int = Query(default=1, ge=1),
     profile_name: Optional[str] = Query(default=None),
     provider: Optional[str] = Query(default=None),
-    status: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
     category_ids: list[int] = Query(default=[]),
     thumb_size: Optional[str] = Query(default="md"),
@@ -1601,7 +1600,6 @@ def gallery_page(
         page=page,
         profile_name=profile_name or None,
         provider=provider or None,
-        status=status or None,
         prompt_query=q or None,
         category_ids=normalized_category_ids or None,
     )
@@ -1612,8 +1610,6 @@ def gallery_page(
         filter_params["profile_name"] = profile_name
     if provider:
         filter_params["provider"] = provider
-    if status:
-        filter_params["status"] = status
     if q:
         filter_params["q"] = q
     if normalized_category_ids:
@@ -1631,7 +1627,6 @@ def gallery_page(
             "page_data": page_data,
             "profile_name": profile_name or "",
             "provider": provider or "",
-            "status": status or "",
             "q": q or "",
             "selected_category_ids": normalized_category_ids,
             "thumb_size": thumb_size_value,
@@ -1641,7 +1636,6 @@ def gallery_page(
             "message": message or "",
             "error": error or "",
             "hide_header": True,
-            "hide_footer": True,
         },
     )
 

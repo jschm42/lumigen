@@ -16,7 +16,7 @@
   <script src="https://unpkg.com/idiomorph@0.3.0/dist/idiomorph-ext.min.js" defer></script>
   <script src="{{ url_for('static', path='js/app.js') }}" defer></script>
 </head>
-<body class="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
+<body class="flex flex-col min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
   {% set embedded = request.query_params.get('embedded') == '1' %}
   {% set show_top_navigation = false %}
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
@@ -104,12 +104,12 @@
   </header>
   {% endif %}
 
-  <main class="mx-auto w-full {% if embedded %}max-w-none px-0 py-0{% elif hide_header %}max-w-none px-2 py-2 sm:px-3 lg:px-4{% else %}max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8{% endif %}">
+  <main class="flex-1 mx-auto w-full {% if embedded %}max-w-none px-0 py-0{% elif hide_header %}max-w-none px-2 py-2 sm:px-3 lg:px-4{% else %}max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8{% endif %}">
     {% block content %}{% endblock %}
   </main>
 
   {% if not hide_footer and not embedded %}
-  <footer class="mx-auto flex w-full max-w-7xl flex-col items-center justify-center gap-1 px-4 pb-10 pt-2 text-sm text-slate-500 sm:px-6 lg:px-8">
+  <footer class="mx-auto mt-auto flex w-full max-w-7xl flex-col items-center justify-center gap-1 px-4 pb-10 pt-2 text-sm text-slate-500 sm:px-6 lg:px-8">
     <small>(c) 2026 by Jean Schmitz</small>
     <small class="text-xs">v{{ app_version }}</small>
   </footer>
