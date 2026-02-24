@@ -1,3 +1,11 @@
+## Architecture
+
+- Separate concerns: routers for HTTP, services for business logic, repositories for data access
+- Single Responsibility: one function does one thing, keep functions under 20 lines
+- Use repository pattern for all database access
+- Models are data structures only, no business logic
+- Extract common logic into utilities, avoid code duplication
+- Use data classes when functions need more than 3 parameters
 ## Coding Guidelines
 
 ### Strict Separation
@@ -67,3 +75,20 @@
 - Cache static files with Cache-Control headers
 - Lazy load and cache Pillow images
 - Cache HuggingFace models locally
+
+
+## Security
+
+- Never log sensitive data like passwords, tokens, or API keys
+- Never build SQL queries manually, use SQLAlchemy ORM exclusively
+- Always validate input using Pydantic schemas
+- Always use environment variables for secrets via pydantic-settings
+- Always configure HTTPS for production
+- Never store plaintext passwords, use bcrypt or argon2
+- Validate file extensions AND mime types for uploads
+- Limit file upload sizes
+- Store uploaded files outside webroot
+- Implement rate limiting on APIs
+- Configure CORS properly
+- Use timeouts with httpx
+- Validate tokens server-side
