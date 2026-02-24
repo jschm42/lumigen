@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -49,6 +50,12 @@ from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
 
 settings = get_settings()
+
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
@@ -145,6 +152,7 @@ def apply_openrouter_image_config(
     provider: str,
     aspect_ratio: str,
     image_size: str,
+    allow_clear: bool = True,
 ) -> dict[str, Any]:
     merged = copy.deepcopy(params_json or {})
     provider_value = (provider or "").strip().lower()
@@ -172,12 +180,12 @@ def apply_openrouter_image_config(
 
     if ratio_value:
         image_config["aspect_ratio"] = ratio_value
-    else:
+    elif allow_clear:
         image_config.pop("aspect_ratio", None)
 
     if image_size_value:
         image_config["image_size"] = image_size_value
-    else:
+    elif allow_clear:
         image_config.pop("image_size", None)
 
     if image_config:
@@ -695,6 +703,7 @@ def generate_submit(
                 provider=provider_value,
                 aspect_ratio=aspect_ratio,
                 image_size=image_size,
+                allow_clear=False,
             )
             overrides["params_json"] = params_json_with_overrides
         else:

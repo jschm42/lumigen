@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -60,6 +62,31 @@ class ProviderServiceUnavailableError(ProviderError):
 
 class ProviderAdapter(ABC):
     name: str
+    _logger: logging.Logger = logging.getLogger(__name__)
+
+    def _log_request(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        payload: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Logs an outgoing provider HTTP request at DEBUG level.
+
+        Sensitive header values (containing 'key' or 'auth') are masked.
+        """
+        safe_headers = {
+            k: ("***" if "key" in k.lower() or "auth" in k.lower() else v)
+            for k, v in headers.items()
+        }
+        self._logger.debug(
+            "[%s] → %s %s\nHeaders: %s\nPayload: %s",
+            self.name,
+            method.upper(),
+            url,
+            json.dumps(safe_headers, indent=2),
+            json.dumps(payload, indent=2, default=str) if payload is not None else "(none)",
+        )
 
     @abstractmethod
     async def generate(

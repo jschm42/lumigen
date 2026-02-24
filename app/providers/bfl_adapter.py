@@ -83,6 +83,7 @@ class BFLAdapter(ProviderAdapter):
             "Content-Type": "application/json",
         }
         payload = self._build_payload(request)
+        self._log_request("POST", submit_url, headers, payload)
 
         timeout = httpx.Timeout(60.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:

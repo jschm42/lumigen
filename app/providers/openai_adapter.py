@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from typing import Any, Optional
 
 import httpx
@@ -20,6 +21,7 @@ from app.providers.base import (
 
 class OpenAIAdapter(ProviderAdapter):
     name = "openai"
+    _logger = logging.getLogger(__name__)
 
     async def list_models(self, settings: Settings) -> list[str]:
         if not settings.openai_api_key:
@@ -28,6 +30,7 @@ class OpenAIAdapter(ProviderAdapter):
         url = settings.openai_base_url.rstrip("/") + "/models"
         headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
         timeout = httpx.Timeout(30.0, connect=10.0)
+        self._log_request("GET", url, headers)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(url, headers=headers)
@@ -62,6 +65,7 @@ class OpenAIAdapter(ProviderAdapter):
         }
         output_format = self._normalize_output_format(request.output_format)
         payload = self._build_payload(request, output_format)
+        self._log_request("POST", url, headers, payload)
 
         timeout = httpx.Timeout(60.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:

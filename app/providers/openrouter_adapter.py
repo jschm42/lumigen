@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import re
 from io import BytesIO
 from typing import Any, Optional
@@ -23,6 +24,7 @@ from app.providers.base import (
 
 class OpenRouterAdapter(ProviderAdapter):
     name = "openrouter"
+    _logger = logging.getLogger(__name__)
 
     async def list_models(self, settings: Settings) -> list[str]:
         if not settings.openrouter_api_key:
@@ -33,6 +35,7 @@ class OpenRouterAdapter(ProviderAdapter):
         url = settings.openrouter_base_url.rstrip("/") + "/models"
         headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
         timeout = httpx.Timeout(30.0, connect=10.0)
+        self._log_request("GET", url, headers)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(url, headers=headers)
@@ -74,6 +77,7 @@ class OpenRouterAdapter(ProviderAdapter):
             "X-Title": settings.app_name,
         }
         payload = self._build_payload(request)
+        self._log_request("POST", url, headers, payload)
 
         timeout = httpx.Timeout(120.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:

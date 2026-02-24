@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Lumigen"
     app_version: str = VERSION
+    log_level: str = "INFO"
 
     data_dir: Path = Path("./data")
     sqlite_path: Path = Path("./data/app.db")
