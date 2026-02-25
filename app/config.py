@@ -55,8 +55,6 @@ class Settings(BaseSettings):
     provider_config_key: Optional[str] = None
 
     upscaler_command: Optional[str] = None
-    upscaler_model_x2: str = "realesrgan-x2plus"
-    upscaler_model_x4: str = "realesrgan-x4plus"
     upscaler_model_dir: Path = Path("./data/models/realesrgan")
 
     openai_api_key: Optional[str] = None

@@ -179,8 +179,6 @@ Lumigen can upscale generated images with Real-ESRGAN NCNN Vulkan.
 
 ```dotenv
 UPSCALER_COMMAND=/usr/local/bin/realesrgan-ncnn-vulkan
-UPSCALER_MODEL_X2=realesrgan-x2plus
-UPSCALER_MODEL_X4=realesrgan-x4plus
 UPSCALER_MODEL_DIR=./data/models/realesrgan
 ```
 
