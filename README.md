@@ -1,143 +1,177 @@
 # Lumigen
 
-Local-first FastAPI app for image generation with provider adapters (stub, OpenAI, OpenRouter) and SQLite-first storage.
+Lumigen is a local-first image generation app built with FastAPI.
+It provides a server-rendered web UI, provider adapters (OpenAI, OpenRouter, Google, BFL, and local stub), and SQLite-backed asset management with reproducible metadata snapshots.
 
-## Features
+## Why Lumigen
 
-- FastAPI + Jinja2 + HTMX server-rendered UI
-- SQLAlchemy 2.0 + Alembic migrations from day 1
-- SQLite DB at `./data/app.db` with WAL + foreign keys enabled
-- Provider adapter architecture with per-provider rate limiting/retry
-- Safe managed filesystem writes under storage templates
-- Reproducible generation snapshots (profile/storage/request)
-- Sidecars for successful and failed generations
-- Thumbnail generation under `.thumbs/`
+- Local-first by default: data, images, and database live in `./data`
+- Provider-agnostic generation flow through adapter classes
+- Safe managed file storage with strict path boundary checks
+- Reproducible generation history via profile/request/storage snapshots
+- Built-in sidecars for both successful and failed generations
+- Optional local upscaling with Real-ESRGAN
 
-## Quick start
+## Tech stack
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+- Backend: FastAPI + Jinja2 + HTMX
+- Database: SQLite + SQLAlchemy 2 + Alembic
+- HTTP clients: `httpx`
+- Image processing: `Pillow`
+- Secret encryption for model keys: `cryptography` (Fernet)
+
+## Project structure
+
+- `app/main.py`: route definitions and service wiring
+- `app/services/`: generation, storage, thumbnails, sidecars, gallery, enhancement
+- `app/providers/`: provider adapters and registry with retry/rate-limit policy
+- `app/db/`: SQLAlchemy models, CRUD helpers, DB session/engine
+- `alembic/`: schema migrations
+- `scripts/`: Docker run/update helpers and provider key generation
+
+## Getting started
+
+### Prerequisites
+
+- Python 3.12+
+- pip
+- Optional: Docker
+
+### 1) Clone and enter the repository
+
+```bash
+git clone <your-repo-url>
+cd lumigen
+```
+
+### 2) Create and activate a virtual environment
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+macOS/Linux:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### 3) Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configure environment (optional defaults are already local-first):
+### 4) Configure environment
 
-```bash
+Windows:
+
+```powershell
 copy .env.example .env
 ```
 
-4. Run migrations:
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+For a local-only first run, the default `.env` values are enough.
+
+### 5) Run database migrations
 
 ```bash
 alembic upgrade head
 ```
 
-5. Start app:
+### 6) Start the app
 
 ```bash
 python -m app.main
 ```
 
-Or:
+Alternative dev command:
 
 ```bash
 uvicorn app.main:app --reload --port 8010
 ```
 
-Open http://127.0.0.1:8010
+Open: `http://127.0.0.1:8010`
 
-If port `8000` is already in use on your machine (common on Windows with other local tools), pick another port (for example `8010`).
+## First-time app usage
+
+1. Open **Profiles** and create a profile.
+2. Choose provider:
+	- `stub` for local testing without external API calls
+	- any cloud provider if API keys are configured
+3. Go to **Generate**, enter a prompt, submit.
+4. Check **Gallery** for generated assets and metadata.
+
+## Provider configuration
+
+Set provider API keys in `.env` for default usage:
+
+- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
+- `GOOGLE_API_KEY`
+- `BFL_API_KEY`
+
+For per-model custom API keys in Admin, set `PROVIDER_CONFIG_KEY` first.
+Generate one with:
+
+- Bash: `./scripts/generate_provider_key.sh`
+- PowerShell: `./scripts/generate_provider_key.ps1`
 
 ## Docker
 
-Build and run with a shared local `data/` folder and port `7003`:
+Run (build + start on port `7003`):
+
+macOS/Linux:
 
 ```bash
-scripts/docker_run.sh
+./scripts/docker_run.sh
 ```
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
-scripts\docker_run.ps1
+.\scripts\docker_run.ps1
 ```
 
-Configure the host data directory via `.env`:
+Update container after pulling new changes:
+
+macOS/Linux:
+
+```bash
+./scripts/docker_update.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\docker_update.ps1
+```
+
+Optional in `.env`:
 
 ```dotenv
 DOCKER_DATA_DIR=./data
 ```
 
-Update the container after pulling a new version:
+Open: `http://127.0.0.1:7003`
 
-```bash
-scripts/docker_update.sh
-```
+## Upscaling (optional, Linux + Real-ESRGAN)
 
-```powershell
-scripts\docker_update.ps1
-```
+Lumigen can upscale generated images with Real-ESRGAN NCNN Vulkan.
 
-## Notes
-
-- Create at least one profile in **Profiles** before generating.
-- Use provider `stub` for fully local end-to-end generation.
-- OpenAI adapter works with `OPENAI_API_KEY`.
-- OpenRouter adapter works with `OPENROUTER_API_KEY` and sends image-generation requests through `/chat/completions` (`modalities: ["image","text"]`).
-- Generated files are managed via DB-indexed relative paths only; no arbitrary path browsing is exposed.
-
-## React migration frontend (Next.js)
-
-A React/Next.js frontend is available under `./frontend` as a migration path from server-rendered templates.
-
-- Uses `next`, `react`, `next-intl`, `react-hook-form`, `zod`, `clsx`, `tailwind-merge`, `lucide-react`, `@prisma/client`.
-- Reads existing SQLite data through Prisma (`DATABASE_URL=file:../../data/app.db` from `frontend/prisma/schema.prisma`).
-- For generation execution, it forwards requests to the existing FastAPI backend (`FASTAPI_BASE_URL`).
-
-Quick start:
-
-```bash
-cd frontend
-npm install
-copy .env.example .env
-npm run prisma:generate
-npm run dev
-```
-
-Open `http://127.0.0.1:3100/de`.
-
-## Upscaling (Linux, local Real-ESRGAN)
-
-Lumigen can upscale generated images locally using Real-ESRGAN (NCNN Vulkan). The app calls the binary directly, so you only need to install the executable and the model files.
-
-### 1) Download the binary
-
-- Real-ESRGAN releases: https://github.com/xinntao/Real-ESRGAN/releases
-- Download the Linux build (for example `realesrgan-ncnn-vulkan`), extract it, and make it executable:
-
-```bash
-chmod +x realesrgan-ncnn-vulkan
-sudo cp realesrgan-ncnn-vulkan /usr/local/bin/
-```
-
-### 2) Download the models
-
-- Model weights are available in the repo under `weights/` or in the release assets:
-	- https://github.com/xinntao/Real-ESRGAN/tree/master/weights
-- Hugging Face hosts mirrors too (search for Real-ESRGAN weights):
-	- https://huggingface.co/models?search=Real-ESRGAN
-
-The app expects model names (not full paths), so place the model files next to the binary or in the `models` directory that Real-ESRGAN uses by default (for example `/usr/local/bin/models`).
-
-Recommended model files:
-- `realesrgan-x2plus` (x2)
-- `realesrgan-x4plus` (x4)
-
-For x8, Lumigen runs x4 then x2 sequentially.
-
-### 3) Configure .env
+1. Install the Real-ESRGAN binary from:
+	- https://github.com/xinntao/Real-ESRGAN/releases
+2. Place model files (`.param` + `.bin`) where the binary can resolve them.
+3. Configure `.env`:
 
 ```dotenv
 UPSCALER_COMMAND=/usr/local/bin/realesrgan-ncnn-vulkan
@@ -145,13 +179,7 @@ UPSCALER_MODEL_X2=realesrgan-x2plus
 UPSCALER_MODEL_X4=realesrgan-x4plus
 ```
 
-Restart the app and enable the upscale option in the Generate form.
-
-### Optional: auto-download models from Hugging Face
-
-Lumigen can auto-download Real-ESRGAN NCNN model files (`.param` and `.bin`) from a Hugging Face repo. You need a repo that actually contains those NCNN files.
-
-Example `.env`:
+Optional auto-download from Hugging Face:
 
 ```dotenv
 UPSCALER_AUTO_DOWNLOAD=true
@@ -160,8 +188,16 @@ UPSCALER_HF_REVISION=main
 UPSCALER_MODEL_DIR=./data/models/realesrgan
 ```
 
-Expected files in the repo:
-- `realesrgan-x2plus.param`
-- `realesrgan-x2plus.bin`
-- `realesrgan-x4plus.param`
-- `realesrgan-x4plus.bin`
+## Development notes
+
+- Migrations are required for schema changes: add Alembic migration under `alembic/versions/`.
+- The app also calls `Base.metadata.create_all()` during startup for local bootstrap, but Alembic remains the source of schema evolution.
+- There is currently no automated test suite in this repository.
+
+## Optional frontend migration path
+
+The repository can include a Next.js frontend under `frontend/` as a migration path from server-rendered templates. It reads from the same SQLite data and forwards generation requests to FastAPI.
+
+## License
+
+See `LICENSE`.
