@@ -154,8 +154,6 @@
     var inputFileState = [];
     var enhanceBtn = form.querySelector('[data-enhance-prompt]');
     var promptInput = form.querySelector('[name="prompt_user"]');
-    var upscaleEnable = form.querySelector('[data-upscale-enable]');
-    var upscaleModel = form.querySelector('[data-upscale-model]');
     var advancedToggle = form.querySelector('[data-advanced-toggle]');
     var advancedPanel = form.querySelector('[data-advanced-panel]');
 
@@ -240,17 +238,6 @@
       heightInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
       });
-    }
-
-    if (upscaleEnable && upscaleModel) {
-      function syncUpscaleToggle() {
-        upscaleModel.disabled = !upscaleEnable.checked;
-        if (!upscaleEnable.checked) {
-          upscaleModel.value = '';
-        }
-      }
-      upscaleEnable.addEventListener('change', syncUpscaleToggle);
-      syncUpscaleToggle();
     }
 
     function syncInputFiles() {

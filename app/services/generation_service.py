@@ -75,9 +75,12 @@ class GenerationService:
             params_json = copy.deepcopy(params_json_override)
         else:
             params_json = copy.deepcopy(profile.params_json or {})
-        upscale_model_override = effective_overrides.get("upscale_model")
-        if isinstance(upscale_model_override, str) and upscale_model_override.strip():
-            upscale_model = upscale_model_override.strip()
+        if "upscale_model" in effective_overrides:
+            upscale_model_override = effective_overrides.get("upscale_model")
+            if isinstance(upscale_model_override, str):
+                upscale_model = upscale_model_override.strip() or None
+            else:
+                upscale_model = None
         else:
             upscale_model = str(profile.upscale_model or "").strip() or None
         input_images = effective_overrides.get("input_images")

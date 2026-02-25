@@ -638,8 +638,7 @@ def generate_submit(
     seed: str = Form(default=""),
     aspect_ratio: str = Form(default=""),
     image_size: str = Form(default=""),
-    upscale_enable: bool = Form(default=False),
-    upscale_model: str = Form(default=""),
+    upscale_model: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
     session: Session = Depends(get_session),
@@ -738,16 +737,24 @@ def generate_submit(
         if seed_value is not None:
             overrides["seed"] = seed_value
 
-        if upscale_enable:
+        upscale_choice = (upscale_model or "__profile__").strip()
+        if upscale_choice == "__none__":
+            overrides["upscale_model"] = None
+        elif upscale_choice == "__profile__":
+            profile_upscale_model = str(profile.upscale_model or "").strip()
+            if profile_upscale_model:
+                if not upscale_service.is_available():
+                    raise ValueError("Upscaler is not configured on this server")
+                available = upscale_service.list_available_models()
+                if available and profile_upscale_model not in available:
+                    raise ValueError("Profile upscale model is not available")
+        else:
             if not upscale_service.is_available():
                 raise ValueError("Upscaler is not configured on this server")
-            model_value = upscale_model.strip() or str(profile.upscale_model or "").strip()
-            if not model_value:
-                raise ValueError("Upscale model is required")
             available = upscale_service.list_available_models()
-            if available and model_value not in available:
+            if available and upscale_choice not in available:
                 raise ValueError("Selected upscale model is not available")
-            overrides["upscale_model"] = model_value
+            overrides["upscale_model"] = upscale_choice
 
         generation = generation_service.create_generation_from_profile(
             session,
