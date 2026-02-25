@@ -216,6 +216,19 @@ Shared-path mapping (default):
 - Container data dir: `/app/data`
 - Ensure `DOCKER_DATA_DIR` points to the host folder you want to share.
 
+### Docker troubleshooting (Vulkan)
+
+If you see:
+
+`error while loading shared libraries: libvulkan.so.1: cannot open shared object file`
+
+then rebuild the image so Vulkan runtime libraries are included:
+
+- PowerShell: `./scripts/docker_update.ps1`
+- Bash: `./scripts/docker_update.sh`
+
+If you want hardware Vulkan acceleration from host GPU, ensure your Docker runtime is configured for GPU passthrough (for example NVIDIA Container Toolkit on NVIDIA systems).
+
 ## Development notes
 
 - Migrations are required for schema changes: add Alembic migration under `alembic/versions/`.
