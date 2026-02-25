@@ -122,6 +122,41 @@ class OpenRouterAdapter(ProviderAdapter):
             image_refs = self._extract_image_refs(
                 body, output_format=normalized_output_format
             )
+            if not image_refs and self._should_retry_empty_success_with_image_only(
+                payload
+            ):
+                retry_payload = dict(payload)
+                retry_payload["modalities"] = ["image"]
+                response = await client.post(url, headers=headers, json=retry_payload)
+
+                if response.status_code == 429:
+                    raise ProviderRateLimitError("OpenRouter rate limit reached (429).")
+                if response.status_code == 503:
+                    raise ProviderServiceUnavailableError(
+                        "OpenRouter service unavailable (503)."
+                    )
+                if response.status_code >= 500:
+                    raise ProviderServiceUnavailableError(
+                        f"OpenRouter upstream error ({response.status_code})."
+                    )
+                if response.status_code >= 400:
+                    message = self._extract_error_message(response)
+                    raise ProviderError(
+                        f"OpenRouter request failed ({response.status_code}): {message}"
+                    )
+
+                try:
+                    body = response.json()
+                except Exception as exc:
+                    raise ProviderError(
+                        "OpenRouter returned a non-JSON response."
+                    ) from exc
+
+                payload = retry_payload
+                image_refs = self._extract_image_refs(
+                    body, output_format=normalized_output_format
+                )
+
             if not image_refs:
                 summary = self._summarize_empty_image_response(body)
                 raise ProviderError(
@@ -591,6 +626,20 @@ class OpenRouterAdapter(ProviderAdapter):
         )
         is_param_validation = any(token in message for token in keywords)
         return touches_dimensions and is_param_validation
+
+    def _should_retry_empty_success_with_image_only(
+        self, payload: dict[str, Any]
+    ) -> bool:
+        requested_modalities = payload.get("modalities")
+        if not isinstance(requested_modalities, list):
+            return True
+
+        normalized_modalities = {
+            str(modality).strip().lower()
+            for modality in requested_modalities
+            if isinstance(modality, str) and modality.strip()
+        }
+        return normalized_modalities != {"image"}
 
     def _summarize_empty_image_response(self, body: dict[str, Any]) -> str:
         summary: list[str] = [f"top_keys={sorted(body.keys())}"]

@@ -125,6 +125,7 @@ class GenerationService:
             "n_images": max(1, n_images),
             "seed": seed,
             "upscale_model": upscale_model,
+            "upscaling_active": False,
             "output_format": profile.output_format,
             "provider": profile.provider,
             "model": profile.model,
@@ -167,6 +168,7 @@ class GenerationService:
         profile_snapshot = copy.deepcopy(source.profile_snapshot_json or {})
         storage_snapshot = copy.deepcopy(source.storage_template_snapshot_json or {})
         request_snapshot = copy.deepcopy(source.request_snapshot_json or {})
+        request_snapshot["upscaling_active"] = False
 
         generation = Generation(
             profile_id=source.profile_id,
@@ -254,6 +256,11 @@ class GenerationService:
                     raise ProviderError("Upscale service is not available.")
                 if upscale_enabled and not self.upscale_service.is_available():
                     raise ProviderError("Upscaler is not configured on this server.")
+                if upscale_enabled:
+                    request_snapshot = dict(generation.request_snapshot_json or {})
+                    request_snapshot["upscaling_active"] = True
+                    generation.request_snapshot_json = request_snapshot
+                    session.commit()
                 category_ids = self._parse_int_list(
                     generation.request_snapshot_json.get("category_ids")
                 )

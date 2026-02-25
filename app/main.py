@@ -964,6 +964,7 @@ async def provider_models(provider: str) -> JSONResponse:
 def admin_page(
     request: Request,
     section: Optional[str] = Query(default="models"),
+    message: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -1590,6 +1591,7 @@ def gallery_page(
     q: Optional[str] = Query(default=None),
     category_ids: list[int] = Query(default=[]),
     thumb_size: Optional[str] = Query(default="md"),
+    message: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:

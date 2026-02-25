@@ -11,8 +11,8 @@
 {% endif %}
 
 {% set snapshot = generation.request_snapshot_json or {} %}
-{% set upscale_model = (snapshot.get('upscale_model') or '')|string %}
-{% set running_status_text = 'Upscaling...' if generation.status == 'running' and upscale_model else 'Generating...' %}
+{% set upscaling_active = snapshot.get('upscaling_active') %}
+{% set running_status_text = 'Upscaling...' if generation.status == 'running' and upscaling_active else 'Generating...' %}
 
 <div id="chat-generation-{{ generation.id }}"
      class="chat-generation space-y-3"
