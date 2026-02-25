@@ -81,6 +81,7 @@ class Profile(Base, TimestampMixin):
     output_format: Mapped[str] = mapped_column(
         String(16), default="png", nullable=False
     )
+    upscale_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     params_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )

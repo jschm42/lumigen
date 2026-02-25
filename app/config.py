@@ -58,9 +58,6 @@ class Settings(BaseSettings):
     upscaler_model_x2: str = "realesrgan-x2plus"
     upscaler_model_x4: str = "realesrgan-x4plus"
     upscaler_model_dir: Path = Path("./data/models/realesrgan")
-    upscaler_auto_download: bool = False
-    upscaler_hf_repo: Optional[str] = None
-    upscaler_hf_revision: Optional[str] = None
 
     openai_api_key: Optional[str] = None
     openai_base_url: str = "https://api.openai.com/v1"

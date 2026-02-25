@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import copy
-import json
 import logging
 import os
 import uuid
@@ -137,13 +136,24 @@ def parse_optional_int(value: Optional[str]) -> Optional[int]:
     return int(stripped)
 
 
-def parse_params_json(raw: Optional[str]) -> dict[str, Any]:
-    if not raw or not raw.strip():
-        return {}
-    parsed = json.loads(raw)
-    if not isinstance(parsed, dict):
-        raise ValueError("params_json must be a JSON object")
-    return parsed
+def resolve_default_storage_template_id(session: Session) -> int:
+    templates = crud.list_storage_templates(session)
+    if not templates:
+        raise ValueError("No storage template available")
+    default_template = next((item for item in templates if item.name == "default"), None)
+    return (default_template or templates[0]).id
+
+
+def validate_profile_upscale_model(value: str) -> Optional[str]:
+    candidate = (value or "").strip()
+    if not candidate:
+        return None
+    local_models = set(upscale_service.list_available_models())
+    if not local_models:
+        raise ValueError("No local upscale models available. Please place a model in UPSCALER_MODEL_DIR first.")
+    if candidate not in local_models:
+        raise ValueError("Upscale model must be one of the locally available models")
+    return candidate
 
 
 def apply_openrouter_image_config(
@@ -731,7 +741,7 @@ def generate_submit(
         if upscale_enable:
             if not upscale_service.is_available():
                 raise ValueError("Upscaler is not configured on this server")
-            model_value = upscale_model.strip()
+            model_value = upscale_model.strip() or str(profile.upscale_model or "").strip()
             if not model_value:
                 raise ValueError("Upscale model is required")
             available = upscale_service.list_available_models()
@@ -948,7 +958,6 @@ def admin_page(
     request: Request,
     section: Optional[str] = Query(default="models"),
     error: Optional[str] = Query(default=None),
-    message: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     model_configs = crud.list_model_configs(session)
@@ -1366,7 +1375,6 @@ def profiles_page(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
-    storage_templates = crud.list_storage_templates(session)
     model_configs = crud.list_model_configs(session)
     categories = crud.list_categories(session)
     open_edit_id: Optional[int] = None
@@ -1378,7 +1386,6 @@ def profiles_page(
         {
             "request": request,
             "profiles": profiles,
-            "storage_templates": storage_templates,
             "model_configs": model_configs,
             "categories": categories,
             "upscale_ready": upscale_service.is_available(),
@@ -1414,10 +1421,8 @@ def create_profile(
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
-    params_json: str = Form(default="{}"),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
-    storage_template_id: int = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     try:
@@ -1440,17 +1445,12 @@ def create_profile(
             if height_value is not None and height_value <= 0:
                 raise ValueError("Height must be > 0")
         params_value = apply_openrouter_image_config(
-            params_json=parse_params_json(params_json),
+            params_json={},
             provider=provider_value,
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        # Store upscale_model in params_json if specified
-        upscale_model_value = upscale_model.strip()
-        if upscale_model_value:
-            if not params_value:
-                params_value = {}
-            params_value["upscale_model"] = upscale_model_value
+        upscale_model_value = validate_profile_upscale_model(upscale_model)
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -1469,9 +1469,10 @@ def create_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
+            upscale_model=upscale_model_value,
             params_json=params_value,
             categories=categories,
-            storage_template_id=storage_template_id,
+            storage_template_id=resolve_default_storage_template_id(session),
         )
     except (ValueError, IntegrityError) as exc:
         return RedirectResponse(url=f"/profiles?create=1&error={str(exc)}", status_code=303)
@@ -1491,10 +1492,8 @@ def update_profile(
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
-    params_json: str = Form(default="{}"),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
-    storage_template_id: int = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     profile = crud.get_profile(session, profile_id)
@@ -1521,17 +1520,12 @@ def update_profile(
             if height_value is not None and height_value <= 0:
                 raise ValueError("Height must be > 0")
         params_value = apply_openrouter_image_config(
-            params_json=parse_params_json(params_json),
+            params_json=dict(profile.params_json or {}),
             provider=provider_value,
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        # Store upscale_model in params_json if specified
-        upscale_model_value = upscale_model.strip()
-        if upscale_model_value:
-            if not params_value:
-                params_value = {}
-            params_value["upscale_model"] = upscale_model_value
+        upscale_model_value = validate_profile_upscale_model(upscale_model)
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -1551,9 +1545,9 @@ def update_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
+            upscale_model=upscale_model_value,
             params_json=params_value,
             categories=categories,
-            storage_template_id=storage_template_id,
         )
     except (ValueError, IntegrityError) as exc:
         return RedirectResponse(
@@ -1589,7 +1583,6 @@ def gallery_page(
     q: Optional[str] = Query(default=None),
     category_ids: list[int] = Query(default=[]),
     thumb_size: Optional[str] = Query(default="md"),
-    message: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:

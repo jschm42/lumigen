@@ -168,25 +168,29 @@ Open: `http://127.0.0.1:7003`
 
 Lumigen can upscale generated images with Real-ESRGAN NCNN Vulkan.
 
-1. Install the Real-ESRGAN binary from:
+1. Install the Real-ESRGAN NCNN Vulkan binary:
 	- https://github.com/xinntao/Real-ESRGAN/releases
-2. Place model files (`.param` + `.bin`) where the binary can resolve them.
-3. Configure `.env`:
+2. Download NCNN model files manually (`.param` + `.bin`).
+	- Example model names used by default: `realesrgan-x2plus` and `realesrgan-x4plus`
+	- Required files per model: `realesrgan-x2plus.param` + `realesrgan-x2plus.bin`
+3. Place the model files in your configured model directory (`UPSCALER_MODEL_DIR`).
+	- Default: `./data/models/realesrgan`
+4. Configure `.env`:
 
 ```dotenv
 UPSCALER_COMMAND=/usr/local/bin/realesrgan-ncnn-vulkan
 UPSCALER_MODEL_X2=realesrgan-x2plus
 UPSCALER_MODEL_X4=realesrgan-x4plus
-```
-
-Optional auto-download from Hugging Face:
-
-```dotenv
-UPSCALER_AUTO_DOWNLOAD=true
-UPSCALER_HF_REPO=ai-forever/Real-ESRGAN
-UPSCALER_HF_REVISION=main
 UPSCALER_MODEL_DIR=./data/models/realesrgan
 ```
+
+### Docker note (shared local models)
+
+When running in Docker, model files must be inside the shared data folder so the container can read them.
+
+- Host path (default): `./data/models/realesrgan`
+- Container path: `/app/data/models/realesrgan`
+- Ensure `DOCKER_DATA_DIR` points to the host folder you want to share with the container.
 
 ## Development notes
 

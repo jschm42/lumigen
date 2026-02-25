@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -23,9 +24,14 @@ class UpscaleService:
         model_dir = self._get_model_dir()
         if model_dir and model_dir.exists():
             for item in model_dir.iterdir():
-                if item.is_file() and item.suffix.lower() == ".param":
-                    if self._model_files_exist(item.stem, model_dir):
-                        models.add(item.stem)
+                if not item.is_file() or item.suffix.lower() != '.param':
+                    continue
+                try:
+                    model_name = self._normalize_model_name(item.stem)
+                except ValueError:
+                    continue
+                if self._model_files_exist(model_name, model_dir):
+                    models.add(model_name)
 
         return sorted(models)
 
@@ -37,26 +43,25 @@ class UpscaleService:
     ) -> Tuple[bytes, int, int, str]:
         cmd = self._resolve_command()
         if not cmd:
-            raise ValueError("UPSCALER_COMMAND is not configured.")
+            raise ValueError('UPSCALER_COMMAND is not configured.')
 
-        model_name = (model or "").strip()
+        model_name = (model or '').strip()
         if not model_name:
-            raise ValueError("Upscale model is required.")
+            raise ValueError('Upscale model is required.')
         scale = self._infer_scale(model_name)
         if scale not in {2, 3, 4}:
-            raise ValueError("Upscale model must map to x2, x3, or x4.")
+            raise ValueError('Upscale model must map to x2, x3, or x4.')
 
         fmt = self._normalize_format(output_format)
-        self._ensure_models_available(model_name)
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)
-            input_path = temp_root / f"input.{fmt}"
+            input_path = temp_root / f'input.{fmt}'
             input_path.write_bytes(data)
 
             output_path = self._run_realesrgan(
                 cmd,
                 input_path,
-                temp_root / "out",
+                temp_root / 'out',
                 scale,
                 model_name,
                 fmt,
@@ -68,7 +73,7 @@ class UpscaleService:
             return output_bytes, width, height, mime
 
     def _resolve_command(self) -> Optional[str]:
-        cmd = (self.settings.upscaler_command or "").strip()
+        cmd = (self.settings.upscaler_command or '').strip()
         if not cmd:
             return None
         if Path(cmd).is_file():
@@ -76,17 +81,17 @@ class UpscaleService:
         return shutil.which(cmd)
 
     def _normalize_format(self, output_format: str) -> str:
-        fmt = (output_format or "png").lower().lstrip(".")
-        if fmt == "jpeg":
-            fmt = "jpg"
-        if fmt not in {"png", "jpg", "webp"}:
-            return "png"
+        fmt = (output_format or 'png').lower().lstrip('.')
+        if fmt == 'jpeg':
+            fmt = 'jpg'
+        if fmt not in {'png', 'jpg', 'webp'}:
+            return 'png'
         return fmt
 
     def _format_to_mime(self, fmt: str) -> str:
-        if fmt == "jpg":
-            return "image/jpeg"
-        return f"image/{fmt}"
+        if fmt == 'jpg':
+            return 'image/jpeg'
+        return f'image/{fmt}'
 
     def _run_realesrgan(
         self,
@@ -98,42 +103,40 @@ class UpscaleService:
         fmt: str,
     ) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{input_path.stem}.{fmt}"
+        output_path = output_dir / f'{input_path.stem}.{fmt}'
         model_dir = self._model_dir_if_available(model)
         args = [
             cmd,
-            "-i",
+            '-i',
             str(input_path),
-            "-o",
+            '-o',
             str(output_path),
         ]
         if model_dir:
-            args.extend(["-m", str(model_dir)])
-        args.extend(
-            [
-                "-n",
-                model,
-                "-s",
-                str(scale),
-                "-f",
-                fmt,
-            ]
-        )
+            args.extend(['-m', str(model_dir)])
+        args.extend([
+            '-n',
+            model,
+            '-s',
+            str(scale),
+            '-f',
+            fmt,
+        ])
         try:
             subprocess.run(args, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or "").strip()
-            message = stderr or "Upscaler command failed."
+            stderr = (exc.stderr or '').strip()
+            message = stderr or 'Upscaler command failed.'
             raise ValueError(message) from exc
 
         if output_path.exists():
             return output_path
 
-        matches = sorted(output_dir.glob(f"{input_path.stem}.*"))
+        matches = sorted(output_dir.glob(f'{input_path.stem}.*'))
         if matches:
             return matches[0]
 
-        raise ValueError("Upscaler did not produce output.")
+        raise ValueError('Upscaler did not produce output.')
 
     def _get_image_size(self, path: Path) -> Tuple[int, int]:
         with Image.open(path) as image:
@@ -147,57 +150,34 @@ class UpscaleService:
             return model_dir
         return None
 
-    def _ensure_models_available(self, model: str) -> None:
-        if not self.settings.upscaler_auto_download:
-            return
-
-        repo = (self.settings.upscaler_hf_repo or "").strip()
-        if not repo:
-            raise ValueError("UPSCALER_HF_REPO is required for auto-download.")
-
-        model_dir = self._get_model_dir()
-        model_dir.mkdir(parents=True, exist_ok=True)
-
-        if not self._model_files_exist(model, model_dir):
-            self._download_model_files(repo, model, model_dir)
-
     def _model_files_exist(self, model: str, model_dir: Path) -> bool:
-        param = model_dir / f"{model}.param"
-        bin_file = model_dir / f"{model}.bin"
+        param = model_dir / f'{model}.param'
+        bin_file = model_dir / f'{model}.bin'
         if param.exists() and bin_file.exists():
             return True
-        param_upper = model_dir / f"{model}.PARAM"
-        bin_upper = model_dir / f"{model}.BIN"
+        param_upper = model_dir / f'{model}.PARAM'
+        bin_upper = model_dir / f'{model}.BIN'
         return param_upper.exists() and bin_upper.exists()
-
-    def _download_model_files(self, repo: str, model: str, model_dir: Path) -> None:
-        try:
-            from huggingface_hub import hf_hub_download
-        except ImportError as exc:
-            raise ValueError(
-                "huggingface_hub is required for auto-download. Install dependencies."
-            ) from exc
-
-        revision = (self.settings.upscaler_hf_revision or "").strip() or None
-        for suffix in (".param", ".bin"):
-            filename = f"{model}{suffix}"
-            hf_hub_download(
-                repo_id=repo,
-                filename=filename,
-                revision=revision,
-                local_dir=str(model_dir),
-                local_dir_use_symlinks=False,
-            )
 
     def _infer_scale(self, model: str) -> int:
         lowered = model.lower()
-        if "x2" in lowered:
+        if 'x2' in lowered:
             return 2
-        if "x3" in lowered:
+        if 'x3' in lowered:
             return 3
-        if "x4" in lowered:
+        if 'x4' in lowered:
             return 4
         return 4
+
+    def _normalize_model_name(self, value: str) -> str:
+        candidate = (value or '').strip()
+        if not candidate:
+            return ''
+        if len(candidate) > 128:
+            raise ValueError('Upscale model must be 128 characters or fewer.')
+        if not re.fullmatch(r'[A-Za-z0-9._-]+', candidate):
+            raise ValueError('Upscale model contains invalid characters.')
+        return candidate
 
     def _get_model_dir(self) -> Optional[Path]:
         model_dir = self.settings.upscaler_model_dir

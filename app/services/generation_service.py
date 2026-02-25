@@ -75,7 +75,11 @@ class GenerationService:
             params_json = copy.deepcopy(params_json_override)
         else:
             params_json = copy.deepcopy(profile.params_json or {})
-        upscale_model = effective_overrides.get("upscale_model")
+        upscale_model_override = effective_overrides.get("upscale_model")
+        if isinstance(upscale_model_override, str) and upscale_model_override.strip():
+            upscale_model = upscale_model_override.strip()
+        else:
+            upscale_model = str(profile.upscale_model or "").strip() or None
         input_images = effective_overrides.get("input_images")
         chat_session_id = str(effective_overrides.get("chat_session_id") or "").strip()
         profile_category_ids = [item.id for item in profile.categories]
@@ -95,6 +99,7 @@ class GenerationService:
             "n_images": profile.n_images,
             "seed": profile.seed,
             "output_format": profile.output_format,
+            "upscale_model": profile.upscale_model,
             "params_json": profile.params_json or {},
             "storage_template_id": profile.storage_template_id,
             "category_ids": profile_category_ids,

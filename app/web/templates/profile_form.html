@@ -3,13 +3,13 @@
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
 {% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
 {% set openrouter_cfg = p.params_json.get('image_config') if p and p.params_json and (p.params_json.get('image_config') is mapping) else {} %}
-{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set input_class = "mt-1.5 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set text_class = "mt-1.5 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
 {% set label_class = "block text-sm font-semibold text-slate-200" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
 
-<form action="{{ action }}" method="post" class="space-y-5" id="{{ form_dom_id }}" data-profile-form>
+<form action="{{ action }}" method="post" class="space-y-4" id="{{ form_dom_id }}" data-profile-form>
   <div>
     <label for="{{ form_dom_id }}-name" class="{{ label_class }}">Name</label>
     <input id="{{ form_dom_id }}-name" type="text" name="name" value="{{ p.name if p else '' }}" maxlength="50" required class="{{ input_class }}">
@@ -29,13 +29,13 @@
 
   <div>
     <label for="{{ form_dom_id }}-base-prompt" class="{{ label_class }}">Base prompt (optional)</label>
-    <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="3" class="{{ text_class }}">{{ p.base_prompt if p else '' }}</textarea>
+    <textarea id="{{ form_dom_id }}-base-prompt" name="base_prompt" rows="2" class="{{ text_class }}">{{ p.base_prompt if p else '' }}</textarea>
   </div>
 
   {% set selected_category_ids = (p.categories | map(attribute='id') | list) if p else [] %}
   <div>
     <label class="{{ label_class }}">Categories</label>
-    <div class="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-xl border border-white/15 bg-slate-950/70 px-3 py-3">
+    <div class="mt-1.5 max-h-32 space-y-1.5 overflow-y-auto rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2.5">
       {% if categories %}
         {% for category in categories %}
           <label class="flex items-center gap-2 text-sm text-slate-200">
@@ -62,7 +62,7 @@
   </div>
 
   <div class="rounded-2xl border border-white/8 bg-slate-900/40 p-4 hidden" data-profile-openrouter>
-    <p class="mb-3 text-xs text-slate-400">OpenRouter verwendet `image_config` statt fixer Pixel-Dimensionen.</p>
+    <p class="mb-2 text-xs text-slate-400">OpenRouter verwendet image_config statt fixer Pixel-Dimensionen.</p>
     <div class="grid gap-4 md:grid-cols-2">
       <div>
         <label for="{{ form_dom_id }}-openrouter-ratio" class="{{ label_class }}">OpenRouter ratio</label>
@@ -116,32 +116,20 @@
         <option value="webp" {% if selected_format == 'webp' %}selected{% endif %}>webp</option>
       </select>
     </div>
-    {% if upscale_ready and upscale_models %}
     <div>
       <label for="{{ form_dom_id }}-upscale-model" class="{{ label_class }}">Upscale model</label>
+      {% set selected_upscale = p.upscale_model if p and p.upscale_model else '' %}
       <select id="{{ form_dom_id }}-upscale-model" name="upscale_model" class="{{ input_class }}">
-        {% set selected_upscale = p.params_json.get('upscale_model') if p and p.params_json else '' %}
         <option value="">Use default (or select per generation)</option>
         {% for model in upscale_models %}
           <option value="{{ model }}" {% if selected_upscale == model %}selected{% endif %}>{{ model }}</option>
         {% endfor %}
       </select>
+      <p class="mt-2 text-xs text-slate-400">Wird genutzt, wenn Upscale bei der Generierung aktiviert ist.</p>
+      {% if not upscale_models %}
+      <p class="mt-1 text-xs text-amber-300">Keine lokalen Upscale-Modelle gefunden. Bitte .param/.bin Dateien in UPSCALER_MODEL_DIR bereitstellen.</p>
+      {% endif %}
     </div>
-    {% endif %}
-  </div>
-
-  <div>
-    <label for="{{ form_dom_id }}-params" class="{{ label_class }}">params_json</label>
-    <textarea id="{{ form_dom_id }}-params" name="params_json" rows="4" class="{{ text_class }} font-mono text-xs">{{ p.params_json | tojson if p else '{}' }}</textarea>
-  </div>
-
-  <div>
-    <label for="{{ form_dom_id }}-storage" class="{{ label_class }}">Storage template</label>
-    <select id="{{ form_dom_id }}-storage" name="storage_template_id" required class="{{ input_class }}">
-      {% for st in storage_templates %}
-      <option value="{{ st.id }}" {% if p and p.storage_template_id == st.id %}selected{% endif %}>{{ st.name }} :: {{ st.base_dir }}</option>
-      {% endfor %}
-    </select>
   </div>
 
   <div class="flex flex-wrap justify-end gap-3 pt-2">
