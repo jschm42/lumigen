@@ -414,17 +414,5 @@
   {% endif %}
 </section>
 
-<script>
-function toggleApiKeyField(prefix) {
-  const checkbox = document.getElementById(prefix + '-use-custom-api-key');
-  const field = document.getElementById(prefix + '-api-key-field');
-  if (checkbox && field) {
-    if (checkbox.checked) {
-      field.classList.remove('hidden');
-    } else {
-      field.classList.add('hidden');
-    }
-  }
-}
-</script>
+<script src="{{ url_for('static', path='js/admin-page.js') }}"></script>
 {% endblock %}

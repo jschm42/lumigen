@@ -18,6 +18,14 @@
 - Polling job status uses HTMX fragments (`app/web/templates/fragments/job_status.html`, `.../chat_generation_item.html`).
 - Validate form/query data in route handlers before CRUD/service calls (see admin create/update handlers and `/generate`).
 - Name/length constraints are enforced in app code and DB schema (e.g., category 30 chars, profile/model-config 50 chars).
+- No inline scripts in templates: place JavaScript in `app/web/static/js/*` and include via `<script src="...">`.
+- No inline styles in templates: prefer existing utility classes/CSS files in `app/web/static/`.
+
+## Clean code expectations
+- Keep methods/functions small and single-purpose; extract helpers instead of growing large blocks.
+- Add comments where they improve maintainability (non-obvious behavior, constraints, or provider quirks), avoid noise comments.
+- Avoid code duplication (DRY): reuse existing helpers/services or introduce shared helpers when logic repeats.
+- Prefer clear naming and straightforward control flow over clever/implicit patterns.
 
 ## Secrets and provider configuration
 - Model-specific API keys are encrypted via Fernet in `ModelConfigService`; requires `PROVIDER_CONFIG_KEY`.

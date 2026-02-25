@@ -4,7 +4,7 @@
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
 
-<section class="{{ panel_class }}">
+<section class="{{ panel_class }}" data-profiles-page data-open-create="{{ '1' if open_create_dialog else '0' }}" data-open-edit-id="{{ open_edit_id if open_edit_id else '' }}">
   <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
     <div>
       <h2 class="text-2xl font-semibold text-white">Profiles</h2>
@@ -53,25 +53,5 @@
 </dialog>
 {% endfor %}
 
-{% if open_create_dialog %}
-<script>
-  window.addEventListener("DOMContentLoaded", function () {
-    var dialog = document.getElementById("create-profile-dialog");
-    if (dialog) {
-      dialog.showModal();
-    }
-  });
-</script>
-{% endif %}
-
-{% if open_edit_id %}
-<script>
-  window.addEventListener("DOMContentLoaded", function () {
-    var dialog = document.getElementById("edit-profile-dialog-{{ open_edit_id }}");
-    if (dialog) {
-      dialog.showModal();
-    }
-  });
-</script>
-{% endif %}
+<script src="{{ url_for('static', path='js/profiles-page.js') }}"></script>
 {% endblock %}
