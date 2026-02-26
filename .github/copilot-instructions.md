@@ -37,6 +37,7 @@
 - Dev server alternative: `uvicorn app.main:app --reload --port 8010`.
 - Docker flow: `scripts/docker_run.ps1` / `.sh`, update via `scripts/docker_update.ps1` / `.sh`.
 - Backend tests: `pytest -q` (or focused runs like `pytest -q tests/unit` and `pytest -q tests/routes`).
+- Optional coverage check: `pytest --cov=app --cov-report=term-missing -q`.
 
 ## Testing expectations (backend)
 - When changing backend logic, add or update automated tests under `tests/` in the same PR.

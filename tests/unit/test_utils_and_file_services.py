@@ -123,3 +123,80 @@ def test_thumbnail_create_thumbnail_writes_webp(tmp_path: Path) -> None:
 
     with Image.open(thumb_abs) as thumb_img:
         assert max(thumb_img.size) <= 256
+
+
+def test_storage_write_json_atomic_and_resolve_managed_path(tmp_path: Path) -> None:
+    base_dir = tmp_path / "images"
+    service = StorageService()
+
+    rel = Path("meta/asset.json")
+    abs_path = service.resolve_managed_path(base_dir, rel)
+    service.write_json_atomic(abs_path, '{"ok":true}')
+
+    assert abs_path.read_text(encoding="utf-8") == '{"ok":true}'
+    with pytest.raises(ValueError):
+        service.resolve_managed_path(base_dir, "../escape.json")
+
+
+def test_storage_delete_relative_file_handles_missing_and_prunes(tmp_path: Path) -> None:
+    base_dir = tmp_path / "images"
+    service = StorageService()
+
+    # missing file should be a no-op
+    service.delete_relative_file(base_dir, "no/such/file.png")
+
+    existing = base_dir / "nested" / "file.txt"
+    existing.parent.mkdir(parents=True, exist_ok=True)
+    existing.write_text("x", encoding="utf-8")
+    service.delete_relative_file(base_dir, "nested/file.txt")
+
+    assert not existing.exists()
+    assert not (base_dir / "nested").exists()
+
+
+def test_storage_move_relative_file_edge_cases(tmp_path: Path) -> None:
+    base_dir = tmp_path / "images"
+    service = StorageService()
+
+    same = base_dir / "a" / "same.txt"
+    same.parent.mkdir(parents=True, exist_ok=True)
+    same.write_text("same", encoding="utf-8")
+    service.move_relative_file(base_dir, "a/same.txt", "a/same.txt")
+    assert same.exists()
+
+    # missing source should be a no-op
+    service.move_relative_file(base_dir, "missing.txt", "target.txt")
+
+    src = base_dir / "src.txt"
+    dst = base_dir / "dst.txt"
+    src.write_text("src", encoding="utf-8")
+    dst.write_text("dst", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        service.move_relative_file(base_dir, "src.txt", "dst.txt")
+
+
+def test_sidecar_write_asset_and_failure_sidecar(tmp_path: Path) -> None:
+    base_dir = tmp_path / "images"
+    storage = StorageService()
+    sidecar = SidecarService(storage)
+
+    asset_rel = Path("p/img.png")
+    expected_asset_sidecar = Path("p/img.png.json")
+    assert sidecar.asset_sidecar_relative_path(asset_rel) == expected_asset_sidecar
+
+    written_asset_rel = sidecar.write_asset_sidecar(
+        base_dir,
+        asset_rel,
+        {"k": "v"},
+    )
+    assert written_asset_rel == expected_asset_sidecar
+    assert (base_dir / expected_asset_sidecar).exists()
+
+    written_failure_rel = sidecar.write_failure_sidecar(
+        base_dir,
+        "Profile Name",
+        99,
+        {"error": "boom"},
+    )
+    assert written_failure_rel.as_posix().startswith(".failures/")
+    assert (base_dir / written_failure_rel).exists()

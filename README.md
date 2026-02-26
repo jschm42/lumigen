@@ -245,6 +245,7 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 - Run all backend tests: `pytest -q`
 - Run focused suites: `pytest -q tests/unit` and `pytest -q tests/routes`
 - Frontend route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/frontend`
+- Coverage baseline (terminal report): `pytest --cov=app --cov-report=term-missing -q`
 
 ## Optional frontend migration path
 

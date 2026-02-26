@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from app.providers.base import ProviderError
@@ -9,12 +10,20 @@ class _FakeSession:
     def __init__(self) -> None:
         self.added = []
         self.commits = 0
+        self._scalar_value = None
+        self._scalars_result = []
 
     def add(self, item) -> None:  # type: ignore[no-untyped-def]
         self.added.append(item)
 
     def commit(self) -> None:
         self.commits += 1
+
+    def scalar(self, _query):  # type: ignore[no-untyped-def]
+        return self._scalar_value
+
+    def scalars(self, _query):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(all=lambda: list(self._scalars_result))
 
 
 def _override_session(fake_session: _FakeSession):
@@ -166,3 +175,174 @@ def test_generate_submit_rejects_non_positive_width(client, app_module, monkeypa
     assert response.status_code == 303
     assert "error=Width+must+be+greater+than+0" in response.headers["location"]
     assert fake_generation_service.create_called is False
+
+
+def test_bulk_set_categories_rejects_missing_assets(client, app_module) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.post(
+        "/assets/bulk-set-categories",
+        data={"asset_ids": [], "category_ids": ["1"]},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "No+assets+selected" in response.headers["location"]
+
+
+def test_bulk_set_categories_rejects_missing_categories(client, app_module) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.post(
+        "/assets/bulk-set-categories",
+        data={"asset_ids": ["1"], "category_ids": []},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "Select+at+least+one+category" in response.headers["location"]
+
+
+def test_bulk_set_categories_updates_assets_and_reports_missing(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    existing_asset = SimpleNamespace(id=1, categories=[])
+    fake_session._scalars_result = [existing_asset]
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_categories_by_ids",
+        lambda _session, _ids: [SimpleNamespace(id=2, name="Portrait")],
+    )
+
+    response = client.post(
+        "/assets/bulk-set-categories",
+        data={"asset_ids": ["1", "2"], "category_ids": ["2"], "return_to": "/gallery?page=2"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "Updated+categories+for+1+asset%28s%29" in response.headers["location"]
+    assert "1+asset%28s%29+not+found" in response.headers["location"]
+    assert fake_session.commits == 1
+    assert len(fake_session.added) == 1
+
+
+def test_bulk_delete_assets_handles_no_selection(client, app_module) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.post(
+        "/assets/bulk-delete",
+        data={"asset_ids": []},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "No+assets+selected" in response.headers["location"]
+
+
+def test_bulk_delete_assets_reports_deleted_and_failures(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "delete_asset",
+        lambda _session, asset_id: asset_id == 1,
+    )
+
+    response = client.post(
+        "/assets/bulk-delete",
+        data={"asset_ids": ["1", "2"], "return_to": "/gallery?thumb_size=lg"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "Deleted+1+asset%28s%29" in response.headers["location"]
+    assert "1+asset%28s%29+could+not+be+deleted" in response.headers["location"]
+
+
+def test_delete_asset_not_found_returns_404(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(app_module.generation_service, "delete_asset", lambda _session, _id: False)
+
+    response = client.post("/assets/77/delete")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Asset not found"
+
+
+def test_delete_generation_not_found_returns_404(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(app_module.generation_service, "delete_generation", lambda _session, _id: False)
+
+    response = client.post("/generations/77/delete")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Generation not found"
+
+
+def test_rerun_generation_not_found_returns_404(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(app_module.crud, "get_generation", lambda _session, _id: None)
+
+    response = client.post("/generations/5/rerun")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Generation not found"
+
+
+def test_asset_file_missing_asset_returns_404(client, app_module) -> None:
+    fake_session = _FakeSession()
+    fake_session._scalar_value = None
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.get("/assets/8/file")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Asset not found"
+
+
+def test_asset_download_and_thumb_missing_file_returns_404(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    fake_session._scalar_value = SimpleNamespace(
+        id=9,
+        mime="image/png",
+        file_path="images/a.png",
+        generation=SimpleNamespace(),
+    )
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "asset_absolute_path",
+        lambda _asset, which="file": Path("Z:/definitely-missing-file"),
+    )
+
+    download_response = client.get("/assets/9/download")
+    thumb_response = client.get("/assets/9/thumb")
+
+    assert download_response.status_code == 404
+    assert download_response.json()["detail"] == "Asset file missing"
+    assert thumb_response.status_code == 404
+    assert thumb_response.json()["detail"] == "Thumbnail missing"
