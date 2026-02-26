@@ -36,7 +36,15 @@
 - Setup/run (local): `pip install -r requirements.txt`, `alembic upgrade head`, `python -m app.main`.
 - Dev server alternative: `uvicorn app.main:app --reload --port 8010`.
 - Docker flow: `scripts/docker_run.ps1` / `.sh`, update via `scripts/docker_update.ps1` / `.sh`.
-- No test suite is currently present in this repo; validate changes by running the app and exercising affected routes.
+- Backend tests: `pytest -q` (or focused runs like `pytest -q tests/unit` and `pytest -q tests/routes`).
+
+## Testing expectations (backend)
+- When changing backend logic, add or update automated tests under `tests/` in the same PR.
+- Prioritize deterministic unit tests for `app/utils`, `app/services`, and provider orchestration in `app/providers/registry.py`.
+- For FastAPI route tests, prefer assertions on JSON payloads, status codes, redirects, and headers over brittle full-template snapshots.
+- Keep backend route tests DB-light by using dependency overrides (`get_session`) and monkeypatching imported `app.main.crud.*` seams where appropriate.
+- Avoid real external provider/network calls in tests; mock provider registry/adapter behavior explicitly.
+- Frontend test coverage is tracked separately and should not block backend unit-test work in this phase.
 
 ## Integration points and external dependencies
 - External provider APIs: OpenAI, OpenRouter, Google, BFL adapters under `app/providers/`.

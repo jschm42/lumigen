@@ -241,7 +241,9 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 
 - Migrations are required for schema changes: add Alembic migration under `alembic/versions/`.
 - The app also calls `Base.metadata.create_all()` during startup for local bootstrap, but Alembic remains the source of schema evolution.
-- There is currently no automated test suite in this repository.
+- Backend tests run with `pytest`.
+- Run all backend tests: `pytest -q`
+- Run focused suites: `pytest -q tests/unit` and `pytest -q tests/routes`
 
 ## Optional frontend migration path
 
