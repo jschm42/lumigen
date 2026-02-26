@@ -41,6 +41,8 @@ class GalleryService:
         provider: Optional[str] = None,
         prompt_query: Optional[str] = None,
         category_ids: Optional[list[int]] = None,
+        min_rating: Optional[int] = None,
+        unrated_only: bool = False,
     ) -> GalleryPage:
         safe_page_size = max(1, min(200, page_size or self.default_page_size))
         safe_page = max(1, page)
@@ -55,6 +57,11 @@ class GalleryService:
         normalized_category_ids = sorted({item for item in (category_ids or []) if item > 0})
         if normalized_category_ids:
             filters.append(Asset.categories.any(Category.id.in_(normalized_category_ids)))
+        if unrated_only:
+            filters.append(Asset.rating.is_(None))
+        elif min_rating is not None:
+            filters.append(Asset.rating.is_not(None))
+            filters.append(Asset.rating >= min_rating)
 
         count_stmt = select(func.count()).select_from(Asset).join(Generation)
         if filters:

@@ -1,6 +1,6 @@
 <div class="grid gap-2 {% if thumb_size == 'sm' %}grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6{% elif thumb_size == 'lg' %}grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4{% else %}grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5{% endif %}">
   {% for asset in page_data.items %}
-  <article class="group relative overflow-hidden rounded-xl bg-slate-900/50 p-2.5 shadow-md shadow-slate-950/45 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}">
+  <article class="group relative overflow-hidden rounded-xl bg-slate-900/50 p-2.5 shadow-md shadow-slate-950/45 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}" data-asset-detail-url="/assets/{{ asset.id }}">
     <div class="relative aspect-square overflow-hidden rounded-lg bg-slate-900/75 cursor-pointer" data-gallery-card-click>
       <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
       
@@ -24,11 +24,28 @@
       </div>
     </div>
 
-    <div class="mt-2.5 space-y-1">
-      <p class="truncate text-xs text-slate-400">{{ asset.generation.profile_name }} | {{ asset.generation.provider }}</p>
-      {% if asset.categories %}
-        <p class="truncate text-xs text-slate-500">{{ asset.categories | map(attribute='name') | join(', ') }}</p>
-      {% endif %}
+    <div class="mt-1.5 flex items-center">
+      <form
+        method="post"
+        action="/assets/{{ asset.id }}/rating"
+        class="flex items-center gap-0 {% if asset.rating is none %}opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100{% endif %}"
+        aria-label="Set rating for asset {{ asset.id }}"
+        data-rating-form
+        data-current-rating="{{ asset.rating if asset.rating is not none else 0 }}"
+      >
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <input type="hidden" name="rating" value="{{ asset.rating if asset.rating is not none else 0 }}" data-rating-input>
+        {% for value in [1, 2, 3, 4, 5] %}
+          <button
+            type="button"
+            data-rating-star
+            data-rating-value="{{ value }}"
+            class="inline-flex h-4 w-4 items-center justify-center text-[13px] leading-none transition {% if (asset.rating or 0) >= value %}text-amber-300{% else %}text-slate-600{% endif %}"
+            title="Set {{ value }} stars"
+            aria-label="Set {{ value }} stars"
+          >★</button>
+        {% endfor %}
+      </form>
     </div>
   </article>
   {% else %}

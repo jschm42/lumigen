@@ -707,6 +707,19 @@ function setupGallerySelection() {
       createOrUpdateHiddenInput(assetId, !isSelected);
       updateState();
     });
+
+    clickArea.addEventListener('dblclick', function (e) {
+      var target = e.target;
+      if (target.closest('a') || target.closest('button') || target.closest('form')) {
+        return;
+      }
+
+      var detailUrl = card.dataset.assetDetailUrl;
+      if (!detailUrl) {
+        return;
+      }
+      window.location.href = detailUrl;
+    });
   });
 
   // Select all toggle
@@ -725,6 +738,80 @@ function setupGallerySelection() {
   updateState();
 }
 
+function setupGalleryRatings() {
+  var ratingForms = Array.from(document.querySelectorAll('[data-rating-form]'));
+  if (ratingForms.length === 0) return;
+
+  ratingForms.forEach(function (form) {
+    var stars = Array.from(form.querySelectorAll('[data-rating-star]'));
+    var ratingInput = form.querySelector('[data-rating-input]');
+    if (!ratingInput || stars.length === 0) return;
+
+    var currentRating = parseInt(form.getAttribute('data-current-rating') || '0', 10);
+    if (!Number.isFinite(currentRating) || currentRating < 0) {
+      currentRating = 0;
+    }
+
+    function paintStars(activeRating) {
+      stars.forEach(function (star) {
+        var value = parseInt(star.getAttribute('data-rating-value') || '0', 10);
+        var isActive = Number.isFinite(value) && value <= activeRating;
+        star.classList.toggle('text-amber-300', isActive);
+        star.classList.toggle('text-slate-600', !isActive);
+      });
+    }
+
+    paintStars(currentRating);
+
+    stars.forEach(function (star) {
+      star.addEventListener('mouseenter', function () {
+        var hoverRating = parseInt(star.getAttribute('data-rating-value') || '0', 10);
+        if (Number.isFinite(hoverRating)) {
+          paintStars(hoverRating);
+        }
+      });
+
+      star.addEventListener('click', async function () {
+        var clickedValue = parseInt(star.getAttribute('data-rating-value') || '0', 10);
+        if (!Number.isFinite(clickedValue)) return;
+
+        var nextRating = clickedValue;
+        if (clickedValue === 1 && currentRating === 1) {
+          nextRating = 0;
+        }
+
+        var previousRating = currentRating;
+        ratingInput.value = String(nextRating);
+        currentRating = nextRating;
+        form.setAttribute('data-current-rating', String(currentRating));
+        paintStars(currentRating);
+
+        try {
+          var formData = new FormData(form);
+          var response = await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+
+          if (!response.ok) {
+            throw new Error('Rating update failed');
+          }
+        } catch (error) {
+          currentRating = previousRating;
+          form.setAttribute('data-current-rating', String(currentRating));
+          ratingInput.value = String(currentRating);
+          paintStars(currentRating);
+        }
+      });
+    });
+
+    form.addEventListener('mouseleave', function () {
+      paintStars(currentRating);
+    });
+  });
+}
+
   // ==========================================================================
   // Initialization
   // ==========================================================================
@@ -736,6 +823,7 @@ function setupGallerySelection() {
     setupProfileForms();
     setupGalleryFilters();
     setupGallerySelection();
+    setupGalleryRatings();
   }
 
   // Run on DOM ready

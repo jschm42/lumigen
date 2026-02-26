@@ -6,13 +6,9 @@
 {% set btn_danger = "inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
 
 <section class="{{ panel_class }}">
-  <header class="mb-5">
-    <h2 class="text-2xl font-semibold text-white">Asset #{{ asset.id }}</h2>
-    <p class="mt-1 text-sm text-slate-400">Details, metadata, and actions for this asset.</p>
-  </header>
-
-  <!-- Image -->
-  <img class="mb-5 w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-950/70" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}" id="asset-image-{{ asset.id }}">
+  <div class="mb-5 flex justify-center rounded-2xl border border-white/10 bg-slate-950/70 p-2">
+    <img class="max-h-[75vh] w-auto max-w-full rounded-xl" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}" id="asset-image-{{ asset.id }}">
+  </div>
 
   <!-- Image-to-Image Generation -->
   <div class="mb-8">
@@ -76,6 +72,10 @@
       <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">
         <span class="material-symbols-outlined" style="font-size: 18px;">download</span>
         Download
+      </a>
+      <a href="/assets/{{ asset.id }}/file" target="_blank" rel="noopener" class="{{ btn_secondary }}">
+        <span class="material-symbols-outlined" style="font-size: 18px;">open_in_new</span>
+        Original size
       </a>
       <button
         hx-post="/generations/{{ asset.generation.id }}/rerun"

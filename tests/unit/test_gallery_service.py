@@ -30,6 +30,7 @@ def _add_generation_with_asset(
     status: str,
     prompt_user: str,
     category: Category | None = None,
+    rating: int | None = None,
 ):
     generation = Generation(
         id=generation_id,
@@ -55,6 +56,7 @@ def _add_generation_with_asset(
         width=64,
         height=64,
         mime="image/png",
+        rating=rating,
         meta_json={},
     )
     if category is not None:
@@ -190,3 +192,45 @@ def test_list_filter_options_returns_distinct_sorted_values(db_session) -> None:
     assert options.providers == ["openai", "openrouter"]
     assert options.statuses == ["failed", "succeeded"]
     assert [item.name for item in options.categories] == ["A", "B"]
+
+
+def test_list_assets_filters_by_min_rating_and_unrated(db_session) -> None:
+    _add_generation_with_asset(
+        db_session,
+        generation_id=31,
+        profile_name="P",
+        provider="stub",
+        status="succeeded",
+        prompt_user="one",
+        rating=1,
+    )
+    _add_generation_with_asset(
+        db_session,
+        generation_id=32,
+        profile_name="P",
+        provider="stub",
+        status="succeeded",
+        prompt_user="three",
+        rating=3,
+    )
+    _add_generation_with_asset(
+        db_session,
+        generation_id=33,
+        profile_name="P",
+        provider="stub",
+        status="succeeded",
+        prompt_user="none",
+        rating=None,
+    )
+
+    service = GalleryService(default_page_size=20)
+
+    min_rating = service.list_assets(db_session, min_rating=2)
+    assert min_rating.total == 1
+    assert len(min_rating.items) == 1
+    assert min_rating.items[0].rating == 3
+
+    unrated = service.list_assets(db_session, unrated_only=True)
+    assert unrated.total == 1
+    assert len(unrated.items) == 1
+    assert unrated.items[0].rating is None

@@ -346,3 +346,87 @@ def test_asset_download_and_thumb_missing_file_returns_404(client, app_module, m
     assert download_response.json()["detail"] == "Asset file missing"
     assert thumb_response.status_code == 404
     assert thumb_response.json()["detail"] == "Thumbnail missing"
+
+
+def test_update_asset_rating_success(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    asset = SimpleNamespace(id=7, rating=None)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(app_module.crud, "get_asset", lambda _s, _id, with_generation=False: asset)
+
+    response = client.post(
+        "/assets/7/rating",
+        data={"rating": "4", "return_to": "/gallery?page=2"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "message=Rating+updated" in response.headers["location"]
+    assert asset.rating == 4
+    assert fake_session.commits == 1
+    assert fake_session.added == [asset]
+
+
+def test_update_asset_rating_rejects_invalid_value(client, app_module) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.post(
+        "/assets/7/rating",
+        data={"rating": "9", "return_to": "/gallery"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "error=Rating+must+be+between+0+and+5" in response.headers["location"]
+    assert fake_session.commits == 0
+
+
+def test_update_asset_rating_zero_clears_rating(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    asset = SimpleNamespace(id=7, rating=1)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(app_module.crud, "get_asset", lambda _s, _id, with_generation=False: asset)
+
+    response = client.post(
+        "/assets/7/rating",
+        data={"rating": "0", "return_to": "/gallery"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "message=Rating+removed" in response.headers["location"]
+    assert asset.rating is None
+    assert fake_session.commits == 1
+
+
+def test_gallery_page_passes_rating_filters_to_service(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    captured: dict[str, object] = {}
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    def fake_list_assets(_session, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return SimpleNamespace(items=[], page=1, pages=1, total=0)
+
+    monkeypatch.setattr(app_module.gallery_service, "list_assets", fake_list_assets)
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=[], providers=[], categories=[]),
+    )
+
+    response = client.get("/gallery?min_rating=3&unrated=1")
+
+    assert response.status_code == 200
+    assert captured["min_rating"] is None
+    assert captured["unrated_only"] is True

@@ -229,6 +229,7 @@ class Asset(Base):
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     mime: Mapped[str] = mapped_column(String(64), nullable=False)
+    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     meta_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )

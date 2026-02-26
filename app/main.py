@@ -212,6 +212,16 @@ def normalize_thumb_size(value: Optional[str]) -> str:
     return "md"
 
 
+def normalize_min_rating(value: Optional[int]) -> Optional[int]:
+    if value is None:
+        return None
+    if value < 0:
+        return 0
+    if value > 5:
+        return 5
+    return value
+
+
 def generation_session_token(generation: Generation) -> str:
     snapshot = generation.request_snapshot_json or {}
     raw_token = snapshot.get("chat_session_id")
@@ -1598,12 +1608,20 @@ def gallery_page(
     provider: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
     category_ids: list[int] = Query(default=[]),
+    min_rating: Optional[str] = Query(default=None),
+    unrated: bool = Query(default=False),
     thumb_size: Optional[str] = Query(default="md"),
     message: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     normalized_category_ids = normalize_category_ids(category_ids)
+    parsed_min_rating: Optional[int] = None
+    try:
+        parsed_min_rating = parse_optional_int(min_rating)
+    except ValueError:
+        parsed_min_rating = None
+    min_rating_value = normalize_min_rating(parsed_min_rating)
     thumb_size_value = normalize_thumb_size(thumb_size)
     page_data = gallery_service.list_assets(
         session,
@@ -1612,6 +1630,8 @@ def gallery_page(
         provider=provider or None,
         prompt_query=q or None,
         category_ids=normalized_category_ids or None,
+        min_rating=None if unrated else min_rating_value,
+        unrated_only=unrated,
     )
     options = gallery_service.list_filter_options(session)
 
@@ -1624,6 +1644,10 @@ def gallery_page(
         filter_params["q"] = q
     if normalized_category_ids:
         filter_params["category_ids"] = normalized_category_ids
+    if min_rating_value is not None:
+        filter_params["min_rating"] = min_rating_value
+    if unrated:
+        filter_params["unrated"] = "1"
     gallery_query = urlencode(filter_params, doseq=True)
 
     return_to_params: dict[str, Any] = {"page": page, "thumb_size": thumb_size_value}
@@ -1640,6 +1664,8 @@ def gallery_page(
             "provider": provider or "",
             "q": q or "",
             "selected_category_ids": normalized_category_ids,
+            "min_rating": min_rating_value,
+            "unrated_only": unrated,
             "thumb_size": thumb_size_value,
             "gallery_query": gallery_query,
             "return_to": return_to,
@@ -1649,6 +1675,28 @@ def gallery_page(
             "hide_header": True,
         },
     )
+
+
+@app.post("/assets/{asset_id}/rating")
+def update_asset_rating(
+    asset_id: int,
+    rating: int = Form(...),
+    return_to: str = Form(default="/gallery"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    if rating < 0 or rating > 5:
+        return gallery_redirect(return_to, error="Rating must be between 0 and 5")
+
+    asset = crud.get_asset(session, asset_id, with_generation=False)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    asset.rating = None if rating == 0 else rating
+    session.add(asset)
+    session.commit()
+    if rating == 0:
+        return gallery_redirect(return_to, message="Rating removed")
+    return gallery_redirect(return_to, message="Rating updated")
 
 
 @app.post("/assets/bulk-set-categories")

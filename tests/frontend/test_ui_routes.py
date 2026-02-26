@@ -12,11 +12,15 @@ class _ScalarResult:
 
 
 class _FakeSession:
-    def __init__(self, generations=None):  # type: ignore[no-untyped-def]
+    def __init__(self, generations=None, scalar_value=None):  # type: ignore[no-untyped-def]
         self._generations = generations or []
+        self._scalar_value = scalar_value
 
     def scalars(self, _query):
         return _ScalarResult(self._generations)
+
+    def scalar(self, _query):  # type: ignore[no-untyped-def]
+        return self._scalar_value
 
 
 def _override_session(fake_session: _FakeSession):
@@ -227,3 +231,85 @@ def test_delete_generation_htmx_returns_flash_fragment(client, app_module, monke
     assert response.status_code == 200
     assert "Generation deleted" in response.text
     assert 'role="alert"' in response.text
+
+
+def test_gallery_page_renders_star_controls_and_rating_filters(client, app_module, monkeypatch) -> None:
+    asset = SimpleNamespace(
+        id=12,
+        rating=4,
+        generation=SimpleNamespace(profile_name="Profile Hidden", provider="provider-hidden"),
+        categories=[],
+    )
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **_kwargs: SimpleNamespace(items=[asset], page=1, pages=1, total=1),
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=[], providers=[], categories=[]),
+    )
+
+    response = client.get("/gallery?min_rating=3&thumb_size=md")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'name="min_rating"' in body
+    assert 'Unrated only' in body
+    assert 'action="/assets/12/rating"' in body
+    assert 'data-rating-form' in body
+    assert 'data-rating-star' in body
+    assert 'data-current-rating="4"' in body
+    assert 'data-asset-detail-url="/assets/12"' in body
+    assert 'Profile Hidden | provider-hidden' not in body
+
+
+def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(client, app_module, monkeypatch) -> None:
+    asset = SimpleNamespace(
+        id=44,
+        generation=SimpleNamespace(
+            id=5,
+            profile_id=1,
+            status="succeeded",
+            provider="stub",
+            model="stub-v1",
+            prompt_final="prompt",
+            failure_sidecar_path=None,
+            profile_snapshot_json={},
+            storage_template_snapshot_json={},
+            request_snapshot_json={},
+        ),
+        categories=[],
+        width=1024,
+        height=1024,
+        mime="image/png",
+        file_path="images/x.png",
+        thumbnail_path=".thumbs/x.webp",
+        sidecar_path="images/x.png.json",
+        meta_json={},
+    )
+    fake_session = _FakeSession(scalar_value=asset)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [SimpleNamespace(id=1, name="Default")],
+    )
+
+    response = client.get("/assets/44")
+    body = response.text
+
+    assert response.status_code == 200
+    assert "Asset #44" not in body
+    assert "Details, metadata, and actions for this asset." not in body
+    assert 'max-h-[75vh]' in body
+    assert 'href="/assets/44/file"' in body
+    assert 'Original size' in body
