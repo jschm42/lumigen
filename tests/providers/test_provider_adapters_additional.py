@@ -305,7 +305,7 @@ async def test_bfl_poll_non_json_and_list_models_variants(monkeypatch: pytest.Mo
 
 
 @pytest.mark.asyncio
-async def test_google_adapter_config_and_pending_paths() -> None:
+async def test_google_adapter_config_and_happy_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = GoogleAdapter()
     request = ProviderGenerationRequest(
         prompt="p",
@@ -323,8 +323,81 @@ async def test_google_adapter_config_and_pending_paths() -> None:
     with pytest.raises(ProviderConfigError):
         await adapter.generate(request, Settings(google_api_key=None))
 
-    assert await adapter.list_models(Settings(google_api_key="g-key")) == [
-        "imagen-3.0-generate-002"
+    calls: list[dict] = []
+    image_b64 = base64.b64encode(_png_bytes((12, 8))).decode("ascii")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def get(self, url, headers=None, params=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "GET", "url": url, "headers": headers, "params": params})
+            return _json_response(
+                "GET",
+                url,
+                200,
+                {
+                    "models": [
+                        {
+                            "name": "models/gemini-2.0-flash-preview-image-generation",
+                            "supportedGenerationMethods": ["generateContent"],
+                        },
+                        {
+                            "name": "models/imagen-3.0-generate-002",
+                            "supportedGenerationMethods": ["predict"],
+                        },
+                        {
+                            "name": "models/gemini-2.0-flash",
+                            "supportedGenerationMethods": ["generateMessage"],
+                        },
+                    ]
+                },
+            )
+
+        async def post(self, url, headers=None, params=None, json=None):  # type: ignore[no-untyped-def]
+            calls.append(
+                {
+                    "method": "POST",
+                    "url": url,
+                    "headers": headers,
+                    "params": params,
+                    "json": json,
+                }
+            )
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {"inlineData": {"mimeType": "image/png", "data": image_b64}}
+                                ]
+                            }
+                        }
+                    ]
+                },
+            )
+
+    monkeypatch.setattr("app.providers.google_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    models = await adapter.list_models(Settings(google_api_key="g-key"))
+    assert models == [
+        "gemini-2.0-flash-preview-image-generation",
+        "imagen-3.0-generate-002",
     ]
-    with pytest.raises(ProviderError, match="implementation is pending"):
-        await adapter.generate(request, Settings(google_api_key="g-key"))
+
+    result = await adapter.generate(request, Settings(google_api_key="g-key"))
+    assert len(result.images) == 1
+    assert result.images[0].width == 12
+    assert result.images[0].height == 8
+    assert calls[0]["url"].endswith("/models")
+    assert calls[1]["url"].endswith("/models/imagen:predict")

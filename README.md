@@ -128,6 +128,50 @@ Set provider API keys in `.env` for default usage:
 - `GOOGLE_API_KEY`
 - `BFL_API_KEY`
 
+### Google (Gemini / Imagen)
+
+Lumigen uses the Google Generative Language API for the `google` provider.
+
+- Recommended Gemini image model:
+	- `gemini-2.0-flash-preview-image-generation`
+- Recommended Imagen model:
+	- `imagen-3.0-generate-002`
+
+Notes:
+
+- For Gemini image generation, Lumigen calls `models/{model}:generateContent`.
+- For Imagen models (`imagen*`), Lumigen calls `models/{model}:predict`.
+- You can optionally override endpoint base URL (advanced/self-hosted proxy setups):
+
+```dotenv
+GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+```
+
+You can pass provider-specific options via profile/request params.
+Examples:
+
+- Gemini safety settings:
+
+```json
+{
+	"safetySettings": [
+		{
+			"category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+			"threshold": "BLOCK_ONLY_HIGH"
+		}
+	]
+}
+```
+
+- Imagen parameters:
+
+```json
+{
+	"aspectRatio": "1:1",
+	"personGeneration": "ALLOW_ADULT"
+}
+```
+
 For per-model custom API keys in Admin, set `PROVIDER_CONFIG_KEY` first.
 Generate one with:
 

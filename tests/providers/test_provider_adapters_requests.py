@@ -10,6 +10,7 @@ from PIL import Image
 from app.config import Settings
 from app.providers.base import ProviderGenerationRequest, ProviderInputImage
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
 
@@ -24,6 +25,81 @@ def _png_bytes(width: int = 16, height: int = 12) -> bytes:
 def _json_response(method: str, url: str, status: int, payload: dict) -> httpx.Response:
     request = httpx.Request(method, url)
     return httpx.Response(status, json=payload, request=request)
+
+
+@pytest.mark.asyncio
+async def test_google_generate_calls_expected_endpoint_and_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+    image_bytes = _png_bytes(22, 11)
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, params=None, json=None):  # type: ignore[no-untyped-def]
+            calls.append(
+                {
+                    "method": "POST",
+                    "url": url,
+                    "headers": headers or {},
+                    "params": params or {},
+                    "json": json,
+                }
+            )
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {"inlineData": {"mimeType": "image/png", "data": image_b64}}
+                                ]
+                            }
+                        }
+                    ]
+                },
+            )
+
+    monkeypatch.setattr("app.providers.google_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = GoogleAdapter()
+    settings = Settings(google_api_key="google-key", google_base_url="https://google.test/v1beta")
+    request = ProviderGenerationRequest(
+        prompt="A river",
+        width=640,
+        height=360,
+        n_images=1,
+        seed=12,
+        output_format="png",
+        model="gemini-2.0-flash-preview-image-generation",
+        params={"safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}]},
+    )
+
+    result = await adapter.generate(request, settings)
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["url"] == "https://google.test/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent"
+    assert call["headers"]["Content-Type"] == "application/json"
+    assert call["params"]["key"] == "google-key"
+    assert call["json"]["contents"][0]["parts"][0]["text"] == "A river"
+    assert call["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
+    assert call["json"]["generationConfig"]["candidateCount"] == 1
+    assert call["json"]["generationConfig"]["seed"] == 12
+    assert "safetySettings" in call["json"]
+    assert len(result.images) == 1
+    assert result.images[0].width == 22
+    assert result.images[0].height == 11
 
 
 @pytest.mark.asyncio

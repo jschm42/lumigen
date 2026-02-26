@@ -15,6 +15,7 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
 
@@ -29,6 +30,40 @@ def _png_b64() -> str:
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+@pytest.mark.asyncio
+async def test_google_generate_429_raises_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, params=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, params, json
+            return _json_response("POST", url, 429, {"error": {"message": "rate"}})
+
+    monkeypatch.setattr("app.providers.google_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = GoogleAdapter()
+    settings = Settings(google_api_key="google-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gemini-2.0-flash-preview-image-generation",
+    )
+
+    with pytest.raises(ProviderRateLimitError):
+        await adapter.generate(request, settings)
 
 
 @pytest.mark.asyncio
