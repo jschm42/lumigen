@@ -578,9 +578,9 @@
     var labelSpan = form.querySelector('[data-category-popover-toggle] span:nth-child(2)');
     if (labelSpan) {
       if (checkedCount > 0) {
-        labelSpan.textContent = checkedCount + ' ausgewaehlt';
+        labelSpan.textContent = checkedCount + ' selected';
       } else {
-        labelSpan.textContent = 'Alle Kategorien';
+        labelSpan.textContent = 'All categories';
       }
     }
   }

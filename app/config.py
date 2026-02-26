@@ -8,8 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # App version
-VERSION = "1.0.0"
-
+VERSION = "0.1.0"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

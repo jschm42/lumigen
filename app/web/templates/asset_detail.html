@@ -8,7 +8,7 @@
 <section class="{{ panel_class }}">
   <header class="mb-5">
     <h2 class="text-2xl font-semibold text-white">Asset #{{ asset.id }}</h2>
-    <p class="mt-1 text-sm text-slate-400">Details, Metadaten und Aktionen fuer dieses Asset.</p>
+    <p class="mt-1 text-sm text-slate-400">Details, metadata, and actions for this asset.</p>
   </header>
 
   <!-- Image -->
@@ -16,18 +16,18 @@
 
   <!-- Image-to-Image Generation -->
   <div class="mb-8">
-    <h3 class="mb-3 text-lg font-semibold text-white">Neugenerierung mit diesem Bild</h3>
+    <h3 class="mb-3 text-lg font-semibold text-white">Regenerate with this image</h3>
     <div class="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
       <form method="post" action="/generate" enctype="multipart/form-data" class="space-y-4">
         <input type="hidden" name="conversation" value="{{ session_token }}">
         
         <!-- Profile Selection -->
         <div>
-          <label class="mb-1 block text-sm font-semibold text-slate-300">Profil</label>
+          <label class="mb-1 block text-sm font-semibold text-slate-300">Profile</label>
           <select name="profile_id" required class="w-full rounded-lg border border-white/20 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300">
             {% for profile in profiles %}
               <option value="{{ profile.id }}" {% if asset.generation.profile_id == profile.id %}selected{% endif %}>
-                {{ profile.name }}{% if asset.generation.profile_id == profile.id %} (aktuell){% endif %}
+                {{ profile.name }}{% if asset.generation.profile_id == profile.id %} (current){% endif %}
               </option>
             {% endfor %}
           </select>
@@ -35,12 +35,12 @@
 
         <!-- Prompt Input -->
         <div>
-          <label class="mb-1 block text-sm font-semibold text-slate-300">Neuer Prompt</label>
+          <label class="mb-1 block text-sm font-semibold text-slate-300">New prompt</label>
           <textarea 
             name="prompt_user" 
             rows="3" 
             required
-            placeholder="Beschreibe die gewünschte Variation..."
+            placeholder="Describe the variation you want..."
             class="w-full rounded-lg border border-white/20 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300"
           ></textarea>
         </div>
@@ -51,7 +51,7 @@
         <!-- Submit Button -->
         <button type="submit" class="{{ btn_primary }} w-full">
           <span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span>
-          Mit diesem Bild neu generieren
+          Regenerate with this image
         </button>
       </form>
     </div>
@@ -59,7 +59,7 @@
 
   <!-- Complete Prompt (including injections) -->
   <div class="mb-6">
-    <h3 class="mb-2 text-lg font-semibold text-white">Vollständiger Prompt</h3>
+    <h3 class="mb-2 text-lg font-semibold text-white">Full prompt</h3>
     <div class="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
       <p class="whitespace-pre-wrap text-sm text-slate-200">{{ asset.generation.prompt_final }}</p>
     </div>
@@ -71,7 +71,7 @@
       <!-- Primary Actions -->
       <button type="button" class="{{ btn_secondary }}" onclick="navigator.clipboard.writeText(this.dataset.prompt);" data-prompt="{{ asset.generation.prompt_final }}">
         <span class="material-symbols-outlined" style="font-size: 18px;">content_copy</span>
-        Prompt kopieren
+        Copy prompt
       </button>
       <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">
         <span class="material-symbols-outlined" style="font-size: 18px;">download</span>
@@ -93,13 +93,13 @@
         <form method="post" action="/assets/{{ asset.id }}/delete" onsubmit="return confirm('Delete this asset?');" class="inline-flex">
           <button class="{{ btn_danger }}" type="submit">
             <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
-            Asset löschen
+            Delete asset
           </button>
         </form>
         <form method="post" action="/generations/{{ asset.generation.id }}/delete" onsubmit="return confirm('Delete full generation and all assets?');" class="inline-flex">
           <button class="{{ btn_danger }}" type="submit">
             <span class="material-symbols-outlined" style="font-size: 18px;">delete_forever</span>
-            Generation löschen
+            Delete generation
           </button>
         </form>
       </div>
@@ -107,7 +107,7 @@
       <!-- Back Button -->
       <a href="/gallery" class="{{ btn_secondary }}">
         <span class="material-symbols-outlined" style="font-size: 18px;">arrow_back</span>
-        Zurück zur Galerie
+        Back to gallery
       </a>
     </div>
   </div>

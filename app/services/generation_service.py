@@ -63,7 +63,7 @@ class GenerationService:
         prompt_final = self._compose_prompt(profile.base_prompt, prompt_user)
         storage_template = profile.storage_template
         if storage_template is None:
-            raise ValueError("Profile has no storage template")
+            raise ValueError("Profile has no storage template configured")
         effective_overrides = overrides or {}
 
         width = effective_overrides.get("width", profile.width)
@@ -200,7 +200,7 @@ class GenerationService:
             return generation
 
         generation.status = "cancelled"
-        generation.error = "Cancelled by user."
+        generation.error = "Canceled by user."
         generation.failure_sidecar_path = None
         generation.finished_at = datetime.utcnow()
         session.commit()
@@ -236,7 +236,7 @@ class GenerationService:
                 )
                 self._raise_if_cancelled(session, generation_id)
                 if not result.images:
-                    raise ProviderError("Provider returned zero images")
+                    raise ProviderError("Provider returned no images")
 
                 storage_template = str(
                     generation.storage_template_snapshot_json.get(
@@ -253,9 +253,9 @@ class GenerationService:
                 ).strip()
                 upscale_enabled = bool(upscale_model)
                 if upscale_enabled and not self.upscale_service:
-                    raise ProviderError("Upscale service is not available.")
+                    raise ProviderError("Upscaling service is not available")
                 if upscale_enabled and not self.upscale_service.is_available():
-                    raise ProviderError("Upscaler is not configured on this server.")
+                    raise ProviderError("Upscaling is not configured on this server")
                 if upscale_enabled:
                     request_snapshot = dict(generation.request_snapshot_json or {})
                     request_snapshot["upscaling_active"] = True
@@ -423,7 +423,7 @@ class GenerationService:
             raise GenerationCancelledError("Generation no longer exists.")
         session.refresh(generation)
         if generation.status == "cancelled":
-            raise GenerationCancelledError("Cancelled by user.")
+            raise GenerationCancelledError("Canceled by user.")
 
     def delete_asset(self, session: Session, asset_id: int) -> bool:
         asset = crud.get_asset(session, asset_id, with_generation=True)
@@ -464,7 +464,7 @@ class GenerationService:
     def asset_absolute_path(self, asset: Asset, which: str = "file") -> Path:
         generation = asset.generation
         if not generation:
-            raise ValueError("Asset has no associated generation")
+            raise ValueError("Asset has no associated generation record")
         base_dir = self._base_dir_from_snapshot(
             generation.storage_template_snapshot_json
         )
@@ -480,8 +480,8 @@ class GenerationService:
         model = str(request_data.get("model") or generation.model or "").strip()
         if not model:
             raise ProviderError(
-                "Model configuration error: Model not specified. "
-                "Please check the profile's model configuration in Admin settings."
+                "Model configuration error: no model is specified. "
+                "Please check the profile model configuration in Admin settings."
             )
         
         # Get API key - check model config to decide which key to use
@@ -508,7 +508,7 @@ class GenerationService:
         if not api_key:
             raise ProviderError(
                 "Model configuration error: API key not found. "
-                "Please configure the API key for this model in Admin settings."
+                "Please configure an API key for this model in Admin settings."
             )
         
         input_images: list[ProviderInputImage] = []
@@ -640,7 +640,7 @@ class GenerationService:
         fallback_height: int,
     ) -> tuple[bytes, int, int, str]:
         if not data:
-            raise ProviderError("No image data provided")
+            raise ProviderError("No image data was provided")
 
         try:
             with Image.open(BytesIO(data)) as source:
@@ -662,7 +662,7 @@ class GenerationService:
         except ProviderError:
             raise
         except Exception as exc:
-            raise ProviderError(f"Cannot process image: {exc}") from exc
+            raise ProviderError(f"Failed to process image: {exc}") from exc
 
     def _normalized_output_format(self, value: str) -> str:
         raw = (value or "png").strip().lower().lstrip(".")

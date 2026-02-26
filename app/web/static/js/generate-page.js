@@ -88,7 +88,7 @@
         event.stopPropagation();
         var token = button.getAttribute("data-session-token") || "";
         var currentTitle = button.getAttribute("data-session-title") || "";
-        var nextTitle = window.prompt("Session umbenennen", currentTitle);
+        var nextTitle = window.prompt("Rename session", currentTitle);
         if (nextTitle === null) return;
         var trimmed = nextTitle.trim();
         if (!trimmed || !renameForm || !renameTokenInput || !renameTitleInput) return;

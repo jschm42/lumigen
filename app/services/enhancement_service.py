@@ -34,7 +34,7 @@ class EnhancementService:
     async def enhance(self, prompt: str, enhancement_prompt: Optional[str]) -> str:
         config = self._get_config()
         if not config:
-            raise ValueError("Enhancement LLM is not configured.")
+            raise ValueError("Enhancement LLM is not configured")
 
         provider = config["provider"]
         model = config["model"]
@@ -69,23 +69,23 @@ class EnhancementService:
                 "temperature": 0.7,
             }
         else:
-            raise ValueError("Enhancement provider is not supported yet.")
+            raise ValueError("Enhancement provider is not supported yet")
 
         timeout = httpx.Timeout(60.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, headers=headers, json=payload)
 
         if response.status_code >= 400:
-            raise ValueError(f"Enhancement request failed ({response.status_code}).")
+            raise ValueError(f"Enhancement request failed ({response.status_code})")
 
         data = response.json()
         choices = data.get("choices") or []
         if not choices:
-            raise ValueError("Enhancement LLM returned no output.")
+            raise ValueError("Enhancement LLM returned no output")
 
         message = choices[0].get("message") or {}
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise ValueError("Enhancement LLM returned empty content.")
+            raise ValueError("Enhancement LLM returned empty content")
 
         return content.strip()

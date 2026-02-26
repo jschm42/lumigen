@@ -47,7 +47,7 @@
         <p class="text-sm text-slate-400">No categories available.</p>
       {% endif %}
     </div>
-    <p class="mt-2 text-xs text-slate-400">Ausgewaehlte Kategorien werden neuen Bildern aus diesem Profil zugewiesen.</p>
+    <p class="mt-2 text-xs text-slate-400">Selected categories will be assigned to new images generated with this profile.</p>
   </div>
 
   <div class="grid gap-4 md:grid-cols-2" data-profile-dimensions>
@@ -62,7 +62,7 @@
   </div>
 
   <div class="rounded-2xl border border-white/8 bg-slate-900/40 p-4 hidden" data-profile-openrouter>
-    <p class="mb-2 text-xs text-slate-400">OpenRouter verwendet image_config statt fixer Pixel-Dimensionen.</p>
+    <p class="mb-2 text-xs text-slate-400">OpenRouter uses image_config instead of fixed pixel dimensions.</p>
     <div class="grid gap-4 md:grid-cols-2">
       <div>
         <label for="{{ form_dom_id }}-openrouter-ratio" class="{{ label_class }}">OpenRouter ratio</label>
@@ -124,9 +124,9 @@
           <option value="{{ model }}" {% if selected_upscale == model %}selected{% endif %}>{{ model }}</option>
         {% endfor %}
       </select>
-      <p class="mt-2 text-xs text-slate-400">Wird genutzt, wenn Upscale bei der Generierung aktiviert ist.</p>
+      <p class="mt-2 text-xs text-slate-400">Used when upscaling is enabled during generation.</p>
       {% if not upscale_models %}
-      <p class="mt-1 text-xs text-amber-300">Keine lokalen Upscale-Modelle gefunden. Bitte .param/.bin Dateien in UPSCALER_MODEL_DIR bereitstellen.</p>
+      <p class="mt-1 text-xs text-amber-300">No local upscaling models found. Please provide .param/.bin files in UPSCALER_MODEL_DIR.</p>
       {% endif %}
     </div>
   </div>

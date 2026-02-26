@@ -43,14 +43,14 @@ class UpscaleService:
     ) -> Tuple[bytes, int, int, str]:
         cmd = self._resolve_command()
         if not cmd:
-            raise ValueError('UPSCALER_COMMAND is not configured.')
+            raise ValueError('UPSCALER_COMMAND is not configured')
 
         model_name = (model or '').strip()
         if not model_name:
-            raise ValueError('Upscale model is required.')
+            raise ValueError('Upscaling model is required')
         scale = self._infer_scale(model_name)
         if scale not in {2, 3, 4}:
-            raise ValueError('Upscale model must map to x2, x3, or x4.')
+            raise ValueError('Upscaling model must map to x2, x3, or x4')
 
         fmt = self._normalize_format(output_format)
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -126,7 +126,7 @@ class UpscaleService:
             subprocess.run(args, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or '').strip()
-            message = stderr or 'Upscaler command failed.'
+            message = stderr or 'Upscaler command failed'
             raise ValueError(message) from exc
 
         if output_path.exists():
@@ -136,7 +136,7 @@ class UpscaleService:
         if matches:
             return matches[0]
 
-        raise ValueError('Upscaler did not produce output.')
+        raise ValueError('Upscaler did not produce any output')
 
     def _get_image_size(self, path: Path) -> Tuple[int, int]:
         with Image.open(path) as image:
@@ -174,9 +174,9 @@ class UpscaleService:
         if not candidate:
             return ''
         if len(candidate) > 128:
-            raise ValueError('Upscale model must be 128 characters or fewer.')
+            raise ValueError('Upscaling model must be 128 characters or fewer')
         if not re.fullmatch(r'[A-Za-z0-9._-]+', candidate):
-            raise ValueError('Upscale model contains invalid characters.')
+            raise ValueError('Upscaling model contains invalid characters')
         return candidate
 
     def _get_model_dir(self) -> Optional[Path]:

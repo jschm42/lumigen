@@ -75,7 +75,7 @@
           {% endfor %}
         </div>
       {% elif generation.status == 'succeeded' %}
-        <p class="text-sm text-slate-400">Job abgeschlossen, aber keine Assets erzeugt.</p>
+        <p class="text-sm text-slate-400">Job completed, but no assets were generated.</p>
       {% elif generation.status in ['queued', 'running'] %}
         <div class="flex min-h-[220px] w-full items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 px-4 py-6">
           <div class="flex items-center gap-3 text-slate-200">

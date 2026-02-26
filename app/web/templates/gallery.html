@@ -12,18 +12,18 @@
     <input type="hidden" name="thumb_size" value="{{ thumb_size }}">
     <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(0,1.8fr)_auto_auto_auto]">
       <select name="profile_name" aria-label="Profile filter" class="{{ input_class }}">
-        <option value="">Alle Profile</option>
+        <option value="">All profiles</option>
         {% for item in filter_options.profile_names %}
           <option value="{{ item }}" {% if profile_name == item %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
       </select>
       <select name="provider" aria-label="Provider filter" class="{{ input_class }}">
-        <option value="">Alle Provider</option>
+        <option value="">All providers</option>
         {% for item in filter_options.providers %}
           <option value="{{ item }}" {% if provider == item %}selected{% endif %}>{{ item }}</option>
         {% endfor %}
       </select>
-      <input type="text" name="q" value="{{ q }}" placeholder="Prompt durchsuchen..." aria-label="Prompt filter" class="{{ input_class }}">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search prompt..." aria-label="Prompt filter" class="{{ input_class }}">
       <div class="relative" data-category-popover>
         <button
           type="button"
@@ -33,12 +33,12 @@
           aria-expanded="false"
         >
           <span class="min-w-0">
-            <span class="block text-[11px] uppercase tracking-wide text-slate-400">Kategorie-Filter</span>
+            <span class="block text-[11px] uppercase tracking-wide text-slate-400">Category filter</span>
             <span class="block truncate font-semibold text-slate-100">
               {% if selected_category_ids %}
-                {{ selected_category_ids | length }} ausgewaehlt
+                {{ selected_category_ids | length }} selected
               {% else %}
-                Alle Kategorien
+                All categories
               {% endif %}
             </span>
           </span>
@@ -46,9 +46,9 @@
         </button>
         <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-slate-700/40 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
           <div class="mb-2 flex items-center justify-between">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Kategorien</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Categories</p>
             {% if selected_category_ids %}
-              <p class="text-xs text-sky-200">{{ selected_category_ids | length }} aktiv</p>
+              <p class="text-xs text-sky-200">{{ selected_category_ids | length }} active</p>
             {% endif %}
           </div>
           {% if filter_options.categories %}
@@ -61,7 +61,7 @@
               {% endfor %}
             </div>
           {% else %}
-            <p class="text-sm text-slate-400">Keine Kategorien vorhanden.</p>
+            <p class="text-sm text-slate-400">No categories available.</p>
           {% endif %}
         </div>
       </div>
@@ -73,22 +73,22 @@
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=sm"
           class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
-          title="Kleine Thumbnails"
-          aria-label="Kleine Thumbnails"
+          title="Small thumbnails"
+          aria-label="Small thumbnails"
           data-gallery-thumb-size="sm"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=md"
           class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
-          title="Mittlere Thumbnails"
-          aria-label="Mittlere Thumbnails"
+          title="Medium thumbnails"
+          aria-label="Medium thumbnails"
           data-gallery-thumb-size="md"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_on</span></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=lg"
           class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
-          title="Groesse Thumbnails"
-          aria-label="Groesse Thumbnails"
+          title="Large thumbnails"
+          aria-label="Large thumbnails"
           data-gallery-thumb-size="lg"
         ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">crop_square</span></a>
       </div>
@@ -120,10 +120,10 @@
           aria-haspopup="dialog"
           aria-expanded="false"
         >
-          Kategorien zuweisen
+          Assign categories
         </button>
         <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-slate-700/40 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
-          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Kategorien fuer Auswahl</p>
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Categories for selection</p>
           {% if filter_options.categories %}
             <div class="max-h-56 space-y-2 overflow-y-auto pr-1">
               {% for item in filter_options.categories %}
@@ -139,11 +139,11 @@
                 class="{{ btn_primary }}"
                 formaction="/assets/bulk-set-categories"
                 data-bulk-action>
-                Kategorien speichern
+                Save categories
               </button>
             </div>
           {% else %}
-            <p class="text-sm text-slate-400">Keine Kategorien vorhanden.</p>
+            <p class="text-sm text-slate-400">No categories available.</p>
           {% endif %}
         </div>
       </div>

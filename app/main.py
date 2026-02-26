@@ -139,7 +139,7 @@ def parse_optional_int(value: Optional[str]) -> Optional[int]:
 def resolve_default_storage_template_id(session: Session) -> int:
     templates = crud.list_storage_templates(session)
     if not templates:
-        raise ValueError("No storage template available")
+        raise ValueError("No storage templates are configured")
     default_template = next((item for item in templates if item.name == "default"), None)
     return (default_template or templates[0]).id
 
@@ -152,7 +152,7 @@ def validate_profile_upscale_model(value: str) -> Optional[str]:
     if not local_models:
         raise ValueError("No local upscale models available. Please place a model in UPSCALER_MODEL_DIR first.")
     if candidate not in local_models:
-        raise ValueError("Upscale model must be one of the locally available models")
+        raise ValueError("Selected upscaling model is not available locally")
     return candidate
 
 
@@ -184,9 +184,9 @@ def apply_openrouter_image_config(
     image_size_value = (image_size or "").strip().upper()
 
     if ratio_value and ratio_value not in OPENROUTER_ALLOWED_ASPECT_RATIOS:
-        raise ValueError("Invalid OpenRouter aspect ratio")
+        raise ValueError("Invalid OpenRouter aspect ratio selected")
     if image_size_value and image_size_value not in OPENROUTER_ALLOWED_IMAGE_SIZES:
-        raise ValueError("Invalid OpenRouter image size")
+        raise ValueError("Invalid OpenRouter image size selected")
 
     if ratio_value:
         image_config["aspect_ratio"] = ratio_value
@@ -468,7 +468,7 @@ def normalize_category_ids(values: list[int]) -> list[int]:
 def normalize_category_name(value: str) -> str:
     normalized = (value or "").strip()
     if not normalized:
-        raise ValueError("Name is required")
+        raise ValueError("Category name is required")
     if len(normalized) > MAX_CATEGORY_NAME_LENGTH:
         raise ValueError(
             f"Category name must be at most {MAX_CATEGORY_NAME_LENGTH} characters"
@@ -720,13 +720,13 @@ def generate_submit(
             width_value = parse_optional_int(width)
             if width_value is not None:
                 if width_value <= 0:
-                    raise ValueError("Width must be > 0")
+                    raise ValueError("Width must be greater than 0")
                 overrides["width"] = width_value
 
             height_value = parse_optional_int(height)
             if height_value is not None:
                 if height_value <= 0:
-                    raise ValueError("Height must be > 0")
+                    raise ValueError("Height must be greater than 0")
                 overrides["height"] = height_value
 
         n_images_value = parse_optional_int(n_images)
@@ -1003,13 +1003,13 @@ def admin_create_dimension_preset(
     try:
         name_value = name.strip()
         if not name_value:
-            raise ValueError("Name is required")
+            raise ValueError("Preset name is required")
         width_value = parse_optional_int(width)
         height_value = parse_optional_int(height)
         if width_value is None or width_value <= 0:
-            raise ValueError("Width must be > 0")
+            raise ValueError("Width must be greater than 0")
         if height_value is None or height_value <= 0:
-            raise ValueError("Height must be > 0")
+            raise ValueError("Height must be greater than 0")
 
         crud.create_dimension_preset(
             session,
@@ -1038,13 +1038,13 @@ def admin_update_dimension_preset(
     try:
         name_value = name.strip()
         if not name_value:
-            raise ValueError("Name is required")
+            raise ValueError("Preset name is required")
         width_value = parse_optional_int(width)
         height_value = parse_optional_int(height)
         if width_value is None or width_value <= 0:
-            raise ValueError("Width must be > 0")
+            raise ValueError("Width must be greater than 0")
         if height_value is None or height_value <= 0:
-            raise ValueError("Height must be > 0")
+            raise ValueError("Height must be greater than 0")
 
         crud.update_dimension_preset(
             session,
@@ -1130,7 +1130,7 @@ def admin_create_model_config(
 ) -> RedirectResponse:
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
-        raise HTTPException(status_code=404, detail="Unknown provider")
+        raise HTTPException(status_code=404, detail="Unsupported provider")
 
     try:
         name_value = normalize_model_config_name(name)
@@ -1177,11 +1177,11 @@ def admin_update_model_config(
 ) -> RedirectResponse:
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
-        raise HTTPException(status_code=404, detail="Unknown provider")
+        raise HTTPException(status_code=404, detail="Unsupported provider")
 
     config = crud.get_model_config(session, model_config_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Model config not found")
+        raise HTTPException(status_code=404, detail="Model configuration not found")
 
     try:
         name_value = normalize_model_config_name(name)
@@ -1226,7 +1226,7 @@ def admin_delete_model_config(
 ) -> RedirectResponse:
     config = crud.get_model_config(session, model_config_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Model config not found")
+        raise HTTPException(status_code=404, detail="Model configuration not found")
 
     crud.delete_model_config(session, config)
     return admin_redirect("models", message="Deleted")
@@ -1242,7 +1242,7 @@ def admin_update_enhancement(
 ) -> RedirectResponse:
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
-        raise HTTPException(status_code=404, detail="Unknown provider")
+        raise HTTPException(status_code=404, detail="Unsupported provider")
 
     try:
         existing = crud.get_enhancement_config(session)
@@ -1450,9 +1450,9 @@ def create_profile(
             width_value = parse_optional_int(width)
             height_value = parse_optional_int(height)
             if width_value is not None and width_value <= 0:
-                raise ValueError("Width must be > 0")
+                raise ValueError("Width must be greater than 0")
             if height_value is not None and height_value <= 0:
-                raise ValueError("Height must be > 0")
+                raise ValueError("Height must be greater than 0")
         params_value = apply_openrouter_image_config(
             params_json={},
             provider=provider_value,
@@ -1525,9 +1525,9 @@ def update_profile(
             width_value = parse_optional_int(width)
             height_value = parse_optional_int(height)
             if width_value is not None and width_value <= 0:
-                raise ValueError("Width must be > 0")
+                raise ValueError("Width must be greater than 0")
             if height_value is not None and height_value <= 0:
-                raise ValueError("Height must be > 0")
+                raise ValueError("Height must be greater than 0")
         params_value = apply_openrouter_image_config(
             params_json=dict(profile.params_json or {}),
             provider=provider_value,
