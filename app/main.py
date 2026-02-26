@@ -60,7 +60,8 @@ MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
-ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement"}
+ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
+APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
 OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "1:1",
     "2:3",
@@ -70,7 +71,6 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "4:5",
     "5:4",
     "9:16",
-    "9:21",
     "16:9",
     "21:9",
 }
@@ -988,6 +988,7 @@ def admin_page(
             "message": message or "",
             "encryption_ready": encryption_ready,
             "active_admin_section": active_admin_section,
+            "app_copyright_text": APP_COPYRIGHT_TEXT,
         },
     )
 
