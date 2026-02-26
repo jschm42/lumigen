@@ -1,16 +1,24 @@
 # Lumigen
 
-Lumigen is a local-first image generation app built with FastAPI.
-It provides a server-rendered web UI, provider adapters (OpenAI, OpenRouter, Google, BFL, and local stub), and SQLite-backed asset management with reproducible metadata snapshots.
+Lumigen is your local AI image studio.
+Create images from prompts, keep everything organized, and iterate quickly with profiles, sessions, and a clean gallery workflow — all from one lightweight web app.
+
+## App preview
+
+> Put your screenshots here so they render on GitHub: `docs/screenshots/`
+
+![Generation Session](docs/screenshots/generation_session_view.png)
+![Image Gallery](docs/screenshots/gallery_view.png)
 
 ## Why Lumigen
 
-- Local-first by default: data, images, and database live in `./data`
-- Provider-agnostic generation flow through adapter classes
-- Safe managed file storage with strict path boundary checks
-- Reproducible generation history via profile/request/storage snapshots
-- Built-in sidecars for both successful and failed generations
-- Optional local upscaling with Real-ESRGAN
+- 🏡 **Local-first by default**: your images, metadata, and DB stay under `./data`
+- ⚡ **Fast creative loop**: generate, tweak, rerun, and compare in seconds
+- 🧩 **Flexible providers**: connect OpenAI, OpenRouter, Google, BFL, or use `stub`
+- 🗂️ **Profiles & categories**: save your favorite setups and keep outputs tidy
+- 🖼️ **Gallery workflow**: browse, filter, download, and manage assets easily
+- 🔍 **Reproducible history**: snapshots help you understand how each image was created
+- 🚀 **Optional upscaling**: improve output resolution with Real-ESRGAN
 
 ## Tech stack
 
