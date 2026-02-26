@@ -600,6 +600,7 @@ def generate_page(
         active_workspace_view = "chat"
 
     return templates.TemplateResponse(
+        request,
         "generate.html",
         {
             "request": request,
@@ -766,6 +767,7 @@ def generate_submit(
     except ValueError as exc:
         if is_htmx(request):
             return templates.TemplateResponse(
+                request,
                 "fragments/chat_error_item.html",
                 {
                     "request": request,
@@ -791,6 +793,7 @@ def generate_submit(
             response.headers["HX-Redirect"] = redirect_target
             return response
         return templates.TemplateResponse(
+            request,
             "fragments/chat_generation_item.html",
             {
                 "request": request,
@@ -911,6 +914,7 @@ def job_status(
         else "fragments/job_status.html"
     )
     return templates.TemplateResponse(
+        request,
         template_name,
         {
             "request": request,
@@ -941,6 +945,7 @@ def job_cancel(
             else "fragments/job_status.html"
         )
         return templates.TemplateResponse(
+            request,
             template_name,
             {
                 "request": request,
@@ -976,6 +981,7 @@ def admin_page(
     active_admin_section = normalize_admin_section(section)
 
     return templates.TemplateResponse(
+        request,
         "admin.html",
         {
             "request": request,
@@ -1391,6 +1397,7 @@ def profiles_page(
         open_edit_id = edit_id
 
     return templates.TemplateResponse(
+        request,
         "profiles.html",
         {
             "request": request,
@@ -1624,6 +1631,7 @@ def gallery_page(
     return_to = f"/gallery?{urlencode(return_to_params, doseq=True)}"
 
     return templates.TemplateResponse(
+        request,
         "gallery.html",
         {
             "request": request,
@@ -1748,6 +1756,7 @@ def asset_detail(
     session_token = generation_session_token(asset.generation) if asset.generation else ""
 
     return templates.TemplateResponse(
+        request,
         "asset_detail.html",
         {
             "request": request,
@@ -1785,6 +1794,7 @@ def delete_asset(
         raise HTTPException(status_code=404, detail="Asset not found")
     if is_htmx(request):
         return templates.TemplateResponse(
+            request,
             "fragments/flash.html",
             {"request": request, "message": "Asset deleted"},
         )
@@ -1802,6 +1812,7 @@ def delete_generation(
         raise HTTPException(status_code=404, detail="Generation not found")
     if is_htmx(request):
         return templates.TemplateResponse(
+            request,
             "fragments/flash.html",
             {"request": request, "message": "Generation deleted"},
         )
@@ -1823,6 +1834,7 @@ def rerun_generation(
     generation_service.enqueue(background_tasks, generation.id)
 
     return templates.TemplateResponse(
+        request,
         "fragments/job_status.html",
         {
             "request": request,

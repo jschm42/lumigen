@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+
+class _ScalarResult:
+    def __init__(self, values):  # type: ignore[no-untyped-def]
+        self._values = list(values)
+
+    def all(self):  # type: ignore[no-untyped-def]
+        return list(self._values)
+
+
+class _FakeSession:
+    def __init__(self, generations=None):  # type: ignore[no-untyped-def]
+        self._generations = generations or []
+
+    def scalars(self, _query):
+        return _ScalarResult(self._generations)
+
+
+def _override_session(fake_session: _FakeSession):
+    def _dependency():
+        yield fake_session
+
+    return _dependency
+
+
+def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [
+            SimpleNamespace(
+                id=1,
+                name="Default",
+                provider="stub",
+                model="stub-v1",
+                model_config_id=1,
+                width=512,
+                height=512,
+                n_images=1,
+                seed=None,
+            )
+        ],
+    )
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30: (
+            [
+                {
+                    "token": "session:abc",
+                    "label": "Session",
+                    "subtitle": "",
+                    "age": "",
+                    "time_category": "today",
+                    "latest_created_at": None,
+                }
+            ],
+            False,
+        ),
+    )
+
+    response = client.get("/?workspace_view=chat&conversation=session:abc")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'data-chat-shell' in body
+    assert 'hx-post="/generate"' in body
+    assert 'data-generation-form' in body
+    assert 'Start a new session with a prompt in the input field below.' in body
+
+
+def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module.crud, "list_profiles", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30: ([], False),
+    )
+
+    response = client.get("/?workspace_view=gallery&conversation=new")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'title="workspace"' in body
+    assert 'src="/gallery?embedded=1"' in body
+
+
+def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **_kwargs: SimpleNamespace(items=[], page=1, pages=1, total=0),
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=["Default"], providers=["stub"], categories=[]),
+    )
+
+    response = client.get("/gallery?thumb_size=lg")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'data-gallery-thumb-size="lg"' in body
+    assert 'No assets found for current filters.' in body
+    assert 'data-gallery-bulk-form' in body
+
+
+def test_admin_page_renders_sections_and_key_warning(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(app_module.settings, "provider_config_key", None)
+
+    monkeypatch.setattr(app_module.crud, "list_model_configs", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_categories", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+
+    response = client.get("/admin?section=models")
+    body = response.text
+
+    assert response.status_code == 200
+    assert "Manage models, presets, categories" in body
+    assert "PROVIDER_CONFIG_KEY is missing" in body
+    assert "/admin?section=categories" in body
+
+
+def test_job_cancel_htmx_chat_returns_chat_fragment(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    generation = SimpleNamespace(
+        id=9,
+        status="running",
+        prompt_user="Test prompt",
+        profile_name="Default",
+        provider="stub",
+        model="stub-v1",
+        request_snapshot_json={},
+        error=None,
+        failure_sidecar_path=None,
+        assets=[],
+    )
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "cancel_generation",
+        lambda _session, _generation_id: generation,
+    )
+
+    response = client.post(
+        "/jobs/9/cancel?view=chat",
+        headers={"HX-Request": "true"},
+    )
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'id="chat-generation-9"' in body
+    assert 'hx-get="/jobs/9?view=chat"' in body
+    assert "Generating..." in body
+
+
+def test_delete_asset_htmx_returns_flash_fragment(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "delete_asset",
+        lambda _session, _asset_id: True,
+    )
+
+    response = client.post(
+        "/assets/21/delete",
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "Asset deleted" in response.text
+    assert 'role="alert"' in response.text
+
+
+def test_delete_generation_htmx_returns_flash_fragment(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "delete_generation",
+        lambda _session, _generation_id: True,
+    )
+
+    response = client.post(
+        "/generations/34/delete",
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "Generation deleted" in response.text
+    assert 'role="alert"' in response.text

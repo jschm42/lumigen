@@ -44,7 +44,12 @@
 - For FastAPI route tests, prefer assertions on JSON payloads, status codes, redirects, and headers over brittle full-template snapshots.
 - Keep backend route tests DB-light by using dependency overrides (`get_session`) and monkeypatching imported `app.main.crud.*` seams where appropriate.
 - Avoid real external provider/network calls in tests; mock provider registry/adapter behavior explicitly.
-- Frontend test coverage is tracked separately and should not block backend unit-test work in this phase.
+
+## Testing expectations (frontend)
+- Frontend coverage in this repo targets server-rendered Jinja + HTMX behavior through FastAPI route tests under `tests/frontend/`.
+- Prefer stable assertions for critical UI markers (form/action attributes, fragment IDs, HTMX attributes, flash/error text) instead of full HTML snapshots.
+- Keep frontend tests deterministic by mocking `app.main.crud.*`, service singletons (`gallery_service`, `generation_service`, etc.), and using dependency overrides for `get_session`.
+- Do not add browser E2E tooling unless explicitly requested; route/template tests are the default frontend test level in this project.
 
 ## Integration points and external dependencies
 - External provider APIs: OpenAI, OpenRouter, Google, BFL adapters under `app/providers/`.
