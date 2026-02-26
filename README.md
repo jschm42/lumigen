@@ -14,7 +14,7 @@ Create images from prompts, keep everything organized, and iterate quickly with 
 
 - 🏡 **Local-first by default**: your images, metadata, and DB stay under `./data`
 - ⚡ **Fast creative loop**: generate, tweak, rerun, and compare in seconds
-- 🧩 **Flexible providers**: connect OpenAI, OpenRouter, Google, BFL, or use `stub`
+- 🧩 **Flexible providers**: connect OpenAI, OpenRouter, Google, BFL
 - 🗂️ **Profiles & categories**: save your favorite setups and keep outputs tidy
 - 🖼️ **Gallery workflow**: browse, filter, download, and manage assets easily
 - 🔍 **Reproducible history**: snapshots help you understand how each image was created
