@@ -24,6 +24,38 @@
     return Math.floor(Math.random() * span) + min;
   }
 
+  function getCsrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (!meta) return '';
+    return String(meta.getAttribute('content') || '').trim();
+  }
+
+  function ensurePostFormCsrfTokens() {
+    var token = getCsrfToken();
+    if (!token) return;
+    document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function (form) {
+      var existing = form.querySelector('input[name="csrf_token"]');
+      if (existing) {
+        existing.value = token;
+        return;
+      }
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'csrf_token';
+      input.value = token;
+      form.appendChild(input);
+    });
+  }
+
+  function setupHtmxCsrf() {
+    var token = getCsrfToken();
+    if (!token || typeof document.body.addEventListener !== 'function') return;
+    document.body.addEventListener('htmx:configRequest', function (event) {
+      if (!event || !event.detail || !event.detail.headers) return;
+      event.detail.headers['X-CSRF-Token'] = token;
+    });
+  }
+
   // ==========================================================================
   // Seed Generation
   // ==========================================================================
@@ -423,7 +455,10 @@
         try {
           var response = await fetch('/api/enhance', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrfToken()
+            },
             body: JSON.stringify({
               prompt: promptValue,
               model_config_id: modelConfigId ? Number(modelConfigId) : null
@@ -835,7 +870,10 @@ function setupGalleryRatings() {
           var response = await fetch(form.action, {
             method: 'POST',
             body: formData,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-CSRF-Token': getCsrfToken()
+            }
           });
 
           if (!response.ok) {
@@ -861,6 +899,8 @@ function setupGalleryRatings() {
   // ==========================================================================
 
   function init() {
+    ensurePostFormCsrfTokens();
+    setupHtmxCsrf();
     setupSeedButtons();
     setupModelSelects();
     setupGenerationForms();
@@ -876,5 +916,9 @@ function setupGalleryRatings() {
   } else {
     init();
   }
+
+  document.body.addEventListener('htmx:afterSwap', function () {
+    ensurePostFormCsrfTokens();
+  });
 
 })();

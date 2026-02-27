@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="csrf-token" content="{{ request.session.get('csrf_token', '') }}">
   <title>{{ title if title else "Lumigen" }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='app-logo.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -96,7 +97,9 @@
             <a href="/gallery" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/gallery') or request.url.path.startswith('/assets') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}">Gallery</a>
           </li>
           <li>
+            {% if request.session.get('user_role') == 'admin' %}
             <a href="/admin" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/admin') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}">Admin</a>
+            {% endif %}
           </li>
         </ul>
       </nav>

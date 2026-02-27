@@ -16,6 +16,7 @@ from app.db.models import (
     ModelConfig,
     Profile,
     StorageTemplate,
+    User,
 )
 
 
@@ -44,6 +45,60 @@ def ensure_default_storage_template(
 def list_storage_templates(session: Session) -> list[StorageTemplate]:
     stmt = select(StorageTemplate).order_by(StorageTemplate.name.asc())
     return list(session.scalars(stmt).all())
+
+
+def count_users(session: Session) -> int:
+    stmt = select(User.id)
+    return len(list(session.scalars(stmt).all()))
+
+
+def list_users(session: Session) -> list[User]:
+    stmt = select(User).order_by(User.username.asc())
+    return list(session.scalars(stmt).all())
+
+
+def count_admin_users(session: Session, *, active_only: bool = True) -> int:
+    stmt = select(User.id).where(User.role == "admin")
+    if active_only:
+        stmt = stmt.where(User.is_active.is_(True))
+    return len(list(session.scalars(stmt).all()))
+
+
+def get_user(session: Session, user_id: int) -> Optional[User]:
+    stmt = select(User).where(User.id == user_id)
+    return session.scalar(stmt)
+
+
+def get_user_by_username(session: Session, username: str) -> Optional[User]:
+    stmt = select(User).where(User.username == username)
+    return session.scalar(stmt)
+
+
+def create_user(session: Session, **fields) -> User:
+    row = User(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_user(session: Session, user: User, **fields) -> User:
+    for key, value in fields.items():
+        setattr(user, key, value)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def delete_user(session: Session, user: User) -> None:
+    session.delete(user)
+    session.commit()
+
+
+def delete_all_users(session: Session) -> None:
+    session.query(User).delete()
+    session.commit()
 
 
 def list_profiles(session: Session) -> list[Profile]:

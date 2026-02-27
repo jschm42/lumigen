@@ -144,9 +144,15 @@
       payload.last_thumb_size = data.thumb_size;
     }
 
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
+
     fetch("/api/session-preferences", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
       body: JSON.stringify(payload)
     }).catch(function (err) {
       console.error("Failed to save session preference:", err);

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import base64
 import copy
+import hmac
+import json
 import logging
 import os
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -32,6 +35,8 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -39,7 +44,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
-from app.db.models import Asset, Generation
+from app.db.models import Asset, Generation, User
 from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
 from app.services.enhancement_service import EnhancementService
@@ -50,6 +55,7 @@ from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
+from app.services.auth_service import AuthService
 from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
@@ -67,6 +73,9 @@ MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "users", "about"}
+ADMIN_ROLE = "admin"
+USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
 OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "1:1",
@@ -98,12 +107,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret_key,
+    session_cookie=settings.session_cookie_name,
+    max_age=settings.session_max_age_seconds,
+    same_site="lax",
+    https_only=settings.session_https_only,
+)
 
 template_dir = Path(__file__).resolve().parent / "web" / "templates"
 static_dir = Path(__file__).resolve().parent / "web" / "static"
-# Add version to all templates via context processor
-def version_context(request):
-    return {"app_version": settings.app_version}
 
 templates = Jinja2Templates(directory=str(template_dir))
 templates.env.globals["app_version"] = settings.app_version
@@ -127,10 +141,141 @@ generation_service = GenerationService(
     upscale_service=upscale_service,
 )
 gallery_service = GalleryService(default_page_size=settings.default_page_size)
+auth_service = AuthService()
+
+
+def has_bootstrapped_users(session: Session) -> bool:
+    return crud.count_admin_users(session, active_only=False) > 0
+
+
+def get_session_user_id(request: Request) -> Optional[int]:
+    raw = request.session.get("user_id")
+    if isinstance(raw, int):
+        return raw
+    return None
+
+
+def get_current_user(request: Request, session: Session) -> Optional[User]:
+    user_id = get_session_user_id(request)
+    if not user_id:
+        return None
+    user = crud.get_user(session, user_id)
+    if not user or not user.is_active:
+        return None
+    return user
+
+
+def clear_auth_session(request: Request) -> None:
+    request.session.pop("user_id", None)
+    request.session.pop("user_role", None)
+    request.session.pop("username", None)
+
+
+def start_auth_session(request: Request, user: User) -> None:
+    request.session["user_id"] = user.id
+    request.session["user_role"] = user.role
+    request.session["username"] = user.username
+
+
+def ensure_csrf_token(request: Request) -> str:
+    token = request.session.get("csrf_token")
+    issued_at = request.session.get("csrf_issued_at")
+    now = int(datetime.utcnow().timestamp())
+    if isinstance(token, str) and token and isinstance(issued_at, int):
+        if now - issued_at <= settings.csrf_token_ttl_seconds:
+            return token
+    token = secrets.token_urlsafe(32)
+    request.session["csrf_token"] = token
+    request.session["csrf_issued_at"] = now
+    return token
+
+
+def is_csrf_valid(request: Request, provided: Optional[str]) -> bool:
+    expected = request.session.get("csrf_token")
+    if not isinstance(expected, str) or not expected:
+        return False
+    candidate = (provided or "").strip()
+    if not candidate:
+        return False
+    return hmac.compare_digest(expected, candidate)
+
+
+def current_user_is_admin(request: Request) -> bool:
+    return str(request.session.get("user_role") or "").strip().lower() == ADMIN_ROLE
+
+
+def read_session_cookie_payload(request: Request) -> dict[str, Any]:
+    cookie_value = request.cookies.get(settings.session_cookie_name)
+    if not cookie_value:
+        return {}
+    signer = TimestampSigner(str(settings.session_secret_key))
+    try:
+        unsigned = signer.unsign(
+            cookie_value,
+            max_age=settings.session_max_age_seconds,
+        )
+        decoded = base64.b64decode(unsigned)
+        payload = json.loads(decoded)
+        if isinstance(payload, dict):
+            return payload
+    except (BadSignature, SignatureExpired, ValueError, TypeError, json.JSONDecodeError):
+        return {}
+    return {}
+
+
+def login_redirect(next_path: str = "/") -> RedirectResponse:
+    params = {"next": next_path}
+    return RedirectResponse(url=f"/login?{urlencode(params)}", status_code=303)
+
+
+def validate_csrf_or_raise(request: Request, csrf_token: str) -> None:
+    if not is_csrf_valid(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+
+def require_admin_or_redirect(request: Request) -> Optional[RedirectResponse]:
+    if current_user_is_admin(request):
+        return None
+    return RedirectResponse(
+        url="/?workspace_view=chat&conversation=new&error=Admin+access+required",
+        status_code=303,
+    )
 
 
 def is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request", "").lower() == "true"
+
+
+@app.middleware("http")
+async def auth_guard_middleware(request: Request, call_next):
+    path = request.url.path
+    is_static = path.startswith("/static")
+    if is_static:
+        return await call_next(request)
+
+    session_payload = read_session_cookie_payload(request)
+    session_user_id = session_payload.get("user_id")
+
+    with SessionLocal() as session:
+        users_exist = has_bootstrapped_users(session)
+        user = None
+        if isinstance(session_user_id, int):
+            candidate = crud.get_user(session, session_user_id)
+            if candidate and candidate.is_active:
+                user = candidate
+
+    public_paths = {"/login"}
+    if path in public_paths:
+        if users_exist and user and request.method.upper() == "GET":
+            return RedirectResponse(url="/", status_code=303)
+        return await call_next(request)
+
+    if not users_exist:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not user:
+        return login_redirect(path)
+    return await call_next(request)
 
 
 def parse_optional_int(value: Optional[str]) -> Optional[int]:
@@ -143,11 +288,11 @@ def parse_optional_int(value: Optional[str]) -> Optional[int]:
 
 
 def resolve_default_storage_template_id(session: Session) -> int:
-    templates = crud.list_storage_templates(session)
-    if not templates:
+    storage_templates = crud.list_storage_templates(session)
+    if not storage_templates:
         raise ValueError("No storage templates are configured")
-    default_template = next((item for item in templates if item.name == "default"), None)
-    return (default_template or templates[0]).id
+    default_template = next((item for item in storage_templates if item.name == "default"), None)
+    return (default_template or storage_templates[0]).id
 
 
 def validate_profile_upscale_model(value: str) -> Optional[str]:
@@ -516,9 +661,16 @@ def normalize_model_config_name(value: str) -> str:
 
 def normalize_admin_section(value: Optional[str]) -> str:
     candidate = (value or "models").strip().lower()
-    if candidate in ADMIN_SECTIONS:
+    if candidate in ADMIN_USER_SECTIONS:
         return candidate
     return "models"
+
+
+def normalize_user_role(value: str) -> str:
+    role = (value or "").strip().lower()
+    if role in {ADMIN_ROLE, USER_ROLE}:
+        return role
+    raise ValueError("Invalid role")
 
 
 def admin_redirect(
@@ -533,6 +685,86 @@ def admin_redirect(
     if error:
         params["error"] = error
     return RedirectResponse(url=f"/admin?{urlencode(params)}", status_code=303)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(
+    request: Request,
+    next_url: Optional[str] = Query(default="/", alias="next"),
+    error: Optional[str] = Query(default=None),
+    message: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    users_exist = has_bootstrapped_users(session)
+    token = ensure_csrf_token(request)
+    next_path = (next_url or "/").strip() or "/"
+    if not next_path.startswith("/"):
+        next_path = "/"
+
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "request": request,
+            "csrf_token": token,
+            "users_exist": users_exist,
+            "next": next_path,
+            "error": error or "",
+            "message": message or "",
+            "hide_header": True,
+        },
+    )
+
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    csrf_token: str = Form(...),
+    next_url: str = Form(default="/", alias="next"),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    users_exist = has_bootstrapped_users(session)
+    username_value = (username or "").strip()
+    next_path = (next_url or "/").strip() or "/"
+    if not next_path.startswith("/"):
+        next_path = "/"
+
+    if not users_exist:
+        if len(username_value) < 3:
+            return RedirectResponse(
+                url="/login?error=Username+must+be+at+least+3+characters",
+                status_code=303,
+            )
+        try:
+            password_hash = auth_service.hash_password(password)
+            user = crud.create_user(
+                session,
+                username=username_value,
+                password_hash=password_hash,
+                role=ADMIN_ROLE,
+                is_active=True,
+            )
+            start_auth_session(request, user)
+            return RedirectResponse(url="/", status_code=303)
+        except (ValueError, IntegrityError) as exc:
+            return RedirectResponse(url=f"/login?error={str(exc)}", status_code=303)
+
+    user = crud.get_user_by_username(session, username_value)
+    if not user or not user.is_active or not auth_service.verify_password(password, user.password_hash):
+        params = {"next": next_path, "error": "Invalid credentials"}
+        return RedirectResponse(url=f"/login?{urlencode(params)}", status_code=303)
+
+    start_auth_session(request, user)
+    return RedirectResponse(url=next_path, status_code=303)
+
+
+@app.get("/logout")
+def logout(request: Request) -> RedirectResponse:
+    clear_auth_session(request)
+    return RedirectResponse(url="/login?message=Logged+out", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -614,6 +846,8 @@ def generate_page(
     active_workspace_view = (workspace_view or "chat").strip().lower()
     if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
         active_workspace_view = "chat"
+    if active_workspace_view == "admin" and not current_user_is_admin(request):
+        active_workspace_view = "chat"
 
     return templates.TemplateResponse(
         request,
@@ -658,8 +892,10 @@ def generate_submit(
     upscale_model: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    validate_csrf_or_raise(request, csrf_token)
     profile = crud.get_profile(session, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -826,12 +1062,15 @@ def generate_submit(
 
 @app.post("/sessions/rename")
 def rename_chat_session(
+    request: Request,
     session_token: str = Form(...),
     title: str = Form(...),
     active_conversation: str = Form(default=""),
     workspace_view: str = Form(default="chat"),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     token = (session_token or "").strip()
     if not token or token in {"all", "new"}:
         return generate_workspace_redirect(
@@ -872,11 +1111,14 @@ def rename_chat_session(
 
 @app.post("/sessions/delete")
 def delete_chat_session(
+    request: Request,
     session_token: str = Form(...),
     active_conversation: str = Form(default=""),
     workspace_view: str = Form(default="chat"),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     token = (session_token or "").strip()
     if not token or token in {"all", "new"}:
         return generate_workspace_redirect(
@@ -945,8 +1187,10 @@ def job_cancel(
     request: Request,
     generation_id: int,
     view: str = Query(default="default"),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    validate_csrf_or_raise(request, csrf_token)
     generation = generation_service.cancel_generation(session, generation_id)
     if not generation:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -989,9 +1233,14 @@ def admin_page(
     error: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
     model_configs = crud.list_model_configs(session)
     dimension_presets = crud.list_dimension_presets(session)
     categories = crud.list_categories(session)
+    users = crud.list_users(session)
     enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
@@ -1006,22 +1255,30 @@ def admin_page(
             "categories": categories,
             "enhancement_config": enhancement_config,
             "providers": provider_registry.provider_names(),
+            "users": users,
             "error": error or "",
             "message": message or "",
             "encryption_ready": encryption_ready,
             "active_admin_section": active_admin_section,
             "app_copyright_text": APP_COPYRIGHT_TEXT,
+            "onboarding_reset_enabled": settings.auth_allow_onboarding_reset,
         },
     )
 
 
 @app.post("/admin/dimension-presets")
 def admin_create_dimension_preset(
+    request: Request,
     name: str = Form(...),
     width: str = Form(...),
     height: str = Form(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     try:
         name_value = name.strip()
         if not name_value:
@@ -1047,12 +1304,18 @@ def admin_create_dimension_preset(
 
 @app.post("/admin/dimension-presets/{preset_id}/update")
 def admin_update_dimension_preset(
+    request: Request,
     preset_id: int,
     name: str = Form(...),
     width: str = Form(...),
     height: str = Form(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     preset = crud.get_dimension_preset(session, preset_id)
     if not preset:
         raise HTTPException(status_code=404, detail="Dimension preset not found")
@@ -1083,9 +1346,15 @@ def admin_update_dimension_preset(
 
 @app.post("/admin/dimension-presets/{preset_id}/delete")
 def admin_delete_dimension_preset(
+    request: Request,
     preset_id: int,
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     preset = crud.get_dimension_preset(session, preset_id)
     if not preset:
         raise HTTPException(status_code=404, detail="Dimension preset not found")
@@ -1096,9 +1365,15 @@ def admin_delete_dimension_preset(
 
 @app.post("/admin/categories")
 def admin_create_category(
+    request: Request,
     name: str = Form(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     try:
         name_value = normalize_category_name(name)
         crud.create_category(session, name=name_value)
@@ -1110,10 +1385,16 @@ def admin_create_category(
 
 @app.post("/admin/categories/{category_id}/update")
 def admin_update_category(
+    request: Request,
     category_id: int,
     name: str = Form(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     category = crud.get_category(session, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -1129,9 +1410,15 @@ def admin_update_category(
 
 @app.post("/admin/categories/{category_id}/delete")
 def admin_delete_category(
+    request: Request,
     category_id: int,
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     category = crud.get_category(session, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -1142,14 +1429,20 @@ def admin_delete_category(
 
 @app.post("/admin/model-configs")
 def admin_create_model_config(
+    request: Request,
     name: str = Form(...),
     provider: str = Form(...),
     model: str = Form(...),
     enhancement_prompt: str = Form(default=""),
     api_key: str = Form(default=""),
     use_custom_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
         raise HTTPException(status_code=404, detail="Unsupported provider")
@@ -1187,6 +1480,7 @@ def admin_create_model_config(
 
 @app.post("/admin/model-configs/{model_config_id}/update")
 def admin_update_model_config(
+    request: Request,
     model_config_id: int,
     name: str = Form(...),
     provider: str = Form(...),
@@ -1195,8 +1489,13 @@ def admin_update_model_config(
     api_key: str = Form(default=""),
     use_custom_api_key: bool = Form(default=False),
     clear_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
         raise HTTPException(status_code=404, detail="Unsupported provider")
@@ -1244,8 +1543,15 @@ def admin_update_model_config(
 
 @app.post("/admin/model-configs/{model_config_id}/delete")
 def admin_delete_model_config(
-    model_config_id: int, session: Session = Depends(get_session)
+    request: Request,
+    model_config_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     config = crud.get_model_config(session, model_config_id)
     if not config:
         raise HTTPException(status_code=404, detail="Model configuration not found")
@@ -1256,12 +1562,18 @@ def admin_delete_model_config(
 
 @app.post("/admin/enhancement")
 def admin_update_enhancement(
+    request: Request,
     provider: str = Form(...),
     model: str = Form(...),
     api_key: str = Form(default=""),
     clear_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
         raise HTTPException(status_code=404, detail="Unsupported provider")
@@ -1288,11 +1600,132 @@ def admin_update_enhancement(
     return admin_redirect("enhancement", message="Saved")
 
 
+@app.post("/admin/users")
+def admin_create_user(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(default=USER_ROLE),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    username_value = (username or "").strip()
+    if len(username_value) < 3:
+        return admin_redirect("users", error="Username must be at least 3 characters")
+    try:
+        role_value = normalize_user_role(role)
+        password_hash = auth_service.hash_password(password)
+        crud.create_user(
+            session,
+            username=username_value,
+            password_hash=password_hash,
+            role=role_value,
+            is_active=True,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect("users", error=str(exc))
+    return admin_redirect("users", message="User created")
+
+
+@app.post("/admin/users/{user_id}/update")
+def admin_update_user(
+    request: Request,
+    user_id: int,
+    role: str = Form(...),
+    password: str = Form(default=""),
+    is_active: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    user = crud.get_user(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        role_value = normalize_user_role(role)
+        fields: dict[str, Any] = {"role": role_value, "is_active": is_active}
+        password_value = (password or "").strip()
+        if password_value:
+            fields["password_hash"] = auth_service.hash_password(password_value)
+
+        active_admin_count = crud.count_admin_users(session, active_only=True)
+        removing_active_admin = (
+            user.role == ADMIN_ROLE and user.is_active and (role_value != ADMIN_ROLE or not is_active)
+        )
+        if removing_active_admin and active_admin_count <= 1:
+            return admin_redirect("users", error="At least one active admin must remain")
+
+        crud.update_user(session, user, **fields)
+    except ValueError as exc:
+        return admin_redirect("users", error=str(exc))
+
+    return admin_redirect("users", message="User updated")
+
+
+@app.post("/admin/users/{user_id}/delete")
+def admin_delete_user(
+    request: Request,
+    user_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    user = crud.get_user(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    acting_user_id = get_session_user_id(request)
+    if acting_user_id and acting_user_id == user.id:
+        return admin_redirect("users", error="You cannot delete your own user")
+
+    if user.role == ADMIN_ROLE and user.is_active and crud.count_admin_users(session, active_only=True) <= 1:
+        return admin_redirect("users", error="At least one active admin must remain")
+
+    crud.delete_user(session, user)
+    return admin_redirect("users", message="User deleted")
+
+
+@app.post("/admin/dev/reset-onboarding")
+def admin_reset_onboarding(
+    request: Request,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    if not settings.auth_allow_onboarding_reset:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    crud.delete_all_users(session)
+    clear_auth_session(request)
+    return RedirectResponse(url="/login?message=Onboarding+reset", status_code=303)
+
+
 @app.post("/api/enhance", response_class=JSONResponse)
 async def enhance_prompt(
     request: Request,
     session: Session = Depends(get_session),
 ) -> JSONResponse:
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"prompt": "", "error": "Invalid CSRF token."}, status_code=403)
+
     payload = await request.json()
     prompt = str(payload.get("prompt") or "").strip()
     model_config_id = payload.get("model_config_id")
@@ -1321,6 +1754,10 @@ async def update_session_preferences(
     request: Request,
     session: Session = Depends(get_session),
 ) -> JSONResponse:
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
     payload = await request.json()
     chat_session_id = str(payload.get("chat_session_id") or "").strip()
     
@@ -1346,18 +1783,13 @@ async def update_session_preferences(
                 {"success": False, "error": "Invalid thumb size"}, status_code=400
             )
     
-    try:
-        crud.upsert_chat_session_preferences(
-            session,
-            chat_session_id=chat_session_id,
-            last_profile_id=last_profile_id,
-            last_thumb_size=last_thumb_size,
-        )
-        return JSONResponse({"success": True, "error": None})
-    except Exception as exc:
-        return JSONResponse(
-            {"success": False, "error": str(exc)}, status_code=500
-        )
+    crud.upsert_chat_session_preferences(
+        session,
+        chat_session_id=chat_session_id,
+        last_profile_id=last_profile_id,
+        last_thumb_size=last_thumb_size,
+    )
+    return JSONResponse({"success": True, "error": None})
 
 
 @app.get("/api/sessions", response_class=JSONResponse)
@@ -1367,28 +1799,23 @@ def list_sessions(
     session: Session = Depends(get_session),
 ) -> JSONResponse:
     """API endpoint to fetch paginated sessions with time categories."""
-    try:
-        session_items, has_more = build_session_items(
-            session,
-            offset=offset,
-            limit=limit,
-            max_days=SESSION_MAX_DAYS,
-        )
-        return JSONResponse({
-            "sessions": session_items,
-            "has_more": has_more,
-            "offset": offset,
-            "limit": limit,
-        })
-    except Exception as exc:
-        return JSONResponse(
-            {"sessions": [], "has_more": False, "error": str(exc)}, status_code=500
-        )
+    session_items, has_more = build_session_items(
+        session,
+        offset=offset,
+        limit=limit,
+        max_days=SESSION_MAX_DAYS,
+    )
+    return JSONResponse({
+        "sessions": session_items,
+        "has_more": has_more,
+        "offset": offset,
+        "limit": limit,
+    })
 
 
 @app.get("/profiles/new", response_class=HTMLResponse)
 def new_profile_page(
-    request: Request,
+    _request: Request,
     error: Optional[str] = Query(default=None),
 ) -> HTMLResponse:
     params: dict[str, str] = {"create": "1"}
@@ -1431,7 +1858,7 @@ def profiles_page(
 
 @app.get("/profiles/{profile_id}/edit", response_class=HTMLResponse)
 def edit_profile_page(
-    request: Request,
+    _request: Request,
     profile_id: int,
     error: Optional[str] = Query(default=None),
 ) -> HTMLResponse:
@@ -1443,6 +1870,7 @@ def edit_profile_page(
 
 @app.post("/profiles")
 def create_profile(
+    request: Request,
     name: str = Form(...),
     model_config_id: str = Form(...),
     base_prompt: str = Form(default=""),
@@ -1455,8 +1883,10 @@ def create_profile(
     output_format: str = Form(default="png"),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     try:
         name_value = normalize_profile_name(name)
         model_config_value = parse_optional_int(model_config_id)
@@ -1513,6 +1943,7 @@ def create_profile(
 
 @app.post("/profiles/{profile_id}/update")
 def update_profile(
+    request: Request,
     profile_id: int,
     name: str = Form(...),
     model_config_id: str = Form(...),
@@ -1526,8 +1957,10 @@ def update_profile(
     output_format: str = Form(default="png"),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     profile = crud.get_profile(session, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -1591,8 +2024,12 @@ def update_profile(
 
 @app.post("/profiles/{profile_id}/delete")
 def delete_profile(
-    profile_id: int, session: Session = Depends(get_session)
+    request: Request,
+    profile_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     profile = crud.get_profile(session, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -1685,11 +2122,14 @@ def gallery_page(
 
 @app.post("/assets/{asset_id}/rating")
 def update_asset_rating(
+    request: Request,
     asset_id: int,
     rating: int = Form(...),
     return_to: str = Form(default="/gallery"),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     if rating < 0 or rating > 5:
         return gallery_redirect(return_to, error="Rating must be between 0 and 5")
 
@@ -1707,11 +2147,14 @@ def update_asset_rating(
 
 @app.post("/assets/bulk-set-categories")
 def bulk_set_asset_categories(
+    request: Request,
     asset_ids: list[int] = Form(default=[]),
     category_ids: list[int] = Form(default=[]),
     return_to: str = Form(default="/gallery"),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     requested_asset_ids = sorted({item for item in asset_ids if item > 0})
     if not requested_asset_ids:
         return gallery_redirect(return_to, error="No assets selected")
@@ -1764,10 +2207,13 @@ def bulk_set_asset_categories(
 
 @app.post("/assets/bulk-delete")
 def bulk_delete_assets(
+    request: Request,
     asset_ids: list[int] = Form(default=[]),
     return_to: str = Form(default="/gallery"),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
     if not asset_ids:
         return gallery_redirect(return_to, error="No assets selected")
 
@@ -1841,8 +2287,10 @@ def asset_detail(
 def delete_asset(
     request: Request,
     asset_id: int,
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    validate_csrf_or_raise(request, csrf_token)
     deleted = generation_service.delete_asset(session, asset_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -1859,8 +2307,10 @@ def delete_asset(
 def delete_generation(
     request: Request,
     generation_id: int,
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ):
+    validate_csrf_or_raise(request, csrf_token)
     deleted = generation_service.delete_generation(session, generation_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Generation not found")
@@ -1878,8 +2328,10 @@ def rerun_generation(
     request: Request,
     generation_id: int,
     background_tasks: BackgroundTasks,
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    validate_csrf_or_raise(request, csrf_token)
     source = crud.get_generation(session, generation_id)
     if not source:
         raise HTTPException(status_code=404, detail="Generation not found")

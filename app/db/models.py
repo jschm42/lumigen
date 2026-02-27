@@ -156,6 +156,16 @@ class Category(Base, TimestampMixin):
     )
 
 
+class User(Base, TimestampMixin):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="user")
+    is_active: Mapped[bool] = mapped_column(Boolean(), default=True, nullable=False)
+
+
 class ChatSession(Base, TimestampMixin):
     __tablename__ = "chat_sessions"
 

@@ -39,6 +39,7 @@
     <a href="/admin?section=dimensions{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
     <a href="/admin?section=categories{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
     <a href="/admin?section=enhancement{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'enhancement' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancement LLM</a>
+    <a href="/admin?section=users{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'users' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Users</a>
     <a href="/admin?section=about{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'about' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">About</a>
   </nav>
 
@@ -412,6 +413,119 @@
         <button type="submit" class="{{ btn_primary }}">Save</button>
       </div>
     </form>
+  {% elif active_admin_section == "users" %}
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold text-white">Users</h3>
+      <div class="flex items-center gap-2">
+        {% if onboarding_reset_enabled %}
+        <span class="text-xs text-rose-300">Dev only: removes all users and reopens onboarding.</span>
+        <form action="/admin/dev/reset-onboarding" method="post" onsubmit="return confirm('Reset onboarding and remove all users?');" class="inline-flex">
+          <button type="submit" class="{{ btn_danger }}">Reset onboarding (dev)</button>
+        </form>
+        {% endif %}
+        <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-user-dialog').showModal()">New user</button>
+      </div>
+    </div>
+
+    <dialog id="create-user-dialog">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">New user</h3>
+            <p class="mt-1 text-sm text-slate-400">Create a new user and assign a role.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-user-dialog').close()">&times;</button>
+        </header>
+        <form action="/admin/users" method="post" class="space-y-4">
+          <div>
+            <label for="new-user-name" class="{{ label_class }}">Username</label>
+            <input id="new-user-name" type="text" name="username" minlength="3" required class="{{ input_class }}">
+          </div>
+          <div>
+            <label for="new-user-password" class="{{ label_class }}">Password</label>
+            <input id="new-user-password" type="password" name="password" minlength="8" required class="{{ input_class }}">
+          </div>
+          <div>
+            <label for="new-user-role" class="{{ label_class }}">Role</label>
+            <select id="new-user-role" name="role" class="{{ input_class }}">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Create</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+
+    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
+      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
+        <thead class="bg-white/5 text-slate-300">
+          <tr>
+            <th class="px-4 py-3 font-semibold">Username</th>
+            <th class="px-4 py-3 font-semibold">Role</th>
+            <th class="px-4 py-3 font-semibold">Active</th>
+            <th class="px-4 py-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        {% for user in users %}
+          <tr>
+            <td class="px-4 py-3">{{ user.username }}</td>
+            <td class="px-4 py-3">{{ user.role }}</td>
+            <td class="px-4 py-3">{{ "yes" if user.is_active else "no" }}</td>
+            <td class="px-4 py-3">
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-user-{{ user.id }}').showModal()">Edit</button>
+                <form action="/admin/users/{{ user.id }}/delete" method="post" onsubmit="return confirm('Delete this user?');" class="inline-flex">
+                  <button class="{{ btn_danger }}" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4" class="px-4 py-4 text-slate-400">No users available.</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% for user in users %}
+    <dialog id="edit-user-{{ user.id }}">
+      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+        <header class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white">Edit user: {{ user.username }}</h3>
+            <p class="mt-1 text-sm text-slate-400">Update role, status, or reset password.</p>
+          </div>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-user-{{ user.id }}').close()">&times;</button>
+        </header>
+        <form action="/admin/users/{{ user.id }}/update" method="post" class="space-y-4">
+          <div>
+            <label for="edit-user-role-{{ user.id }}" class="{{ label_class }}">Role</label>
+            <select id="edit-user-role-{{ user.id }}" name="role" class="{{ input_class }}">
+              <option value="user" {% if user.role == 'user' %}selected{% endif %}>user</option>
+              <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>admin</option>
+            </select>
+          </div>
+          <div>
+            <label for="edit-user-password-{{ user.id }}" class="{{ label_class }}">New password (optional)</label>
+            <input id="edit-user-password-{{ user.id }}" type="password" name="password" minlength="8" class="{{ input_class }}">
+          </div>
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+            <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}>
+            Active
+          </label>
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </article>
+    </dialog>
+    {% endfor %}
   {% elif active_admin_section == "about" %}
     <header class="mb-1">
       <h3 class="text-xl font-semibold text-white">About</h3>

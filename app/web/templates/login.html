@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block content %}
+{% set panel_class = "mx-auto mt-16 w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/62 p-6 shadow-panel backdrop-blur sm:p-8" %}
+{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set btn_primary = "inline-flex w-full items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+
+<section class="{{ panel_class }} space-y-5">
+  {% if users_exist %}
+    <header>
+      <h2 class="text-2xl font-semibold text-white">Login</h2>
+      <p class="mt-1 text-sm text-slate-400">Melde dich mit deinem Konto an.</p>
+    </header>
+  {% else %}
+    <header>
+      <h2 class="text-2xl font-semibold text-white">Ersteinrichtung</h2>
+      <p class="mt-1 text-sm text-slate-400">Lege den ersten Admin-Benutzer an.</p>
+    </header>
+  {% endif %}
+
+  {% if message %}
+    <div class="rounded-2xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{{ message }}</div>
+  {% endif %}
+
+  {% if error %}
+    <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{{ error }}</div>
+  {% endif %}
+
+  <form action="/login" method="post" class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <div>
+      <label for="username" class="text-sm font-semibold text-slate-200">Username</label>
+      <input id="username" name="username" type="text" autocomplete="username" required class="{{ input_class }}">
+    </div>
+
+    <div>
+      <label for="password" class="text-sm font-semibold text-slate-200">Passwort</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required class="{{ input_class }}">
+    </div>
+
+    <button type="submit" class="{{ btn_primary }}">
+      {% if users_exist %}Login{% else %}Admin erstellen{% endif %}
+    </button>
+  </form>
+</section>
+{% endblock %}

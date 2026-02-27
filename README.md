@@ -119,6 +119,65 @@ Open: `http://127.0.0.1:8010`
 3. Go to **Generate**, enter a prompt, submit.
 4. Check **Gallery** for generated assets and metadata.
 
+## Auth rollout checklist
+
+Use this checklist when deploying the login/role feature to a new or existing instance.
+
+1. Install dependencies and run latest migration:
+
+```bash
+pip install -r requirements.txt
+alembic upgrade head
+```
+
+2. Set a strong session secret in `.env`:
+
+```dotenv
+SESSION_SECRET_KEY=<long-random-secret>
+```
+
+3. Configure cookie security for your environment:
+
+- local dev over HTTP: `SESSION_HTTPS_ONLY=false`
+- production behind HTTPS: `SESSION_HTTPS_ONLY=true`
+
+4. Start the app and open `/login`.
+
+5. First login flow:
+
+- if no users exist, `/login` shows onboarding and creates the first user as `admin`
+- afterwards, `/login` switches to normal sign-in mode
+
+6. Verify role behavior:
+
+- `admin`: full access, including `/admin` and all admin dialogs
+- `user`: no access to admin dialogs/routes
+
+7. Optional smoke check:
+
+```bash
+python3.12 -m pytest -q tests/routes tests/frontend
+```
+
+### Dev-only onboarding reset
+
+For local testing, you can enable a reset button in **Admin → Users**:
+
+```dotenv
+AUTH_ALLOW_ONBOARDING_RESET=true
+```
+
+Behavior:
+
+- visible only for admins
+- deletes all users
+- logs out current session
+- redirects to `/login` so onboarding is shown again
+
+Security note:
+
+- keep `AUTH_ALLOW_ONBOARDING_RESET=false` in production
+
 ## Provider configuration
 
 Set provider API keys in `.env` for default usage:

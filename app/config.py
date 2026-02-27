@@ -53,6 +53,13 @@ class Settings(BaseSettings):
 
     provider_config_key: Optional[str] = None
 
+    session_secret_key: str = "dev-insecure-session-key-change-me"
+    session_cookie_name: str = "lumigen_session"
+    session_max_age_seconds: int = 60 * 60 * 24 * 7
+    session_https_only: bool = False
+    csrf_token_ttl_seconds: int = 60 * 60 * 8
+    auth_allow_onboarding_reset: bool = False
+
     upscaler_command: Optional[str] = None
     upscaler_model_dir: Path = Path("./data/models/realesrgan")
 

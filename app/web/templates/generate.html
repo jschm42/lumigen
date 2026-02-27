@@ -87,7 +87,13 @@
     <nav class="mt-4 shrink-0 border-t border-white/5 pt-3">
       <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Profiles</a>
       <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Gallery</a>
+      {% if request.session.get('user_role') == 'admin' %}
       <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-200 hover:bg-white/12{% endif %}">Admin</a>
+      {% endif %}
+      <a href="/logout" class="mt-2 inline-flex w-full items-center gap-2 rounded-xl bg-white/6 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/12">
+        <span class="material-symbols-outlined text-base" aria-hidden="true">logout</span>
+        <span>Logout</span>
+      </a>
     </nav>
   </aside>
 
