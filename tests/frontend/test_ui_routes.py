@@ -113,9 +113,30 @@ def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, 
 
     assert response.status_code == 200
     assert 'id="chat-generation-10"' in body
-    assert 'src="data:image/png;base64,YWJj"' in body
-    assert 'src="data:image/png;base64,ZGVm"' in body
+    assert 'src="/generations/10/input-images/0"' in body
+    assert 'src="/generations/10/input-images/1"' in body
     assert 'Prompt with references' in body
+
+
+def test_generation_input_image_thumbnail_endpoint_returns_image_bytes(client, app_module) -> None:
+    generation = SimpleNamespace(
+        id=14,
+        request_snapshot_json={
+            "input_images": [
+                {"name": "x.png", "mime": "image/png", "b64": "YWJj"},
+            ]
+        },
+    )
+    fake_session = _FakeSession(scalar_value=generation)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.get("/generations/14/input-images/0")
+
+    assert response.status_code == 200
+    assert response.headers.get("content-type", "").startswith("image/png")
+    assert response.content == b"abc"
 
 
 def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_module, monkeypatch) -> None:

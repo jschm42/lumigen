@@ -32,7 +32,7 @@
           {% for input_image in input_images[:5] %}
             {% if input_image is mapping and input_image.get('b64') %}
               <img
-                src="data:{{ input_image.get('mime', 'image/png') }};base64,{{ input_image.get('b64') }}"
+                src="/generations/{{ generation.id }}/input-images/{{ loop.index0 }}"
                 alt="Input image {{ loop.index }}"
                 loading="lazy"
                 class="h-12 w-12 shrink-0 rounded-lg border border-sky-200/25 object-cover"

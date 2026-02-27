@@ -23,7 +23,13 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -1940,6 +1946,42 @@ def asset_thumbnail(
     if not absolute_path.exists():
         raise HTTPException(status_code=404, detail="Thumbnail missing")
     return FileResponse(path=absolute_path, media_type="image/webp")
+
+
+@app.get("/generations/{generation_id}/input-images/{image_index}")
+def generation_input_image_thumbnail(
+    generation_id: int,
+    image_index: int,
+    session: Session = Depends(get_session),
+) -> Response:
+    generation = session.scalar(
+        select(Generation).where(Generation.id == generation_id)
+    )
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+
+    snapshot = generation.request_snapshot_json or {}
+    input_images = snapshot.get("input_images")
+    if not isinstance(input_images, list):
+        raise HTTPException(status_code=404, detail="Input image not found")
+    if image_index < 0 or image_index >= len(input_images):
+        raise HTTPException(status_code=404, detail="Input image not found")
+
+    item = input_images[image_index]
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=404, detail="Input image not found")
+
+    b64_value = item.get("b64")
+    if not isinstance(b64_value, str) or not b64_value.strip():
+        raise HTTPException(status_code=404, detail="Input image not available")
+
+    try:
+        image_bytes = base64.b64decode(b64_value)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid input image data") from exc
+
+    media_type = str(item.get("mime") or "image/png").strip() or "image/png"
+    return Response(content=image_bytes, media_type=media_type)
 
 
 if __name__ == "__main__":
