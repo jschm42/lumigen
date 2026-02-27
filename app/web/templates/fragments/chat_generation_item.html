@@ -26,6 +26,21 @@
 
   <div class="flex justify-end">
     <article class="max-w-[90%] rounded-2xl border border-sky-300/30 bg-sky-400/15 px-4 py-3 text-sm text-slate-100 sm:max-w-[78%]">
+      {% set input_images = snapshot.get('input_images') %}
+      {% if input_images is sequence and input_images is not string and input_images|length > 0 %}
+        <div class="subtle-scrollbar mb-2 flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1">
+          {% for input_image in input_images[:5] %}
+            {% if input_image is mapping and input_image.get('b64') %}
+              <img
+                src="data:{{ input_image.get('mime', 'image/png') }};base64,{{ input_image.get('b64') }}"
+                alt="Input image {{ loop.index }}"
+                loading="lazy"
+                class="h-12 w-12 shrink-0 rounded-lg border border-sky-200/25 object-cover"
+              >
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
       <p class="whitespace-pre-wrap">{{ generation.prompt_user }}</p>
     </article>
   </div>

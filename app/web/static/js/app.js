@@ -152,6 +152,12 @@
     var inputClear = form.querySelector('[data-input-clear]');
     var inputTrigger = form.querySelector('[data-input-trigger]');
     var inputFileState = [];
+    var canUseDataTransfer = false;
+    try {
+      canUseDataTransfer = typeof DataTransfer !== 'undefined' && !!new DataTransfer();
+    } catch (_error) {
+      canUseDataTransfer = false;
+    }
     var enhanceBtn = form.querySelector('[data-enhance-prompt]');
     var promptInput = form.querySelector('[name="prompt_user"]');
     var advancedToggle = form.querySelector('[data-advanced-toggle]');
@@ -242,18 +248,31 @@
 
     function syncInputFiles() {
       if (!inputImages) return;
-      var dataTransfer = new DataTransfer();
-      inputFileState.forEach(function (file) {
-        dataTransfer.items.add(file);
-      });
-      inputImages.files = dataTransfer.files;
+      if (!canUseDataTransfer) {
+        return false;
+      }
+      try {
+        var dataTransfer = new DataTransfer();
+        inputFileState.forEach(function (file) {
+          dataTransfer.items.add(file);
+        });
+        inputImages.files = dataTransfer.files;
+        return true;
+      } catch (_error) {
+        canUseDataTransfer = false;
+        return false;
+      }
     }
 
     function renderInputPreviews() {
       if (!inputImages || !inputPreview) return;
       inputPreview.innerHTML = '';
 
-      if (inputFileState.length > 5) {
+      var selectedCount = canUseDataTransfer
+        ? inputFileState.length
+        : Array.from(inputImages.files || []).length;
+
+      if (selectedCount > 5) {
         inputImages.setCustomValidity('Max 5 images allowed.');
       } else {
         inputImages.setCustomValidity('');
@@ -278,7 +297,13 @@
         removeBtn.type = 'button';
         removeBtn.className = 'preview-image-remove';
         removeBtn.textContent = 'x';
+        if (!canUseDataTransfer) {
+          removeBtn.disabled = true;
+          removeBtn.title = 'Use clear button to remove images';
+          removeBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        }
         removeBtn.addEventListener('click', function () {
+          if (!canUseDataTransfer) return;
           inputFileState.splice(index, 1);
           syncInputFiles();
           renderInputPreviews();
@@ -314,14 +339,29 @@
 
     if (inputImages) {
       inputImages.addEventListener('change', function () {
-        addSelectedFiles(inputImages.files);
-        inputImages.value = '';
+        if (!canUseDataTransfer) {
+          inputFileState = Array.from(inputImages.files || []).slice(0, 5);
+          renderInputPreviews();
+          return;
+        }
+        var nativeSelectedFiles = Array.from(inputImages.files || []);
+        addSelectedFiles(nativeSelectedFiles);
+
+        if (canUseDataTransfer) {
+          // Keep files assigned to the input for submit.
+        } else {
+          inputFileState = nativeSelectedFiles.slice(0, 5);
+          renderInputPreviews();
+        }
       });
       renderInputPreviews();
     }
 
     if (inputTrigger && inputImages) {
       inputTrigger.addEventListener('click', function () {
+        if (canUseDataTransfer) {
+          inputImages.value = '';
+        }
         inputImages.click();
       });
     }
@@ -329,7 +369,11 @@
     if (inputClear) {
       inputClear.addEventListener('click', function () {
         inputFileState = [];
-        syncInputFiles();
+        if (canUseDataTransfer) {
+          syncInputFiles();
+        } else if (inputImages) {
+          inputImages.value = '';
+        }
         renderInputPreviews();
       });
     }

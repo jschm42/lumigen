@@ -81,7 +81,41 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     assert 'data-chat-shell' in body
     assert 'hx-post="/generate"' in body
     assert 'data-generation-form' in body
+    assert 'data-input-preview' in body
     assert 'Start a new session with a prompt in the input field below.' in body
+
+
+def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, app_module) -> None:
+    generation = SimpleNamespace(
+        id=10,
+        status="succeeded",
+        prompt_user="Prompt with references",
+        profile_name="Default",
+        provider="stub",
+        model="stub-v1",
+        request_snapshot_json={
+            "input_images": [
+                {"name": "a.png", "mime": "image/png", "b64": "YWJj"},
+                {"name": "b.png", "mime": "image/png", "b64": "ZGVm"},
+            ]
+        },
+        error=None,
+        failure_sidecar_path=None,
+        assets=[],
+    )
+    fake_session = _FakeSession(scalar_value=generation)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.get("/jobs/10?view=chat")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'id="chat-generation-10"' in body
+    assert 'src="data:image/png;base64,YWJj"' in body
+    assert 'src="data:image/png;base64,ZGVm"' in body
+    assert 'Prompt with references' in body
 
 
 def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_module, monkeypatch) -> None:
