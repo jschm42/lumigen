@@ -114,8 +114,7 @@ Open: `http://127.0.0.1:8010`
 
 1. Open **Profiles** and create a profile.
 2. Choose provider:
-	- `stub` for local testing without external API calls
-	- any cloud provider if API keys are configured
+   - any cloud provider if API keys are configured
 3. Go to **Generate**, enter a prompt, submit.
 4. Check **Gallery** for generated assets and metadata.
 
