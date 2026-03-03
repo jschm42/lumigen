@@ -170,3 +170,14 @@ def test_format_session_helpers(app_module) -> None:
 
     category_today = app_module.get_session_time_category(now)
     assert category_today == "today"
+
+
+def test_parse_proxy_trusted_hosts(app_module) -> None:
+    assert app_module.parse_proxy_trusted_hosts("") == "127.0.0.1"
+    assert app_module.parse_proxy_trusted_hosts("   ") == "127.0.0.1"
+    assert app_module.parse_proxy_trusted_hosts("*") == "*"
+    assert app_module.parse_proxy_trusted_hosts("127.0.0.1") == ["127.0.0.1"]
+    assert app_module.parse_proxy_trusted_hosts("127.0.0.1, 10.0.0.1") == [
+        "127.0.0.1",
+        "10.0.0.1",
+    ]

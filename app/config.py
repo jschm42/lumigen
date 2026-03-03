@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     session_cookie_name: str = "lumigen_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7
     session_https_only: bool = False
+    proxy_headers_enabled: bool = False
+    proxy_headers_trusted_hosts: str = "127.0.0.1"
     csrf_token_ttl_seconds: int = 60 * 60 * 8
     auth_allow_onboarding_reset: bool = False
 

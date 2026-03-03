@@ -141,6 +141,15 @@ SESSION_SECRET_KEY=<long-random-secret>
 - local dev over HTTP: `SESSION_HTTPS_ONLY=false`
 - production behind HTTPS: `SESSION_HTTPS_ONLY=true`
 
+If Lumigen runs behind a reverse proxy / TLS terminator, also enable forwarded header trust so request URLs keep the `https` scheme:
+
+```dotenv
+PROXY_HEADERS_ENABLED=true
+PROXY_HEADERS_TRUSTED_HOSTS=*
+```
+
+Use a narrower trusted host/IP list instead of `*` when possible.
+
 4. Start the app and open `/login`.
 
 5. First login flow:

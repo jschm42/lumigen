@@ -15,6 +15,7 @@ from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlencode
 
 import uvicorn
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -92,6 +93,18 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
 OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
 
 
+def parse_proxy_trusted_hosts(raw: str) -> str | list[str]:
+    value = (raw or "").strip()
+    if not value:
+        return "127.0.0.1"
+    if value == "*":
+        return "*"
+    hosts = [item.strip() for item in value.split(",") if item.strip()]
+    if not hosts:
+        return "127.0.0.1"
+    return hosts
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ensure_dir(settings.data_dir)
@@ -107,6 +120,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+if settings.proxy_headers_enabled:
+    app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=parse_proxy_trusted_hosts(settings.proxy_headers_trusted_hosts),
+    )
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret_key,
@@ -121,6 +139,14 @@ static_dir = Path(__file__).resolve().parent / "web" / "static"
 
 templates = Jinja2Templates(directory=str(template_dir))
 templates.env.globals["app_version"] = settings.app_version
+
+
+def static_url(path: str) -> str:
+    normalized = path.lstrip("/")
+    return str(app.url_path_for("static", path=normalized))
+
+
+templates.env.globals["static_url"] = static_url
 
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 

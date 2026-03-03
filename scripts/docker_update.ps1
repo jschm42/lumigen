@@ -40,11 +40,21 @@ try {
 
 Write-Host "Restarting container $Container on port 7003..."
 $EnvArgs = @()
-$ProviderConfigKey = $EnvMap["PROVIDER_CONFIG_KEY"]
-if (-not [string]::IsNullOrWhiteSpace($ProviderConfigKey)) {
-  $EnvArgs += "-e"
-  $EnvArgs += "PROVIDER_CONFIG_KEY=$ProviderConfigKey"
+function Add-OptionalEnvArg {
+  param(
+    [string]$Key
+  )
+  $Value = $EnvMap[$Key]
+  if (-not [string]::IsNullOrWhiteSpace($Value)) {
+    $EnvArgs += "-e"
+    $EnvArgs += "$Key=$Value"
+  }
 }
+
+Add-OptionalEnvArg "PROVIDER_CONFIG_KEY"
+Add-OptionalEnvArg "SESSION_HTTPS_ONLY"
+Add-OptionalEnvArg "PROXY_HEADERS_ENABLED"
+Add-OptionalEnvArg "PROXY_HEADERS_TRUSTED_HOSTS"
 
 $EnvFileArgs = @()
 if (Test-Path $EnvFile) {

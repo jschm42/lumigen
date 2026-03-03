@@ -6,16 +6,16 @@
   <meta name="color-scheme" content="dark">
   <meta name="csrf-token" content="{{ request.session.get('csrf_token', '') }}">
   <title>{{ title if title else "Lumigen" }}</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='app-logo.svg') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ static_url('app-logo.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="{{ url_for('static', path='js/tailwind-config.js') }}"></script>
+  <script src="{{ static_url('js/tailwind-config.js') }}"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
-  <script src="{{ url_for('static', path='js/htmx.min.js') }}" defer></script>
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  <script src="{{ static_url('js/htmx.min.js') }}" defer></script>
   <script src="https://unpkg.com/idiomorph@0.3.0/dist/idiomorph-ext.min.js" defer></script>
-  <script src="{{ url_for('static', path='js/app.js') }}" defer></script>
+  <script src="{{ static_url('js/app.js') }}" defer></script>
 </head>
 <body class="flex flex-col min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
   {% set embedded = request.query_params.get('embedded') == '1' %}

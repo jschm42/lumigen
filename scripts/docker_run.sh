@@ -27,9 +27,12 @@ docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
 echo "Starting container $CONTAINER_NAME on port 7003..."
 DOCKER_ENV_ARGS=()
-if [[ -n "${PROVIDER_CONFIG_KEY:-}" ]]; then
-  DOCKER_ENV_ARGS+=("-e" "PROVIDER_CONFIG_KEY=$PROVIDER_CONFIG_KEY")
-fi
+for env_key in PROVIDER_CONFIG_KEY SESSION_HTTPS_ONLY PROXY_HEADERS_ENABLED PROXY_HEADERS_TRUSTED_HOSTS; do
+  env_value="${!env_key-}"
+  if [[ -n "$env_value" ]]; then
+    DOCKER_ENV_ARGS+=("-e" "$env_key=$env_value")
+  fi
+done
 
 DOCKER_ENV_FILE_ARGS=()
 if [[ -f "$ENV_FILE" ]]; then
