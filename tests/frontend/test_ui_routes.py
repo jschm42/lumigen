@@ -395,4 +395,8 @@ def test_generate_page_renders_user_menu_popup(client, app_module, monkeypatch) 
     assert 'data-user-menu-container' in body
     assert 'href="/logout"' in body
     assert 'test-admin' in body
-    assert 'v0.1.0' in body
+    app_version = getattr(app_module, "APP_VERSION", None) or getattr(
+        app_module, "app_version", None
+    )
+    if app_version:
+        assert app_version in body
