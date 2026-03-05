@@ -95,20 +95,26 @@
           type="button"
           class="inline-flex w-full items-center gap-2 rounded-xl bg-white/6 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/12"
           data-user-menu-toggle
-          aria-haspopup="true"
+          aria-haspopup="menu"
           aria-expanded="false"
+          aria-controls="user-menu"
         >
           <span class="material-symbols-outlined text-base" aria-hidden="true">account_circle</span>
           <span class="flex-1 truncate text-left">{{ request.session.get('username') or 'User' }}</span>
           <span class="material-symbols-outlined text-sm" aria-hidden="true" data-user-menu-chevron>expand_less</span>
         </button>
-        <div class="absolute bottom-full left-0 right-0 mb-2 hidden rounded-2xl bg-slate-800 p-3 shadow-xl ring-1 ring-white/10" data-user-menu>
+        <div
+          id="user-menu"
+          class="absolute bottom-full left-0 right-0 mb-2 hidden rounded-2xl bg-slate-800 p-3 shadow-xl ring-1 ring-white/10"
+          data-user-menu
+          role="menu"
+        >
           <div class="mb-3 px-1">
             <p class="truncate text-sm font-semibold text-white">{{ request.session.get('username') or 'User' }}</p>
             <p class="text-xs text-slate-400">v{{ app_version }}</p>
           </div>
           <div class="mb-2 border-t border-white/8"></div>
-          <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-200 transition hover:bg-white/10 hover:text-white">
+          <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-200 transition hover:bg-white/10 hover:text-white" role="menuitem">
             <span class="material-symbols-outlined text-base" aria-hidden="true">logout</span>
             <span>Logout</span>
           </a>
