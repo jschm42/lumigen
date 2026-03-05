@@ -927,6 +927,54 @@ function setupGalleryRatings() {
   }
 
   // ==========================================================================
+  // User Menu Popup
+  // ==========================================================================
+
+  function setupUserMenu() {
+    document.querySelectorAll('[data-user-menu-container]').forEach(function (container) {
+      var toggle = container.querySelector('[data-user-menu-toggle]');
+      var menu = container.querySelector('[data-user-menu]');
+      var chevron = container.querySelector('[data-user-menu-chevron]');
+      if (!toggle || !menu) return;
+
+      function openMenu() {
+        menu.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+        if (chevron) chevron.textContent = 'expand_less';
+      }
+
+      function closeMenu() {
+        menu.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+        if (chevron) chevron.textContent = 'expand_more';
+      }
+
+      toggle.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (menu.classList.contains('hidden')) {
+          openMenu();
+        } else {
+          closeMenu();
+        }
+      });
+
+      // Close when clicking outside the container
+      document.addEventListener('click', function (event) {
+        if (!container.contains(event.target)) {
+          closeMenu();
+        }
+      });
+
+      // Close on Escape key
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          closeMenu();
+        }
+      });
+    });
+  }
+
+  // ==========================================================================
   // Initialization
   // ==========================================================================
 
@@ -938,6 +986,7 @@ function setupGalleryRatings() {
     setupGenerationForms();
     setupProfileForms();
     setupChatAddToInput();
+    setupUserMenu();
     setupGalleryFilters();
     setupGallerySelection();
     setupGalleryRatings();
