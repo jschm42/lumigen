@@ -148,6 +148,10 @@
   // Generation Form
   // ==========================================================================
 
+  // Module-level reference to the active generation form's addImageFromAsset handler,
+  // set by setupGenerationForm so the document-level listener can call it.
+  var _addImageFromAsset = null;
+
   /**
    * Sync dimension preset with width/height inputs
    */
@@ -409,6 +413,32 @@
         renderInputPreviews();
       });
     }
+
+    async function addImageFromAsset(assetId) {
+      if (inputFileState.length >= 5) return;
+      try {
+        var response = await fetch('/assets/' + encodeURIComponent(assetId) + '/file');
+        if (!response.ok) return;
+        var blob = await response.blob();
+        var mime = blob.type || 'image/webp';
+        var mimeToExt = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
+        var ext = mimeToExt[mime] || 'webp';
+        var filename = 'asset_' + assetId + '.' + ext;
+        var isDuplicate = inputFileState.some(function (f) { return f.name === filename; });
+        if (isDuplicate) return;
+        var file = new File([blob], filename, { type: mime });
+        inputFileState.push(file);
+        if (inputFileState.length > 5) {
+          inputFileState = inputFileState.slice(0, 5);
+        }
+        syncInputFiles();
+        renderInputPreviews();
+      } catch (_error) {
+        // Silently ignore fetch errors
+      }
+    }
+
+    _addImageFromAsset = addImageFromAsset;
 
     if (advancedToggle && advancedPanel) {
       function syncAdvancedState() {
@@ -895,6 +925,20 @@ function setupGalleryRatings() {
 }
 
   // ==========================================================================
+  // Chat: Add generated image to prompt input panel
+  // ==========================================================================
+
+  function setupChatAddToInput() {
+    document.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-add-to-input]');
+      if (!btn || !_addImageFromAsset) return;
+      var assetId = btn.getAttribute('data-add-to-input');
+      if (!assetId) return;
+      _addImageFromAsset(assetId);
+    });
+  }
+
+  // ==========================================================================
   // Initialization
   // ==========================================================================
 
@@ -905,6 +949,7 @@ function setupGalleryRatings() {
     setupModelSelects();
     setupGenerationForms();
     setupProfileForms();
+    setupChatAddToInput();
     setupGalleryFilters();
     setupGallerySelection();
     setupGalleryRatings();

@@ -118,6 +118,33 @@ def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, 
     assert 'Prompt with references' in body
 
 
+def test_job_status_chat_fragment_renders_add_to_input_button_on_assets(client, app_module) -> None:
+    asset = SimpleNamespace(id=42, mime="image/webp", file_path="some/path/image.webp")
+    generation = SimpleNamespace(
+        id=20,
+        status="succeeded",
+        prompt_user="A cat on a mat",
+        profile_name="Default",
+        provider="stub",
+        model="stub-v1",
+        request_snapshot_json={},
+        error=None,
+        failure_sidecar_path=None,
+        assets=[asset],
+    )
+    fake_session = _FakeSession(scalar_value=generation)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.get("/jobs/20?view=chat")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'data-add-to-input="42"' in body
+    assert 'add_photo_alternate' in body
+
+
 def test_generation_input_image_thumbnail_endpoint_returns_image_bytes(client, app_module) -> None:
     generation = SimpleNamespace(
         id=14,
