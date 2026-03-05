@@ -86,6 +86,13 @@
                  class="download-button absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-white opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-slate-800 group-hover:opacity-100">
                 <span class="material-symbols-outlined">download</span>
               </a>
+              <button
+                type="button"
+                data-add-to-input="{{ asset.id }}"
+                title="Add as input image"
+                class="absolute bottom-3 left-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-white opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-sky-500/80 group-hover:opacity-100">
+                <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
+              </button>
             </div>
           {% endfor %}
         </div>
