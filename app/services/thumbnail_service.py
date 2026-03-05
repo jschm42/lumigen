@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
-from typing import Union
 
 from PIL import Image
 
@@ -14,11 +13,11 @@ class ThumbnailService:
         self.storage_service = storage_service
         self.max_px = max_px
 
-    def thumbnail_relative_path(self, image_relative_path: Union[str, Path]) -> Path:
+    def thumbnail_relative_path(self, image_relative_path: str | Path) -> Path:
         image_rel = Path(image_relative_path)
         return Path(".thumbs") / image_rel.with_suffix(".webp")
 
-    def create_thumbnail(self, base_dir: Path, image_relative_path: Union[str, Path]) -> Path:
+    def create_thumbnail(self, base_dir: Path, image_relative_path: str | Path) -> Path:
         image_abs = self.storage_service.resolve_managed_path(base_dir, image_relative_path)
         thumbnail_rel = self.thumbnail_relative_path(image_relative_path)
         thumbnail_abs = self.storage_service.resolve_managed_path(base_dir, thumbnail_rel)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import unicodedata
 
-
 _INVALID_RE = re.compile(r"[^a-z0-9]+")
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -36,12 +35,12 @@ class GalleryService:
         session: Session,
         *,
         page: int = 1,
-        page_size: Optional[int] = None,
-        profile_name: Optional[str] = None,
-        provider: Optional[str] = None,
-        prompt_query: Optional[str] = None,
-        category_ids: Optional[list[int]] = None,
-        min_rating: Optional[int] = None,
+        page_size: int | None = None,
+        profile_name: str | None = None,
+        provider: str | None = None,
+        prompt_query: str | None = None,
+        category_ids: list[int] | None = None,
+        min_rating: int | None = None,
         unrated_only: bool = False,
     ) -> GalleryPage:
         safe_page_size = max(1, min(200, page_size or self.default_page_size))

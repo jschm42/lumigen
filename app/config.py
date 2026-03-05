@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 # App version
 VERSION = "0.1.0"
@@ -51,7 +49,7 @@ class Settings(BaseSettings):
     provider_bfl_max_concurrent: int = 1
     provider_bfl_min_interval_ms: int = 800
 
-    provider_config_key: Optional[str] = None
+    provider_config_key: str | None = None
 
     session_secret_key: str = "dev-insecure-session-key-change-me"
     session_cookie_name: str = "lumigen_session"
@@ -62,16 +60,16 @@ class Settings(BaseSettings):
     csrf_token_ttl_seconds: int = 60 * 60 * 8
     auth_allow_onboarding_reset: bool = False
 
-    upscaler_command: Optional[str] = None
+    upscaler_command: str | None = None
     upscaler_model_dir: Path = Path("./data/models/realesrgan")
 
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
-    openrouter_api_key: Optional[str] = None
+    openrouter_api_key: str | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    google_api_key: Optional[str] = None
+    google_api_key: str | None = None
     google_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    bfl_api_key: Optional[str] = None
+    bfl_api_key: str | None = None
 
     @property
     def database_url(self) -> str:

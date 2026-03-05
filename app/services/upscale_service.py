@@ -5,7 +5,6 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional, Tuple
 
 from PIL import Image
 
@@ -40,7 +39,7 @@ class UpscaleService:
         data: bytes,
         output_format: str,
         model: str,
-    ) -> Tuple[bytes, int, int, str]:
+    ) -> tuple[bytes, int, int, str]:
         cmd = self._resolve_command()
         if not cmd:
             raise ValueError('UPSCALER_COMMAND is not configured')
@@ -72,7 +71,7 @@ class UpscaleService:
             mime = self._format_to_mime(fmt)
             return output_bytes, width, height, mime
 
-    def _resolve_command(self) -> Optional[str]:
+    def _resolve_command(self) -> str | None:
         cmd = (self.settings.upscaler_command or '').strip()
         if not cmd:
             return None
@@ -138,11 +137,11 @@ class UpscaleService:
 
         raise ValueError('Upscaler did not produce any output')
 
-    def _get_image_size(self, path: Path) -> Tuple[int, int]:
+    def _get_image_size(self, path: Path) -> tuple[int, int]:
         with Image.open(path) as image:
             return image.width, image.height
 
-    def _model_dir_if_available(self, model: str) -> Optional[Path]:
+    def _model_dir_if_available(self, model: str) -> Path | None:
         model_dir = self._get_model_dir()
         if not model_dir:
             return None
@@ -179,7 +178,7 @@ class UpscaleService:
             raise ValueError('Upscaling model contains invalid characters')
         return candidate
 
-    def _get_model_dir(self) -> Optional[Path]:
+    def _get_model_dir(self) -> Path | None:
         model_dir = self.settings.upscaler_model_dir
         if not model_dir:
             return None

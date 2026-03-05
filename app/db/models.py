@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -57,7 +57,7 @@ class StorageTemplate(Base, TimestampMixin):
     base_dir: Mapped[str] = mapped_column(String(1024), nullable=False)
     template: Mapped[str] = mapped_column(String(1024), nullable=False)
 
-    profiles: Mapped[list["Profile"]] = relationship(back_populates="storage_template")
+    profiles: Mapped[list[Profile]] = relationship(back_populates="storage_template")
 
 
 class Profile(Base, TimestampMixin):
@@ -67,21 +67,21 @@ class Profile(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
-    model_config_id: Mapped[Optional[int]] = mapped_column(
+    model_config_id: Mapped[int | None] = mapped_column(
         ForeignKey("model_configs.id", ondelete="SET NULL"),
         nullable=True,
     )
-    base_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    negative_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    aspect_ratio: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    base_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    negative_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    aspect_ratio: Mapped[str | None] = mapped_column(String(32), nullable=True)
     n_images: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_format: Mapped[str] = mapped_column(
         String(16), default="png", nullable=False
     )
-    upscale_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    upscale_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     params_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )
@@ -92,11 +92,11 @@ class Profile(Base, TimestampMixin):
     )
 
     storage_template: Mapped[StorageTemplate] = relationship(back_populates="profiles")
-    model_config: Mapped[Optional["ModelConfig"]] = relationship(
+    model_config: Mapped[ModelConfig | None] = relationship(
         back_populates="profiles"
     )
-    generations: Mapped[list["Generation"]] = relationship(back_populates="profile")
-    categories: Mapped[list["Category"]] = relationship(
+    generations: Mapped[list[Generation]] = relationship(back_populates="profile")
+    categories: Mapped[list[Category]] = relationship(
         secondary=profile_categories,
         back_populates="profiles",
     )
@@ -109,15 +109,15 @@ class ModelConfig(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
-    enhancement_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    api_key_encrypted: Mapped[Optional[str]] = mapped_column(
+    enhancement_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    api_key_encrypted: Mapped[str | None] = mapped_column(
         String(4096), nullable=True
     )
     use_custom_api_key: Mapped[bool] = mapped_column(
         Boolean(), default=False, nullable=False
     )
 
-    profiles: Mapped[list["Profile"]] = relationship(back_populates="model_config")
+    profiles: Mapped[list[Profile]] = relationship(back_populates="model_config")
 
 
 class EnhancementConfig(Base, TimestampMixin):
@@ -126,7 +126,7 @@ class EnhancementConfig(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
-    api_key_encrypted: Mapped[Optional[str]] = mapped_column(
+    api_key_encrypted: Mapped[str | None] = mapped_column(
         String(4096), nullable=True
     )
 
@@ -150,7 +150,7 @@ class Category(Base, TimestampMixin):
         secondary=profile_categories,
         back_populates="categories",
     )
-    assets: Mapped[list["Asset"]] = relationship(
+    assets: Mapped[list[Asset]] = relationship(
         secondary=asset_categories,
         back_populates="categories",
     )
@@ -173,7 +173,7 @@ class ChatSession(Base, TimestampMixin):
     chat_session_id: Mapped[str] = mapped_column(
         String(64), unique=True, nullable=False, index=True
     )
-    last_profile_id: Mapped[Optional[int]] = mapped_column(
+    last_profile_id: Mapped[int | None] = mapped_column(
         ForeignKey("profiles.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -181,7 +181,7 @@ class ChatSession(Base, TimestampMixin):
         String(10), default="md", nullable=False
     )
 
-    last_profile: Mapped[Optional[Profile]] = relationship()
+    last_profile: Mapped[Profile | None] = relationship()
 
 
 class Generation(Base):
@@ -189,7 +189,7 @@ class Generation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    profile_id: Mapped[Optional[int]] = mapped_column(
+    profile_id: Mapped[int | None] = mapped_column(
         ForeignKey("profiles.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -199,7 +199,7 @@ class Generation(Base):
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
-    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     profile_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     storage_template_snapshot_json: Mapped[dict[str, Any]] = mapped_column(
@@ -207,18 +207,18 @@ class Generation(Base):
     )
     request_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
-    failure_sidecar_path: Mapped[Optional[str]] = mapped_column(
+    failure_sidecar_path: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
-    finished_at: Mapped[Optional[datetime]] = mapped_column(
+    finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    profile: Mapped[Optional[Profile]] = relationship(back_populates="generations")
-    assets: Mapped[list["Asset"]] = relationship(
+    profile: Mapped[Profile | None] = relationship(back_populates="generations")
+    assets: Mapped[list[Asset]] = relationship(
         back_populates="generation",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -239,7 +239,7 @@ class Asset(Base):
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     mime: Mapped[str] = mapped_column(String(64), nullable=False)
-    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     meta_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )

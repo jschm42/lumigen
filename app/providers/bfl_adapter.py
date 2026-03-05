@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
-import time
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from PIL import Image, UnidentifiedImageError
@@ -220,14 +219,14 @@ class BFLAdapter(ProviderAdapter):
             "result_keys": list(result.keys()),
         }
         self._write_debug_log("bfl_sample", debug_info)
-        
+
         # Log sample info at INFO level for debugging
         self._logger.info(
             f"BFL sample: type={type(sample).__name__}, "
             f"length={len(sample) if isinstance(sample, str) else 'N/A'}, "
             f"first_50={repr(sample[:50]) if isinstance(sample, str) else sample}"
         )
-        
+
         # Debug log the raw response
         self._logger.debug(
             f"BFL full result keys: {result.keys()}"
@@ -329,7 +328,7 @@ class BFLAdapter(ProviderAdapter):
 
         return payload
 
-    def _normalize_output_format(self, value: Optional[str]) -> str:
+    def _normalize_output_format(self, value: str | None) -> str:
         raw = (value or "png").strip().lower().lstrip(".")
         if raw in {"jpg", "jpeg"}:
             return "jpeg"
@@ -380,14 +379,14 @@ class BFLAdapter(ProviderAdapter):
         """Write debug info to a file for troubleshooting."""
         import json
         from pathlib import Path
-        
+
         debug_dir = Path("data/debug")
         debug_dir.mkdir(exist_ok=True, parents=True)
-        
+
         # Find next sequence number
         existing = list(debug_dir.glob(f"{prefix}_*.json"))
         seq = len(existing) + 1
-        
+
         filepath = debug_dir / f"{prefix}_{seq:04d}.json"
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)

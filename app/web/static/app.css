@@ -19,13 +19,13 @@
   justify-content: center;
   white-space: nowrap;
   direction: ltr;
-  -webkit-font-feature-settings: "liga";
+  font-feature-settings: "liga";
   -webkit-font-smoothing: antialiased;
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
 ::selection {
-  background: rgba(56, 189, 248, 0.35);
+  background: rgb(56 189 248 / 35%);
   color: #eaf7ff;
 }
 
@@ -48,7 +48,7 @@ dialog {
 }
 
 dialog::backdrop {
-  background: rgba(2, 6, 23, 0.76);
+  background: rgb(2 6 23 / 76%);
   backdrop-filter: blur(5px);
 }
 
@@ -61,6 +61,7 @@ dialog[open] {
     opacity: 0;
     transform: translateY(8px) scale(0.985);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -74,7 +75,7 @@ pre {
 
 .subtle-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.32) transparent;
+  scrollbar-color: rgb(148 163 184 / 32%) transparent;
 }
 
 .subtle-scrollbar::-webkit-scrollbar {
@@ -87,14 +88,14 @@ pre {
 }
 
 .subtle-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
+  background: rgb(148 163 184 / 25%);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 .subtle-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgb(148 163 184 / 40%);
   background-clip: padding-box;
 }
 
@@ -113,8 +114,8 @@ pre {
 }
 
 .download-button:hover {
-  background: rgba(15, 23, 42, 0.95) !important;
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgb(15 23 42 / 95%) !important;
+  border-color: rgb(255 255 255 / 30%);
 }
 
 /* Chat thumbnail sizes */
@@ -140,9 +141,9 @@ pre {
   height: 5rem;
   overflow: hidden;
   border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background-color: rgba(15, 23, 42, 0.8);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgb(255 255 255 / 15%);
+  background-color: rgb(15 23 42 / 80%);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 30%), 0 2px 4px -2px rgb(0 0 0 / 30%);
 }
 
 .preview-image {
@@ -161,8 +162,8 @@ pre {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background-color: rgba(15, 23, 36, 0.9);
+  border: 1px solid rgb(255 255 255 / 35%);
+  background-color: rgb(15 23 36 / 90%);
   font-size: 11px;
   font-weight: 700;
   color: white;
@@ -171,8 +172,8 @@ pre {
 }
 
 .preview-image-remove:hover {
-  border-color: rgba(255, 200, 200, 0.8);
-  background-color: rgba(239, 68, 68, 0.8);
+  border-color: rgb(255 200 200 / 80%);
+  background-color: rgb(239 68 68 / 80%);
 }
 
 /* Generation pending shimmer animation */
@@ -186,17 +187,17 @@ pre {
   min-height: 200px;
   background: linear-gradient(
     110deg,
-    rgba(30, 41, 59, 0.6) 8%,
-    rgba(56, 189, 248, 0.25) 18%,
-    rgba(56, 189, 248, 0.35) 33%,
-    rgba(30, 41, 59, 0.6) 45%,
-    rgba(30, 41, 59, 0.6) 55%,
-    rgba(56, 189, 248, 0.25) 65%,
-    rgba(56, 189, 248, 0.35) 75%,
-    rgba(30, 41, 59, 0.6) 85%
+    rgb(30 41 59 / 60%) 8%,
+    rgb(56 189 248 / 25%) 18%,
+    rgb(56 189 248 / 35%) 33%,
+    rgb(30 41 59 / 60%) 45%,
+    rgb(30 41 59 / 60%) 55%,
+    rgb(56 189 248 / 25%) 65%,
+    rgb(56 189 248 / 35%) 75%,
+    rgb(30 41 59 / 60%) 85%
   );
   background-size: 200% 100%;
   animation: shimmer 8s linear infinite;
-  border: 2px solid rgba(56, 189, 248, 0.4);
-  box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
+  border: 2px solid rgb(56 189 248 / 40%);
+  box-shadow: 0 0 15px rgb(56 189 248 / 15%);
 }

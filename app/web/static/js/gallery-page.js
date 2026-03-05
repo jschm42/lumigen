@@ -53,14 +53,14 @@
         window.location.href = window.location.pathname + window.location.search + separator + "thumb_size=" + savedSize;
         return;
       }
-    } catch (e) {}
+    } catch (_e) { /* ignore */ }
   } else {
     try {
       var currentSize = urlParams.get("thumb_size");
       if (currentSize && ["sm", "md", "lg"].indexOf(currentSize) !== -1) {
         localStorage.setItem(STORAGE_KEY, currentSize);
       }
-    } catch (e) {}
+    } catch (_e) { /* ignore */ }
   }
 
   document.querySelectorAll("[data-gallery-thumb-size]").forEach(function (btn) {
@@ -68,7 +68,7 @@
       var size = btn.getAttribute("data-gallery-thumb-size");
       try {
         localStorage.setItem(STORAGE_KEY, size);
-      } catch (e) {}
+      } catch (_e) { /* ignore */ }
     });
   });
 })();

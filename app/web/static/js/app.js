@@ -120,7 +120,7 @@
             : 'No models returned by API. Free input remains possible.';
         }
       }
-    } catch (error) {
+    } catch (_error) {
       if (modelStatus) {
         modelStatus.textContent = 'Failed to load models. Free input remains possible.';
       }
@@ -182,7 +182,6 @@
     var imagesInput = form.querySelector('[name="n_images"]');
     var seedInput = form.querySelector('[name="seed"]');
     var dimensionPreset = form.querySelector('[data-dimension-preset]');
-    var dimensionControls = form.querySelector('[data-dimension-controls]');
     var inputImages = form.querySelector('[data-input-images]');
     var inputPreview = form.querySelector('[data-input-preview]');
     var inputClear = form.querySelector('[data-input-clear]');
@@ -500,7 +499,7 @@
           } else if (payload && payload.error) {
             alert(payload.error);
           }
-        } catch (error) {
+        } catch (_error) {
           alert('Enhancement failed.');
         } finally {
           enhanceBtn.disabled = false;
@@ -611,7 +610,7 @@
 
       // Update category popover label
       updateCategoryLabel();
-    } catch (e) {
+    } catch (_e) {
       // Ignore localStorage errors
     }
   }
@@ -647,7 +646,7 @@
       }
 
       localStorage.setItem(GALLERY_FILTER_KEY, JSON.stringify(filters));
-    } catch (e) {
+    } catch (_e) {
       // Ignore localStorage errors
     }
   }
@@ -660,19 +659,8 @@
       if (size && ['sm', 'md', 'lg'].indexOf(size) !== -1) {
         localStorage.setItem(GALLERY_THUMB_SIZE_KEY, size);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore localStorage errors
-    }
-  }
-
-  /**
-   * Load thumb size preference from localStorage
-   */
-  function loadGalleryThumbSize() {
-    try {
-      return localStorage.getItem(GALLERY_THUMB_SIZE_KEY) || 'md';
-    } catch (e) {
-      return 'md';
     }
   }
 
@@ -909,7 +897,7 @@ function setupGalleryRatings() {
           if (!response.ok) {
             throw new Error('Rating update failed');
           }
-        } catch (error) {
+        } catch (_error) {
           currentRating = previousRating;
           form.setAttribute('data-current-rating', String(currentRating));
           ratingInput.value = String(currentRating);

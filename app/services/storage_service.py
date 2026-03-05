@@ -5,11 +5,9 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Optional, Union
 
 from app.utils.paths import ensure_dir, ensure_within_base, prune_empty_directories
 from app.utils.slugify import slugify
-
 
 _EXT_RE = re.compile(r"^[a-z0-9]+$")
 
@@ -27,7 +25,7 @@ class StorageService:
         generation_id: int,
         idx: int,
         ext: str,
-        when: Optional[datetime] = None,
+        when: datetime | None = None,
     ) -> Path:
         safe_ext = ext.lower().lstrip(".")
         if not _EXT_RE.match(safe_ext):
@@ -54,7 +52,7 @@ class StorageService:
 
         return Path(*relative_posix.parts)
 
-    def resolve_managed_path(self, base_dir: Path, relative_path: Union[str, Path]) -> Path:
+    def resolve_managed_path(self, base_dir: Path, relative_path: str | Path) -> Path:
         base = base_dir.resolve()
         candidate = (base / Path(relative_path)).resolve()
         return ensure_within_base(candidate, base)
@@ -77,7 +75,7 @@ class StorageService:
             os.fsync(handle.fileno())
         os.replace(tmp_path, absolute_path)
 
-    def delete_relative_file(self, base_dir: Path, relative_path: Union[str, Path]) -> None:
+    def delete_relative_file(self, base_dir: Path, relative_path: str | Path) -> None:
         absolute_path = self.resolve_managed_path(base_dir, relative_path)
         if not absolute_path.exists():
             return
@@ -87,8 +85,8 @@ class StorageService:
     def move_relative_file(
         self,
         base_dir: Path,
-        source_relative_path: Union[str, Path],
-        target_relative_path: Union[str, Path],
+        source_relative_path: str | Path,
+        target_relative_path: str | Path,
     ) -> None:
         source_abs = self.resolve_managed_path(base_dir, source_relative_path)
         target_abs = self.resolve_managed_path(base_dir, target_relative_path)

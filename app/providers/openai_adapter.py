@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -157,7 +157,7 @@ class OpenAIAdapter(ProviderAdapter):
         except ValueError:
             return 1024, 1024
 
-    def _normalize_output_format(self, value: Optional[str]) -> str:
+    def _normalize_output_format(self, value: str | None) -> str:
         raw = (value or "png").strip().lower().lstrip(".")
         if raw in {"jpg", "jpeg"}:
             return "jpeg"

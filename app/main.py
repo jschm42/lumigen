@@ -8,14 +8,14 @@ import logging
 import os
 import secrets
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional
+from typing import Any
 from urllib.parse import urlencode
 
 import uvicorn
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -37,10 +37,11 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
-from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
+from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.config import get_settings
 from app.db import crud
@@ -48,6 +49,7 @@ from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, Generation, User
 from app.providers.base import ProviderError
 from app.providers.registry import ProviderRegistry
+from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
@@ -56,7 +58,6 @@ from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
-from app.services.auth_service import AuthService
 from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
@@ -174,14 +175,14 @@ def has_bootstrapped_users(session: Session) -> bool:
     return crud.count_admin_users(session, active_only=False) > 0
 
 
-def get_session_user_id(request: Request) -> Optional[int]:
+def get_session_user_id(request: Request) -> int | None:
     raw = request.session.get("user_id")
     if isinstance(raw, int):
         return raw
     return None
 
 
-def get_current_user(request: Request, session: Session) -> Optional[User]:
+def get_current_user(request: Request, session: Session) -> User | None:
     user_id = get_session_user_id(request)
     if not user_id:
         return None
@@ -216,7 +217,7 @@ def ensure_csrf_token(request: Request) -> str:
     return token
 
 
-def is_csrf_valid(request: Request, provided: Optional[str]) -> bool:
+def is_csrf_valid(request: Request, provided: str | None) -> bool:
     expected = request.session.get("csrf_token")
     if not isinstance(expected, str) or not expected:
         return False
@@ -259,7 +260,7 @@ def validate_csrf_or_raise(request: Request, csrf_token: str) -> None:
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
 
-def require_admin_or_redirect(request: Request) -> Optional[RedirectResponse]:
+def require_admin_or_redirect(request: Request) -> RedirectResponse | None:
     if current_user_is_admin(request):
         return None
     return RedirectResponse(
@@ -304,7 +305,7 @@ async def auth_guard_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-def parse_optional_int(value: Optional[str]) -> Optional[int]:
+def parse_optional_int(value: str | None) -> int | None:
     if value is None:
         return None
     stripped = value.strip()
@@ -321,7 +322,7 @@ def resolve_default_storage_template_id(session: Session) -> int:
     return (default_template or storage_templates[0]).id
 
 
-def validate_profile_upscale_model(value: str) -> Optional[str]:
+def validate_profile_upscale_model(value: str) -> str | None:
     candidate = (value or "").strip()
     if not candidate:
         return None
@@ -382,14 +383,14 @@ def apply_openrouter_image_config(
     return merged
 
 
-def normalize_thumb_size(value: Optional[str]) -> str:
+def normalize_thumb_size(value: str | None) -> str:
     candidate = (value or "md").strip().lower()
     if candidate in {"sm", "md", "lg"}:
         return candidate
     return "md"
 
 
-def normalize_min_rating(value: Optional[int]) -> Optional[int]:
+def normalize_min_rating(value: int | None) -> int | None:
     if value is None:
         return None
     if value < 0:
@@ -425,21 +426,21 @@ def format_session_age(created_at: datetime | None) -> str:
     """Format the age of a session as Xh, Xd, Xw, or Xm."""
     if not created_at or created_at == datetime.min:
         return ""
-    
+
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
     delta = now - created_at
-    
+
     total_seconds = int(delta.total_seconds())
     if total_seconds < 0:
         total_seconds = 0
-    
+
     hours = total_seconds // 3600
     days = total_seconds // 86400
     weeks = days // 7
     months = days // 30
-    
+
     # Today: show hours (>= 1 hour)
     if created_at >= today_start:
         if hours >= 1:
@@ -467,11 +468,11 @@ def get_session_time_category(created_at: datetime | None) -> str:
     """Categorize a session by its creation time: 'today', 'last7days', or 'last30days'."""
     if not created_at or created_at == datetime.min:
         return "last30days"
-    
+
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     seven_days_ago = today_start - timedelta(days=7)
-    
+
     if created_at >= today_start:
         return "today"
     elif created_at >= seven_days_ago:
@@ -495,10 +496,10 @@ def build_session_items(
     Returns (session_items, has_more).
     """
     from sqlalchemy import and_
-    
+
     now = datetime.now()
     cutoff_date = now - timedelta(days=max_days)
-    
+
     # Get generations within the time range
     query = (
         select(Generation)
@@ -510,14 +511,14 @@ def build_session_items(
         )
         .order_by(Generation.created_at.desc(), Generation.id.desc())
     )
-    
+
     # First, get all generations to build session index
     all_generations = list(session.scalars(query).all())
     all_generations = [
         g for g in all_generations
         if not generation_chat_hidden(g)
     ]
-    
+
     # Build session index
     session_index: dict[str, dict[str, Any]] = {}
     for generation in all_generations:
@@ -542,7 +543,7 @@ def build_session_items(
             item["latest_status"] = generation.status
             if custom_title:
                 item["custom_title"] = custom_title
-    
+
     # Get all unique sessions sorted by latest_created_at
     all_sessions = sorted(
         session_index.values(),
@@ -552,13 +553,13 @@ def build_session_items(
         ),
         reverse=True,
     )
-    
+
     # Check if there are more sessions beyond the requested range
     has_more = len(all_sessions) > offset + limit
-    
+
     # Get the requested slice
     session_slice = all_sessions[offset:offset + limit]
-    
+
     # Build session items with time categories
     session_items = []
     for item in session_slice:
@@ -568,7 +569,7 @@ def build_session_items(
         latest_label = format_session_timestamp(latest_at)
         base_label = str(item.get("profile_label") or "Session")
         custom_title = str(item.get("custom_title") or "").strip()
-        
+
         session_items.append({
             "token": item["token"],
             "label": custom_title or base_label,
@@ -577,7 +578,7 @@ def build_session_items(
             "time_category": get_session_time_category(latest_at),
             "latest_created_at": latest_at,
         })
-    
+
     return session_items, has_more
 
 
@@ -612,7 +613,7 @@ def generate_workspace_redirect(
     *,
     conversation: str,
     workspace_view: str = "chat",
-    error: Optional[str] = None,
+    error: str | None = None,
 ) -> RedirectResponse:
     view = (workspace_view or "chat").strip().lower()
     if view not in {"chat", "profiles", "gallery", "admin"}:
@@ -623,7 +624,7 @@ def generate_workspace_redirect(
     return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
-def safe_gallery_return_to(value: Optional[str]) -> str:
+def safe_gallery_return_to(value: str | None) -> str:
     candidate = (value or "/gallery").strip()
     if candidate.startswith("/gallery"):
         return candidate
@@ -631,10 +632,10 @@ def safe_gallery_return_to(value: Optional[str]) -> str:
 
 
 def gallery_redirect(
-    return_to: Optional[str] = "/gallery",
+    return_to: str | None = "/gallery",
     *,
-    message: Optional[str] = None,
-    error: Optional[str] = None,
+    message: str | None = None,
+    error: str | None = None,
 ) -> RedirectResponse:
     target = safe_gallery_return_to(return_to)
     params: dict[str, str] = {}
@@ -685,7 +686,7 @@ def normalize_model_config_name(value: str) -> str:
     return normalized
 
 
-def normalize_admin_section(value: Optional[str]) -> str:
+def normalize_admin_section(value: str | None) -> str:
     candidate = (value or "models").strip().lower()
     if candidate in ADMIN_USER_SECTIONS:
         return candidate
@@ -702,8 +703,8 @@ def normalize_user_role(value: str) -> str:
 def admin_redirect(
     section: str,
     *,
-    message: Optional[str] = None,
-    error: Optional[str] = None,
+    message: str | None = None,
+    error: str | None = None,
 ) -> RedirectResponse:
     params: dict[str, str] = {"section": normalize_admin_section(section)}
     if message:
@@ -716,9 +717,9 @@ def admin_redirect(
 @app.get("/login", response_class=HTMLResponse)
 def login_page(
     request: Request,
-    next_url: Optional[str] = Query(default="/", alias="next"),
-    error: Optional[str] = Query(default=None),
-    message: Optional[str] = Query(default=None),
+    next_url: str | None = Query(default="/", alias="next"),
+    error: str | None = Query(default=None),
+    message: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     users_exist = has_bootstrapped_users(session)
@@ -796,16 +797,16 @@ def logout(request: Request) -> RedirectResponse:
 @app.get("/", response_class=HTMLResponse)
 def generate_page(
     request: Request,
-    error: Optional[str] = Query(default=None),
-    conversation: Optional[str] = Query(default=None),
-    workspace_view: Optional[str] = Query(default="chat"),
+    error: str | None = Query(default=None),
+    conversation: str | None = Query(default=None),
+    workspace_view: str | None = Query(default="chat"),
     session_offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     dimension_presets = crud.list_dimension_presets(session)
     enhancement_config = crud.get_enhancement_config(session)
-    
+
     # Load chat session preferences
     active_conversation = (conversation or "").strip()
     chat_session_prefs = None
@@ -816,7 +817,7 @@ def generate_page(
         if chat_session_prefs:
             last_profile_id = chat_session_prefs.last_profile_id
             last_thumb_size = chat_session_prefs.last_thumb_size or "md"
-    
+
     # Use the new build_session_items function with pagination
     session_items, session_has_more = build_session_items(
         session,
@@ -824,7 +825,7 @@ def generate_page(
         limit=SESSION_PAGE_SIZE,
         max_days=SESSION_MAX_DAYS,
     )
-    
+
     # Get recent generations for the chat view (all generations, not limited by time)
     recent_generations = list(
         session.scalars(
@@ -840,7 +841,7 @@ def generate_page(
         for generation in recent_generations
         if not generation_chat_hidden(generation)
     ]
-    
+
     # Build full session list for active conversation check
     # (we need all sessions to find the active one, not just the paginated ones)
     all_sessions, _ = build_session_items(
@@ -936,7 +937,7 @@ def generate_submit(
         overrides["chat_session_id"] = resolved_conversation
 
         encoded_images: list[dict[str, str]] = []
-        
+
         # Handle input_image_asset_id (from asset detail page)
         asset_id_value = parse_optional_int(input_image_asset_id)
         if asset_id_value is not None:
@@ -976,12 +977,12 @@ def generate_submit(
                         "b64": base64.b64encode(data).decode("ascii"),
                     }
                 )
-        
+
         if encoded_images:
             overrides["input_images"] = encoded_images
 
         provider_value = str(profile.provider or "").strip().lower()
-        
+
         # Apply OpenRouter-specific or standard dimension overrides
         if provider_value == "openrouter":
             # For OpenRouter: process aspect_ratio and image_size
@@ -1254,9 +1255,9 @@ async def provider_models(provider: str) -> JSONResponse:
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(
     request: Request,
-    section: Optional[str] = Query(default="models"),
-    message: Optional[str] = Query(default=None),
-    error: Optional[str] = Query(default=None),
+    section: str | None = Query(default="models"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     denied = require_admin_or_redirect(request)
@@ -1475,12 +1476,12 @@ def admin_create_model_config(
 
     try:
         name_value = normalize_model_config_name(name)
-        
+
         # Validate model is required
         model_value = model.strip()
         if not model_value:
             raise ValueError("Model is required")
-        
+
         # Validate API key if custom key is enabled
         api_key_encrypted = None
         api_key_value = api_key.strip()
@@ -1532,12 +1533,12 @@ def admin_update_model_config(
 
     try:
         name_value = normalize_model_config_name(name)
-        
+
         # Validate model is required
         model_value = model.strip()
         if not model_value:
             raise ValueError("Model is required")
-        
+
         # Handle API key based on use_custom_api_key flag
         api_key_encrypted = None
         if use_custom_api_key:
@@ -1550,7 +1551,7 @@ def admin_update_model_config(
                 elif config.api_key_encrypted:
                     # Keep existing key if no new key provided
                     api_key_encrypted = config.api_key_encrypted
-        
+
         crud.update_model_config(
             session,
             config,
@@ -1786,29 +1787,29 @@ async def update_session_preferences(
 
     payload = await request.json()
     chat_session_id = str(payload.get("chat_session_id") or "").strip()
-    
+
     if not chat_session_id or chat_session_id in {"all", "new"}:
         return JSONResponse(
             {"success": False, "error": "Invalid session ID"}, status_code=400
         )
-    
+
     last_profile_id = payload.get("last_profile_id")
     last_thumb_size = payload.get("last_thumb_size")
-    
+
     # Validate profile_id if provided
     if last_profile_id is not None:
         if not isinstance(last_profile_id, int) or last_profile_id <= 0:
             return JSONResponse(
                 {"success": False, "error": "Invalid profile ID"}, status_code=400
             )
-    
+
     # Validate thumb_size if provided
     if last_thumb_size is not None:
         if last_thumb_size not in {"sm", "md", "lg"}:
             return JSONResponse(
                 {"success": False, "error": "Invalid thumb size"}, status_code=400
             )
-    
+
     crud.upsert_chat_session_preferences(
         session,
         chat_session_id=chat_session_id,
@@ -1842,7 +1843,7 @@ def list_sessions(
 @app.get("/profiles/new", response_class=HTMLResponse)
 def new_profile_page(
     _request: Request,
-    error: Optional[str] = Query(default=None),
+    error: str | None = Query(default=None),
 ) -> HTMLResponse:
     params: dict[str, str] = {"create": "1"}
     if error:
@@ -1854,14 +1855,14 @@ def new_profile_page(
 def profiles_page(
     request: Request,
     create: bool = Query(default=False),
-    edit_id: Optional[int] = Query(default=None),
-    error: Optional[str] = Query(default=None),
+    edit_id: int | None = Query(default=None),
+    error: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     profiles = crud.list_profiles(session)
     model_configs = crud.list_model_configs(session)
     categories = crud.list_categories(session)
-    open_edit_id: Optional[int] = None
+    open_edit_id: int | None = None
     if edit_id is not None and crud.get_profile(session, edit_id):
         open_edit_id = edit_id
 
@@ -1886,7 +1887,7 @@ def profiles_page(
 def edit_profile_page(
     _request: Request,
     profile_id: int,
-    error: Optional[str] = Query(default=None),
+    error: str | None = Query(default=None),
 ) -> HTMLResponse:
     params: dict[str, str] = {"edit_id": str(profile_id)}
     if error:
@@ -2073,19 +2074,19 @@ def delete_profile(
 def gallery_page(
     request: Request,
     page: int = Query(default=1, ge=1),
-    profile_name: Optional[str] = Query(default=None),
-    provider: Optional[str] = Query(default=None),
-    q: Optional[str] = Query(default=None),
+    profile_name: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    q: str | None = Query(default=None),
     category_ids: list[int] = Query(default=[]),
-    min_rating: Optional[str] = Query(default=None),
+    min_rating: str | None = Query(default=None),
     unrated: bool = Query(default=False),
-    thumb_size: Optional[str] = Query(default="md"),
-    message: Optional[str] = Query(default=None),
-    error: Optional[str] = Query(default=None),
+    thumb_size: str | None = Query(default="md"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     normalized_category_ids = normalize_category_ids(category_ids)
-    parsed_min_rating: Optional[int] = None
+    parsed_min_rating: int | None = None
     try:
         parsed_min_rating = parse_optional_int(min_rating)
     except ValueError:

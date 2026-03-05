@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
@@ -64,12 +63,12 @@ def count_admin_users(session: Session, *, active_only: bool = True) -> int:
     return len(list(session.scalars(stmt).all()))
 
 
-def get_user(session: Session, user_id: int) -> Optional[User]:
+def get_user(session: Session, user_id: int) -> User | None:
     stmt = select(User).where(User.id == user_id)
     return session.scalar(stmt)
 
 
-def get_user_by_username(session: Session, username: str) -> Optional[User]:
+def get_user_by_username(session: Session, username: str) -> User | None:
     stmt = select(User).where(User.username == username)
     return session.scalar(stmt)
 
@@ -136,7 +135,7 @@ def list_categories_by_ids(session: Session, category_ids: list[int]) -> list[Ca
     return list(session.scalars(stmt).all())
 
 
-def get_category(session: Session, category_id: int) -> Optional[Category]:
+def get_category(session: Session, category_id: int) -> Category | None:
     stmt = select(Category).where(Category.id == category_id)
     return session.scalar(stmt)
 
@@ -163,12 +162,12 @@ def delete_category(session: Session, category: Category) -> None:
     session.commit()
 
 
-def get_model_config(session: Session, model_config_id: int) -> Optional[ModelConfig]:
+def get_model_config(session: Session, model_config_id: int) -> ModelConfig | None:
     stmt = select(ModelConfig).where(ModelConfig.id == model_config_id)
     return session.scalar(stmt)
 
 
-def get_model_config_by_name(session: Session, name: str) -> Optional[ModelConfig]:
+def get_model_config_by_name(session: Session, name: str) -> ModelConfig | None:
     stmt = select(ModelConfig).where(ModelConfig.name == name)
     return session.scalar(stmt)
 
@@ -183,7 +182,7 @@ def create_model_config(session: Session, **fields) -> ModelConfig:
 
 def get_dimension_preset(
     session: Session, preset_id: int
-) -> Optional[DimensionPreset]:
+) -> DimensionPreset | None:
     stmt = select(DimensionPreset).where(DimensionPreset.id == preset_id)
     return session.scalar(stmt)
 
@@ -228,7 +227,7 @@ def delete_model_config(session: Session, model_config: ModelConfig) -> None:
     session.commit()
 
 
-def get_enhancement_config(session: Session) -> Optional[EnhancementConfig]:
+def get_enhancement_config(session: Session) -> EnhancementConfig | None:
     stmt = select(EnhancementConfig).order_by(EnhancementConfig.id.asc())
     return session.scalar(stmt)
 
@@ -237,7 +236,7 @@ def upsert_enhancement_config(
     session: Session,
     provider: str,
     model: str,
-    api_key_encrypted: Optional[str],
+    api_key_encrypted: str | None,
 ) -> EnhancementConfig:
     existing = get_enhancement_config(session)
     if existing:
@@ -260,7 +259,7 @@ def upsert_enhancement_config(
     return row
 
 
-def get_profile(session: Session, profile_id: int) -> Optional[Profile]:
+def get_profile(session: Session, profile_id: int) -> Profile | None:
     stmt = (
         select(Profile)
         .options(
@@ -304,7 +303,7 @@ def create_generation(session: Session, generation: Generation) -> Generation:
 
 def get_generation(
     session: Session, generation_id: int, with_assets: bool = False
-) -> Optional[Generation]:
+) -> Generation | None:
     stmt: Select[tuple[Generation]] = select(Generation).where(
         Generation.id == generation_id
     )
@@ -315,7 +314,7 @@ def get_generation(
 
 def get_asset(
     session: Session, asset_id: int, with_generation: bool = True
-) -> Optional[Asset]:
+) -> Asset | None:
     stmt: Select[tuple[Asset]] = select(Asset).where(Asset.id == asset_id)
     if with_generation:
         stmt = stmt.options(
@@ -324,7 +323,7 @@ def get_asset(
     return session.scalar(stmt)
 
 
-def get_chat_session(session: Session, chat_session_id: str) -> Optional[ChatSession]:
+def get_chat_session(session: Session, chat_session_id: str) -> ChatSession | None:
     stmt = (
         select(ChatSession)
         .options(selectinload(ChatSession.last_profile))
@@ -336,8 +335,8 @@ def get_chat_session(session: Session, chat_session_id: str) -> Optional[ChatSes
 def upsert_chat_session_preferences(
     session: Session,
     chat_session_id: str,
-    last_profile_id: Optional[int] = None,
-    last_thumb_size: Optional[str] = None,
+    last_profile_id: int | None = None,
+    last_thumb_size: str | None = None,
 ) -> ChatSession:
     existing = get_chat_session(session, chat_session_id)
     if existing:
