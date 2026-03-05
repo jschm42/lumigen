@@ -1,13 +1,12 @@
 """Pydantic schemas for generation-related requests and responses."""
 
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
 class GenerationCreateRequest(BaseModel):
     """Request schema for creating a new generation."""
-    
+
     prompt_user: str = Field(..., min_length=1, max_length=10000)
     profile_id: int = Field(..., gt=0)
     conversation: str = ""
@@ -26,10 +25,10 @@ class GenerationCreateRequest(BaseModel):
 
 class GenerationResponse(BaseModel):
     """Response schema for a generation."""
-    
+
     id: int
     status: str
-    prompt: Optional[str] = None
-    created_at: Optional[str] = None
-    
+    prompt: str | None = None
+    created_at: str | None = None
+
     model_config = {"from_attributes": True}

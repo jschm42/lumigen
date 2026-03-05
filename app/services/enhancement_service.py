@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import httpx
 
 from app.config import Settings
@@ -17,7 +15,7 @@ class EnhancementService:
         self._settings = settings
         self._secrets = model_config_service
 
-    def _get_config(self) -> Optional[dict[str, str]]:
+    def _get_config(self) -> dict[str, str] | None:
         with SessionLocal() as session:
             config = crud.get_enhancement_config(session)
             if not config:
@@ -31,7 +29,7 @@ class EnhancementService:
                 "api_key": api_key,
             }
 
-    async def enhance(self, prompt: str, enhancement_prompt: Optional[str]) -> str:
+    async def enhance(self, prompt: str, enhancement_prompt: str | None) -> str:
         config = self._get_config()
         if not config:
             raise ValueError("Enhancement LLM is not configured")

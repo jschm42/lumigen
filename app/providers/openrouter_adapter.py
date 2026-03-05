@@ -4,7 +4,7 @@ import base64
 import logging
 import re
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from PIL import Image, UnidentifiedImageError
@@ -373,7 +373,7 @@ class OpenRouterAdapter(ProviderAdapter):
 
     def _extract_single_image_ref(
         self, image_obj: Any, output_format: str
-    ) -> Optional[str]:
+    ) -> str | None:
         if isinstance(image_obj, str):
             return self._normalize_ref_string(image_obj, output_format)
 
@@ -410,7 +410,7 @@ class OpenRouterAdapter(ProviderAdapter):
 
         return None
 
-    def _normalize_ref_string(self, value: str, output_format: str) -> Optional[str]:
+    def _normalize_ref_string(self, value: str, output_format: str) -> str | None:
         raw = value.strip()
         if not raw:
             return None
@@ -528,7 +528,7 @@ class OpenRouterAdapter(ProviderAdapter):
 
     def _explicit_dimensions(
         self, request: ProviderGenerationRequest
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         if request.width is None or request.height is None:
             return None
         try:
@@ -563,7 +563,7 @@ class OpenRouterAdapter(ProviderAdapter):
             pass
         return fallback_width, fallback_height
 
-    def _normalize_output_format(self, value: Optional[str]) -> str:
+    def _normalize_output_format(self, value: str | None) -> str:
         raw = (value or "png").strip().lower().lstrip(".")
         if raw in {"jpg", "jpeg"}:
             return "jpeg"

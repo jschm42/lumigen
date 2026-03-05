@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import BackgroundTasks
 from PIL import Image, ImageOps
@@ -58,7 +58,7 @@ class GenerationService:
         session: Session,
         profile: Profile,
         prompt_user: str,
-        overrides: Optional[dict[str, Any]] = None,
+        overrides: dict[str, Any] | None = None,
     ) -> Generation:
         prompt_final = self._compose_prompt(profile.base_prompt, prompt_user)
         storage_template = profile.storage_template
@@ -191,7 +191,7 @@ class GenerationService:
 
     def cancel_generation(
         self, session: Session, generation_id: int
-    ) -> Optional[Generation]:
+    ) -> Generation | None:
         generation = crud.get_generation(session, generation_id, with_assets=True)
         if not generation:
             return None
@@ -475,7 +475,7 @@ class GenerationService:
         self, generation: Generation
     ) -> ProviderGenerationRequest:
         request_data = generation.request_snapshot_json or {}
-        
+
         # Validate model is set
         model = str(request_data.get("model") or generation.model or "").strip()
         if not model:
@@ -483,16 +483,16 @@ class GenerationService:
                 "Model configuration error: no model is specified. "
                 "Please check the profile model configuration in Admin settings."
             )
-        
+
         # Get API key - check model config to decide which key to use
         api_key = None
         model_config_id = self._parse_optional_int(request_data.get("model_config_id"))
         provider = str(request_data.get("provider") or generation.provider or "").strip()
-        
+
         if model_config_id is not None and self.model_config_service:
             # Get the model config to check if custom API key is enabled
             config = self.model_config_service.get_model_config(model_config_id)
-            
+
             if config and config.use_custom_api_key:
                 # Use custom API key if enabled
                 api_key = self.model_config_service.get_api_key(model_config_id)
@@ -503,14 +503,14 @@ class GenerationService:
         elif provider and self.model_config_service:
             # No model config, try to use env variable directly
             api_key = self.model_config_service.get_default_api_key(provider)
-        
+
         # Validate API key is available
         if not api_key:
             raise ProviderError(
                 "Model configuration error: API key not found. "
                 "Please configure an API key for this model in Admin settings."
             )
-        
+
         input_images: list[ProviderInputImage] = []
         raw_input_images = request_data.get("input_images")
         if isinstance(raw_input_images, list):
@@ -539,7 +539,7 @@ class GenerationService:
             input_images=input_images,
         )
 
-    def _base_dir_from_snapshot(self, snapshot: Optional[dict[str, Any]]) -> Path:
+    def _base_dir_from_snapshot(self, snapshot: dict[str, Any] | None) -> Path:
         candidate = (snapshot or {}).get("base_dir")
         if candidate:
             return Path(str(candidate)).resolve()
@@ -572,7 +572,7 @@ class GenerationService:
                     }
                     sanitized_images.append(sanitized_img)
             request_snapshot["input_images"] = sanitized_images
-        
+
         # Build response snapshot with provider metadata
         response_snapshot = {
             "provider_meta": provider_meta,
@@ -583,7 +583,7 @@ class GenerationService:
                 "mime": image_mime,
             },
         }
-        
+
         return {
             "type": "asset_success",
             "generated_at": datetime.utcnow().isoformat(),
@@ -686,7 +686,7 @@ class GenerationService:
             return "image/webp"
         return "image/png"
 
-    def _parse_optional_int(self, value: Any) -> Optional[int]:
+    def _parse_optional_int(self, value: Any) -> int | None:
         if value is None:
             return None
         try:

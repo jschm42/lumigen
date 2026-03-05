@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import Settings
@@ -40,7 +38,7 @@ class ModelConfigService:
             ) from exc
         return raw.decode("utf-8")
 
-    def get_api_key(self, model_config_id: int) -> Optional[str]:
+    def get_api_key(self, model_config_id: int) -> str | None:
         """Get the custom API key for a model config if use_custom_api_key is True."""
         with SessionLocal() as session:
             config = crud.get_model_config(session, model_config_id)
@@ -48,7 +46,7 @@ class ModelConfigService:
                 return None
             return self.decrypt_api_key(config.api_key_encrypted)
 
-    def get_default_api_key(self, provider: str) -> Optional[str]:
+    def get_default_api_key(self, provider: str) -> str | None:
         """Get the default API key from settings for a given provider."""
         attr_name = self.PROVIDER_API_KEY_ATTR.get(provider.lower())
         if not attr_name:

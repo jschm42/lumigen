@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from PIL import Image, UnidentifiedImageError
@@ -259,7 +259,7 @@ class GoogleAdapter(ProviderAdapter):
 
         return blobs
 
-    def _normalize_output_format(self, value: Optional[str]) -> str:
+    def _normalize_output_format(self, value: str | None) -> str:
         raw = (value or "png").strip().lower().lstrip(".")
         if raw in {"jpg", "jpeg"}:
             return "jpeg"

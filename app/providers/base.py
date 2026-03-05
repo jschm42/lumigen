@@ -4,7 +4,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from app.config import Settings
 
@@ -12,15 +12,15 @@ from app.config import Settings
 @dataclass
 class ProviderGenerationRequest:
     prompt: str
-    width: Optional[int]
-    height: Optional[int]
+    width: int | None
+    height: int | None
     n_images: int
-    seed: Optional[int]
+    seed: int | None
     output_format: str
     model: str
-    api_key: Optional[str] = None
+    api_key: str | None = None
     params: dict[str, Any] = field(default_factory=dict)
-    input_images: list["ProviderInputImage"] = field(default_factory=list)
+    input_images: list[ProviderInputImage] = field(default_factory=list)
 
 
 @dataclass
@@ -69,7 +69,7 @@ class ProviderAdapter(ABC):
         method: str,
         url: str,
         headers: dict[str, str],
-        payload: Optional[dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
     ) -> None:
         """Logs an outgoing provider HTTP request at DEBUG level.
 
