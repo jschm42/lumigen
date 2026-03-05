@@ -368,3 +368,31 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert 'max-h-[75vh]' in body
     assert 'href="/assets/44/file"' in body
     assert 'Original size' in body
+
+
+def test_generate_page_renders_user_menu_popup(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module.crud, "list_profiles", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30: ([], False),
+    )
+
+    response = client.get("/")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'data-user-menu-toggle' in body
+    assert 'data-user-menu' in body
+    assert 'data-user-menu-container' in body
+    assert 'href="/logout"' in body
+    assert 'test-admin' in body
+    assert 'v0.1.0' in body
