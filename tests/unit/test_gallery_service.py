@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
@@ -33,7 +33,7 @@ def _add_generation_with_asset(
     rating: int | None = None,
     created_at: datetime | None = None,
 ):
-    created_value = created_at or (datetime.utcnow() + timedelta(seconds=generation_id))
+    created_value = created_at or (datetime.now(UTC) + timedelta(seconds=generation_id))
     generation = Generation(
         id=generation_id,
         profile_id=None,
@@ -240,7 +240,7 @@ def test_list_assets_filters_by_min_rating_and_unrated(db_session) -> None:
 
 
 def test_list_assets_filters_by_created_at_range(db_session) -> None:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     old_time = now - timedelta(days=20)
     week_time = now - timedelta(days=5)
     today_time = now - timedelta(hours=2)

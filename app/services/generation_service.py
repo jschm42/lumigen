@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import copy
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -202,7 +202,7 @@ class GenerationService:
         generation.status = "cancelled"
         generation.error = "Canceled by user."
         generation.failure_sidecar_path = None
-        generation.finished_at = datetime.utcnow()
+        generation.finished_at = datetime.now(UTC)
         session.commit()
         session.refresh(generation)
         return generation
@@ -359,7 +359,7 @@ class GenerationService:
                 generation.status = "succeeded"
                 generation.error = None
                 generation.failure_sidecar_path = None
-                generation.finished_at = datetime.utcnow()
+                generation.finished_at = datetime.now(UTC)
                 session.commit()
             except GenerationCancelledError as exc:
                 session.rollback()
@@ -376,7 +376,7 @@ class GenerationService:
                 generation.status = "cancelled"
                 generation.error = self._truncate_error(str(exc))
                 generation.failure_sidecar_path = None
-                generation.finished_at = datetime.utcnow()
+                generation.finished_at = datetime.now(UTC)
                 session.commit()
             except Exception as exc:
                 session.rollback()
@@ -396,7 +396,7 @@ class GenerationService:
 
                 generation.status = "failed"
                 generation.error = self._truncate_error(str(exc))
-                generation.finished_at = datetime.utcnow()
+                generation.finished_at = datetime.now(UTC)
 
                 failure_payload = self._build_failure_sidecar_payload(generation, exc)
                 try:
@@ -586,7 +586,7 @@ class GenerationService:
 
         return {
             "type": "asset_success",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "generation_id": generation.id,
             "asset_index": asset_index,
             "image_path": image_rel,
@@ -609,7 +609,7 @@ class GenerationService:
     ) -> dict[str, Any]:
         return {
             "type": "generation_failure",
-            "failed_at": datetime.utcnow().isoformat(),
+            "failed_at": datetime.now(UTC).isoformat(),
             "generation_id": generation.id,
             "profile_name": generation.profile_name,
             "provider": generation.provider,

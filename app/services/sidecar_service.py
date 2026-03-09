@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.services.storage_service import StorageService
@@ -17,7 +17,7 @@ class SidecarService:
         return Path(f"{image_rel.as_posix()}.json")
 
     def failure_sidecar_relative_path(self, profile_name: str, generation_id: int, when: datetime | None = None) -> Path:
-        ts = when or datetime.utcnow()
+        ts = when or datetime.now(UTC)
         safe_profile = slugify(profile_name, max_length=48)
         filename = f"{safe_profile}-{generation_id}.json"
         return Path(".failures") / f"{ts.year:04d}" / f"{ts.month:02d}" / filename

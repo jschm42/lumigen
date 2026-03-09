@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from app.utils.paths import ensure_dir, ensure_within_base, prune_empty_directories
@@ -31,7 +31,7 @@ class StorageService:
         if not _EXT_RE.match(safe_ext):
             raise ValueError(f"Invalid file extension: {ext}")
 
-        now = when or datetime.utcnow()
+        now = when or datetime.now(UTC)
         context = {
             "profile": slugify(profile_name, max_length=48),
             "yyyy": f"{now.year:04d}",
