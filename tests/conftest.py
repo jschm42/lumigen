@@ -19,6 +19,8 @@ def app_module(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("DATA_DIR", str(data_dir))
     monkeypatch.setenv("DEFAULT_BASE_DIR", str(base_dir))
     monkeypatch.setenv("SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("SESSION_HTTPS_ONLY", "false")
+    monkeypatch.setenv("SESSION_SECRET_KEY", "test-session-secret")
 
     get_settings.cache_clear()
 

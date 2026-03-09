@@ -21,6 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("users"):
+        return
+
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -36,4 +41,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("users")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("users"):
+        op.drop_table("users")

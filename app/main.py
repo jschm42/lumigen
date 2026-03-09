@@ -10,7 +10,7 @@ import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -398,6 +398,60 @@ def normalize_min_rating(value: int | None) -> int | None:
     if value > 5:
         return 5
     return value
+
+
+def normalize_time_preset(value: str | None) -> str:
+    candidate = (value or "today").strip().lower()
+    aliases = {
+        "this_week": "last_7_days",
+        "this_month": "last_30_days",
+    }
+    candidate = aliases.get(candidate, candidate)
+    if candidate in {"today", "last_7_days", "last_30_days", "custom"}:
+        return candidate
+    return "today"
+
+
+def parse_optional_date(value: str | None) -> date | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("Invalid date format; use YYYY-MM-DD") from exc
+
+
+def build_created_at_bounds(
+    *,
+    time_preset: str,
+    from_date: date | None,
+    to_date: date | None,
+) -> tuple[datetime | None, datetime | None]:
+    now = datetime.now()
+
+    # Custom date range always wins over preset when at least one bound is provided.
+    if from_date is not None or to_date is not None:
+        start = (
+            datetime.combine(from_date, datetime.min.time())
+            if from_date is not None
+            else None
+        )
+        end = (
+            datetime.combine(to_date, datetime.max.time())
+            if to_date is not None
+            else None
+        )
+        return start, end
+
+    if time_preset == "custom":
+        return None, None
+    if time_preset == "last_7_days":
+        return now - timedelta(days=7), now
+    if time_preset == "last_30_days":
+        return now - timedelta(days=30), now
+
+    return now - timedelta(days=1), now
 
 
 def generation_session_token(generation: Generation) -> str:
@@ -2080,6 +2134,9 @@ def gallery_page(
     category_ids: list[int] = Query(default=[]),
     min_rating: str | None = Query(default=None),
     unrated: bool = Query(default=False),
+    time_preset: str | None = Query(default="today"),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
     thumb_size: str | None = Query(default="md"),
     message: str | None = Query(default=None),
     error: str | None = Query(default=None),
@@ -2092,6 +2149,24 @@ def gallery_page(
     except ValueError:
         parsed_min_rating = None
     min_rating_value = normalize_min_rating(parsed_min_rating)
+    time_preset_value = normalize_time_preset(time_preset)
+    parsed_date_from: date | None = None
+    parsed_date_to: date | None = None
+    try:
+        parsed_date_from = parse_optional_date(date_from)
+        parsed_date_to = parse_optional_date(date_to)
+    except ValueError:
+        parsed_date_from = None
+        parsed_date_to = None
+    if parsed_date_from and parsed_date_to and parsed_date_from > parsed_date_to:
+        parsed_date_from, parsed_date_to = parsed_date_to, parsed_date_from
+    if parsed_date_from is not None or parsed_date_to is not None:
+        time_preset_value = "custom"
+    created_after, created_before = build_created_at_bounds(
+        time_preset=time_preset_value,
+        from_date=parsed_date_from,
+        to_date=parsed_date_to,
+    )
     thumb_size_value = normalize_thumb_size(thumb_size)
     page_data = gallery_service.list_assets(
         session,
@@ -2102,6 +2177,8 @@ def gallery_page(
         category_ids=normalized_category_ids or None,
         min_rating=None if unrated else min_rating_value,
         unrated_only=unrated,
+        created_after=created_after,
+        created_before=created_before,
     )
     options = gallery_service.list_filter_options(session)
 
@@ -2118,6 +2195,11 @@ def gallery_page(
         filter_params["min_rating"] = min_rating_value
     if unrated:
         filter_params["unrated"] = "1"
+    filter_params["time_preset"] = time_preset_value
+    if parsed_date_from is not None:
+        filter_params["date_from"] = parsed_date_from.isoformat()
+    if parsed_date_to is not None:
+        filter_params["date_to"] = parsed_date_to.isoformat()
     gallery_query = urlencode(filter_params, doseq=True)
 
     return_to_params: dict[str, Any] = {"page": page, "thumb_size": thumb_size_value}
@@ -2136,6 +2218,9 @@ def gallery_page(
             "selected_category_ids": normalized_category_ids,
             "min_rating": min_rating_value,
             "unrated_only": unrated,
+            "time_preset": time_preset_value,
+            "date_from": parsed_date_from.isoformat() if parsed_date_from else "",
+            "date_to": parsed_date_to.isoformat() if parsed_date_to else "",
             "thumb_size": thumb_size_value,
             "gallery_query": gallery_query,
             "return_to": return_to,
@@ -2271,6 +2356,7 @@ def asset_detail(
     asset_id: int,
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    htmx_request = is_htmx(request)
     asset = session.scalar(
         select(Asset)
         .options(selectinload(Asset.generation), selectinload(Asset.categories))
@@ -2282,32 +2368,35 @@ def asset_detail(
     profiles = crud.list_profiles(session)
     session_token = generation_session_token(asset.generation) if asset.generation else ""
 
-    return templates.TemplateResponse(
-        request,
-        "asset_detail.html",
-        {
-            "request": request,
-            "asset": asset,
-            "profiles": profiles,
-            "session_token": session_token,
-            "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
-            "profile_snapshot_pretty": (
-                dumps_json(asset.generation.profile_snapshot_json, pretty=True)
-                if asset.generation
-                else "{}"
-            ),
-            "storage_snapshot_pretty": (
-                dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
-                if asset.generation
-                else "{}"
-            ),
-            "request_snapshot_pretty": (
-                dumps_json(asset.generation.request_snapshot_json, pretty=True)
-                if asset.generation
-                else "{}"
-            ),
-        },
+    context = {
+        "request": request,
+        "asset": asset,
+        "profiles": profiles,
+        "session_token": session_token,
+        "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
+        "profile_snapshot_pretty": (
+            dumps_json(asset.generation.profile_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "storage_snapshot_pretty": (
+            dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "request_snapshot_pretty": (
+            dumps_json(asset.generation.request_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "compact_dialog": htmx_request,
+    }
+    template_name = (
+        "fragments/asset_detail_dialog_body.html"
+        if htmx_request
+        else "asset_detail.html"
     )
+    return templates.TemplateResponse(request, template_name, context)
 
 
 @app.post("/assets/{asset_id}/delete")

@@ -57,11 +57,11 @@
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {% for asset in assets %}
       <article class="overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 p-2">
-        <a href="/assets/{{ asset.id }}" class="block overflow-hidden rounded-lg border border-white/10">
+        <a href="/assets/{{ asset.id }}" hx-get="/assets/{{ asset.id }}" hx-target="#asset-detail-dialog-content" hx-swap="innerHTML" class="block overflow-hidden rounded-lg border border-white/10" data-asset-detail-trigger>
           <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="aspect-square w-full object-cover">
         </a>
         <div class="mt-2 space-y-1">
-          <a href="/assets/{{ asset.id }}" class="block text-sm font-semibold text-white hover:text-sky-200">Asset #{{ asset.id }}</a>
+          <a href="/assets/{{ asset.id }}" hx-get="/assets/{{ asset.id }}" hx-target="#asset-detail-dialog-content" hx-swap="innerHTML" class="block text-sm font-semibold text-white hover:text-sky-200" data-asset-detail-trigger>Asset #{{ asset.id }}</a>
           <small class="block text-xs text-slate-400">{{ asset.width }}x{{ asset.height }}</small>
         </div>
       </article>

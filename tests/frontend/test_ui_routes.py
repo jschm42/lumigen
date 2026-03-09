@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 
 
@@ -214,6 +215,46 @@ def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkey
     assert 'data-gallery-thumb-size="lg"' in body
     assert 'No assets found for current filters.' in body
     assert 'data-gallery-bulk-form' in body
+    assert 'name="time_preset"' in body
+    assert 'name="date_from"' in body
+    assert 'name="date_to"' in body
+    assert 'value="today" selected' in body
+    assert 'Last 7 days' in body
+    assert 'Last 30 days' in body
+    assert 'value="custom"' in body
+
+
+def test_gallery_page_custom_date_range_overrides_preset(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    captured: dict[str, object] = {}
+
+    def _list_assets(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(items=[], page=1, pages=1, total=0)
+
+    monkeypatch.setattr(app_module.gallery_service, "list_assets", _list_assets)
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=["Default"], providers=["stub"], categories=[]),
+    )
+
+    response = client.get(
+        "/gallery?time_preset=custom&date_from=2026-03-01&date_to=2026-03-02"
+    )
+    body = response.text
+
+    assert response.status_code == 200
+    assert captured.get("created_after") == datetime(2026, 3, 1, 0, 0, 0)
+    created_before = captured.get("created_before")
+    assert isinstance(created_before, datetime)
+    assert created_before.date().isoformat() == "2026-03-02"
+    assert 'name="date_from" value="2026-03-01"' in body
+    assert 'name="date_to" value="2026-03-02"' in body
 
 
 def test_admin_page_renders_sections_and_key_warning(client, app_module, monkeypatch) -> None:
@@ -349,6 +390,12 @@ def test_gallery_page_renders_star_controls_and_rating_filters(client, app_modul
     assert 'data-rating-star' in body
     assert 'data-current-rating="4"' in body
     assert 'data-asset-detail-url="/assets/12"' in body
+    assert 'data-asset-detail-dialog' in body
+    assert 'id="asset-detail-dialog-content"' in body
+    assert 'data-asset-detail-close' in body
+    assert '>X</button>' in body
+    assert 'hx-target="#asset-detail-dialog-content"' in body
+    assert 'data-asset-detail-trigger' in body
     assert 'Profile Hidden | provider-hidden' not in body
 
 
@@ -394,6 +441,50 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert "Details, metadata, and actions for this asset." not in body
     assert 'max-h-[75vh]' in body
     assert 'href="/assets/44/file"' in body
+    assert 'Original size' in body
+
+
+def test_asset_detail_htmx_returns_dialog_fragment_only(client, app_module, monkeypatch) -> None:
+    asset = SimpleNamespace(
+        id=45,
+        generation=SimpleNamespace(
+            id=6,
+            profile_id=1,
+            status="succeeded",
+            provider="stub",
+            model="stub-v1",
+            prompt_final="prompt",
+            failure_sidecar_path=None,
+            profile_snapshot_json={},
+            storage_template_snapshot_json={},
+            request_snapshot_json={},
+        ),
+        categories=[],
+        width=1024,
+        height=1024,
+        mime="image/png",
+        file_path="images/y.png",
+        thumbnail_path=".thumbs/y.webp",
+        sidecar_path="images/y.png.json",
+        meta_json={},
+    )
+    fake_session = _FakeSession(scalar_value=asset)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [SimpleNamespace(id=1, name="Default")],
+    )
+
+    response = client.get("/assets/45", headers={"HX-Request": "true"})
+    body = response.text
+
+    assert response.status_code == 200
+    assert "<!doctype html>" not in body
+    assert 'id="asset-image-45"' in body
+    assert 'href="/assets/45/file"' in body
     assert 'Original size' in body
 
 

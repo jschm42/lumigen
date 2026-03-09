@@ -19,7 +19,7 @@
       data-session-title="{{ item.label }}"
       role="menuitem"
     >Rename</button>
-    <form action="/sessions/delete" method="post" onsubmit="return confirm('Delete session and chat history? Images in the gallery will be kept.');">
+    <form action="/sessions/delete" method="post" data-confirm-message="Delete session and chat history? Images in the gallery will be kept.">
       <input type="hidden" name="session_token" value="{{ item.token }}">
       <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
       <input type="hidden" name="workspace_view" value="{{ workspace_view }}">

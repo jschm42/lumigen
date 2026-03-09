@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -42,6 +43,8 @@ class GalleryService:
         category_ids: list[int] | None = None,
         min_rating: int | None = None,
         unrated_only: bool = False,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> GalleryPage:
         safe_page_size = max(1, min(200, page_size or self.default_page_size))
         safe_page = max(1, page)
@@ -61,6 +64,10 @@ class GalleryService:
         elif min_rating is not None:
             filters.append(Asset.rating.is_not(None))
             filters.append(Asset.rating >= min_rating)
+        if created_after is not None:
+            filters.append(Asset.created_at >= created_after)
+        if created_before is not None:
+            filters.append(Asset.created_at <= created_before)
 
         count_stmt = select(func.count()).select_from(Asset).join(Generation)
         if filters:

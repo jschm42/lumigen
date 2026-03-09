@@ -1,0 +1,173 @@
+{% set btn_primary = "inline-flex items-center justify-center gap-2 rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+{% set btn_secondary = "inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
+{% set btn_danger = "inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
+{% set compact_dialog = compact_dialog | default(false) %}
+{% set section_gap = "mb-4" if compact_dialog else "mb-8" %}
+{% set card_class = "bg-transparent p-0" if compact_dialog else "rounded-2xl border border-white/10 bg-slate-950/45 p-4" %}
+
+<div class="{{ 'mb-3' if compact_dialog else 'mb-5' }} flex justify-center {{ '' if compact_dialog else 'rounded-2xl border border-white/10 bg-slate-950/70 p-2' }}">
+  <img class="max-h-[75vh] w-auto max-w-full rounded-xl" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}" id="asset-image-{{ asset.id }}">
+</div>
+
+<div class="{{ section_gap }}">
+  <div class="{{ card_class }}">
+    <form method="post" action="/generate" enctype="multipart/form-data" class="space-y-3">
+      <input type="hidden" name="conversation" value="{{ session_token }}">
+
+      <div>
+        <label class="mb-1 block text-sm font-semibold text-slate-300">Profile</label>
+        <select name="profile_id" required class="w-full rounded-lg border border-white/20 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300">
+          {% for profile in profiles %}
+            <option value="{{ profile.id }}" {% if asset.generation.profile_id == profile.id %}selected{% endif %}>
+              {{ profile.name }}{% if asset.generation.profile_id == profile.id %} (current){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="flex items-end gap-2">
+        <div class="flex-1">
+          <label class="mb-1 block text-sm font-semibold text-slate-300">New prompt</label>
+          <textarea
+            name="prompt_user"
+            rows="2"
+            required
+            placeholder="Describe the variation you want..."
+            class="w-full min-h-[3rem] rounded-lg border border-white/20 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300"
+          ></textarea>
+        </div>
+        <button type="submit" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-300 text-slate-950 transition hover:bg-sky-200" title="Regenerate" aria-label="Regenerate">
+          <span class="material-symbols-outlined" style="font-size: 20px;">arrow_upward</span>
+        </button>
+      </div>
+
+      <input type="hidden" name="input_image_asset_id" value="{{ asset.id }}">
+    </form>
+  </div>
+</div>
+
+<div class="{{ 'mb-4' if compact_dialog else 'mb-6' }}">
+  <div class="flex flex-wrap items-center gap-2">
+    <button type="button" class="{{ btn_secondary }}" onclick="navigator.clipboard.writeText(this.dataset.prompt);" data-prompt="{{ asset.generation.prompt_final }}">
+      <span class="material-symbols-outlined" style="font-size: 18px;">content_copy</span>
+      Copy prompt
+    </button>
+    <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">
+      <span class="material-symbols-outlined" style="font-size: 18px;">download</span>
+      Download
+    </a>
+    <a href="/assets/{{ asset.id }}/file" target="_blank" rel="noopener" class="{{ btn_secondary }}">
+      <span class="material-symbols-outlined" style="font-size: 18px;">open_in_new</span>
+      Original size
+    </a>
+    <button
+      hx-post="/generations/{{ asset.generation.id }}/rerun"
+      hx-target="#rerun-status"
+      hx-swap="innerHTML"
+      type="button"
+      class="{{ btn_primary }}"
+    >
+      <span class="material-symbols-outlined" style="font-size: 18px;">refresh</span>
+      Re-run
+    </button>
+
+    <div class="ml-auto flex flex-wrap items-center gap-2">
+      <form method="post" action="/assets/{{ asset.id }}/delete" data-confirm-message="Delete this asset?" class="inline-flex">
+        <button class="{{ btn_danger }}" type="submit">
+          <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+          Delete asset
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="rerun-status" class="{{ 'mb-4' if compact_dialog else 'mb-6' }}"></div>
+
+<details class="group {{ 'mb-4' if compact_dialog else 'mb-8 rounded-2xl border border-white/10 bg-slate-950/45' }}">
+  <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
+    <div class="flex items-center justify-between">
+      <span>Full prompt</span>
+      <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+    </div>
+  </summary>
+  <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
+    <p class="whitespace-pre-wrap text-sm text-slate-200">{{ asset.generation.prompt_final }}</p>
+  </div>
+</details>
+
+<details class="group {{ 'mb-4' if compact_dialog else 'mb-8 rounded-2xl border border-white/10 bg-slate-950/45' }}">
+  <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
+    <div class="flex items-center justify-between">
+      <span>Metadata</span>
+      <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+    </div>
+  </summary>
+  <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
+    <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[12rem_1fr]">
+      <dt class="font-semibold text-slate-400">Generation</dt><dd>{{ asset.generation.id }}</dd>
+      <dt class="font-semibold text-slate-400">Status</dt><dd>{{ asset.generation.status }}</dd>
+      <dt class="font-semibold text-slate-400">Provider</dt><dd>{{ asset.generation.provider }}</dd>
+      <dt class="font-semibold text-slate-400">Model</dt><dd>{{ asset.generation.model }}</dd>
+      <dt class="font-semibold text-slate-400">Categories</dt><dd>{{ asset.categories | map(attribute='name') | join(', ') if asset.categories else "-" }}</dd>
+      <dt class="font-semibold text-slate-400">Size</dt><dd>{{ asset.width }}x{{ asset.height }}</dd>
+      <dt class="font-semibold text-slate-400">MIME</dt><dd>{{ asset.mime }}</dd>
+      <dt class="font-semibold text-slate-400">File path (relative)</dt><dd class="break-all">{{ asset.file_path }}</dd>
+      <dt class="font-semibold text-slate-400">Thumbnail path (relative)</dt><dd class="break-all">{{ asset.thumbnail_path }}</dd>
+      <dt class="font-semibold text-slate-400">Sidecar path (relative)</dt><dd class="break-all">{{ asset.sidecar_path }}</dd>
+      {% if asset.generation.failure_sidecar_path %}
+        <dt class="font-semibold text-slate-400">Failure sidecar (generation)</dt><dd class="break-all">{{ asset.generation.failure_sidecar_path }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+</details>
+
+<div class="{{ 'space-y-2' if compact_dialog else 'space-y-4' }}">
+  <details class="group {{ '' if compact_dialog else 'rounded-2xl border border-white/10 bg-slate-950/45' }}">
+    <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
+      <div class="flex items-center justify-between">
+        <span>asset.meta_json</span>
+        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+      </div>
+    </summary>
+    <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
+      <pre class="text-xs text-slate-200">{{ asset_meta_pretty }}</pre>
+    </div>
+  </details>
+
+  <details class="group {{ '' if compact_dialog else 'rounded-2xl border border-white/10 bg-slate-950/45' }}">
+    <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
+      <div class="flex items-center justify-between">
+        <span>profile_snapshot_json</span>
+        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+      </div>
+    </summary>
+    <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
+      <pre class="text-xs text-slate-200">{{ profile_snapshot_pretty }}</pre>
+    </div>
+  </details>
+
+  <details class="group {{ '' if compact_dialog else 'rounded-2xl border border-white/10 bg-slate-950/45' }}">
+    <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
+      <div class="flex items-center justify-between">
+        <span>storage_template_snapshot_json</span>
+        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+      </div>
+    </summary>
+    <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
+      <pre class="text-xs text-slate-200">{{ storage_snapshot_pretty }}</pre>
+    </div>
+  </details>
+
+  <details class="group {{ '' if compact_dialog else 'rounded-2xl border border-white/10 bg-slate-950/45' }}">
+    <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
+      <div class="flex items-center justify-between">
+        <span>request_snapshot_json</span>
+        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+      </div>
+    </summary>
+    <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
+      <pre class="text-xs text-slate-200">{{ request_snapshot_pretty }}</pre>
+    </div>
+  </details>
+</div>

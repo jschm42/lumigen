@@ -56,6 +56,94 @@
     });
   }
 
+  function setupConfirmDialog() {
+    var dialog = document.querySelector('[data-confirm-dialog]');
+    if (!dialog) return;
+
+    var messageNode = dialog.querySelector('[data-confirm-dialog-message]');
+    var confirmButton = dialog.querySelector('[data-confirm-dialog-confirm]');
+    var cancelButton = dialog.querySelector('[data-confirm-dialog-cancel]');
+    if (!messageNode || !confirmButton || !cancelButton) return;
+
+    var pendingAction = null;
+
+    function clearPending() {
+      pendingAction = null;
+    }
+
+    function openConfirm(message, onConfirm) {
+      messageNode.textContent = message || 'Are you sure?';
+      pendingAction = onConfirm;
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    }
+
+    confirmButton.addEventListener('click', function () {
+      var action = pendingAction;
+      clearPending();
+      dialog.close();
+      if (typeof action === 'function') {
+        action();
+      }
+    });
+
+    cancelButton.addEventListener('click', function () {
+      clearPending();
+      dialog.close();
+    });
+
+    dialog.addEventListener('close', function () {
+      clearPending();
+    });
+
+    document.addEventListener('click', function (event) {
+      var submitter = event.target.closest('button[type="submit"][data-confirm-message], input[type="submit"][data-confirm-message]');
+      if (!submitter) return;
+
+      var form = submitter.form;
+      if (!form) return;
+
+      if (form.dataset.confirmBypass === '1') {
+        form.dataset.confirmBypass = '0';
+        return;
+      }
+
+      event.preventDefault();
+      var message = submitter.getAttribute('data-confirm-message') || form.getAttribute('data-confirm-message') || 'Are you sure?';
+      openConfirm(message, function () {
+        form.dataset.confirmBypass = '1';
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit(submitter);
+        } else {
+          form.submit();
+        }
+      });
+    });
+
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (!form.hasAttribute('data-confirm-message')) return;
+
+      if (form.dataset.confirmBypass === '1') {
+        form.dataset.confirmBypass = '0';
+        return;
+      }
+
+      event.preventDefault();
+      var message = form.getAttribute('data-confirm-message') || 'Are you sure?';
+      openConfirm(message, function () {
+        form.dataset.confirmBypass = '1';
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      });
+    }, true);
+  }
+
   // ==========================================================================
   // Seed Generation
   // ==========================================================================
@@ -591,12 +679,17 @@
       if (!filters || typeof filters !== 'object') return;
 
       // Apply to select inputs
-      ['profile_name', 'provider', 'q'].forEach(function (name) {
+      ['profile_name', 'provider', 'q', 'time_preset', 'date_from', 'date_to', 'min_rating'].forEach(function (name) {
         var selectEl = document.querySelector('form[action="/gallery"] [name="' + name + '"]');
         if (selectEl && filters[name]) {
           selectEl.value = filters[name];
         }
       });
+
+      var unrated = document.querySelector('form[action="/gallery"] [name="unrated"]');
+      if (unrated) {
+        unrated.checked = filters.unrated === true || filters.unrated === '1';
+      }
 
       // Apply to category checkboxes
       if (filters.category_ids && Array.isArray(filters.category_ids)) {
@@ -626,12 +719,17 @@
       var filters = {};
 
       // Save select inputs
-      ['profile_name', 'provider', 'q'].forEach(function (name) {
+      ['profile_name', 'provider', 'q', 'time_preset', 'date_from', 'date_to', 'min_rating'].forEach(function (name) {
         var selectEl = form.querySelector('[name="' + name + '"]');
         if (selectEl && selectEl.value) {
           filters[name] = selectEl.value;
         }
       });
+
+      var unrated = form.querySelector('[name="unrated"]');
+      if (unrated && unrated.checked) {
+        filters.unrated = '1';
+      }
 
       // Save category checkboxes
       var checkedCategories = [];
@@ -689,8 +787,84 @@
     var form = document.querySelector('form[action="/gallery"]');
     if (!form) return;
 
+    // If no timeframe is explicitly present in the URL, restore and apply stored timeframe.
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var hasExplicitTime = params.has('time_preset') || params.has('date_from') || params.has('date_to');
+      if (!hasExplicitTime) {
+        var storedRaw = localStorage.getItem(GALLERY_FILTER_KEY);
+        if (storedRaw) {
+          var stored = JSON.parse(storedRaw);
+          if (stored && typeof stored === 'object') {
+            var shouldRedirect = false;
+
+            if (stored.time_preset) {
+              params.set('time_preset', stored.time_preset);
+              shouldRedirect = true;
+            }
+            if (stored.date_from) {
+              params.set('date_from', stored.date_from);
+              shouldRedirect = true;
+            }
+            if (stored.date_to) {
+              params.set('date_to', stored.date_to);
+              shouldRedirect = true;
+            }
+
+            if (shouldRedirect) {
+              var qs = params.toString();
+              window.location.href = window.location.pathname + (qs ? '?' + qs : '');
+              return;
+            }
+          }
+        }
+      }
+    } catch (_e) {
+      // Ignore localStorage/query parsing errors
+    }
+
     // Load saved filters on page load
     loadGalleryFilters();
+
+    var preset = form.querySelector('[name="time_preset"]');
+    var dateFrom = form.querySelector('[name="date_from"]');
+    var dateTo = form.querySelector('[name="date_to"]');
+    var customFields = form.querySelector('[data-time-custom-fields]');
+
+    function syncTimeFilterUi() {
+      if (!preset || !dateFrom || !dateTo) return;
+      var isCustom = preset.value === 'custom';
+      if (customFields) {
+        customFields.classList.toggle('hidden', !isCustom);
+      }
+      if (!isCustom) {
+        if (dateFrom.value || dateTo.value) {
+          dateFrom.value = '';
+          dateTo.value = '';
+        }
+      }
+      if (!preset.value) {
+        preset.value = 'today';
+      }
+    }
+
+    if (preset && dateFrom && dateTo) {
+      preset.addEventListener('change', syncTimeFilterUi);
+
+      dateFrom.addEventListener('change', function () {
+        if (dateFrom.value || dateTo.value) {
+          preset.value = 'custom';
+        }
+        syncTimeFilterUi();
+      });
+      dateTo.addEventListener('change', function () {
+        if (dateFrom.value || dateTo.value) {
+          preset.value = 'custom';
+        }
+        syncTimeFilterUi();
+      });
+      syncTimeFilterUi();
+    }
 
     // Save filters on form submit
     form.addEventListener('submit', function () {
@@ -981,6 +1155,7 @@ function setupGalleryRatings() {
   function init() {
     ensurePostFormCsrfTokens();
     setupHtmxCsrf();
+    setupConfirmDialog();
     setupSeedButtons();
     setupModelSelects();
     setupGenerationForms();
