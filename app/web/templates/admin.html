@@ -121,7 +121,7 @@
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
-                <form action="/admin/model-configs/{{ config.id }}/delete" method="post" onsubmit="return confirm('Delete this model config?');" class="inline-flex">
+                <form action="/admin/model-configs/{{ config.id }}/delete" method="post" data-confirm-message="Delete this model config?" class="inline-flex">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -251,7 +251,7 @@
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
-                <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" onsubmit="return confirm('Delete this dimension preset?');" class="inline-flex">
+                <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" data-confirm-message="Delete this dimension preset?" class="inline-flex">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -342,7 +342,7 @@
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-category-{{ category.id }}').showModal()">Edit</button>
-                <form action="/admin/categories/{{ category.id }}/delete" method="post" onsubmit="return confirm('Delete this category?');" class="inline-flex">
+                <form action="/admin/categories/{{ category.id }}/delete" method="post" data-confirm-message="Delete this category?" class="inline-flex">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -419,7 +419,7 @@
       <div class="flex items-center gap-2">
         {% if onboarding_reset_enabled %}
         <span class="text-xs text-rose-300">Dev only: removes all users and reopens onboarding.</span>
-        <form action="/admin/dev/reset-onboarding" method="post" onsubmit="return confirm('Reset onboarding and remove all users?');" class="inline-flex">
+        <form action="/admin/dev/reset-onboarding" method="post" data-confirm-message="Reset onboarding and remove all users?" class="inline-flex">
           <button type="submit" class="{{ btn_danger }}">Reset onboarding (dev)</button>
         </form>
         {% endif %}
@@ -478,7 +478,7 @@
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-user-{{ user.id }}').showModal()">Edit</button>
-                <form action="/admin/users/{{ user.id }}/delete" method="post" onsubmit="return confirm('Delete this user?');" class="inline-flex">
+                <form action="/admin/users/{{ user.id }}/delete" method="post" data-confirm-message="Delete this user?" class="inline-flex">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>

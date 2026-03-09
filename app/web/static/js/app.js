@@ -56,6 +56,94 @@
     });
   }
 
+  function setupConfirmDialog() {
+    var dialog = document.querySelector('[data-confirm-dialog]');
+    if (!dialog) return;
+
+    var messageNode = dialog.querySelector('[data-confirm-dialog-message]');
+    var confirmButton = dialog.querySelector('[data-confirm-dialog-confirm]');
+    var cancelButton = dialog.querySelector('[data-confirm-dialog-cancel]');
+    if (!messageNode || !confirmButton || !cancelButton) return;
+
+    var pendingAction = null;
+
+    function clearPending() {
+      pendingAction = null;
+    }
+
+    function openConfirm(message, onConfirm) {
+      messageNode.textContent = message || 'Are you sure?';
+      pendingAction = onConfirm;
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    }
+
+    confirmButton.addEventListener('click', function () {
+      var action = pendingAction;
+      clearPending();
+      dialog.close();
+      if (typeof action === 'function') {
+        action();
+      }
+    });
+
+    cancelButton.addEventListener('click', function () {
+      clearPending();
+      dialog.close();
+    });
+
+    dialog.addEventListener('close', function () {
+      clearPending();
+    });
+
+    document.addEventListener('click', function (event) {
+      var submitter = event.target.closest('button[type="submit"][data-confirm-message], input[type="submit"][data-confirm-message]');
+      if (!submitter) return;
+
+      var form = submitter.form;
+      if (!form) return;
+
+      if (form.dataset.confirmBypass === '1') {
+        form.dataset.confirmBypass = '0';
+        return;
+      }
+
+      event.preventDefault();
+      var message = submitter.getAttribute('data-confirm-message') || form.getAttribute('data-confirm-message') || 'Are you sure?';
+      openConfirm(message, function () {
+        form.dataset.confirmBypass = '1';
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit(submitter);
+        } else {
+          form.submit();
+        }
+      });
+    });
+
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (!form.hasAttribute('data-confirm-message')) return;
+
+      if (form.dataset.confirmBypass === '1') {
+        form.dataset.confirmBypass = '0';
+        return;
+      }
+
+      event.preventDefault();
+      var message = form.getAttribute('data-confirm-message') || 'Are you sure?';
+      openConfirm(message, function () {
+        form.dataset.confirmBypass = '1';
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      });
+    }, true);
+  }
+
   // ==========================================================================
   // Seed Generation
   // ==========================================================================
@@ -981,6 +1069,7 @@ function setupGalleryRatings() {
   function init() {
     ensurePostFormCsrfTokens();
     setupHtmxCsrf();
+    setupConfirmDialog();
     setupSeedButtons();
     setupModelSelects();
     setupGenerationForms();

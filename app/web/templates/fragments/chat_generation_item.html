@@ -74,7 +74,7 @@
         <div class="flex flex-col gap-3">
           {% for asset in assets %}
             <div class="image-container group relative inline-block max-w-full self-start overflow-hidden rounded-xl border border-white/10 bg-slate-900/80">
-              <a href="/assets/{{ asset.id }}">
+              <a href="/assets/{{ asset.id }}" hx-get="/assets/{{ asset.id }}" hx-target="#asset-detail-dialog-content" hx-swap="innerHTML" data-asset-detail-trigger>
                 <img
                   src="/assets/{{ asset.id }}/thumb"
                   alt="thumb {{ asset.id }}"

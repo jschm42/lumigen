@@ -2271,6 +2271,7 @@ def asset_detail(
     asset_id: int,
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    htmx_request = is_htmx(request)
     asset = session.scalar(
         select(Asset)
         .options(selectinload(Asset.generation), selectinload(Asset.categories))
@@ -2282,32 +2283,35 @@ def asset_detail(
     profiles = crud.list_profiles(session)
     session_token = generation_session_token(asset.generation) if asset.generation else ""
 
-    return templates.TemplateResponse(
-        request,
-        "asset_detail.html",
-        {
-            "request": request,
-            "asset": asset,
-            "profiles": profiles,
-            "session_token": session_token,
-            "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
-            "profile_snapshot_pretty": (
-                dumps_json(asset.generation.profile_snapshot_json, pretty=True)
-                if asset.generation
-                else "{}"
-            ),
-            "storage_snapshot_pretty": (
-                dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
-                if asset.generation
-                else "{}"
-            ),
-            "request_snapshot_pretty": (
-                dumps_json(asset.generation.request_snapshot_json, pretty=True)
-                if asset.generation
-                else "{}"
-            ),
-        },
+    context = {
+        "request": request,
+        "asset": asset,
+        "profiles": profiles,
+        "session_token": session_token,
+        "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
+        "profile_snapshot_pretty": (
+            dumps_json(asset.generation.profile_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "storage_snapshot_pretty": (
+            dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "request_snapshot_pretty": (
+            dumps_json(asset.generation.request_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "compact_dialog": htmx_request,
+    }
+    template_name = (
+        "fragments/asset_detail_dialog_body.html"
+        if htmx_request
+        else "asset_detail.html"
     )
+    return templates.TemplateResponse(request, template_name, context)
 
 
 @app.post("/assets/{asset_id}/delete")

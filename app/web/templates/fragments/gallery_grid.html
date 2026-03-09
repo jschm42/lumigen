@@ -11,10 +11,10 @@
           <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100">
             <span class="material-symbols-outlined text-xl" aria-hidden="true">download</span>
           </a>
-          <a href="/assets/{{ asset.id }}" aria-label="View details" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100">
+          <a href="/assets/{{ asset.id }}" hx-get="/assets/{{ asset.id }}" hx-target="#asset-detail-dialog-content" hx-swap="innerHTML" aria-label="View details" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/30 bg-slate-900/80 text-slate-100 transition hover:border-sky-300 hover:bg-sky-500/20 hover:text-sky-100" data-asset-detail-trigger>
             <span class="material-symbols-outlined text-xl" aria-hidden="true">info</span>
           </a>
-          <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" onsubmit="return confirm('Delete this asset?');">
+          <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" data-confirm-message="Delete this asset?">
             <input type="hidden" name="return_to" value="{{ return_to }}">
             <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-300/50 bg-slate-900/80 text-rose-100 transition hover:border-rose-300 hover:bg-rose-500/30" aria-label="Delete asset" title="Delete">
               <span class="material-symbols-outlined text-xl" aria-hidden="true">delete</span>
