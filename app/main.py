@@ -10,7 +10,7 @@ import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -207,7 +207,7 @@ def start_auth_session(request: Request, user: User) -> None:
 def ensure_csrf_token(request: Request) -> str:
     token = request.session.get("csrf_token")
     issued_at = request.session.get("csrf_issued_at")
-    now = int(datetime.utcnow().timestamp())
+    now = int(datetime.now(UTC).timestamp())
     if isinstance(token, str) and token and isinstance(issued_at, int):
         if now - issued_at <= settings.csrf_token_ttl_seconds:
             return token
@@ -215,6 +215,9 @@ def ensure_csrf_token(request: Request) -> str:
     request.session["csrf_token"] = token
     request.session["csrf_issued_at"] = now
     return token
+
+
+templates.env.globals["ensure_csrf_token"] = ensure_csrf_token
 
 
 def is_csrf_valid(request: Request, provided: str | None) -> bool:
@@ -302,13 +305,6 @@ async def auth_guard_middleware(request: Request, call_next):
 
     if not user:
         return login_redirect(path)
-    return await call_next(request)
-
-
-@app.middleware("http")
-async def csrf_token_middleware(request: Request, call_next):
-    if not request.url.path.startswith("/static"):
-        ensure_csrf_token(request)
     return await call_next(request)
 
 
