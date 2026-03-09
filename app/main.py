@@ -305,6 +305,13 @@ async def auth_guard_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def csrf_token_middleware(request: Request, call_next):
+    if not request.url.path.startswith("/static"):
+        ensure_csrf_token(request)
+    return await call_next(request)
+
+
 def parse_optional_int(value: str | None) -> int | None:
     if value is None:
         return None

@@ -48,10 +48,11 @@
   }
 
   function setupHtmxCsrf() {
-    var token = getCsrfToken();
-    if (!token || typeof document.body.addEventListener !== 'function') return;
+    if (typeof document.body.addEventListener !== 'function') return;
     document.body.addEventListener('htmx:configRequest', function (event) {
       if (!event || !event.detail || !event.detail.headers) return;
+      var token = getCsrfToken();
+      if (!token) return;
       event.detail.headers['X-CSRF-Token'] = token;
     });
   }
