@@ -31,7 +31,9 @@ def _add_generation_with_asset(
     prompt_user: str,
     category: Category | None = None,
     rating: int | None = None,
+    created_at: datetime | None = None,
 ):
+    created_value = created_at or (datetime.utcnow() + timedelta(seconds=generation_id))
     generation = Generation(
         id=generation_id,
         profile_id=None,
@@ -46,7 +48,7 @@ def _add_generation_with_asset(
         storage_template_snapshot_json={"base_dir": "."},
         request_snapshot_json={},
         failure_sidecar_path=None,
-        created_at=datetime.utcnow() + timedelta(seconds=generation_id),
+        created_at=created_value,
     )
     asset = Asset(
         generation_id=generation_id,
@@ -58,6 +60,7 @@ def _add_generation_with_asset(
         mime="image/png",
         rating=rating,
         meta_json={},
+        created_at=created_value,
     )
     if category is not None:
         asset.categories = [category]
@@ -234,3 +237,53 @@ def test_list_assets_filters_by_min_rating_and_unrated(db_session) -> None:
     assert unrated.total == 1
     assert len(unrated.items) == 1
     assert unrated.items[0].rating is None
+
+
+def test_list_assets_filters_by_created_at_range(db_session) -> None:
+    now = datetime.utcnow()
+    old_time = now - timedelta(days=20)
+    week_time = now - timedelta(days=5)
+    today_time = now - timedelta(hours=2)
+
+    _add_generation_with_asset(
+        db_session,
+        generation_id=41,
+        profile_name="P",
+        provider="stub",
+        status="succeeded",
+        prompt_user="old",
+        created_at=old_time,
+    )
+    _add_generation_with_asset(
+        db_session,
+        generation_id=42,
+        profile_name="P",
+        provider="stub",
+        status="succeeded",
+        prompt_user="week",
+        created_at=week_time,
+    )
+    _add_generation_with_asset(
+        db_session,
+        generation_id=43,
+        profile_name="P",
+        provider="stub",
+        status="succeeded",
+        prompt_user="today",
+        created_at=today_time,
+    )
+
+    service = GalleryService(default_page_size=50)
+
+    last_week = service.list_assets(db_session, created_after=now - timedelta(days=7))
+    assert last_week.total == 2
+    assert {item.generation.prompt_user for item in last_week.items} == {"week", "today"}
+
+    custom_window = service.list_assets(
+        db_session,
+        created_after=now - timedelta(days=6),
+        created_before=now - timedelta(days=1),
+    )
+    assert custom_window.total == 1
+    assert len(custom_window.items) == 1
+    assert custom_window.items[0].generation.prompt_user == "week"

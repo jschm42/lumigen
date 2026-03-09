@@ -10,7 +10,7 @@
 <section class="{{ panel_class }}">
   <form method="get" action="/gallery" class="rounded-xl bg-slate-900/35 p-2.5">
     <input type="hidden" name="thumb_size" value="{{ thumb_size }}">
-    <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(8rem,0.8fr)_minmax(0,1.4fr)_auto_auto_auto]">
+    <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(8rem,0.8fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(0,1.4fr)_auto_auto_auto]">
       <select name="profile_name" aria-label="Profile filter" class="{{ input_class }}">
         <option value="">All profiles</option>
         {% for item in filter_options.profile_names %}
@@ -30,6 +30,16 @@
           <option value="{{ value }}" {% if min_rating == value %}selected{% endif %}>{{ value }}+ stars</option>
         {% endfor %}
       </select>
+      <select name="time_preset" aria-label="Created timeframe preset" class="{{ input_class }}">
+        <option value="today" {% if time_preset == 'today' %}selected{% endif %}>Today</option>
+        <option value="last_7_days" {% if time_preset == 'last_7_days' %}selected{% endif %}>Last 7 days</option>
+        <option value="last_30_days" {% if time_preset == 'last_30_days' %}selected{% endif %}>Last 30 days</option>
+        <option value="custom" {% if time_preset == 'custom' %}selected{% endif %}>Custom</option>
+      </select>
+      <div class="contents {% if time_preset != 'custom' %}hidden{% endif %}" data-time-custom-fields>
+        <input type="date" name="date_from" value="{{ date_from }}" aria-label="Created from date" class="{{ input_class }}" placeholder="From">
+        <input type="date" name="date_to" value="{{ date_to }}" aria-label="Created to date" class="{{ input_class }}" placeholder="To">
+      </div>
       <div class="relative" data-category-popover>
         <button
           type="button"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 
 
@@ -214,6 +215,46 @@ def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkey
     assert 'data-gallery-thumb-size="lg"' in body
     assert 'No assets found for current filters.' in body
     assert 'data-gallery-bulk-form' in body
+    assert 'name="time_preset"' in body
+    assert 'name="date_from"' in body
+    assert 'name="date_to"' in body
+    assert 'value="today" selected' in body
+    assert 'Last 7 days' in body
+    assert 'Last 30 days' in body
+    assert 'value="custom"' in body
+
+
+def test_gallery_page_custom_date_range_overrides_preset(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    captured: dict[str, object] = {}
+
+    def _list_assets(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(items=[], page=1, pages=1, total=0)
+
+    monkeypatch.setattr(app_module.gallery_service, "list_assets", _list_assets)
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=["Default"], providers=["stub"], categories=[]),
+    )
+
+    response = client.get(
+        "/gallery?time_preset=custom&date_from=2026-03-01&date_to=2026-03-02"
+    )
+    body = response.text
+
+    assert response.status_code == 200
+    assert captured.get("created_after") == datetime(2026, 3, 1, 0, 0, 0)
+    created_before = captured.get("created_before")
+    assert isinstance(created_before, datetime)
+    assert created_before.date().isoformat() == "2026-03-02"
+    assert 'name="date_from" value="2026-03-01"' in body
+    assert 'name="date_to" value="2026-03-02"' in body
 
 
 def test_admin_page_renders_sections_and_key_warning(client, app_module, monkeypatch) -> None:
