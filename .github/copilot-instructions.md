@@ -1,64 +1,108 @@
 # Lumigen Copilot Instructions
 
-## Big picture architecture
-- Primary app is a FastAPI monolith in `app/main.py` (routes + dependency wiring + service singletons).
-- Runtime flow for generation: route (`/generate`) -> `GenerationService` -> `ProviderRegistry`/adapter -> `StorageService` + `ThumbnailService` + `SidecarService` -> DB `Asset` rows.
-- SQLAlchemy models live in `app/db/models.py`; DB access helpers are in `app/db/crud.py`.
-- Alembic migrations are the source of schema evolution (`alembic/versions/*`), while `init_db()` in `app/db/engine.py` creates tables for local bootstrap.
+Use this file as the primary onboarding source. Trust these instructions first and only search the repo when information here is missing, stale, or contradicted by runtime output.
 
-## Core boundaries and patterns
-- Keep provider-specific HTTP logic inside adapter classes under `app/providers/*_adapter.py`; adapters return normalized `ProviderGenerationResult` objects.
-- `ProviderRegistry` (`app/providers/registry.py`) owns adapter registration, per-provider concurrency/spacing, and retry policy.
-- Keep file IO inside `StorageService` (`app/services/storage_service.py`): all writes are atomic and must stay under managed base dirs (`ensure_within_base`).
-- Persist reproducibility snapshots on generation creation (`profile_snapshot_json`, `storage_template_snapshot_json`, `request_snapshot_json`) as done in `GenerationService.create_generation_from_profile`.
-- Sidecar JSONs are part of the product contract: success sidecars next to images, failure sidecars under `.failures/YYYY/MM/`.
+## Repository summary
+- Lumigen is a local-first AI image studio (FastAPI monolith) for image generation, gallery management, metadata sidecars, and optional upscaling.
+- Main runtime path: route (`/generate`) -> `GenerationService` -> `ProviderRegistry`/adapter -> `StorageService` + `ThumbnailService` + `SidecarService` -> DB `Asset` rows.
+- Primary stack: Python 3.12+, FastAPI, Jinja2 + HTMX, SQLite, SQLAlchemy 2, Alembic.
+- Additional tooling: `ruff`, `djlint`, `eslint`, `stylelint`, `pytest`.
 
-## API and UI conventions
-- UI is server-rendered Jinja + HTMX; many endpoints return either full-page redirects or fragment templates based on `HX-Request` (`is_htmx` in `app/main.py`).
-- Polling job status uses HTMX fragments (`app/web/templates/fragments/job_status.html`, `.../chat_generation_item.html`).
-- Validate form/query data in route handlers before CRUD/service calls (see admin create/update handlers and `/generate`).
-- Name/length constraints are enforced in app code and DB schema (e.g., category 30 chars, profile/model-config 50 chars).
-- No inline scripts in templates: place JavaScript in `app/web/static/js/*` and include via `<script src="...">`.
-- No inline styles in templates: prefer existing utility classes/CSS files in `app/web/static/`.
+## Repository profile
+- Project type: server-rendered web app + API in one Python service.
+- Size/layout: single backend app under `app/`, migrations under `alembic/`, tests under `tests/`, helper scripts under `scripts/`.
+- Runtimes observed in repo:
+	- Python `3.12.10`.
+	- Node available (observed `v24.13.0`; CI uses Node 20).
 
-## Clean code expectations
-- Keep methods/functions small and single-purpose; extract helpers instead of growing large blocks.
-- Add comments where they improve maintainability (non-obvious behavior, constraints, or provider quirks), avoid noise comments.
-- Avoid code duplication (DRY): reuse existing helpers/services or introduce shared helpers when logic repeats.
-- Prefer clear naming and straightforward control flow over clever/implicit patterns.
+## Most reliable command order
+Always run commands from repository root.
 
-## Secrets and provider configuration
-- Model-specific API keys are encrypted via Fernet in `ModelConfigService`; requires `PROVIDER_CONFIG_KEY`.
-- Use scripts in `scripts/` to generate provider config key (`generate_provider_key.ps1` / `.sh`).
-- When custom model key is disabled, code falls back to provider env vars from `Settings` (`app/config.py`).
+1. Create/activate virtualenv.
+2. Install Python deps: `pip install -r requirements.txt`.
+3. Apply migrations: `alembic upgrade head`.
+4. Install Node deps before JS/CSS lint: `npm ci`.
+5. Run app or tests/lints as needed.
 
-## Developer workflows (actual repo commands)
-- Setup/run (local): `pip install -r requirements.txt`, `alembic upgrade head`, `python -m app.main`.
-- Dev server alternative: `uvicorn app.main:app --reload --port 8010`.
-- Docker flow: `scripts/docker_run.ps1` / `.sh`, update via `scripts/docker_update.ps1` / `.sh`.
-- Backend tests: `pytest -q` (or focused runs like `pytest -q tests/unit` and `pytest -q tests/routes`).
-- Optional coverage check: `pytest --cov=app --cov-report=term-missing -q`.
+## Command matrix (validated)
+Status values: `verified`, `verified with caveat`, `failed here with workaround`, `documented only`.
 
-## Testing expectations (backend)
-- When changing backend logic, add or update automated tests under `tests/` in the same PR.
-- Prioritize deterministic unit tests for `app/utils`, `app/services`, and provider orchestration in `app/providers/registry.py`.
-- For FastAPI route tests, prefer assertions on JSON payloads, status codes, redirects, and headers over brittle full-template snapshots.
-- Keep backend route tests DB-light by using dependency overrides (`get_session`) and monkeypatching imported `app.main.crud.*` seams where appropriate.
-- Avoid real external provider/network calls in tests; mock provider registry/adapter behavior explicitly.
+- `python --version` -> `verified` (3.12.10).
+- `alembic upgrade head` -> `verified`.
+- `python -m app.main` -> `verified` (server starts on `http://127.0.0.1:8010`).
+- `python -m pytest -q tests/unit/test_gallery_service.py` -> `verified` (`5 passed`, ~0.4s).
+- `python -m pytest -q tests/frontend/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
+- `python -m pytest -q tests/routes tests/frontend` -> `verified` (`54 passed`, ~28s).
+- `python scripts/smoke_web_routes.py` -> `verified with caveat`: currently fails with `AssertionError: admin page does not include external admin-page.js`.
+- `ruff check app/` -> `failed here with workaround`: command not found in shell until tool installed.
+- `python -m ruff check app/` -> `failed here with workaround`: module not installed in current venv.
+- `djlint app/web/templates/ --lint` -> `failed here with workaround`: command not found until installed.
+- `npm ci` -> `failed here with workaround` in PowerShell due `npm.ps1` execution policy.
+- `npm.cmd ci` -> `verified with caveat` (succeeds; observed AutoRun warning lines but install completes).
+- `npx eslint app/web/static/js/` -> use `npx.cmd eslint app/web/static/js/` on Windows PowerShell.
+- `npx stylelint "app/web/static/app.css"` -> use `npx.cmd stylelint "app/web/static/app.css"` on Windows PowerShell.
 
-## Testing expectations (frontend)
-- Frontend coverage in this repo targets server-rendered Jinja + HTMX behavior through FastAPI route tests under `tests/frontend/`.
-- Prefer stable assertions for critical UI markers (form/action attributes, fragment IDs, HTMX attributes, flash/error text) instead of full HTML snapshots.
-- Keep frontend tests deterministic by mocking `app.main.crud.*`, service singletons (`gallery_service`, `generation_service`, etc.), and using dependency overrides for `get_session`.
-- Do not add browser E2E tooling unless explicitly requested; route/template tests are the default frontend test level in this project.
+### Required workarounds observed
+- If `ruff`/`djlint` are missing locally, install first:
+	- `python -m pip install ruff djlint`
+- On Windows PowerShell with script execution restrictions, use `.cmd` shims:
+	- `npm.cmd ci`
+	- `npx.cmd eslint ...`
+	- `npx.cmd stylelint ...`
 
-## Integration points and external dependencies
-- External provider APIs: OpenAI, OpenRouter, Google, BFL adapters under `app/providers/`.
-- Optional local upscaling uses Real-ESRGAN command execution in `app/services/upscale_service.py`; models can auto-download via `huggingface_hub`.
-- README documents an optional Next.js migration frontend under `frontend/` that forwards generation requests to this FastAPI backend.
+## CI checks and how to replicate locally
+GitHub workflow: `.github/workflows/lint.yml`.
 
-## Change guidance for AI agents
-- Prefer adding logic to existing services/CRUD/helpers instead of growing `app/main.py` further with inline business logic.
-- For schema changes: update SQLAlchemy model + add Alembic migration in `alembic/versions/`.
-- For new generation metadata: update both DB model fields and sidecar payload builders to keep UI/debug views consistent.
-- For new providers: add adapter, register it in `ProviderRegistry._register_defaults`, and expose required settings in `app/config.py`.
+CI currently runs lint only (no pytest job):
+- Python lint: `ruff check app/`
+- Template lint: `djlint app/web/templates/ --lint`
+- JS lint: `npx eslint app/web/static/js/`
+- CSS lint: `npx stylelint "app/web/static/app.css"`
+
+Recommended pre-PR validation order:
+1. `alembic upgrade head`
+2. `python -m pytest -q tests/unit`
+3. `python -m pytest -q tests/routes tests/frontend`
+4. `ruff check app/`
+5. `djlint app/web/templates/ --lint`
+6. `npx eslint app/web/static/js/`
+7. `npx stylelint "app/web/static/app.css"`
+
+## Architecture map (where to edit)
+- `app/main.py`: route handlers, request validation, dependency wiring, service singletons.
+- `app/db/models.py`: SQLAlchemy schema.
+- `app/db/crud.py`: DB helpers and query routines.
+- `app/db/engine.py`: engine/session init (`init_db` exists for local bootstrap).
+- `alembic/versions/*`: authoritative schema evolution.
+- `app/services/generation_service.py`: generation orchestration and reproducibility snapshots (`profile_snapshot_json`, `storage_template_snapshot_json`, `request_snapshot_json`).
+- `app/services/storage_service.py`: atomic file IO and path-safety (`ensure_within_base`).
+- `app/services/sidecar_service.py`: success/failure sidecar contract (`.failures/YYYY/MM/` for failures).
+- `app/providers/registry.py`: provider registration, concurrency/rate limits, retry policy.
+- `app/providers/*_adapter.py`: provider-specific HTTP integrations.
+- `app/web/templates/`: server-rendered Jinja templates + HTMX fragments.
+- `app/web/static/js/`: all client JavaScript. Do not use inline scripts in templates.
+- `app/web/static/app.css`: app-wide styles.
+
+## Change rules that prevent regressions
+- Prefer service-layer changes over adding business logic in `app/main.py`.
+- For schema changes: update `app/db/models.py` and add a matching Alembic migration.
+- Keep provider logic inside adapters; keep orchestration/policies in `ProviderRegistry`.
+- Keep writes inside `StorageService`; do not bypass path safety checks.
+- Keep templates free of inline JS/CSS; add scripts in `app/web/static/js/*`.
+- Add/adjust tests in `tests/` for any backend or UI behavior change.
+
+## Environment notes that are easy to miss
+- `.env.example` defaults are local-dev oriented.
+- Production auth requires strong `SESSION_SECRET_KEY`.
+- Custom model API key encryption requires `PROVIDER_CONFIG_KEY` (generate via `scripts/generate_provider_key.ps1` or `.sh`).
+- `alembic.ini` uses `sqlite:///./data/app.db` (relative path): run Alembic from repo root.
+
+## Root layout quick reference
+- Root files: `README.md`, `requirements.txt`, `pyproject.toml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`.
+- Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `frontend/`, `data/`.
+
+## When to search
+Only search if one of these is true:
+- A command/path in this file no longer exists.
+- Runtime output contradicts this document.
+- The requested change touches an area not mapped above.
