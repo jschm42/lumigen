@@ -701,8 +701,6 @@
         });
       }
 
-      // Update category popover label
-      updateCategoryLabel();
     } catch (_e) {
       // Ignore localStorage errors
     }
@@ -786,10 +784,28 @@
   function setupGalleryFilters() {
     var form = document.querySelector('form[action="/gallery"]');
     if (!form) return;
+    var params = new URLSearchParams(window.location.search);
+    var autoSubmitTimer = null;
+
+    function hasAnyExplicitFilter() {
+      var filterKeys = [
+        'profile_name',
+        'provider',
+        'q',
+        'category_ids',
+        'min_rating',
+        'unrated',
+        'time_preset',
+        'date_from',
+        'date_to'
+      ];
+      return filterKeys.some(function (key) {
+        return params.has(key);
+      });
+    }
 
     // If no timeframe is explicitly present in the URL, restore and apply stored timeframe.
     try {
-      var params = new URLSearchParams(window.location.search);
       var hasExplicitTime = params.has('time_preset') || params.has('date_from') || params.has('date_to');
       if (!hasExplicitTime) {
         var storedRaw = localStorage.getItem(GALLERY_FILTER_KEY);
@@ -823,8 +839,22 @@
       // Ignore localStorage/query parsing errors
     }
 
-    // Load saved filters on page load
-    loadGalleryFilters();
+    // Only hydrate from localStorage when URL does not already carry explicit filters.
+    if (!hasAnyExplicitFilter()) {
+      loadGalleryFilters();
+    }
+    updateCategoryLabel();
+
+    var resetLink = form.querySelector('[data-gallery-reset]');
+    if (resetLink) {
+      resetLink.addEventListener('click', function () {
+        try {
+          localStorage.removeItem(GALLERY_FILTER_KEY);
+        } catch (_e) {
+          // Ignore localStorage errors
+        }
+      });
+    }
 
     var preset = form.querySelector('[name="time_preset"]');
     var dateFrom = form.querySelector('[name="date_from"]');
@@ -866,6 +896,40 @@
       syncTimeFilterUi();
     }
 
+    function submitGalleryFilters() {
+      saveGalleryFilters();
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    }
+
+    function submitGalleryFiltersDebounced(delayMs) {
+      if (autoSubmitTimer) {
+        clearTimeout(autoSubmitTimer);
+      }
+      autoSubmitTimer = setTimeout(function () {
+        submitGalleryFilters();
+      }, delayMs);
+    }
+
+    var autoApplyOnChange = ['profile_name', 'provider', 'min_rating', 'time_preset', 'unrated', 'date_from', 'date_to'];
+    autoApplyOnChange.forEach(function (name) {
+      var field = form.querySelector('[name="' + name + '"]');
+      if (!field) return;
+      field.addEventListener('change', function () {
+        submitGalleryFilters();
+      });
+    });
+
+    var promptQueryInput = form.querySelector('[name="q"]');
+    if (promptQueryInput) {
+      promptQueryInput.addEventListener('input', function () {
+        submitGalleryFiltersDebounced(350);
+      });
+    }
+
     // Save filters on form submit
     form.addEventListener('submit', function () {
       saveGalleryFilters();
@@ -875,7 +939,7 @@
     form.querySelectorAll('input[name="category_ids"]').forEach(function (checkbox) {
       checkbox.addEventListener('change', function () {
         updateCategoryLabel();
-        saveGalleryFilters();
+        submitGalleryFilters();
       });
     });
 
