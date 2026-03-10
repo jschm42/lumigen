@@ -12,7 +12,7 @@
 {% set nav_tab_inactive = "border border-white/20 bg-white/5 text-slate-200 hover:border-sky-300/60 hover:bg-white/10 hover:text-white" %}
 {% set embedded_suffix = "&embedded=1" if request.query_params.get("embedded") == "1" else "" %}
 
-<section class="{{ panel_class }} space-y-5">
+<section class="{{ panel_class }} space-y-5" data-admin-page>
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h2 class="text-2xl font-semibold text-white">Admin</h2>

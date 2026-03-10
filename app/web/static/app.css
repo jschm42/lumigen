@@ -379,3 +379,234 @@ body[data-theme="light"] small.text-slate-400,
 body[data-theme="light"] p.text-slate-400 {
   color: rgb(71 85 105) !important;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Light theme pass: chat/session history + dialogs + sidebar labels          */
+/* -------------------------------------------------------------------------- */
+
+body[data-theme="light"] #session-list .text-slate-500 {
+  color: rgb(71 85 105) !important;
+}
+
+body[data-theme="light"] #session-list .text-slate-300,
+body[data-theme="light"] #session-list .text-slate-400 {
+  color: rgb(51 65 85) !important;
+}
+
+body[data-theme="light"] #session-list .bg-white\/6,
+body[data-theme="light"] #session-list .bg-sky-300\/20 {
+  background: rgb(255 255 255 / 76%) !important;
+  border: 1px solid rgb(148 163 184 / 28%);
+}
+
+body[data-theme="light"] #chat-history .chat-generation .border-sky-300\/30,
+body[data-theme="light"] #chat-history .chat-generation .bg-sky-400\/15 {
+  background: rgb(224 242 254 / 88%) !important;
+  border-color: rgb(125 211 252 / 65%) !important;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .bg-slate-950\/65,
+body[data-theme="light"] #chat-history .chat-generation .bg-slate-900\/80,
+body[data-theme="light"] #chat-history .chat-generation .bg-slate-900\/60 {
+  background: rgb(255 255 255 / 90%) !important;
+  border-color: rgb(148 163 184 / 35%) !important;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .text-slate-100,
+body[data-theme="light"] #chat-history .chat-generation .text-slate-200,
+body[data-theme="light"] #chat-history .chat-generation .text-white {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .text-slate-400,
+body[data-theme="light"] #chat-history .chat-generation .text-slate-500 {
+  color: rgb(71 85 105) !important;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .border-white\/10,
+body[data-theme="light"] #chat-history .chat-generation .border-white\/20 {
+  border-color: rgb(148 163 184 / 35%) !important;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .bg-rose-500\/10,
+body[data-theme="light"] #chat-history .chat-generation .bg-emerald-300\/20,
+body[data-theme="light"] #chat-history .chat-generation .bg-amber-300\/20 {
+  backdrop-filter: none;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .image-container,
+body[data-theme="light"] #chat-history .chat-generation .image-container img {
+  background: rgb(248 250 252 / 96%) !important;
+}
+
+body[data-theme="light"] #chat-history .chat-generation .download-button,
+body[data-theme="light"] #chat-history .chat-generation button[data-add-to-input] {
+  background: rgb(15 23 42 / 86%) !important;
+  color: rgb(241 245 249) !important;
+  border-color: rgb(255 255 255 / 42%) !important;
+}
+
+body[data-theme="light"] [data-confirm-dialog] article {
+  background: rgb(255 255 255 / 98%) !important;
+  border-color: rgb(148 163 184 / 35%) !important;
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] [data-confirm-dialog] h3,
+body[data-theme="light"] [data-confirm-dialog] p,
+body[data-theme="light"] [data-confirm-dialog] button {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] [data-confirm-dialog] [data-confirm-dialog-cancel] {
+  background: rgb(241 245 249 / 90%) !important;
+  border-color: rgb(148 163 184 / 40%) !important;
+}
+
+body[data-theme="light"] [data-confirm-dialog] [data-confirm-dialog-confirm] {
+  color: rgb(159 18 57) !important;
+  background: rgb(255 228 230 / 90%) !important;
+}
+
+body[data-theme="light"] dialog[data-user-settings-dialog] h3,
+body[data-theme="light"] dialog[data-user-settings-dialog] p,
+body[data-theme="light"] dialog[data-user-settings-dialog] .text-slate-300,
+body[data-theme="light"] dialog[data-user-settings-dialog] .text-slate-400,
+body[data-theme="light"] dialog[data-user-settings-dialog] .text-white {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] dialog[data-asset-detail-dialog] .text-white,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .text-slate-100,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .text-slate-200,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .text-slate-300,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .text-slate-400,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .text-slate-500 {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-950\/70,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-950\/45,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-900\/80,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-900\/90,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-white\/5 {
+  background: rgb(248 250 252 / 96%) !important;
+}
+
+body[data-theme="light"] dialog[data-asset-detail-dialog] .border-white\/10,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .border-white\/15,
+body[data-theme="light"] dialog[data-asset-detail-dialog] .border-white\/20 {
+  border-color: rgb(148 163 184 / 35%) !important;
+}
+
+body[data-theme="light"] dialog[data-asset-detail-dialog] summary:hover {
+  background: rgb(241 245 249 / 88%) !important;
+}
+
+body[data-theme="light"] dialog[data-asset-detail-dialog] textarea,
+body[data-theme="light"] dialog[data-asset-detail-dialog] select,
+body[data-theme="light"] dialog[data-asset-detail-dialog] input {
+  background: rgb(255 255 255 / 96%) !important;
+  color: rgb(15 23 42) !important;
+  border-color: rgb(148 163 184 / 38%) !important;
+}
+
+/* Profiles/Admin pages and dialogs */
+body[data-theme="light"] [data-profiles-page],
+body[data-theme="light"] [data-admin-page] {
+  color: rgb(15 23 42);
+}
+
+body[data-theme="light"] [data-profiles-page] .text-white,
+body[data-theme="light"] [data-admin-page] .text-white,
+body[data-theme="light"] [data-profiles-page] .text-slate-100,
+body[data-theme="light"] [data-admin-page] .text-slate-100,
+body[data-theme="light"] [data-profiles-page] .text-slate-200,
+body[data-theme="light"] [data-admin-page] .text-slate-200,
+body[data-theme="light"] [data-profiles-page] .text-slate-300,
+body[data-theme="light"] [data-admin-page] .text-slate-300,
+body[data-theme="light"] [data-profiles-page] .text-slate-400,
+body[data-theme="light"] [data-admin-page] .text-slate-400 {
+  color: rgb(30 41 59) !important;
+}
+
+body[data-theme="light"] [data-profiles-page] .bg-slate-950\/35,
+body[data-theme="light"] [data-admin-page] .bg-slate-950\/35,
+body[data-theme="light"] [data-profiles-page] .bg-slate-950\/40,
+body[data-theme="light"] [data-admin-page] .bg-slate-950\/40,
+body[data-theme="light"] [data-admin-page] .bg-white\/5,
+body[data-theme="light"] [data-admin-page] .bg-slate-950\/35 {
+  background: rgb(255 255 255 / 88%) !important;
+}
+
+body[data-theme="light"] [data-profiles-page] .divide-white\/6,
+body[data-theme="light"] [data-admin-page] .divide-white\/6,
+body[data-theme="light"] [data-admin-page] .border-white\/8,
+body[data-theme="light"] [data-admin-page] .border-white\/10,
+body[data-theme="light"] [data-admin-page] .border-white\/15,
+body[data-theme="light"] [data-admin-page] .border-white\/20,
+body[data-theme="light"] [data-profiles-page] .border-white\/10,
+body[data-theme="light"] [data-profiles-page] .border-white\/12 {
+  border-color: rgb(148 163 184 / 32%) !important;
+}
+
+body[data-theme="light"] [data-profiles-page] .bg-rose-500\/10,
+body[data-theme="light"] [data-admin-page] .bg-rose-500\/10,
+body[data-theme="light"] [data-admin-page] .bg-emerald-500\/10 {
+  backdrop-filter: none;
+}
+
+body[data-theme="light"] [data-profiles-page] button.inline-flex,
+body[data-theme="light"] [data-profiles-page] a.inline-flex,
+body[data-theme="light"] [data-admin-page] button.inline-flex,
+body[data-theme="light"] [data-admin-page] a.inline-flex {
+  color: rgb(30 41 59);
+}
+
+body[data-theme="light"] [data-admin-page] nav a.border,
+body[data-theme="light"] [data-admin-page] nav a.bg-white\/5 {
+  background: rgb(248 250 252 / 96%) !important;
+  color: rgb(30 41 59) !important;
+}
+
+body[data-theme="light"] dialog article.rounded-3xl.bg-slate-900 {
+  background: rgb(255 255 255 / 98%) !important;
+  color: rgb(15 23 42) !important;
+  border: 1px solid rgb(148 163 184 / 35%);
+}
+
+body[data-theme="light"] dialog article.rounded-3xl .text-white,
+body[data-theme="light"] dialog article.rounded-3xl .text-slate-100,
+body[data-theme="light"] dialog article.rounded-3xl .text-slate-200,
+body[data-theme="light"] dialog article.rounded-3xl .text-slate-300,
+body[data-theme="light"] dialog article.rounded-3xl .text-slate-400 {
+  color: rgb(30 41 59) !important;
+}
+
+body[data-theme="light"] dialog article.rounded-3xl .bg-slate-950\/70,
+body[data-theme="light"] dialog article.rounded-3xl .bg-white\/5,
+body[data-theme="light"] dialog article.rounded-3xl .border-white\/15,
+body[data-theme="light"] dialog article.rounded-3xl .border-white\/20 {
+  background: rgb(248 250 252 / 96%) !important;
+  border-color: rgb(148 163 184 / 36%) !important;
+}
+
+body[data-theme="light"] dialog article.rounded-3xl input,
+body[data-theme="light"] dialog article.rounded-3xl select,
+body[data-theme="light"] dialog article.rounded-3xl textarea {
+  background: rgb(255 255 255 / 96%) !important;
+  color: rgb(15 23 42) !important;
+  border-color: rgb(148 163 184 / 40%) !important;
+}
+
+body[data-theme="light"] nav[data-user-menu-container],
+body[data-theme="light"] [data-user-menu-container] summary,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] [data-user-menu-container] summary,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] {
+  background: rgb(255 255 255 / 92%) !important;
+  border-color: rgb(148 163 184 / 32%) !important;
+}
