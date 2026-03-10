@@ -164,7 +164,7 @@ Use a narrower trusted host/IP list instead of `*` when possible.
 7. Optional smoke check:
 
 ```bash
-python3.12 -m pytest -q tests/routes tests/frontend
+python3.12 -m pytest -q tests/routes tests/ui_routes
 ```
 
 ### Dev-only onboarding reset
@@ -355,7 +355,7 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 - Backend tests run with `pytest`.
 - Run all backend tests: `pytest -q`
 - Run focused suites: `pytest -q tests/unit` and `pytest -q tests/routes`
-- Frontend route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/frontend`
+- UI route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/ui_routes`
 - Coverage baseline (terminal report): `pytest --cov=app --cov-report=term-missing -q`
 
 ## Theme stylesheet structure
@@ -390,10 +390,6 @@ Candidate options for the new user settings dialog:
 10. Gallery defaults: time preset, sort, and minimum rating.
 11. Language setting (`de` / `en`) for future i18n.
 12. Accessibility profile: larger text and stronger contrast.
-
-## Optional frontend migration path
-
-The repository can include a Next.js frontend under `frontend/` as a migration path from server-rendered templates. It reads from the same SQLite data and forwards generation requests to FastAPI.
 
 ## License
 

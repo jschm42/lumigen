@@ -210,10 +210,5 @@ __marimo__/
 data/
 *.db
 
-# Node / Next.js frontend
-frontend/node_modules/
 node_modules/
-frontend/.next/
-frontend/.turbo/
-frontend/.env.local
 

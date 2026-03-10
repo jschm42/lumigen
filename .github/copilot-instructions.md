@@ -31,8 +31,8 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 - `alembic upgrade head` -> `verified`.
 - `python -m app.main` -> `verified` (server starts on `http://127.0.0.1:8010`).
 - `python -m pytest -q tests/unit/test_gallery_service.py` -> `verified` (`5 passed`, ~0.4s).
-- `python -m pytest -q tests/frontend/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
-- `python -m pytest -q tests/routes tests/frontend` -> `verified` (`54 passed`, ~28s).
+- `python -m pytest -q tests/ui_routes/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
+- `python -m pytest -q tests/routes tests/ui_routes` -> `verified` (`54 passed`, ~28s).
 - `python scripts/smoke_web_routes.py` -> `verified with caveat`: currently fails with `AssertionError: admin page does not include external admin-page.js`.
 - `ruff check app/` -> `failed here with workaround`: command not found in shell until tool installed.
 - `python -m ruff check app/` -> `failed here with workaround`: module not installed in current venv.
@@ -62,7 +62,7 @@ CI currently runs lint only (no pytest job):
 Recommended pre-PR validation order:
 1. `alembic upgrade head`
 2. `python -m pytest -q tests/unit`
-3. `python -m pytest -q tests/routes tests/frontend`
+3. `python -m pytest -q tests/routes tests/ui_routes`
 4. `ruff check app/`
 5. `djlint app/web/templates/ --lint`
 6. `npx eslint app/web/static/js/`
@@ -99,7 +99,7 @@ Recommended pre-PR validation order:
 
 ## Root layout quick reference
 - Root files: `README.md`, `requirements.txt`, `pyproject.toml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`.
-- Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `frontend/`, `data/`.
+- Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `data/`.
 
 ## When to search
 Only search if one of these is true:
