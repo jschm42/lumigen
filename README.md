@@ -358,6 +358,22 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 - Frontend route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/frontend`
 - Coverage baseline (terminal report): `pytest --cov=app --cov-report=term-missing -q`
 
+## Theme stylesheet structure
+
+Lumigen now keeps theme styles split for easier manual edits while preserving one stable include in templates.
+
+- `app/web/static/app.css`: entry file imported by `layout.html`.
+- `app/web/static/theme-base.css`: shared styles (fonts, dialogs, utility classes, non-theme behavior).
+- `app/web/static/theme-dark.css`: dark-theme-only overrides (add rules here when needed).
+- `app/web/static/theme-light.css`: all `body[data-theme="light"]` overrides.
+
+Editing workflow:
+
+1. Put cross-theme styles in `theme-base.css`.
+2. Put light-mode adjustments in `theme-light.css`.
+3. Put dark-mode adjustments in `theme-dark.css`.
+4. Keep `app.css` as imports only so existing template references remain unchanged.
+
 ## Settings ideas (roadmap)
 
 Candidate options for the new user settings dialog:
