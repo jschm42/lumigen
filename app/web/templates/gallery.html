@@ -34,6 +34,10 @@
         <option value="today" {% if time_preset == 'today' %}selected{% endif %}>Today</option>
         <option value="last_7_days" {% if time_preset == 'last_7_days' %}selected{% endif %}>Last 7 days</option>
         <option value="last_30_days" {% if time_preset == 'last_30_days' %}selected{% endif %}>Last 30 days</option>
+        <option value="last_60_days" {% if time_preset == 'last_60_days' %}selected{% endif %}>Last 60 days</option>
+        <option value="last_120_days" {% if time_preset == 'last_120_days' %}selected{% endif %}>Last 120 days</option>
+        <option value="last_year" {% if time_preset == 'last_year' %}selected{% endif %}>Last year</option>
+        <option value="older" {% if time_preset == 'older' %}selected{% endif %}>Older</option>
         <option value="custom" {% if time_preset == 'custom' %}selected{% endif %}>Custom</option>
       </select>
       <div class="contents {% if time_preset != 'custom' %}hidden{% endif %}" data-time-custom-fields>

@@ -51,7 +51,6 @@
   }
 
   function setupSessionMenus() {
-    var menuToggles = Array.from(document.querySelectorAll("[data-session-menu-toggle]"));
     var renameForm = document.getElementById("rename-session-form");
     var renameTokenInput = renameForm ? renameForm.querySelector("[name='session_token']") : null;
     var renameTitleInput = renameForm ? renameForm.querySelector("[name='title']") : null;
@@ -62,8 +61,15 @@
       });
     }
 
-    menuToggles.forEach(function (toggle) {
-      toggle.addEventListener("click", function (event) {
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) {
+        closeAllMenus();
+        return;
+      }
+
+      var toggle = target.closest("[data-session-menu-toggle]");
+      if (toggle) {
         event.preventDefault();
         event.stopPropagation();
         var container = toggle.parentElement;
@@ -75,19 +81,15 @@
         if (wasHidden) {
           menu.classList.remove("hidden");
         }
-      });
-    });
+        return;
+      }
 
-    document.addEventListener("click", function () {
-      closeAllMenus();
-    });
-
-    document.querySelectorAll("[data-session-rename]").forEach(function (button) {
-      button.addEventListener("click", function (event) {
+      var renameButton = target.closest("[data-session-rename]");
+      if (renameButton) {
         event.preventDefault();
         event.stopPropagation();
-        var token = button.getAttribute("data-session-token") || "";
-        var currentTitle = button.getAttribute("data-session-title") || "";
+        var token = renameButton.getAttribute("data-session-token") || "";
+        var currentTitle = renameButton.getAttribute("data-session-title") || "";
         var nextTitle = window.prompt("Rename session", currentTitle);
         if (nextTitle === null) return;
         var trimmed = nextTitle.trim();
@@ -95,7 +97,12 @@
         renameTokenInput.value = token;
         renameTitleInput.value = trimmed;
         renameForm.submit();
-      });
+        return;
+      }
+
+      if (!target.closest("[data-session-menu]")) {
+        closeAllMenus();
+      }
     });
   }
 
@@ -210,18 +217,6 @@
     applyThumbSize(currentThumbSize);
   }
 
-  function setupLoadMoreSessions() {
-    var loadMoreBtn = document.querySelector("[data-load-more-sessions]");
-    if (!loadMoreBtn) return;
-
-    loadMoreBtn.addEventListener("click", function () {
-      var offset = parseInt(loadMoreBtn.getAttribute("data-offset") || "0", 10);
-      var currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.set("session_offset", offset);
-      window.location.href = currentUrl.toString();
-    });
-  }
-
   function setupUserMenu() {
     var toggle = document.querySelector("[data-user-menu-toggle]");
     var menu = document.querySelector("[data-user-menu]");
@@ -264,6 +259,5 @@
     });
   }
 
-  setupLoadMoreSessions();
   setupUserMenu();
 })();

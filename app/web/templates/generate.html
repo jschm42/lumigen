@@ -23,61 +23,10 @@
       <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}">
         All Sessions
       </a>
-      
-      {# Group sessions by time category #}
-      {% set ns = namespace(today=[], last7days=[], last30days=[]) %}
-      {% for item in session_items %}
-        {% if item.time_category == 'today' %}
-          {% set ns.today = ns.today + [item] %}
-        {% elif item.time_category == 'last7days' %}
-          {% set ns.last7days = ns.last7days + [item] %}
-        {% else %}
-          {% set ns.last30days = ns.last30days + [item] %}
-        {% endif %}
-      {% endfor %}
-      
-      {# Today #}
-      {% if ns.today %}
-      <div class="mb-1 mt-2 first:mt-0">
-        <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Today</span>
-      </div>
-      {% for item in ns.today %}
-        {% include 'fragments/session_item.html' %}
-      {% endfor %}
-      {% endif %}
-      
-      {# Last 7 days #}
-      {% if ns.last7days %}
-      <div class="mb-1 mt-2">
-        <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Last 7 days</span>
-      </div>
-      {% for item in ns.last7days %}
-        {% include 'fragments/session_item.html' %}
-      {% endfor %}
-      {% endif %}
-      
-      {# Last 30 days #}
-      {% if ns.last30days %}
-      <div class="mb-1 mt-2">
-        <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Last 30 days</span>
-      </div>
-      {% for item in ns.last30days %}
-        {% include 'fragments/session_item.html' %}
-      {% endfor %}
-      {% endif %}
-      
-      {# Load more button #}
-      {% if session_has_more %}
-      <button
-        type="button"
-        class="mt-2 block w-full rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-center text-sm text-slate-300 transition hover:bg-white/12 hover:text-white"
-        data-load-more-sessions
-        data-offset="{{ session_offset + 10 }}"
-      >
-        <span class="material-symbols-outlined mr-1 text-base align-bottom" aria-hidden="true">expand_more</span>
-        Load more
-      </button>
-      {% endif %}
+      {% set session_prev_category = '' %}
+      {% set session_next_offset = session_offset + (session_items | length) %}
+      {% set session_next_prev_category = session_items[-1].time_category if session_items else '' %}
+      {% include 'fragments/session_items_chunk.html' %}
       
       {% if not session_items %}
         <p class="rounded-xl bg-white/6 px-3 py-2 text-sm text-slate-400">No sessions yet.</p>

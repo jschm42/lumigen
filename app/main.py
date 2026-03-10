@@ -410,7 +410,16 @@ def normalize_time_preset(value: str | None) -> str:
         "this_month": "last_30_days",
     }
     candidate = aliases.get(candidate, candidate)
-    if candidate in {"today", "last_7_days", "last_30_days", "custom"}:
+    if candidate in {
+        "today",
+        "last_7_days",
+        "last_30_days",
+        "last_60_days",
+        "last_120_days",
+        "last_year",
+        "older",
+        "custom",
+    }:
         return candidate
     return "today"
 
@@ -453,6 +462,14 @@ def build_created_at_bounds(
         return now - timedelta(days=7), now
     if time_preset == "last_30_days":
         return now - timedelta(days=30), now
+    if time_preset == "last_60_days":
+        return now - timedelta(days=60), now
+    if time_preset == "last_120_days":
+        return now - timedelta(days=120), now
+    if time_preset == "last_year":
+        return now - timedelta(days=365), now
+    if time_preset == "older":
+        return None, now - timedelta(days=365)
 
     return now - timedelta(days=1), now
 
@@ -522,23 +539,47 @@ def format_session_age(created_at: datetime | None) -> str:
 
 
 def get_session_time_category(created_at: datetime | None) -> str:
-    """Categorize a session by its creation time: 'today', 'last7days', or 'last30days'."""
+    """Categorize a session by recency for grouped rendering in the sidebar."""
     if not created_at or created_at == datetime.min:
-        return "last30days"
+        return "older"
 
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     seven_days_ago = today_start - timedelta(days=7)
+    thirty_days_ago = today_start - timedelta(days=30)
+    sixty_days_ago = today_start - timedelta(days=60)
+    onehundredtwenty_days_ago = today_start - timedelta(days=120)
+    one_year_ago = today_start - timedelta(days=365)
 
     if created_at >= today_start:
         return "today"
-    elif created_at >= seven_days_ago:
+    if created_at >= seven_days_ago:
         return "last7days"
-    else:
+    if created_at >= thirty_days_ago:
         return "last30days"
+    if created_at >= sixty_days_ago:
+        return "last60days"
+    if created_at >= onehundredtwenty_days_ago:
+        return "last120days"
+    if created_at >= one_year_ago:
+        return "lastyear"
+    return "older"
 
 
-SESSION_MAX_DAYS = 30
+def get_session_time_category_label(value: str) -> str:
+    labels = {
+        "today": "Today",
+        "last7days": "Last 7 days",
+        "last30days": "Last 30 days",
+        "last60days": "Last 60 days",
+        "last120days": "Last 120 days",
+        "lastyear": "Last year",
+        "older": "Older",
+    }
+    return labels.get(value, "Older")
+
+
+SESSION_MAX_DAYS: int | None = None
 SESSION_PAGE_SIZE = 10
 
 
@@ -546,40 +587,33 @@ def build_session_items(
     session: Session,
     offset: int = 0,
     limit: int = SESSION_PAGE_SIZE,
-    max_days: int = SESSION_MAX_DAYS,
+    max_days: int | None = SESSION_MAX_DAYS,
 ) -> tuple[list[dict[str, Any]], bool]:
     """
     Build session items with pagination and time categorization.
     Returns (session_items, has_more).
     """
-    from sqlalchemy import and_
-
-    now = datetime.now()
-    cutoff_date = now - timedelta(days=max_days)
-
-    # Get generations within the time range
-    query = (
-        select(Generation)
-        .options(selectinload(Generation.assets))
-        .where(
-            and_(
-                Generation.created_at >= cutoff_date,
-            )
-        )
-        .order_by(Generation.created_at.desc(), Generation.id.desc())
-    )
+    query = select(Generation).options(selectinload(Generation.assets))
+    if max_days is not None:
+        now = datetime.now()
+        cutoff_date = now - timedelta(days=max_days)
+        query = query.where(Generation.created_at >= cutoff_date)
+    query = query.order_by(Generation.created_at.desc(), Generation.id.desc())
 
     # First, get all generations to build session index
     all_generations = list(session.scalars(query).all())
-    all_generations = [
-        g for g in all_generations
-        if not generation_chat_hidden(g)
-    ]
+    hidden_tokens: set[str] = set()
+    for generation in all_generations:
+        token = generation_session_token(generation)
+        if generation_chat_hidden(generation) or generation_chat_deleted(generation) or generation_session_archived(generation):
+            hidden_tokens.add(token)
 
     # Build session index
     session_index: dict[str, dict[str, Any]] = {}
     for generation in all_generations:
         token = generation_session_token(generation)
+        if token in hidden_tokens:
+            continue
         custom_title = generation_session_title(generation)
         created_at = generation.created_at or datetime.min
         item = session_index.get(token)
@@ -633,6 +667,7 @@ def build_session_items(
             "subtitle": latest_label or started_label,
             "age": format_session_age(latest_at),
             "time_category": get_session_time_category(latest_at),
+            "time_category_label": get_session_time_category_label(get_session_time_category(latest_at)),
             "latest_created_at": latest_at,
         })
 
@@ -650,6 +685,16 @@ def generation_session_title(generation: Generation) -> str:
 def generation_chat_hidden(generation: Generation) -> bool:
     snapshot = generation.request_snapshot_json or {}
     return bool(snapshot.get("chat_hidden"))
+
+
+def generation_session_archived(generation: Generation) -> bool:
+    snapshot = generation.request_snapshot_json or {}
+    return bool(snapshot.get("chat_archived"))
+
+
+def generation_chat_deleted(generation: Generation) -> bool:
+    snapshot = generation.request_snapshot_json or {}
+    return bool(snapshot.get("chat_deleted"))
 
 
 def list_generations_for_session_token(
@@ -875,13 +920,14 @@ def generate_page(
             last_profile_id = chat_session_prefs.last_profile_id
             last_thumb_size = chat_session_prefs.last_thumb_size or "md"
 
-    # Use the new build_session_items function with pagination
-    session_items, session_has_more = build_session_items(
+    # Build full session list once; we derive the rendered page slice from it.
+    all_sessions, _ = build_session_items(
         session,
-        offset=session_offset,
-        limit=SESSION_PAGE_SIZE,
+        offset=0,
+        limit=100000,
         max_days=SESSION_MAX_DAYS,
     )
+    all_session_tokens = {item["token"] for item in all_sessions}
 
     # Get recent generations for the chat view (all generations, not limited by time)
     recent_generations = list(
@@ -897,24 +943,30 @@ def generate_page(
         generation
         for generation in recent_generations
         if not generation_chat_hidden(generation)
+        and not generation_session_archived(generation)
+        and not generation_chat_deleted(generation)
     ]
-
-    # Build full session list for active conversation check
-    # (we need all sessions to find the active one, not just the paginated ones)
-    all_sessions, _ = build_session_items(
-        session,
-        offset=0,
-        limit=9999,  # Get all to check active conversation
-        max_days=SESSION_MAX_DAYS,
-    )
-    all_session_tokens = {item["token"] for item in all_sessions}
 
     active_conversation = (conversation or "").strip()
     if active_conversation:
         if active_conversation not in {"all", "new"} and active_conversation not in all_session_tokens:
             active_conversation = ""
     if not active_conversation:
-        active_conversation = session_items[0]["token"] if session_items else "new"
+        active_conversation = all_sessions[0]["token"] if all_sessions else "new"
+
+    effective_session_offset = session_offset
+    if active_conversation not in {"", "all", "new"}:
+        active_index = next(
+            (idx for idx, item in enumerate(all_sessions) if item["token"] == active_conversation),
+            -1,
+        )
+        if active_index >= 0:
+            effective_session_offset = (active_index // SESSION_PAGE_SIZE) * SESSION_PAGE_SIZE
+
+    session_items = all_sessions[
+        effective_session_offset:effective_session_offset + SESSION_PAGE_SIZE
+    ]
+    session_has_more = len(all_sessions) > effective_session_offset + SESSION_PAGE_SIZE
 
     if active_conversation == "all":
         conversation_generations = recent_generations
@@ -923,8 +975,10 @@ def generate_page(
     else:
         conversation_generations = [
             generation
-            for generation in recent_generations
-            if generation_session_token(generation) == active_conversation
+            for generation in list_generations_for_session_token(session, active_conversation)
+            if not generation_chat_hidden(generation)
+            and not generation_session_archived(generation)
+            and not generation_chat_deleted(generation)
         ]
 
     active_workspace_view = (workspace_view or "chat").strip().lower()
@@ -943,7 +997,7 @@ def generate_page(
             "conversation_generations": conversation_generations,
             "session_items": session_items,
             "session_has_more": session_has_more,
-            "session_offset": session_offset,
+            "session_offset": effective_session_offset,
             "active_conversation": active_conversation,
             "workspace_view": active_workspace_view,
             "hide_footer": True,
@@ -1222,6 +1276,52 @@ def delete_chat_session(
     for generation in generations:
         snapshot = dict(generation.request_snapshot_json or {})
         snapshot["chat_hidden"] = True
+        snapshot["chat_deleted"] = True
+        snapshot.pop("chat_archived", None)
+        snapshot.pop("chat_session_id", None)
+        snapshot.pop("chat_session_title", None)
+        generation.request_snapshot_json = snapshot
+        session.add(generation)
+    session.commit()
+
+    requested_active = (active_conversation or "").strip()
+    next_conversation = "new" if requested_active == token else (requested_active or "new")
+    return generate_workspace_redirect(
+        conversation=next_conversation,
+        workspace_view=workspace_view,
+    )
+
+
+@app.post("/sessions/archive")
+def archive_chat_session(
+    request: Request,
+    session_token: str = Form(...),
+    active_conversation: str = Form(default=""),
+    workspace_view: str = Form(default="chat"),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Invalid session token",
+        )
+
+    generations = list_generations_for_session_token(session, token)
+    if not generations:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Session not found",
+        )
+
+    for generation in generations:
+        snapshot = dict(generation.request_snapshot_json or {})
+        snapshot["chat_archived"] = True
+        snapshot.pop("chat_deleted", None)
         generation.request_snapshot_json = snapshot
         session.add(generation)
     session.commit()
@@ -1895,6 +1995,47 @@ def list_sessions(
         "offset": offset,
         "limit": limit,
     })
+
+
+@app.get("/sessions/list-fragment", response_class=HTMLResponse)
+def list_sessions_fragment(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=SESSION_PAGE_SIZE, ge=1, le=50),
+    prev_category: str = Query(default=""),
+    active_conversation: str = Query(default="new"),
+    workspace_view: str = Query(default="chat"),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    session_items, session_has_more = build_session_items(
+        session,
+        offset=offset,
+        limit=limit,
+        max_days=SESSION_MAX_DAYS,
+    )
+    next_offset = offset + len(session_items)
+    next_prev_category = prev_category
+    if session_items:
+        next_prev_category = str(session_items[-1].get("time_category") or "")
+
+    safe_workspace_view = (workspace_view or "chat").strip().lower()
+    if safe_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
+        safe_workspace_view = "chat"
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/session_items_chunk.html",
+        {
+            "request": request,
+            "session_items": session_items,
+            "session_has_more": session_has_more,
+            "session_next_offset": next_offset,
+            "session_prev_category": prev_category,
+            "session_next_prev_category": next_prev_category,
+            "active_conversation": active_conversation,
+            "workspace_view": safe_workspace_view,
+        },
+    )
 
 
 @app.get("/profiles/new", response_class=HTMLResponse)
