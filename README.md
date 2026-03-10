@@ -358,6 +358,23 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 - Frontend route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/frontend`
 - Coverage baseline (terminal report): `pytest --cov=app --cov-report=term-missing -q`
 
+## Settings ideas (roadmap)
+
+Candidate options for the new user settings dialog:
+
+1. Theme: `dark` / `light` / `system`.
+2. Session list density: compact vs comfortable rows.
+3. Session list behavior: infinite-scroll toggle and page size.
+4. Session visibility: show/hide archived sessions.
+5. Default workspace on open: chat/profiles/gallery/admin.
+6. Chat thumbnail default size: `sm` / `md` / `lg`.
+7. Prompt input submit behavior: Enter vs Ctrl+Enter.
+8. Auto-open advanced generation options.
+9. Confirm dialogs toggle for archive/delete actions.
+10. Gallery defaults: time preset, sort, and minimum rating.
+11. Language setting (`de` / `en`) for future i18n.
+12. Accessibility profile: larger text and stronger contrast.
+
 ## Optional frontend migration path
 
 The repository can include a Next.js frontend under `frontend/` as a migration path from server-rendered templates. It reads from the same SQLite data and forwards generation requests to FastAPI.

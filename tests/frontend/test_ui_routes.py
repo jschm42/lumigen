@@ -85,6 +85,10 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     assert 'data-input-preview' in body
     assert 'Start a new session with a prompt in the input field below.' in body
     assert 'data-load-more-sessions' not in body
+    assert 'Settings...' in body
+    assert 'data-user-settings-dialog' in body
+    assert 'data-user-theme-select' in body
+    assert '<option value="system">System</option>' in body
 
 
 def test_generate_page_keeps_selected_older_session_visible(client, app_module, monkeypatch) -> None:

@@ -12,6 +12,9 @@
 (function () {
   'use strict';
 
+  var THEME_STORAGE_KEY = 'lumigen_theme';
+  var mediaThemeListenerBound = false;
+
   // ==========================================================================
   // Utility Functions
   // ==========================================================================
@@ -28,6 +31,76 @@
     var meta = document.querySelector('meta[name="csrf-token"]');
     if (!meta) return '';
     return String(meta.getAttribute('content') || '').trim();
+  }
+
+  function getSavedTheme() {
+    try {
+      var saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'light' || saved === 'dark' || saved === 'system') {
+        return saved;
+      }
+    } catch (_error) {
+      // localStorage can be unavailable in strict browser modes.
+    }
+    return 'system';
+  }
+
+  function getSystemTheme() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  function applyTheme(theme) {
+    var effective = theme === 'system' ? getSystemTheme() : theme;
+    var normalized = effective === 'light' ? 'light' : 'dark';
+    var root = document.documentElement;
+    var body = document.body;
+    var colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+
+    root.setAttribute('data-theme', normalized);
+    root.setAttribute('data-theme-mode', theme === 'system' ? 'system' : normalized);
+    if (body) {
+      body.setAttribute('data-theme', normalized);
+      body.setAttribute('data-theme-mode', theme === 'system' ? 'system' : normalized);
+    }
+    root.style.colorScheme = normalized;
+    if (body) {
+      body.style.colorScheme = normalized;
+    }
+    if (colorSchemeMeta) {
+      colorSchemeMeta.setAttribute('content', normalized === 'light' ? 'light dark' : 'dark light');
+    }
+  }
+
+  function persistTheme(theme) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (_error) {
+      // Ignore persistence failures and keep runtime state only.
+    }
+  }
+
+  function initTheme() {
+    applyTheme(getSavedTheme());
+
+    if (mediaThemeListenerBound || !window.matchMedia) return;
+    var query = window.matchMedia('(prefers-color-scheme: dark)');
+    var syncFromSystem = function () {
+      if (getSavedTheme() === 'system') {
+        applyTheme('system');
+      }
+    };
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', syncFromSystem);
+      mediaThemeListenerBound = true;
+      return;
+    }
+    if (typeof query.addListener === 'function') {
+      query.addListener(syncFromSystem);
+      mediaThemeListenerBound = true;
+    }
   }
 
   function ensurePostFormCsrfTokens() {
@@ -1170,46 +1243,79 @@ function setupGalleryRatings() {
   // ==========================================================================
 
   function setupUserMenu() {
+    var settingsDialog = document.querySelector('[data-user-settings-dialog]');
+    var settingsCloseButton = settingsDialog ? settingsDialog.querySelector('[data-user-settings-close]') : null;
+    var themeSelect = settingsDialog ? settingsDialog.querySelector('[data-user-theme-select]') : null;
+
+    function closeSettingsDialog() {
+      if (settingsDialog && settingsDialog.open) {
+        settingsDialog.close();
+      }
+    }
+
+    function openSettingsDialog() {
+      if (settingsDialog && !settingsDialog.open) {
+        settingsDialog.showModal();
+      }
+    }
+
+    if (settingsCloseButton && settingsCloseButton.dataset.bound !== '1') {
+      settingsCloseButton.dataset.bound = '1';
+      settingsCloseButton.addEventListener('click', closeSettingsDialog);
+    }
+
+    if (settingsDialog && settingsDialog.dataset.bound !== '1') {
+      settingsDialog.dataset.bound = '1';
+      settingsDialog.addEventListener('click', function (event) {
+        var rect = settingsDialog.getBoundingClientRect();
+        var isOutside =
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom;
+        if (isOutside) {
+          closeSettingsDialog();
+        }
+      });
+    }
+
+    if (themeSelect && themeSelect.dataset.bound !== '1') {
+      themeSelect.dataset.bound = '1';
+      themeSelect.value = getSavedTheme();
+      themeSelect.addEventListener('change', function () {
+        var selected = 'system';
+        if (themeSelect.value === 'light' || themeSelect.value === 'dark') {
+          selected = themeSelect.value;
+        }
+        applyTheme(selected);
+        persistTheme(selected);
+      });
+    }
+
     document.querySelectorAll('[data-user-menu-container]').forEach(function (container) {
-      var toggle = container.querySelector('[data-user-menu-toggle]');
-      var menu = container.querySelector('[data-user-menu]');
-      var chevron = container.querySelector('[data-user-menu-chevron]');
-      if (!toggle || !menu) return;
-
-      function openMenu() {
-        menu.classList.remove('hidden');
-        toggle.setAttribute('aria-expanded', 'true');
-        if (chevron) chevron.textContent = 'expand_less';
-      }
-
-      function closeMenu() {
-        menu.classList.add('hidden');
-        toggle.setAttribute('aria-expanded', 'false');
-        if (chevron) chevron.textContent = 'expand_more';
-      }
-
-      toggle.addEventListener('click', function (event) {
-        event.stopPropagation();
-        if (menu.classList.contains('hidden')) {
-          openMenu();
-        } else {
-          closeMenu();
-        }
-      });
-
-      // Close when clicking outside the container
-      document.addEventListener('click', function (event) {
-        if (!container.contains(event.target)) {
-          closeMenu();
-        }
-      });
+      var settingsButton = container.querySelector('[data-user-settings-open]');
 
       // Close on Escape key
       document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
-          closeMenu();
+          if (container && container.open) {
+            container.open = false;
+          }
+          closeSettingsDialog();
         }
       });
+
+      if (settingsButton && settingsButton.dataset.bound !== '1') {
+        settingsButton.dataset.bound = '1';
+        settingsButton.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (container && container.open) {
+            container.open = false;
+          }
+          openSettingsDialog();
+        });
+      }
     });
   }
 
@@ -1218,6 +1324,7 @@ function setupGalleryRatings() {
   // ==========================================================================
 
   function init() {
+    initTheme();
     ensurePostFormCsrfTokens();
     setupHtmxCsrf();
     setupConfirmDialog();

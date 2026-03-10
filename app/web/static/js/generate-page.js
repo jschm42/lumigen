@@ -217,47 +217,4 @@
     applyThumbSize(currentThumbSize);
   }
 
-  function setupUserMenu() {
-    var toggle = document.querySelector("[data-user-menu-toggle]");
-    var menu = document.querySelector("[data-user-menu]");
-    var chevron = document.querySelector("[data-user-menu-chevron]");
-    if (!toggle || !menu) return;
-
-    function openMenu() {
-      menu.classList.remove("hidden");
-      toggle.setAttribute("aria-expanded", "true");
-      if (chevron) chevron.textContent = "expand_more";
-    }
-
-    function closeMenu() {
-      menu.classList.add("hidden");
-      toggle.setAttribute("aria-expanded", "false");
-      if (chevron) chevron.textContent = "expand_less";
-    }
-
-    var container = document.querySelector("[data-user-menu-container]");
-
-    toggle.addEventListener("click", function (event) {
-      event.stopPropagation();
-      if (menu.classList.contains("hidden")) {
-        openMenu();
-      } else {
-        closeMenu();
-      }
-    });
-
-    document.addEventListener("click", function (event) {
-      if (container && !container.contains(event.target)) {
-        closeMenu();
-      }
-    });
-
-    document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        closeMenu();
-      }
-    });
-  }
-
-  setupUserMenu();
 })();
