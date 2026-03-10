@@ -1,0 +1,215 @@
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url("fonts/MaterialSymbolsOutlined.woff2") format("woff2");
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: 400;
+  font-style: normal;
+  font-size: 1.1em;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+::selection {
+  background: rgb(56 189 248 / 35%);
+  color: #eaf7ff;
+}
+
+input[type="checkbox"] {
+  accent-color: #38bdf8;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+dialog {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: auto;
+  width: min(92vw, 980px);
+  max-height: calc(100vh - 3rem);
+  color: inherit;
+}
+
+dialog::backdrop {
+  background: rgb(2 6 23 / 76%);
+  backdrop-filter: blur(5px);
+}
+
+/* Keep asset detail modal visually separated from the page, even with global dialog defaults. */
+dialog[data-asset-detail-dialog] {
+  background: rgb(2 6 23 / 94%);
+  border: 1px solid rgb(255 255 255 / 15%);
+}
+
+dialog[data-asset-detail-dialog]::backdrop {
+  background: rgb(2 6 23 / 62%);
+  backdrop-filter: blur(4px);
+}
+
+dialog[open] {
+  animation: dialog-in 140ms ease-out;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+pre {
+  overflow-x: auto;
+  border-radius: 0.9rem;
+}
+
+.subtle-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 32%) transparent;
+}
+
+.subtle-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.subtle-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.subtle-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 25%);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.subtle-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184 / 40%);
+  background-clip: padding-box;
+}
+
+/* Image container with download button on hover */
+.image-container {
+  position: relative;
+}
+
+.image-container .download-button {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.image-container:hover .download-button {
+  opacity: 1;
+}
+
+.download-button:hover {
+  background: rgb(15 23 42 / 95%) !important;
+  border-color: rgb(255 255 255 / 30%);
+}
+
+/* Chat thumbnail sizes */
+#chat-history.thumb-size-sm .image-container img {
+  max-height: min(40vh, 24rem) !important;
+  max-width: min(100%, 36rem) !important;
+}
+
+#chat-history.thumb-size-md .image-container img {
+  max-height: min(68vh, 48rem) !important;
+  max-width: min(100%, 70rem) !important;
+}
+
+#chat-history.thumb-size-lg .image-container img {
+  max-height: min(85vh, 68rem) !important;
+  max-width: min(100%, 90rem) !important;
+}
+
+/* Preview image wrapper for input images */
+.preview-image-wrapper {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 15%);
+  background-color: rgb(15 23 42 / 80%);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 30%), 0 2px 4px -2px rgb(0 0 0 / 30%);
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-image-remove {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 35%);
+  background-color: rgb(15 23 36 / 90%);
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.preview-image-remove:hover {
+  border-color: rgb(255 200 200 / 80%);
+  background-color: rgb(239 68 68 / 80%);
+}
+
+/* Generation pending shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.generation-shimmer {
+  display: block;
+  min-height: 200px;
+  background: linear-gradient(
+    110deg,
+    rgb(30 41 59 / 60%) 8%,
+    rgb(56 189 248 / 25%) 18%,
+    rgb(56 189 248 / 35%) 33%,
+    rgb(30 41 59 / 60%) 45%,
+    rgb(30 41 59 / 60%) 55%,
+    rgb(56 189 248 / 25%) 65%,
+    rgb(56 189 248 / 35%) 75%,
+    rgb(30 41 59 / 60%) 85%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 8s linear infinite;
+  border: 2px solid rgb(56 189 248 / 40%);
+  box-shadow: 0 0 15px rgb(56 189 248 / 15%);
+}
+
