@@ -62,4 +62,4 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run stylelint
-        run: npx stylelint "app/web/static/app.css"
+        run: npx stylelint "app/web/static/css/app.css"

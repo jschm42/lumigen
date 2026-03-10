@@ -362,10 +362,10 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 
 Lumigen now keeps theme styles split for easier manual edits while preserving one stable include in templates.
 
-- `app/web/static/app.css`: entry file imported by `layout.html`.
-- `app/web/static/theme-base.css`: shared styles (fonts, dialogs, utility classes, non-theme behavior).
-- `app/web/static/theme-dark.css`: dark-theme-only overrides (add rules here when needed).
-- `app/web/static/theme-light.css`: all `body[data-theme="light"]` overrides.
+- `app/web/static/css/app.css`: entry file imported by `layout.html`.
+- `app/web/static/css/theme-base.css`: shared styles (fonts, dialogs, utility classes, non-theme behavior).
+- `app/web/static/css/theme-dark.css`: dark-theme-only overrides (add rules here when needed).
+- `app/web/static/css/theme-light.css`: all `body[data-theme="light"]` overrides.
 
 Editing workflow:
 

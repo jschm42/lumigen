@@ -1,6 +1,5 @@
 {
   "extends": ["stylelint-config-standard"],
-  "ignoreFiles": ["app/web/static/css/**"],
   "rules": {
     "font-family-no-missing-generic-family-keyword": null,
     "no-descending-specificity": null
