@@ -62,7 +62,7 @@
               {% endif %}
             </span>
           </span>
-          <span class="material-symbols-outlined text-base text-slate-300" aria-hidden="true">expand_more</span>
+          <i class="bi bi-chevron-down text-base text-slate-300" aria-hidden="true"></i>
         </button>
         <div class="absolute right-0 z-30 mt-2 hidden w-72 rounded-xl border border-slate-700/40 bg-slate-950/95 p-3 shadow-xl shadow-slate-950/70 backdrop-blur" data-category-popover-panel>
           <div class="mb-2 flex items-center justify-between">
@@ -100,21 +100,21 @@
           title="Small thumbnails"
           aria-label="Small thumbnails"
           data-gallery-thumb-size="sm"
-        ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span></a>
+        ><i class="bi bi-grid-3x2-gap text-[18px]" aria-hidden="true"></i></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=md"
           class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Medium thumbnails"
           aria-label="Medium thumbnails"
           data-gallery-thumb-size="md"
-        ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_on</span></a>
+        ><i class="bi bi-grid-3x3-gap text-[18px]" aria-hidden="true"></i></a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=lg"
           class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-300/70 bg-sky-300/20 text-sky-100{% else %}border-slate-700/35 bg-white/5 text-slate-300 hover:border-sky-300/50 hover:text-white{% endif %}"
           title="Large thumbnails"
           aria-label="Large thumbnails"
           data-gallery-thumb-size="lg"
-        ><span class="material-symbols-outlined text-[18px]" aria-hidden="true">crop_square</span></a>
+        ><i class="bi bi-square text-[18px]" aria-hidden="true"></i></a>
       </div>
     </div>
   </form>

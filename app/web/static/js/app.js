@@ -637,9 +637,8 @@
 
         enhanceBtn.disabled = true;
         enhanceBtn.setAttribute('aria-busy', 'true');
-        var enhanceIcon = enhanceBtn.querySelector('.material-symbols-outlined');
+        var enhanceIcon = enhanceBtn.querySelector('.bi');
         if (enhanceIcon) {
-          enhanceIcon.textContent = 'auto_fix_high';
           enhanceIcon.classList.add('animate-pulse');
         }
 
@@ -667,7 +666,6 @@
           enhanceBtn.disabled = false;
           enhanceBtn.removeAttribute('aria-busy');
           if (enhanceIcon) {
-            enhanceIcon.textContent = 'auto_fix_high';
             enhanceIcon.classList.remove('animate-pulse');
           }
         }

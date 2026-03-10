@@ -37,7 +37,7 @@
           ></textarea>
         </div>
         <button type="submit" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-300 text-slate-950 transition hover:bg-sky-200" title="Regenerate" aria-label="Regenerate">
-          <span class="material-symbols-outlined" style="font-size: 20px;">arrow_upward</span>
+          <i class="bi bi-arrow-up" style="font-size: 20px;"></i>
         </button>
       </div>
 
@@ -49,15 +49,15 @@
 <div class="{{ 'mb-4' if compact_dialog else 'mb-6' }}">
   <div class="flex flex-wrap items-center gap-2">
     <button type="button" class="{{ btn_secondary }}" onclick="navigator.clipboard.writeText(this.dataset.prompt);" data-prompt="{{ asset.generation.prompt_final }}">
-      <span class="material-symbols-outlined" style="font-size: 18px;">content_copy</span>
+      <i class="bi bi-copy" style="font-size: 18px;"></i>
       Copy prompt
     </button>
     <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">
-      <span class="material-symbols-outlined" style="font-size: 18px;">download</span>
+      <i class="bi bi-download" style="font-size: 18px;"></i>
       Download
     </a>
     <a href="/assets/{{ asset.id }}/file" target="_blank" rel="noopener" class="{{ btn_secondary }}">
-      <span class="material-symbols-outlined" style="font-size: 18px;">open_in_new</span>
+      <i class="bi bi-box-arrow-up-right" style="font-size: 18px;"></i>
       Original size
     </a>
     <button
@@ -67,14 +67,14 @@
       type="button"
       class="{{ btn_primary }}"
     >
-      <span class="material-symbols-outlined" style="font-size: 18px;">refresh</span>
+      <i class="bi bi-arrow-clockwise" style="font-size: 18px;"></i>
       Re-run
     </button>
 
     <div class="ml-auto flex flex-wrap items-center gap-2">
       <form method="post" action="/assets/{{ asset.id }}/delete" data-confirm-message="Delete this asset?" class="inline-flex">
         <button class="{{ btn_danger }}" type="submit">
-          <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+          <i class="bi bi-trash" style="font-size: 18px;"></i>
           Delete asset
         </button>
       </form>
@@ -88,7 +88,7 @@
   <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
     <div class="flex items-center justify-between">
       <span>Full prompt</span>
-      <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+      <i class="bi bi-chevron-down transition-transform group-open:rotate-180" style="font-size: 20px;"></i>
     </div>
   </summary>
   <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
@@ -100,7 +100,7 @@
   <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
     <div class="flex items-center justify-between">
       <span>Metadata</span>
-      <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+      <i class="bi bi-chevron-down transition-transform group-open:rotate-180" style="font-size: 20px;"></i>
     </div>
   </summary>
   <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
@@ -127,7 +127,7 @@
     <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
       <div class="flex items-center justify-between">
         <span>asset.meta_json</span>
-        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        <i class="bi bi-chevron-down transition-transform group-open:rotate-180" style="font-size: 20px;"></i>
       </div>
     </summary>
     <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
@@ -139,7 +139,7 @@
     <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
       <div class="flex items-center justify-between">
         <span>profile_snapshot_json</span>
-        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        <i class="bi bi-chevron-down transition-transform group-open:rotate-180" style="font-size: 20px;"></i>
       </div>
     </summary>
     <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
@@ -151,7 +151,7 @@
     <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
       <div class="flex items-center justify-between">
         <span>storage_template_snapshot_json</span>
-        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        <i class="bi bi-chevron-down transition-transform group-open:rotate-180" style="font-size: 20px;"></i>
       </div>
     </summary>
     <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">
@@ -163,7 +163,7 @@
     <summary class="cursor-pointer list-none {{ 'p-2.5' if compact_dialog else 'p-4' }} font-semibold text-white hover:bg-white/5">
       <div class="flex items-center justify-between">
         <span>request_snapshot_json</span>
-        <span class="material-symbols-outlined transition-transform group-open:rotate-180" style="font-size: 20px;">expand_more</span>
+        <i class="bi bi-chevron-down transition-transform group-open:rotate-180" style="font-size: 20px;"></i>
       </div>
     </summary>
     <div class="{{ 'pt-2' if compact_dialog else 'border-t border-white/10 p-4' }}">

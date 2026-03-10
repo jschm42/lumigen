@@ -209,7 +209,7 @@ def test_job_status_chat_fragment_renders_add_to_input_button_on_assets(client, 
 
     assert response.status_code == 200
     assert 'data-add-to-input="42"' in body
-    assert 'add_photo_alternate' in body
+    assert 'bi-image' in body
 
 
 def test_generation_input_image_thumbnail_endpoint_returns_image_bytes(client, app_module) -> None:

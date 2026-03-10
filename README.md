@@ -394,3 +394,9 @@ Candidate options for the new user settings dialog:
 ## License
 
 See `LICENSE`.
+
+Third-party asset licenses:
+
+- Bootstrap Icons font (`app/web/static/fonts/bootstrap-icons.woff2`, `app/web/static/fonts/bootstrap-icons.woff`): MIT
+- See `licenses/bootstrap-icons-MIT.txt` and `licenses/bootstrap-icons-NOTICE.md`
+- Overview: `THIRD_PARTY_LICENSES.md`

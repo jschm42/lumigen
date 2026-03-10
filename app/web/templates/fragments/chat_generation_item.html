@@ -84,14 +84,14 @@
               <a href="/assets/{{ asset.id }}/download" 
                  download
                  class="download-button absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-white opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-slate-800 group-hover:opacity-100">
-                <span class="material-symbols-outlined">download</span>
+                <i class="bi bi-download"></i>
               </a>
               <button
                 type="button"
                 data-add-to-input="{{ asset.id }}"
                 title="Add as input image"
                 class="absolute bottom-3 left-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/90 text-white opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-sky-500/80 group-hover:opacity-100">
-                <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
+                <i class="bi bi-image" aria-hidden="true"></i>
               </button>
             </div>
           {% endfor %}
@@ -101,7 +101,7 @@
       {% elif generation.status in ['queued', 'running'] %}
         <div class="flex min-h-[220px] w-full items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 px-4 py-6">
           <div class="flex items-center gap-3 text-slate-200">
-            <span class="material-symbols-outlined animate-spin">progress_activity</span>
+            <i class="bi bi-arrow-repeat animate-spin"></i>
             <span class="text-sm font-medium">{{ running_status_text }}</span>
           </div>
         </div>
