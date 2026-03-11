@@ -595,7 +595,7 @@ def build_session_items(
     """
     query = select(Generation).options(selectinload(Generation.assets))
     if max_days is not None:
-        now = datetime.now()
+        now = datetime.now(UTC)
         cutoff_date = now - timedelta(days=max_days)
         query = query.where(Generation.created_at >= cutoff_date)
     query = query.order_by(Generation.created_at.desc(), Generation.id.desc())
