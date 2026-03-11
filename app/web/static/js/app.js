@@ -82,6 +82,20 @@
     }
   }
 
+  function reloadAfterThemeChange() {
+    var targetWindow = window;
+    try {
+      if (window.top && window.top !== window && window.top.location.origin === window.location.origin) {
+        targetWindow = window.top;
+      }
+    } catch (_error) {
+      // Cross-origin frame access is blocked; fallback to current window.
+    }
+
+    // Use replace to force a full navigation of the active shell URL.
+    targetWindow.location.replace(targetWindow.location.pathname + targetWindow.location.search);
+  }
+
   function initTheme() {
     applyTheme(getSavedTheme());
 
@@ -1281,12 +1295,16 @@ function setupGalleryRatings() {
       themeSelect.dataset.bound = '1';
       themeSelect.value = getSavedTheme();
       themeSelect.addEventListener('change', function () {
+        var previous = getSavedTheme();
         var selected = 'system';
         if (themeSelect.value === 'light' || themeSelect.value === 'dark') {
           selected = themeSelect.value;
         }
         applyTheme(selected);
         persistTheme(selected);
+        if (selected !== previous) {
+          reloadAfterThemeChange();
+        }
       });
     }
 

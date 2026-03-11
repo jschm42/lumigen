@@ -3,6 +3,15 @@ body[data-theme="light"] {
   color: #0f172a;
 }
 
+body[data-theme="light"] dialog::backdrop {
+  background: rgb(15 23 42 / 24%) !important;
+  backdrop-filter: blur(4px);
+}
+
+body[data-theme="light"] dialog[data-asset-detail-dialog]::backdrop {
+  background: rgb(15 23 42 / 18%) !important;
+}
+
 body[data-theme="light"] > [aria-hidden="true"] {
   opacity: 0.45;
 }
@@ -258,6 +267,54 @@ body[data-theme="light"] dialog[data-user-settings-dialog] p,
 body[data-theme="light"] dialog[data-user-settings-dialog] .text-slate-300,
 body[data-theme="light"] dialog[data-user-settings-dialog] .text-slate-400,
 body[data-theme="light"] dialog[data-user-settings-dialog] .text-white {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] dialog[data-user-settings-dialog] .border-white\/10,
+body[data-theme="light"] dialog[data-user-settings-dialog] .border-white\/15,
+body[data-theme="light"] dialog[data-user-settings-dialog] .bg-white\/5,
+body[data-theme="light"] dialog[data-user-settings-dialog] .bg-slate-950\/75 {
+  background: rgb(248 250 252 / 96%) !important;
+  border-color: rgb(148 163 184 / 38%) !important;
+}
+
+body[data-theme="light"] dialog.bg-slate-900,
+body[data-theme="light"] dialog.bg-slate-900\/95,
+body[data-theme="light"] dialog.bg-slate-950\/94,
+body[data-theme="light"] dialog.bg-slate-950\/75,
+body[data-theme="light"] dialog.bg-slate-950\/70,
+body[data-theme="light"] dialog .bg-slate-900,
+body[data-theme="light"] dialog .bg-slate-900\/80,
+body[data-theme="light"] dialog .bg-slate-900\/90,
+body[data-theme="light"] dialog .bg-slate-900\/95,
+body[data-theme="light"] dialog .bg-slate-950\/70,
+body[data-theme="light"] dialog .bg-slate-950\/75,
+body[data-theme="light"] dialog .bg-slate-950\/94,
+body[data-theme="light"] dialog .bg-white\/5 {
+  background: rgb(248 250 252 / 96%) !important;
+}
+
+body[data-theme="light"] dialog.border-white\/10,
+body[data-theme="light"] dialog.border-white\/15,
+body[data-theme="light"] dialog.border-white\/20,
+body[data-theme="light"] dialog.border-white\/30,
+body[data-theme="light"] dialog .border-white\/10,
+body[data-theme="light"] dialog .border-white\/15,
+body[data-theme="light"] dialog .border-white\/20,
+body[data-theme="light"] dialog .border-white\/30 {
+  border-color: rgb(148 163 184 / 38%) !important;
+}
+
+body[data-theme="light"] dialog.text-white,
+body[data-theme="light"] dialog.text-slate-100,
+body[data-theme="light"] dialog.text-slate-200,
+body[data-theme="light"] dialog.text-slate-300,
+body[data-theme="light"] dialog.text-slate-400,
+body[data-theme="light"] dialog .text-white,
+body[data-theme="light"] dialog .text-slate-100,
+body[data-theme="light"] dialog .text-slate-200,
+body[data-theme="light"] dialog .text-slate-300,
+body[data-theme="light"] dialog .text-slate-400 {
   color: rgb(15 23 42) !important;
 }
 

@@ -19,7 +19,17 @@
   <script src="https://unpkg.com/idiomorph@0.3.0/dist/idiomorph-ext.min.js" defer></script>
   <script src="{{ static_url('js/app.js') }}" defer></script>
 </head>
-<body class="flex flex-col min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
+<body class="flex flex-col min-h-screen font-sans antialiased">
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var theme = root.getAttribute('data-theme') || 'dark';
+      var mode = root.getAttribute('data-theme-mode') || theme;
+      document.body.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme-mode', mode);
+      document.body.style.colorScheme = theme;
+    })();
+  </script>
   {% set embedded = request.query_params.get('embedded') == '1' %}
   {% set show_top_navigation = false %}
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
