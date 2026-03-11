@@ -1,22 +1,22 @@
 {% extends "layout.html" %}
 {% block content %}
 {% set panel_class = "p-5 sm:p-7" %}
-{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set text_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set label_class = "block text-sm font-semibold text-slate-200" %}
+{% set input_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
+{% set text_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
+{% set label_class = "block text-sm font-semibold text-slate-700 dark:text-slate-200" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
-{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
-{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/20" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10" %}
+{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/60 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200 dark:border-rose-300/40 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:border-rose-200 dark:hover:bg-rose-500/20" %}
 {% set nav_tab_base = "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold transition" %}
 {% set nav_tab_active = "bg-sky-300 text-slate-950" %}
-{% set nav_tab_inactive = "border border-white/20 bg-white/5 text-slate-200 hover:border-sky-300/60 hover:bg-white/10 hover:text-white" %}
+{% set nav_tab_inactive = "border border-slate-300/75 bg-white text-slate-700 hover:border-sky-400/60 hover:bg-sky-50 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:bg-white/10 dark:hover:text-white" %}
 {% set embedded_suffix = "&embedded=1" if request.query_params.get("embedded") == "1" else "" %}
 
 <section class="{{ panel_class }} space-y-5" data-admin-page>
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h2 class="text-2xl font-semibold text-white">Admin</h2>
-      <p class="mt-1 text-sm text-slate-400">Manage models, presets, categories, and enhancement configuration.</p>
+      <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Admin</h2>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Manage models, presets, categories, and enhancement configuration.</p>
     </div>
   </header>
 
@@ -34,7 +34,7 @@
     </div>
   {% endif %}
 
-  <nav class="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/35 p-2" aria-label="Admin sections">
+  <nav class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-300/70 bg-white/80 p-2 dark:border-white/10 dark:bg-slate-950/35" aria-label="Admin sections">
     <a href="/admin?section=models{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'models' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Models</a>
     <a href="/admin?section=dimensions{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
     <a href="/admin?section=categories{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
@@ -45,18 +45,18 @@
 
   {% if active_admin_section == "models" %}
     <div class="flex items-center justify-between gap-3">
-      <h3 class="text-lg font-semibold text-white">Models</h3>
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Models</h3>
       <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-model-config-dialog').showModal()">New model</button>
     </div>
 
     <dialog id="create-model-config-dialog">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">New model</h3>
-            <p class="mt-1 text-sm text-slate-400">Create a new model with provider and optional API key.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">New model</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Create a new model with provider and optional API key.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()">&times;</button>
         </header>
         <form action="/admin/model-configs" method="post" class="space-y-4">
           <div>
@@ -83,7 +83,7 @@
             <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3" class="{{ text_class }}"></textarea>
           </div>
 
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <input type="checkbox" name="use_custom_api_key" id="new-use-custom-api-key" onchange="toggleApiKeyField('new')">
             Use custom API key
           </label>
@@ -100,9 +100,9 @@
       </article>
     </dialog>
 
-    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-        <thead class="bg-white/5 text-slate-300">
+    <div class="overflow-x-auto rounded-2xl bg-slate-100/80 dark:bg-slate-950/35">
+      <table class="min-w-full divide-y divide-slate-300/60 text-left text-sm dark:divide-white/10">
+        <thead class="bg-slate-200/70 text-slate-700 dark:bg-white/5 dark:text-slate-300">
           <tr>
             <th class="px-4 py-3 font-semibold">Name</th>
             <th class="px-4 py-3 font-semibold">Provider</th>
@@ -111,13 +111,13 @@
             <th class="px-4 py-3 font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
         {% for config in model_configs %}
           <tr>
             <td class="px-4 py-3">{{ config.name }}</td>
             <td class="px-4 py-3">{{ config.provider }}</td>
             <td class="px-4 py-3">{{ config.model }}</td>
-            <td class="px-4 py-3 text-slate-400">{% if config.use_custom_api_key %}{{ "stored" if config.api_key_encrypted else "custom (none)" }}{% else %}default (env){% endif %}</td>
+            <td class="px-4 py-3 text-slate-500 dark:text-slate-400">{% if config.use_custom_api_key %}{{ "stored" if config.api_key_encrypted else "custom (none)" }}{% else %}default (env){% endif %}</td>
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
@@ -129,7 +129,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="5" class="px-4 py-4 text-slate-400">No model configs yet.</td>
+            <td colspan="5" class="px-4 py-4 text-slate-500 dark:text-slate-400">No model configs yet.</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -138,13 +138,13 @@
 
     {% for config in model_configs %}
     <dialog id="edit-model-config-{{ config.id }}">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">Edit model: {{ config.name }}</h3>
-            <p class="mt-1 text-sm text-slate-400">Update provider, model, and API key values.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Edit model: {{ config.name }}</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Update provider, model, and API key values.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()">&times;</button>
         </header>
         <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="space-y-4">
           <div>
@@ -171,7 +171,7 @@
             <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3" class="{{ text_class }}">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
           </div>
 
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <input type="checkbox" name="use_custom_api_key" id="edit-{{ config.id }}-use-custom-api-key" {% if config.use_custom_api_key %}checked{% endif %} onchange="toggleApiKeyField('edit-{{ config.id }}')">
             Use custom API key
           </label>
@@ -181,7 +181,7 @@
             <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" value="{{ '••••••••' if config.api_key_encrypted else '' }}" placeholder="leave blank to keep" class="{{ input_class }}">
           </div>
 
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <input type="checkbox" name="clear_api_key">
             Clear stored key
           </label>
@@ -195,18 +195,18 @@
     {% endfor %}
   {% elif active_admin_section == "dimensions" %}
     <div class="mt-1 flex items-center justify-between gap-3">
-      <h3 class="text-lg font-semibold text-white">Dimension presets</h3>
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Dimension presets</h3>
       <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-dimension-preset-dialog').showModal()">New dimension preset</button>
     </div>
 
     <dialog id="create-dimension-preset-dialog">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">New dimension preset</h3>
-            <p class="mt-1 text-sm text-slate-400">Create a new fixed image dimension preset.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">New dimension preset</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Create a new fixed image dimension preset.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-dimension-preset-dialog').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-dimension-preset-dialog').close()">&times;</button>
         </header>
         <form action="/admin/dimension-presets" method="post" class="space-y-4">
           <div>
@@ -232,9 +232,9 @@
       </article>
     </dialog>
 
-    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-        <thead class="bg-white/5 text-slate-300">
+    <div class="overflow-x-auto rounded-2xl bg-slate-100/80 dark:bg-slate-950/35">
+      <table class="min-w-full divide-y divide-slate-300/60 text-left text-sm dark:divide-white/10">
+        <thead class="bg-slate-200/70 text-slate-700 dark:bg-white/5 dark:text-slate-300">
           <tr>
             <th class="px-4 py-3 font-semibold">Name</th>
             <th class="px-4 py-3 font-semibold">Width</th>
@@ -242,7 +242,7 @@
             <th class="px-4 py-3 font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
         {% for preset in dimension_presets %}
           <tr>
             <td class="px-4 py-3">{{ preset.name }}</td>
@@ -259,7 +259,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="4" class="px-4 py-4 text-slate-400">No dimension presets yet.</td>
+            <td colspan="4" class="px-4 py-4 text-slate-500 dark:text-slate-400">No dimension presets yet.</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -268,13 +268,13 @@
 
     {% for preset in dimension_presets %}
     <dialog id="edit-dimension-preset-{{ preset.id }}">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">Edit dimension preset: {{ preset.name }}</h3>
-            <p class="mt-1 text-sm text-slate-400">Update the name and dimensions.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Edit dimension preset: {{ preset.name }}</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Update the name and dimensions.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()">&times;</button>
         </header>
         <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="space-y-4">
           <div>
@@ -302,18 +302,18 @@
     {% endfor %}
   {% elif active_admin_section == "categories" %}
     <div class="mt-1 flex items-center justify-between gap-3">
-      <h3 class="text-lg font-semibold text-white">Categories</h3>
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Categories</h3>
       <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-category-dialog').showModal()">New category</button>
     </div>
 
     <dialog id="create-category-dialog">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">New category</h3>
-            <p class="mt-1 text-sm text-slate-400">Create a new category.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">New category</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Create a new category.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-category-dialog').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-category-dialog').close()">&times;</button>
         </header>
         <form action="/admin/categories" method="post" class="space-y-4">
           <div>
@@ -327,15 +327,15 @@
       </article>
     </dialog>
 
-    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-        <thead class="bg-white/5 text-slate-300">
+    <div class="overflow-x-auto rounded-2xl bg-slate-100/80 dark:bg-slate-950/35">
+      <table class="min-w-full divide-y divide-slate-300/60 text-left text-sm dark:divide-white/10">
+        <thead class="bg-slate-200/70 text-slate-700 dark:bg-white/5 dark:text-slate-300">
           <tr>
             <th class="px-4 py-3 font-semibold">Name</th>
             <th class="px-4 py-3 font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
         {% for category in categories %}
           <tr>
             <td class="px-4 py-3">{{ category.name }}</td>
@@ -350,7 +350,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="2" class="px-4 py-4 text-slate-400">No categories yet.</td>
+            <td colspan="2" class="px-4 py-4 text-slate-500 dark:text-slate-400">No categories yet.</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -359,13 +359,13 @@
 
     {% for category in categories %}
     <dialog id="edit-category-{{ category.id }}">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">Edit category: {{ category.name }}</h3>
-            <p class="mt-1 text-sm text-slate-400">Update the category name.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Edit category: {{ category.name }}</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Update the category name.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-category-{{ category.id }}').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-category-{{ category.id }}').close()">&times;</button>
         </header>
         <form action="/admin/categories/{{ category.id }}/update" method="post" class="space-y-4">
           <div>
@@ -381,10 +381,10 @@
     {% endfor %}
   {% elif active_admin_section == "enhancement" %}
     <header class="mb-1">
-      <h3 class="text-xl font-semibold text-white">Enhancement LLM</h3>
-      <p class="mt-1 text-sm text-slate-400">Configuration for prompt enhancement.</p>
+      <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Enhancement LLM</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Configuration for prompt enhancement.</p>
     </header>
-    <form action="/admin/enhancement" method="post" class="space-y-4 rounded-2xl border border-white/8 bg-slate-950/35 p-4">
+    <form action="/admin/enhancement" method="post" class="space-y-4 rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
       <div>
         <label for="enhancement-provider" class="{{ label_class }}">Provider</label>
         <select id="enhancement-provider" name="provider" required class="{{ input_class }}">
@@ -404,7 +404,7 @@
         <input id="enhancement-key" type="password" name="api_key" placeholder="leave blank to keep" class="{{ input_class }}">
       </div>
 
-      <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+      <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
         <input type="checkbox" name="clear_api_key">
         Clear stored key
       </label>
@@ -415,7 +415,7 @@
     </form>
   {% elif active_admin_section == "users" %}
     <div class="flex items-center justify-between gap-3">
-      <h3 class="text-lg font-semibold text-white">Users</h3>
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Users</h3>
       <div class="flex items-center gap-2">
         {% if onboarding_reset_enabled %}
         <span class="text-xs text-rose-300">Dev only: removes all users and reopens onboarding.</span>
@@ -428,13 +428,13 @@
     </div>
 
     <dialog id="create-user-dialog">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">New user</h3>
-            <p class="mt-1 text-sm text-slate-400">Create a new user and assign a role.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">New user</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Create a new user and assign a role.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('create-user-dialog').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-user-dialog').close()">&times;</button>
         </header>
         <form action="/admin/users" method="post" class="space-y-4">
           <div>
@@ -459,9 +459,9 @@
       </article>
     </dialog>
 
-    <div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-      <table class="min-w-full divide-y divide-white/6 text-left text-sm">
-        <thead class="bg-white/5 text-slate-300">
+    <div class="overflow-x-auto rounded-2xl bg-slate-100/80 dark:bg-slate-950/35">
+      <table class="min-w-full divide-y divide-slate-300/60 text-left text-sm dark:divide-white/10">
+        <thead class="bg-slate-200/70 text-slate-700 dark:bg-white/5 dark:text-slate-300">
           <tr>
             <th class="px-4 py-3 font-semibold">Username</th>
             <th class="px-4 py-3 font-semibold">Role</th>
@@ -469,7 +469,7 @@
             <th class="px-4 py-3 font-semibold">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+        <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
         {% for user in users %}
           <tr>
             <td class="px-4 py-3">{{ user.username }}</td>
@@ -486,7 +486,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="4" class="px-4 py-4 text-slate-400">No users available.</td>
+            <td colspan="4" class="px-4 py-4 text-slate-500 dark:text-slate-400">No users available.</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -495,13 +495,13 @@
 
     {% for user in users %}
     <dialog id="edit-user-{{ user.id }}">
-      <article class="rounded-3xl bg-slate-900 p-5 text-slate-100 shadow-2xl shadow-slate-950/80 sm:p-7">
+      <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
         <header class="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-white">Edit user: {{ user.username }}</h3>
-            <p class="mt-1 text-sm text-slate-400">Update role, status, or reset password.</p>
+            <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Edit user: {{ user.username }}</h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Update role, status, or reset password.</p>
           </div>
-          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/5 text-lg text-slate-200 transition hover:border-sky-300/60 hover:text-white" aria-label="Close" onclick="document.getElementById('edit-user-{{ user.id }}').close()">&times;</button>
+          <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-user-{{ user.id }}').close()">&times;</button>
         </header>
         <form action="/admin/users/{{ user.id }}/update" method="post" class="space-y-4">
           <div>
@@ -515,7 +515,7 @@
             <label for="edit-user-password-{{ user.id }}" class="{{ label_class }}">New password (optional)</label>
             <input id="edit-user-password-{{ user.id }}" type="password" name="password" minlength="8" class="{{ input_class }}">
           </div>
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-200">
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}>
             Active
           </label>
@@ -528,18 +528,18 @@
     {% endfor %}
   {% elif active_admin_section == "about" %}
     <header class="mb-1">
-      <h3 class="text-xl font-semibold text-white">About</h3>
-      <p class="mt-1 text-sm text-slate-400">Version and copyright information.</p>
+      <h3 class="text-xl font-semibold text-slate-900 dark:text-white">About</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Version and copyright information.</p>
     </header>
-    <div class="rounded-2xl border border-white/8 bg-slate-950/35 p-4">
+    <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
       <dl class="grid gap-4 sm:grid-cols-2">
         <div>
-          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Version</dt>
-          <dd class="mt-1 text-sm text-slate-100">v{{ app_version }}</dd>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Version</dt>
+          <dd class="mt-1 text-sm text-slate-800 dark:text-slate-100">v{{ app_version }}</dd>
         </div>
         <div>
-          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Copyright</dt>
-          <dd class="mt-1 text-sm text-slate-100">{{ app_copyright_text }}</dd>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Copyright</dt>
+          <dd class="mt-1 text-sm text-slate-800 dark:text-slate-100">{{ app_copyright_text }}</dd>
         </div>
       </dl>
     </div>

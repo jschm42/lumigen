@@ -1,17 +1,17 @@
 :root {
-  --dialog-backdrop-bg: rgb(2 6 23 / 76%);
-  --dialog-backdrop-blur: 5px;
-  --asset-dialog-bg: rgb(2 6 23 / 94%);
-  --asset-dialog-border: rgb(255 255 255 / 15%);
-  --asset-dialog-backdrop-bg: rgb(2 6 23 / 62%);
-}
-
-html[data-theme="light"] {
   --dialog-backdrop-bg: rgb(15 23 42 / 24%);
   --dialog-backdrop-blur: 4px;
   --asset-dialog-bg: rgb(255 255 255 / 96%);
   --asset-dialog-border: rgb(148 163 184 / 36%);
   --asset-dialog-backdrop-bg: rgb(15 23 42 / 18%);
+}
+
+.dark {
+  --dialog-backdrop-bg: rgb(2 6 23 / 76%);
+  --dialog-backdrop-blur: 5px;
+  --asset-dialog-bg: rgb(2 6 23 / 94%);
+  --asset-dialog-border: rgb(255 255 255 / 15%);
+  --asset-dialog-backdrop-bg: rgb(2 6 23 / 62%);
 }
 
 html,
@@ -20,19 +20,11 @@ body {
 }
 
 body {
-  background: linear-gradient(180deg, rgb(2 6 23) 0%, rgb(15 23 42) 100%);
-  color: rgb(226 232 240);
   transition: background-color 120ms ease, color 120ms ease;
 }
 
-body[data-embedded="1"],
 body[data-embedded="1"] main {
   background: transparent !important;
-}
-
-html[data-theme="light"] body {
-  background: linear-gradient(180deg, #eef4ff 0%, #f7fbff 100%);
-  color: #0f172a;
 }
 
 ::selection {
@@ -168,48 +160,6 @@ pre {
 #chat-history.thumb-size-lg .image-container img {
   max-height: min(85vh, 68rem) !important;
   max-width: min(100%, 90rem) !important;
-}
-
-/* Preview image wrapper for input images */
-.preview-image-wrapper {
-  position: relative;
-  width: 5rem;
-  height: 5rem;
-  overflow: hidden;
-  border-radius: 0.75rem;
-  border: 1px solid rgb(255 255 255 / 15%);
-  background-color: rgb(15 23 42 / 80%);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 30%), 0 2px 4px -2px rgb(0 0 0 / 30%);
-}
-
-.preview-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.preview-image-remove {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  border: 1px solid rgb(255 255 255 / 35%);
-  background-color: rgb(15 23 36 / 90%);
-  font-size: 11px;
-  font-weight: 700;
-  color: white;
-  transition: all 0.15s ease;
-  cursor: pointer;
-}
-
-.preview-image-remove:hover {
-  border-color: rgb(255 200 200 / 80%);
-  background-color: rgb(239 68 68 / 80%);
 }
 
 /* Generation pending shimmer animation */

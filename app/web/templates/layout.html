@@ -13,23 +13,18 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="{{ static_url('js/tailwind-config.js') }}"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (window.tailwind && window.__lumigenTailwindConfig) {
+      window.tailwind.config = window.__lumigenTailwindConfig;
+    }
+  </script>
   <link rel="stylesheet" href="{{ static_url('css/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
   <script src="{{ static_url('js/htmx.min.js') }}" defer></script>
   <script src="https://unpkg.com/idiomorph@0.3.0/dist/idiomorph-ext.min.js" defer></script>
   <script src="{{ static_url('js/app.js') }}" defer></script>
 </head>
-<body class="flex flex-col min-h-screen font-sans antialiased" data-embedded="{{ '1' if request.query_params.get('embedded') == '1' else '0' }}">
-  <script>
-    (function () {
-      var root = document.documentElement;
-      var theme = root.getAttribute('data-theme') || 'dark';
-      var mode = root.getAttribute('data-theme-mode') || theme;
-      document.body.setAttribute('data-theme', theme);
-      document.body.setAttribute('data-theme-mode', mode);
-      document.body.style.colorScheme = theme;
-    })();
-  </script>
+<body class="flex min-h-screen flex-col bg-gradient-to-b from-slate-100 to-sky-50 font-sans text-slate-900 antialiased dark:from-slate-950 dark:to-slate-900 dark:text-slate-100" data-embedded="{{ '1' if request.query_params.get('embedded') == '1' else '0' }}">
   {% set embedded = request.query_params.get('embedded') == '1' %}
   {% set show_top_navigation = false %}
   {% if not embedded %}
@@ -41,78 +36,32 @@
   {% endif %}
 
   {% if show_top_navigation and not hide_header and not embedded %}
-  <header class="sticky top-0 z-30 border-b border-white/10 bg-slate-950/90 backdrop-blur-xl">
+  <header class="sticky top-0 z-30 border-b border-slate-300/60 bg-white/85 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 md:flex-row md:items-center md:justify-between">
-      <a class="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 transition hover:border-sky-300/50 hover:bg-white/10" href="/">
-        <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-300/30 bg-slate-900/70">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" focusable="false" class="h-10 w-10">
-            <defs>
-              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              <filter id="glowStrong" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-              <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" style="stop-color:#00f5ff"/>
-                <stop offset="60%" style="stop-color:#bf00ff"/>
-                <stop offset="100%" style="stop-color:#ff00aa"/>
-              </radialGradient>
-              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#00f5ff"/>
-                <stop offset="100%" style="stop-color:#bf00ff"/>
-              </linearGradient>
-            </defs>
-            <circle cx="100" cy="100" r="95" fill="#0a0a0f"/>
-            <circle cx="100" cy="100" r="90" fill="none" stroke="url(#ringGrad)" stroke-width="2" filter="url(#glow)"/>
-            <path d="M30,100 Q100,45 170,100 Q100,155 30,100 Z" fill="none" stroke="#00f5ff" stroke-width="2.5" filter="url(#glow)"/>
-            <circle cx="100" cy="100" r="32" fill="none" stroke="url(#irisGrad)" stroke-width="3" filter="url(#glowStrong)"/>
-            <circle cx="100" cy="100" r="24" fill="none" stroke="#bf00ff" stroke-width="1" opacity="0.6" filter="url(#glow)"/>
-            <circle cx="100" cy="100" r="12" fill="#0a0a0f"/>
-            <circle cx="100" cy="100" r="12" fill="none" stroke="#00f5ff" stroke-width="1.5" filter="url(#glow)"/>
-            <circle cx="100" cy="100" r="5" fill="#00f5ff" filter="url(#glowStrong)"/>
-            <circle cx="92" cy="88" r="4" fill="white" opacity="0.8"/>
-            <circle cx="110" cy="108" r="2" fill="white" opacity="0.4"/>
-            <line x1="100" y1="68" x2="100" y2="78" stroke="#00f5ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
-            <line x1="100" y1="122" x2="100" y2="132" stroke="#00f5ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
-            <line x1="68" y1="100" x2="78" y2="100" stroke="#bf00ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
-            <line x1="122" y1="100" x2="132" y2="100" stroke="#bf00ff" stroke-width="1" opacity="0.5" filter="url(#glow)"/>
-            <path d="M160,50 L162,45 L164,50 L169,52 L164,54 L162,59 L160,54 L155,52 Z" fill="#00f5ff" filter="url(#glow)"/>
-            <circle cx="45" cy="65" r="2" fill="#ff00aa" filter="url(#glow)"/>
-            <circle cx="155" cy="140" r="1.5" fill="#bf00ff" filter="url(#glow)"/>
-          </svg>
+      <a class="inline-flex items-center gap-3 rounded-2xl border border-slate-300/70 bg-white/70 px-3 py-2 transition hover:border-sky-400/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-sky-300/50 dark:hover:bg-white/10" href="/">
+        <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-400/40 bg-slate-200/80 dark:border-sky-300/30 dark:bg-slate-900/70">
+          <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-10 w-10 rounded-lg invert dark:invert-0">
         </span>
         <span class="grid min-w-0 gap-0.5 text-left">
-          <strong class="text-base font-semibold leading-tight text-white">Lumigen</strong>
-          <small class="truncate text-xs font-medium text-slate-400">Local image generation control room</small>
+          <strong class="text-base font-semibold leading-tight text-slate-900 dark:text-white">Lumigen</strong>
+          <small class="truncate text-xs font-medium text-slate-600 dark:text-slate-400">Local image generation control room</small>
         </span>
       </a>
 
       <nav aria-label="Hauptnavigation">
         <ul class="flex flex-wrap items-center gap-2">
           <li>
-            <a href="/" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path == '/' %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}">Generate</a>
+            <a href="/" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path == '/' %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white{% endif %}">Generate</a>
           </li>
           <li>
-            <a href="/profiles" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/profiles') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}">Profiles</a>
+            <a href="/profiles" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/profiles') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white{% endif %}">Profiles</a>
           </li>
           <li>
-            <a href="/gallery" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/gallery') or request.url.path.startswith('/assets') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}">Gallery</a>
+            <a href="/gallery" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/gallery') or request.url.path.startswith('/assets') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white{% endif %}">Gallery</a>
           </li>
           <li>
             {% if request.session.get('user_role') == 'admin' %}
-            <a href="/admin" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/admin') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-300 hover:bg-white/10 hover:text-white{% endif %}">Admin</a>
+            <a href="/admin" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition {% if request.url.path.startswith('/admin') %}bg-sky-300 text-slate-950 shadow-lg shadow-sky-500/30{% else %}text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white{% endif %}">Admin</a>
             {% endif %}
           </li>
         </ul>
@@ -126,12 +75,12 @@
   </main>
 
   <dialog id="confirm-action-dialog" data-confirm-dialog>
-    <article class="w-[min(92vw,28rem)] rounded-2xl border border-white/15 bg-slate-900/95 p-5 text-slate-100 shadow-2xl shadow-slate-950/80">
-      <h3 class="text-base font-semibold text-white">Please confirm</h3>
-      <p class="mt-2 text-sm text-slate-300" data-confirm-dialog-message>Are you sure?</p>
+    <article class="w-[min(92vw,28rem)] rounded-2xl border border-slate-300/70 bg-white/95 p-5 text-slate-900 shadow-2xl shadow-slate-300/50 dark:border-white/15 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-slate-950/80">
+      <h3 class="text-base font-semibold text-slate-900 dark:text-white">Please confirm</h3>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300" data-confirm-dialog-message>Are you sure?</p>
       <div class="mt-5 flex items-center justify-end gap-2">
-        <button type="button" class="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" data-confirm-dialog-cancel>Cancel</button>
-        <button type="button" class="inline-flex items-center justify-center rounded-xl border border-rose-300/40 bg-rose-500/15 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200 hover:bg-rose-500/25" data-confirm-dialog-confirm>Confirm</button>
+        <button type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300/70 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10" data-confirm-dialog-cancel>Cancel</button>
+        <button type="button" class="inline-flex items-center justify-center rounded-xl border border-rose-300/60 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200 dark:border-rose-300/40 dark:bg-rose-500/15 dark:text-rose-100 dark:hover:border-rose-200 dark:hover:bg-rose-500/25" data-confirm-dialog-confirm>Confirm</button>
       </div>
     </article>
   </dialog>

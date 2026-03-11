@@ -1,6 +1,6 @@
-<div class="overflow-x-auto rounded-2xl bg-slate-950/35">
-<table class="min-w-full divide-y divide-white/6 text-left text-sm">
-  <thead class="bg-white/3 text-slate-300">
+<div class="overflow-x-auto rounded-2xl bg-slate-100/80 dark:bg-slate-950/35">
+  <table class="min-w-full divide-y divide-slate-300/60 text-left text-sm dark:divide-white/10">
+  <thead class="bg-slate-200/70 text-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
     <tr>
       <th class="px-4 py-3 font-semibold">Name</th>
       <th class="px-4 py-3 font-semibold">Provider</th>
@@ -10,7 +10,7 @@
       <th class="px-4 py-3 font-semibold">Actions</th>
     </tr>
   </thead>
-  <tbody class="divide-y divide-white/6 bg-slate-950/40 text-slate-100">
+  <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
   {% for profile in profiles %}
     <tr>
       <td class="px-4 py-3">{{ profile.name }}</td>
@@ -20,22 +20,22 @@
         {% if profile.categories %}
           {{ profile.categories | map(attribute='name') | join(', ') }}
         {% else %}
-          <span class="text-slate-400">-</span>
+          <span class="text-slate-500 dark:text-slate-400">-</span>
         {% endif %}
       </td>
-      <td class="px-4 py-3 uppercase text-slate-300">{{ profile.output_format }}</td>
+      <td class="px-4 py-3 uppercase text-slate-600 dark:text-slate-300">{{ profile.output_format }}</td>
       <td class="px-4 py-3">
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/40 hover:bg-white/10" onclick="document.getElementById('edit-profile-dialog-{{ profile.id }}').showModal()">Edit</button>
+            <button type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/40 hover:bg-sky-50 dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/40 dark:hover:bg-white/10" onclick="document.getElementById('edit-profile-dialog-{{ profile.id }}').showModal()">Edit</button>
           <form action="/profiles/{{ profile.id }}/delete" method="post" data-confirm-message="Delete this profile?" class="inline-flex">
-            <button class="inline-flex items-center justify-center rounded-xl border border-rose-300/25 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-200/70 hover:bg-rose-500/20" type="submit">Delete</button>
+            <button class="inline-flex items-center justify-center rounded-xl border border-rose-300/60 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200 dark:border-rose-300/25 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:border-rose-200/70 dark:hover:bg-rose-500/20" type="submit">Delete</button>
           </form>
         </div>
       </td>
     </tr>
   {% else %}
     <tr>
-      <td colspan="6" class="px-4 py-4 text-slate-400">No profiles yet.</td>
+      <td colspan="6" class="px-4 py-4 text-slate-500 dark:text-slate-400">No profiles yet.</td>
     </tr>
   {% endfor %}
   </tbody>

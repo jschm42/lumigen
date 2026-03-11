@@ -28,8 +28,7 @@
     var root = document.documentElement;
     var colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
 
-    root.setAttribute('data-theme', normalized);
-    root.setAttribute('data-theme-mode', themeMode === 'system' ? 'system' : normalized);
+    root.classList.toggle('dark', normalized === 'dark');
     root.style.colorScheme = normalized;
 
     if (colorSchemeMeta) {
@@ -38,8 +37,6 @@
 
     function syncBodyTheme() {
       if (!document.body) return false;
-      document.body.setAttribute('data-theme', normalized);
-      document.body.setAttribute('data-theme-mode', themeMode === 'system' ? 'system' : normalized);
       document.body.style.colorScheme = normalized;
       return true;
     }

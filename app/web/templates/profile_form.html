@@ -3,11 +3,11 @@
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
 {% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
 {% set openrouter_cfg = p.params_json.get('image_config') if p and p.params_json and (p.params_json.get('image_config') is mapping) else {} %}
-{% set input_class = "mt-1.5 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set text_class = "mt-1.5 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
-{% set label_class = "block text-sm font-semibold text-slate-200" %}
+{% set input_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
+{% set text_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
+{% set label_class = "block text-sm font-semibold text-slate-700 dark:text-slate-200" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
-{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/10" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10" %}
 
 <form action="{{ action }}" method="post" class="space-y-4" id="{{ form_dom_id }}" data-profile-form>
   <div>
@@ -35,19 +35,19 @@
   {% set selected_category_ids = (p.categories | map(attribute='id') | list) if p else [] %}
   <div>
     <label class="{{ label_class }}">Categories</label>
-    <div class="mt-1.5 max-h-32 space-y-1.5 overflow-y-auto rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2.5">
+    <div class="mt-1.5 max-h-32 space-y-1.5 overflow-y-auto rounded-xl border border-slate-300/75 bg-white px-3 py-2.5 dark:border-white/15 dark:bg-slate-950/70">
       {% if categories %}
         {% for category in categories %}
-          <label class="flex items-center gap-2 text-sm text-slate-200">
+          <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
             <input type="checkbox" name="category_ids" value="{{ category.id }}" {% if category.id in selected_category_ids %}checked{% endif %}>
             <span class="truncate">{{ category.name }}</span>
           </label>
         {% endfor %}
       {% else %}
-        <p class="text-sm text-slate-400">No categories available.</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">No categories available.</p>
       {% endif %}
     </div>
-    <p class="mt-2 text-xs text-slate-400">Selected categories will be assigned to new images generated with this profile.</p>
+    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Selected categories will be assigned to new images generated with this profile.</p>
   </div>
 
   <div class="grid gap-4 md:grid-cols-2" data-profile-dimensions>
@@ -61,8 +61,8 @@
     </div>
   </div>
 
-  <div class="rounded-2xl border border-white/8 bg-slate-900/40 p-4 hidden" data-profile-openrouter>
-    <p class="mb-2 text-xs text-slate-400">OpenRouter uses image_config instead of fixed pixel dimensions.</p>
+  <div class="hidden rounded-2xl border border-slate-300/70 bg-slate-100/80 p-4 dark:border-white/10 dark:bg-slate-900/40" data-profile-openrouter>
+    <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">OpenRouter uses image_config instead of fixed pixel dimensions.</p>
     <div class="grid gap-4 md:grid-cols-2">
       <div>
         <label for="{{ form_dom_id }}-openrouter-ratio" class="{{ label_class }}">OpenRouter ratio</label>
@@ -124,7 +124,7 @@
           <option value="{{ model }}" {% if selected_upscale == model %}selected{% endif %}>{{ model }}</option>
         {% endfor %}
       </select>
-      <p class="mt-2 text-xs text-slate-400">Used when upscaling is enabled during generation.</p>
+      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Used when upscaling is enabled during generation.</p>
       {% if not upscale_models %}
       <p class="mt-1 text-xs text-amber-300">No local upscaling models found. Please provide .param/.bin files in UPSCALER_MODEL_DIR.</p>
       {% endif %}

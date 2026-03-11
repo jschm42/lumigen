@@ -1,19 +1,19 @@
-<div class="relative rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-300/20 text-sky-100{% else %}bg-white/6 text-slate-300 hover:bg-white/12 hover:text-white{% endif %}" title="{{ item.label }} - {{ item.subtitle }}">
+<div class="relative rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-100 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20 dark:hover:text-white{% endif %}" title="{{ item.label }} - {{ item.subtitle }}">
   <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="flex items-center justify-between pr-8">
     <span class="truncate font-semibold">{{ item.label }}</span>
-    <span class="ml-2 shrink-0 text-xs text-slate-400">{{ item.age if item.age else " " }}</span>
+    <span class="ml-2 shrink-0 text-xs text-slate-500 dark:text-slate-300">{{ item.age if item.age else " " }}</span>
   </a>
   <button
     type="button"
-    class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-slate-950/55 text-slate-300 transition hover:border-white/25 hover:text-white"
+    class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300/70 bg-white text-slate-600 transition hover:border-slate-400/80 hover:text-slate-900 dark:border-white/10 dark:bg-slate-950/55 dark:text-slate-200 dark:hover:border-white/25 dark:hover:text-white"
     aria-haspopup="menu"
     aria-label="Session actions"
     data-session-menu-toggle
   ><i class="bi bi-three-dots text-base" aria-hidden="true"></i></button>
-  <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-xl shadow-slate-950/60 backdrop-blur-xl" role="menu" data-session-menu>
+  <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-slate-300/70 bg-white/95 p-1 shadow-xl shadow-slate-300/55 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95 dark:shadow-slate-950/60" role="menu" data-session-menu>
     <button
       type="button"
-      class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+      class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10"
       data-session-rename
       data-session-token="{{ item.token }}"
       data-session-title="{{ item.label }}"
@@ -23,7 +23,7 @@
       <input type="hidden" name="session_token" value="{{ item.token }}">
       <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
       <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
-      <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10" role="menuitem">Archive</button>
+      <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10" role="menuitem">Archive</button>
     </form>
     <form action="/sessions/delete" method="post" data-confirm-message="Delete session and chat history? Images in the gallery will be kept.">
       <input type="hidden" name="session_token" value="{{ item.token }}">
