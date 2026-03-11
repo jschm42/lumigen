@@ -5,6 +5,20 @@
 
 Both scripts print a Fernet key for `PROVIDER_CONFIG_KEY`.
 
+## Admin user reset script
+
+Use this helper to create or reset an admin user in the local database.
+
+```bash
+python scripts/reset_admin_user.py --username admin
+```
+
+If `--password` is omitted, the script prompts securely and validates confirmation.
+
+```bash
+python scripts/reset_admin_user.py --username admin --password "your-new-password"
+```
+
 ## Docker run/update scripts
 
 The Docker helper scripts (`docker_run.*`, `docker_update.*`) read your repository `.env` and pass runtime env vars into the container.
