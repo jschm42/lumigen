@@ -5,26 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="csrf-token" content="{{ ensure_csrf_token(request) }}">
-  <script>
-    (function () {
-      var key = "lumigen_theme";
-      var value = "system";
-      try {
-        var saved = localStorage.getItem(key);
-        if (saved === "dark" || saved === "light" || saved === "system") {
-          value = saved;
-        }
-      } catch (_e) {
-        value = "system";
-      }
-      var effective = value;
-      if (value === "system") {
-        var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        effective = prefersDark ? "dark" : "light";
-      }
-      document.documentElement.setAttribute("data-theme", effective);
-    })();
-  </script>
+  <script src="{{ static_url('js/theme-init.js') }}"></script>
   <title>{{ title if title else "Lumigen" }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ static_url('app-logo.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
