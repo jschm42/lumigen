@@ -56,8 +56,8 @@ body[data-theme="light"] .grid > aside {
 }
 
 body[data-theme="light"] .grid > aside > div a:first-child {
-  background: rgb(255 255 255 / 62%) !important;
-  border: 1px solid rgb(148 163 184 / 28%);
+  background: transparent !important;
+  border-color: transparent !important;
 }
 
 body[data-theme="light"] .grid > aside > div a:first-child .text-white {
@@ -66,6 +66,11 @@ body[data-theme="light"] .grid > aside > div a:first-child .text-white {
 
 body[data-theme="light"] .grid > aside > div a:first-child .text-slate-400 {
   color: rgb(71 85 105) !important;
+}
+
+body[data-theme="light"] .grid > aside > div a:first-child img {
+  background: transparent !important;
+  filter: grayscale(1) brightness(0);
 }
 
 body[data-theme="light"] .grid > aside nav > a,
