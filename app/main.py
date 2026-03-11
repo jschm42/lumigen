@@ -39,7 +39,7 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, load_only, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
@@ -593,7 +593,16 @@ def build_session_items(
     Build session items with pagination and time categorization.
     Returns (session_items, has_more).
     """
-    query = select(Generation).options(selectinload(Generation.assets))
+    query = select(Generation).options(
+        load_only(
+            Generation.id,
+            Generation.profile_id,
+            Generation.profile_name,
+            Generation.status,
+            Generation.created_at,
+            Generation.request_snapshot_json,
+        )
+    )
     if max_days is not None:
         now = datetime.now()
         cutoff_date = now - timedelta(days=max_days)
