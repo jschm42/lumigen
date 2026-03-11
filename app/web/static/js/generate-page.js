@@ -51,7 +51,6 @@
   }
 
   function setupSessionMenus() {
-    var menuToggles = Array.from(document.querySelectorAll("[data-session-menu-toggle]"));
     var renameForm = document.getElementById("rename-session-form");
     var renameTokenInput = renameForm ? renameForm.querySelector("[name='session_token']") : null;
     var renameTitleInput = renameForm ? renameForm.querySelector("[name='title']") : null;
@@ -62,8 +61,15 @@
       });
     }
 
-    menuToggles.forEach(function (toggle) {
-      toggle.addEventListener("click", function (event) {
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) {
+        closeAllMenus();
+        return;
+      }
+
+      var toggle = target.closest("[data-session-menu-toggle]");
+      if (toggle) {
         event.preventDefault();
         event.stopPropagation();
         var container = toggle.parentElement;
@@ -75,19 +81,15 @@
         if (wasHidden) {
           menu.classList.remove("hidden");
         }
-      });
-    });
+        return;
+      }
 
-    document.addEventListener("click", function () {
-      closeAllMenus();
-    });
-
-    document.querySelectorAll("[data-session-rename]").forEach(function (button) {
-      button.addEventListener("click", function (event) {
+      var renameButton = target.closest("[data-session-rename]");
+      if (renameButton) {
         event.preventDefault();
         event.stopPropagation();
-        var token = button.getAttribute("data-session-token") || "";
-        var currentTitle = button.getAttribute("data-session-title") || "";
+        var token = renameButton.getAttribute("data-session-token") || "";
+        var currentTitle = renameButton.getAttribute("data-session-title") || "";
         var nextTitle = window.prompt("Rename session", currentTitle);
         if (nextTitle === null) return;
         var trimmed = nextTitle.trim();
@@ -95,13 +97,116 @@
         renameTokenInput.value = token;
         renameTitleInput.value = trimmed;
         renameForm.submit();
+        return;
+      }
+
+      if (!target.closest("[data-session-menu]")) {
+        closeAllMenus();
+      }
+    });
+  }
+
+  function setupWorkspaceNavigation() {
+    var workspaceLinks = document.querySelectorAll("[data-workspace-nav][data-workspace-view]");
+    var workspaceShell = document.querySelector("[data-chat-shell]");
+    if (!workspaceLinks.length || !workspaceShell) return;
+
+    var activeClasses = ["bg-sky-300/20", "text-sky-100"];
+    var inactiveClasses = ["bg-white/6", "text-slate-200", "hover:bg-white/12"];
+
+    function setActiveWorkspaceLink(activeView) {
+      workspaceLinks.forEach(function (link) {
+        var view = link.getAttribute("data-workspace-view") || "";
+        var isActive = view === activeView;
+        if (isActive) {
+          inactiveClasses.forEach(function (className) {
+            link.classList.remove(className);
+          });
+          activeClasses.forEach(function (className) {
+            link.classList.add(className);
+          });
+        } else {
+          activeClasses.forEach(function (className) {
+            link.classList.remove(className);
+          });
+          inactiveClasses.forEach(function (className) {
+            link.classList.add(className);
+          });
+        }
       });
+    }
+
+    function setWorkspaceIframe(targetUrl) {
+      var iframe = workspaceShell.querySelector("iframe[data-workspace-iframe]");
+      if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.setAttribute("data-workspace-iframe", "1");
+        iframe.setAttribute("title", "workspace");
+        iframe.className = "h-full w-full border-0";
+        workspaceShell.replaceChildren(iframe);
+      }
+      if (iframe.getAttribute("src") !== targetUrl) {
+        iframe.setAttribute("src", targetUrl);
+      }
+    }
+
+    function resolveIframeUrl(view) {
+      if (view === "profiles") return "/profiles?embedded=1";
+      if (view === "gallery") return "/gallery?embedded=1";
+      if (view === "admin") return "/admin?embedded=1";
+      return "";
+    }
+
+    function applyWorkspaceView(view, url, pushHistory) {
+      var iframeUrl = resolveIframeUrl(view);
+      if (!iframeUrl) return false;
+
+      setWorkspaceIframe(iframeUrl);
+      setActiveWorkspaceLink(view);
+
+      if (pushHistory && url) {
+        window.history.pushState({ workspace_view: view }, "", url);
+      }
+      return true;
+    }
+
+    workspaceLinks.forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+
+        var view = link.getAttribute("data-workspace-view") || "";
+        var href = link.getAttribute("href") || "";
+        if (!view || !href) return;
+
+        var absoluteUrl = new URL(href, window.location.origin);
+        applyWorkspaceView(view, absoluteUrl.toString(), true);
+      });
+    });
+
+    window.addEventListener("popstate", function () {
+      var currentUrl = new URL(window.location.href);
+      var view = (currentUrl.searchParams.get("workspace_view") || "chat").toLowerCase();
+      if (!applyWorkspaceView(view, "", false)) {
+        window.location.reload();
+      }
     });
   }
 
   window.addEventListener("DOMContentLoaded", function () {
     setupOverlayObservers();
     setupSessionMenus();
+    setupWorkspaceNavigation();
     setupChatAutoScroll();
     scrollChatToBottom();
   });
@@ -210,60 +315,4 @@
     applyThumbSize(currentThumbSize);
   }
 
-  function setupLoadMoreSessions() {
-    var loadMoreBtn = document.querySelector("[data-load-more-sessions]");
-    if (!loadMoreBtn) return;
-
-    loadMoreBtn.addEventListener("click", function () {
-      var offset = parseInt(loadMoreBtn.getAttribute("data-offset") || "0", 10);
-      var currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.set("session_offset", offset);
-      window.location.href = currentUrl.toString();
-    });
-  }
-
-  function setupUserMenu() {
-    var toggle = document.querySelector("[data-user-menu-toggle]");
-    var menu = document.querySelector("[data-user-menu]");
-    var chevron = document.querySelector("[data-user-menu-chevron]");
-    if (!toggle || !menu) return;
-
-    function openMenu() {
-      menu.classList.remove("hidden");
-      toggle.setAttribute("aria-expanded", "true");
-      if (chevron) chevron.textContent = "expand_more";
-    }
-
-    function closeMenu() {
-      menu.classList.add("hidden");
-      toggle.setAttribute("aria-expanded", "false");
-      if (chevron) chevron.textContent = "expand_less";
-    }
-
-    var container = document.querySelector("[data-user-menu-container]");
-
-    toggle.addEventListener("click", function (event) {
-      event.stopPropagation();
-      if (menu.classList.contains("hidden")) {
-        openMenu();
-      } else {
-        closeMenu();
-      }
-    });
-
-    document.addEventListener("click", function (event) {
-      if (container && !container.contains(event.target)) {
-        closeMenu();
-      }
-    });
-
-    document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        closeMenu();
-      }
-    });
-  }
-
-  setupLoadMoreSessions();
-  setupUserMenu();
 })();

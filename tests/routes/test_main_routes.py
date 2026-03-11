@@ -142,6 +142,110 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
     assert len(fake_session.added) == 2
 
 
+def test_archive_session_marks_generations_as_archived(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    generation = SimpleNamespace(request_snapshot_json={"chat_session_id": "session:abc"})
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [generation],
+    )
+
+    response = client.post(
+        "/sessions/archive",
+        data={
+            "session_token": "session:abc",
+            "active_conversation": "session:abc",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new"
+    assert generation.request_snapshot_json["chat_archived"] is True
+    assert fake_session.commits == 1
+
+
+def test_delete_session_marks_chat_history_deleted_without_removing_assets(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    generation = SimpleNamespace(
+        request_snapshot_json={
+            "chat_session_id": "session:abc",
+            "chat_session_title": "My Session",
+            "chat_archived": True,
+        }
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [generation],
+    )
+
+    response = client.post(
+        "/sessions/delete",
+        data={
+            "session_token": "session:abc",
+            "active_conversation": "session:abc",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new"
+    snapshot = generation.request_snapshot_json
+    assert snapshot["chat_hidden"] is True
+    assert snapshot["chat_deleted"] is True
+    assert "chat_archived" not in snapshot
+    assert "chat_session_id" not in snapshot
+    assert "chat_session_title" not in snapshot
+    assert fake_session.commits == 1
+
+
+def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=None: (
+            [
+                {
+                    "token": "session:one",
+                    "label": "Session One",
+                    "subtitle": "",
+                    "age": "1d",
+                    "time_category": "last7days",
+                    "time_category_label": "Last 7 days",
+                    "latest_created_at": None,
+                }
+            ],
+            True,
+        ),
+    )
+
+    response = client.get(
+        "/sessions/list-fragment?offset=0&limit=10&prev_category=&active_conversation=session:one&workspace_view=chat"
+    )
+    body = response.text
+
+    assert response.status_code == 200
+    assert "Session One" in body
+    assert "Loading more sessions..." in body
+    assert "hx-get=\"/sessions/list-fragment?offset=1" in body
+
+
 def test_generate_submit_rejects_non_positive_width(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(

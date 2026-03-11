@@ -31,8 +31,8 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 - `alembic upgrade head` -> `verified`.
 - `python -m app.main` -> `verified` (server starts on `http://127.0.0.1:8010`).
 - `python -m pytest -q tests/unit/test_gallery_service.py` -> `verified` (`5 passed`, ~0.4s).
-- `python -m pytest -q tests/frontend/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
-- `python -m pytest -q tests/routes tests/frontend` -> `verified` (`54 passed`, ~28s).
+- `python -m pytest -q tests/ui_routes/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
+- `python -m pytest -q tests/routes tests/ui_routes` -> `verified` (`54 passed`, ~28s).
 - `python scripts/smoke_web_routes.py` -> `verified with caveat`: currently fails with `AssertionError: admin page does not include external admin-page.js`.
 - `ruff check app/` -> `failed here with workaround`: command not found in shell until tool installed.
 - `python -m ruff check app/` -> `failed here with workaround`: module not installed in current venv.
@@ -40,7 +40,7 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 - `npm ci` -> `failed here with workaround` in PowerShell due `npm.ps1` execution policy.
 - `npm.cmd ci` -> `verified with caveat` (succeeds; observed AutoRun warning lines but install completes).
 - `npx eslint app/web/static/js/` -> use `npx.cmd eslint app/web/static/js/` on Windows PowerShell.
-- `npx stylelint "app/web/static/app.css"` -> use `npx.cmd stylelint "app/web/static/app.css"` on Windows PowerShell.
+- `npx stylelint "app/web/static/css/app.css"` -> use `npx.cmd stylelint "app/web/static/css/app.css"` on Windows PowerShell.
 
 ### Required workarounds observed
 - If `ruff`/`djlint` are missing locally, install first:
@@ -57,16 +57,16 @@ CI currently runs lint only (no pytest job):
 - Python lint: `ruff check app/`
 - Template lint: `djlint app/web/templates/ --lint`
 - JS lint: `npx eslint app/web/static/js/`
-- CSS lint: `npx stylelint "app/web/static/app.css"`
+- CSS lint: `npx stylelint "app/web/static/css/app.css"`
 
 Recommended pre-PR validation order:
 1. `alembic upgrade head`
 2. `python -m pytest -q tests/unit`
-3. `python -m pytest -q tests/routes tests/frontend`
+3. `python -m pytest -q tests/routes tests/ui_routes`
 4. `ruff check app/`
 5. `djlint app/web/templates/ --lint`
 6. `npx eslint app/web/static/js/`
-7. `npx stylelint "app/web/static/app.css"`
+7. `npx stylelint "app/web/static/css/app.css"`
 
 ## Architecture map (where to edit)
 - `app/main.py`: route handlers, request validation, dependency wiring, service singletons.
@@ -81,7 +81,7 @@ Recommended pre-PR validation order:
 - `app/providers/*_adapter.py`: provider-specific HTTP integrations.
 - `app/web/templates/`: server-rendered Jinja templates + HTMX fragments.
 - `app/web/static/js/`: all client JavaScript. Do not use inline scripts in templates.
-- `app/web/static/app.css`: app-wide styles.
+- `app/web/static/css/app.css`: app-wide styles.
 
 ## Change rules that prevent regressions
 - Prefer service-layer changes over adding business logic in `app/main.py`.
@@ -99,7 +99,7 @@ Recommended pre-PR validation order:
 
 ## Root layout quick reference
 - Root files: `README.md`, `requirements.txt`, `pyproject.toml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`.
-- Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `frontend/`, `data/`.
+- Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `data/`.
 
 ## When to search
 Only search if one of these is true:

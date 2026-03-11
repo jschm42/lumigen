@@ -9,7 +9,7 @@
     aria-haspopup="menu"
     aria-label="Session actions"
     data-session-menu-toggle
-  ><span class="material-symbols-outlined text-base" aria-hidden="true">more_horiz</span></button>
+  ><i class="bi bi-three-dots text-base" aria-hidden="true"></i></button>
   <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-xl shadow-slate-950/60 backdrop-blur-xl" role="menu" data-session-menu>
     <button
       type="button"
@@ -19,6 +19,12 @@
       data-session-title="{{ item.label }}"
       role="menuitem"
     >Rename</button>
+    <form action="/sessions/archive" method="post" data-confirm-message="Archive session? It will be hidden but not deleted.">
+      <input type="hidden" name="session_token" value="{{ item.token }}">
+      <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+      <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+      <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10" role="menuitem">Archive</button>
+    </form>
     <form action="/sessions/delete" method="post" data-confirm-message="Delete session and chat history? Images in the gallery will be kept.">
       <input type="hidden" name="session_token" value="{{ item.token }}">
       <input type="hidden" name="active_conversation" value="{{ active_conversation }}">

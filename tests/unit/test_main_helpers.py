@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -133,6 +133,8 @@ def test_generation_session_helpers(app_module) -> None:
         == "My Title"
     )
     assert app_module.generation_chat_hidden(SimpleNamespace(request_snapshot_json={"chat_hidden": True})) is True
+    assert app_module.generation_session_archived(SimpleNamespace(request_snapshot_json={"chat_archived": True})) is True
+    assert app_module.generation_chat_deleted(SimpleNamespace(request_snapshot_json={"chat_deleted": True})) is True
 
 
 def test_redirect_builders(app_module) -> None:
@@ -170,6 +172,21 @@ def test_format_session_helpers(app_module) -> None:
 
     category_today = app_module.get_session_time_category(now)
     assert category_today == "today"
+
+    assert app_module.get_session_time_category(now - timedelta(days=20)) == "last30days"
+    assert app_module.get_session_time_category(now - timedelta(days=50)) == "last60days"
+    assert app_module.get_session_time_category(now - timedelta(days=100)) == "last120days"
+    assert app_module.get_session_time_category(now - timedelta(days=300)) == "lastyear"
+    assert app_module.get_session_time_category(now - timedelta(days=500)) == "older"
+
+
+def test_normalize_time_preset_supports_extended_values(app_module) -> None:
+    assert app_module.normalize_time_preset("today") == "today"
+    assert app_module.normalize_time_preset("last_60_days") == "last_60_days"
+    assert app_module.normalize_time_preset("last_120_days") == "last_120_days"
+    assert app_module.normalize_time_preset("last_year") == "last_year"
+    assert app_module.normalize_time_preset("older") == "older"
+    assert app_module.normalize_time_preset("nope") == "today"
 
 
 def test_parse_proxy_trusted_hosts(app_module) -> None:

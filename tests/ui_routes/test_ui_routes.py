@@ -84,6 +84,72 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     assert 'data-generation-form' in body
     assert 'data-input-preview' in body
     assert 'Start a new session with a prompt in the input field below.' in body
+    assert 'data-load-more-sessions' not in body
+    assert 'Settings...' in body
+    assert 'data-user-settings-dialog' in body
+    assert 'data-user-theme-select' in body
+    assert '<option value="system">System</option>' in body
+
+
+def test_generate_page_keeps_selected_older_session_visible(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [
+            SimpleNamespace(
+                id=1,
+                name="Default",
+                provider="stub",
+                model="stub-v1",
+                model_config_id=1,
+                width=512,
+                height=512,
+                n_images=1,
+                seed=None,
+            )
+        ],
+    )
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+
+    all_sessions = []
+    for idx in range(25):
+        token = f"session:{idx:03d}"
+        all_sessions.append(
+            {
+                "token": token,
+                "label": f"Session {idx:03d}",
+                "subtitle": "",
+                "age": "",
+                "time_category": "lastyear",
+                "time_category_label": "Last year",
+                "latest_created_at": None,
+            }
+        )
+
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=None: (all_sessions, False),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [],
+    )
+
+    response = client.get("/?workspace_view=chat&conversation=session:022")
+    body = response.text
+
+    assert response.status_code == 200
+    assert "Session 022" in body
+    assert "bg-sky-300/20 text-sky-100" in body
 
 
 def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, app_module) -> None:
@@ -143,7 +209,7 @@ def test_job_status_chat_fragment_renders_add_to_input_button_on_assets(client, 
 
     assert response.status_code == 200
     assert 'data-add-to-input="42"' in body
-    assert 'add_photo_alternate' in body
+    assert 'bi-image' in body
 
 
 def test_generation_input_image_thumbnail_endpoint_returns_image_bytes(client, app_module) -> None:
@@ -191,6 +257,61 @@ def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_mod
     assert 'src="/gallery?embedded=1"' in body
 
 
+def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_module, monkeypatch) -> None:
+    class _NoScalarsSession(_FakeSession):
+        def scalars(self, _query):
+            raise AssertionError("chat generations should not be queried for gallery workspace")
+
+    fake_session = _NoScalarsSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: (_ for _ in ()).throw(AssertionError("profiles should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_dimension_presets",
+        lambda _session: (_ for _ in ()).throw(AssertionError("dimension presets should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_enhancement_config",
+        lambda _session: (_ for _ in ()).throw(AssertionError("enhancement config should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: (_ for _ in ()).throw(AssertionError("session generations should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30: (
+            [
+                {
+                    "token": "session:abc",
+                    "label": "Session",
+                    "subtitle": "",
+                    "age": "",
+                    "time_category": "today",
+                    "time_category_label": "Today",
+                    "latest_created_at": None,
+                }
+            ],
+            False,
+        ),
+    )
+
+    response = client.get("/?workspace_view=gallery&conversation=session:abc")
+
+    assert response.status_code == 200
+    assert 'src="/gallery?embedded=1"' in response.text
+
+
 def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
@@ -221,6 +342,10 @@ def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkey
     assert 'value="today" selected' in body
     assert 'Last 7 days' in body
     assert 'Last 30 days' in body
+    assert 'Last 60 days' in body
+    assert 'Last 120 days' in body
+    assert 'Last year' in body
+    assert '>Older<' in body
     assert 'value="custom"' in body
 
 

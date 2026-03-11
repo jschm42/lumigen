@@ -7,6 +7,6 @@
   },
   "scripts": {
     "lint:js": "eslint app/web/static/js/",
-    "lint:css": "stylelint app/web/static/app.css"
+    "lint:css": "stylelint app/web/static/css/app.css"
   }
 }

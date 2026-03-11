@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light dark">
   <meta name="csrf-token" content="{{ ensure_csrf_token(request) }}">
+  <script src="{{ static_url('js/theme-init.js') }}"></script>
   <title>{{ title if title else "Lumigen" }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ static_url('app-logo.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +13,8 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="{{ static_url('js/tailwind-config.js') }}"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  <link rel="stylesheet" href="{{ static_url('css/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
   <script src="{{ static_url('js/htmx.min.js') }}" defer></script>
   <script src="https://unpkg.com/idiomorph@0.3.0/dist/idiomorph-ext.min.js" defer></script>
   <script src="{{ static_url('js/app.js') }}" defer></script>
