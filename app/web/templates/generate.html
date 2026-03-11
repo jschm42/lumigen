@@ -75,7 +75,7 @@
     </nav>
   </aside>
 
-  <section class="{{ panel_class }} relative h-full min-h-0 overflow-hidden" data-chat-shell data-last-thumb-size="{{ last_thumb_size }}">
+  <section class="{{ panel_class }} relative h-full min-h-0 overflow-hidden" data-chat-shell data-workspace-embedded="{{ '1' if workspace_view != 'chat' else '0' }}" data-last-thumb-size="{{ last_thumb_size }}">
     {% if workspace_view != "chat" %}
       <iframe
         title="workspace"

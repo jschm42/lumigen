@@ -25,6 +25,11 @@ body {
   transition: background-color 120ms ease, color 120ms ease;
 }
 
+body[data-embedded="1"],
+body[data-embedded="1"] main {
+  background: transparent !important;
+}
+
 html[data-theme="light"] body {
   background: linear-gradient(180deg, #eef4ff 0%, #f7fbff 100%);
   color: #0f172a;

@@ -1,6 +1,39 @@
 body[data-theme="light"] {
-  background: linear-gradient(180deg, #eef4ff 0%, #f7fbff 100%);
-  color: #0f172a;
+  background: linear-gradient(180deg, #d9dee5 0%, #e5e9ef 100%);
+  color: #111827;
+}
+
+body[data-theme="light"][data-embedded="1"] {
+  background: transparent;
+}
+
+body[data-theme="light"][data-embedded="1"] form[action="/gallery"],
+body[data-theme="light"][data-embedded="1"] [data-gallery-bulk-form],
+body[data-theme="light"][data-embedded="1"] [data-admin-page] .bg-slate-950\/35,
+body[data-theme="light"][data-embedded="1"] [data-admin-page] .bg-slate-950\/40,
+body[data-theme="light"][data-embedded="1"] [data-profiles-page] .bg-slate-950\/35,
+body[data-theme="light"][data-embedded="1"] [data-profiles-page] .bg-slate-950\/40 {
+  background: transparent !important;
+}
+
+body[data-theme="light"][data-embedded="1"] [data-gallery-card] {
+  background: rgb(246 248 251 / 96%) !important;
+  border: 1px solid rgb(148 163 184 / 28%);
+  box-shadow: 0 8px 20px rgb(15 23 42 / 8%);
+}
+
+body[data-theme="light"][data-embedded="1"] [data-gallery-card] [data-gallery-card-click] {
+  background: rgb(250 251 253 / 96%) !important;
+}
+
+body[data-theme="light"][data-embedded="1"] form[action="/gallery"] {
+  background: rgb(242 246 250 / 94%) !important;
+  border: 1px solid rgb(148 163 184 / 26%);
+}
+
+body[data-theme="light"][data-embedded="1"] [data-gallery-bulk-form] {
+  background: rgb(242 246 250 / 92%) !important;
+  border: 1px solid rgb(148 163 184 / 26%) !important;
 }
 
 body[data-theme="light"] dialog::backdrop {
@@ -17,15 +50,52 @@ body[data-theme="light"] > [aria-hidden="true"] {
 }
 
 body[data-theme="light"] .grid > aside {
-  background: linear-gradient(180deg, #dff3ff 0%, #f6fbff 65%, #f8faff 100%) !important;
+  background: linear-gradient(180deg, #c6d0da 0%, #d5dde6 58%, #dde4eb 100%) !important;
   color: #0f172a;
-  box-shadow: 0 12px 40px rgb(15 23 42 / 10%);
+  box-shadow: 0 12px 40px rgb(15 23 42 / 12%);
+}
+
+body[data-theme="light"] .grid > aside > div a:first-child {
+  background: rgb(255 255 255 / 62%) !important;
+  border: 1px solid rgb(148 163 184 / 28%);
+}
+
+body[data-theme="light"] .grid > aside > div a:first-child .text-white {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] .grid > aside > div a:first-child .text-slate-400 {
+  color: rgb(71 85 105) !important;
+}
+
+body[data-theme="light"] .grid > aside nav > a,
+body[data-theme="light"] .grid > aside #session-list > a {
+  color: rgb(30 41 59) !important;
+}
+
+body[data-theme="light"] .grid > aside nav > a.bg-white\/6,
+body[data-theme="light"] .grid > aside #session-list > a.bg-white\/6 {
+  background: rgb(255 255 255 / 76%) !important;
+  border: 1px solid rgb(148 163 184 / 30%);
+}
+
+body[data-theme="light"] .grid > aside nav > a.bg-sky-300\/20,
+body[data-theme="light"] .grid > aside #session-list > a.bg-sky-300\/20 {
+  background: rgb(186 230 253 / 58%) !important;
+  color: rgb(12 74 110) !important;
+  border: 1px solid rgb(125 211 252 / 72%);
 }
 
 body[data-theme="light"] [data-chat-shell] {
   background: rgb(255 255 255 / 78%) !important;
   color: #0f172a;
   box-shadow: 0 12px 40px rgb(15 23 42 / 10%);
+}
+
+body[data-theme="light"] [data-chat-shell][data-workspace-embedded="1"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 body[data-theme="light"] [data-user-menu-container] [data-user-menu-toggle],
@@ -37,15 +107,39 @@ body[data-theme="light"] [data-generation-form] [data-chat-bottom-panel] > div {
 
 body[data-theme="light"] [data-user-menu-container] [data-user-menu-toggle],
 body[data-theme="light"] [data-user-menu-container] [data-user-menu] {
-  background: rgb(255 255 255 / 88%) !important;
+  background: rgb(255 255 255 / 94%) !important;
+  border-color: rgb(148 163 184 / 38%) !important;
+  color: rgb(17 24 39) !important;
+}
+
+body[data-theme="light"] [data-user-menu-container] [data-user-menu-toggle] .text-slate-200,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu-toggle] .text-slate-300,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] .text-slate-200,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] .text-slate-300,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] .text-slate-400 {
+  color: rgb(30 41 59) !important;
+}
+
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] a,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] button {
+  color: rgb(17 24 39) !important;
+}
+
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] a:hover,
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] button:hover {
+  background: rgb(226 232 240 / 72%) !important;
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] [data-user-menu-container] [data-user-menu] .border-t {
   border-color: rgb(148 163 184 / 35%) !important;
 }
 
 body[data-theme="light"] [data-user-settings-dialog],
 body[data-theme="light"] dialog[data-asset-detail-dialog] {
-  background: rgb(255 255 255 / 96%) !important;
+  background: rgb(234 237 241 / 97%) !important;
   color: #0f172a;
-  border-color: rgb(148 163 184 / 35%) !important;
+  border-color: rgb(148 163 184 / 42%) !important;
 }
 
 body[data-theme="light"] [data-user-theme-select] {
@@ -98,6 +192,25 @@ body[data-theme="light"] [data-category-popover-panel] {
   background: rgb(255 255 255 / 97%) !important;
   color: #0f172a !important;
   border-color: rgb(148 163 184 / 35%) !important;
+}
+
+body[data-theme="light"] [data-gallery-thumb-size] {
+  color: rgb(71 85 105) !important;
+  border-color: rgb(148 163 184 / 46%) !important;
+  background: rgb(248 250 252 / 96%) !important;
+}
+
+body[data-theme="light"] [data-gallery-thumb-size].text-sky-100,
+body[data-theme="light"] [data-gallery-thumb-size][class*="bg-sky-300/20"] {
+  color: rgb(3 105 161) !important;
+  border-color: rgb(56 189 248 / 58%) !important;
+  background: rgb(224 242 254 / 86%) !important;
+}
+
+body[data-theme="light"] [data-gallery-thumb-size]:hover {
+  color: rgb(15 23 42) !important;
+  border-color: rgb(125 211 252 / 80%) !important;
+  background: rgb(241 245 249 / 96%) !important;
 }
 
 body[data-theme="light"] [data-gallery-card] {
@@ -274,8 +387,8 @@ body[data-theme="light"] dialog[data-user-settings-dialog] .border-white\/10,
 body[data-theme="light"] dialog[data-user-settings-dialog] .border-white\/15,
 body[data-theme="light"] dialog[data-user-settings-dialog] .bg-white\/5,
 body[data-theme="light"] dialog[data-user-settings-dialog] .bg-slate-950\/75 {
-  background: rgb(248 250 252 / 96%) !important;
-  border-color: rgb(148 163 184 / 38%) !important;
+  background: rgb(230 234 239 / 96%) !important;
+  border-color: rgb(148 163 184 / 44%) !important;
 }
 
 body[data-theme="light"] dialog.bg-slate-900,
@@ -291,7 +404,7 @@ body[data-theme="light"] dialog .bg-slate-950\/70,
 body[data-theme="light"] dialog .bg-slate-950\/75,
 body[data-theme="light"] dialog .bg-slate-950\/94,
 body[data-theme="light"] dialog .bg-white\/5 {
-  background: rgb(248 250 252 / 96%) !important;
+  background: rgb(230 234 239 / 96%) !important;
 }
 
 body[data-theme="light"] dialog.border-white\/10,
@@ -302,7 +415,7 @@ body[data-theme="light"] dialog .border-white\/10,
 body[data-theme="light"] dialog .border-white\/15,
 body[data-theme="light"] dialog .border-white\/20,
 body[data-theme="light"] dialog .border-white\/30 {
-  border-color: rgb(148 163 184 / 38%) !important;
+  border-color: rgb(148 163 184 / 44%) !important;
 }
 
 body[data-theme="light"] dialog.text-white,
@@ -314,8 +427,17 @@ body[data-theme="light"] dialog .text-white,
 body[data-theme="light"] dialog .text-slate-100,
 body[data-theme="light"] dialog .text-slate-200,
 body[data-theme="light"] dialog .text-slate-300,
-body[data-theme="light"] dialog .text-slate-400 {
+body[data-theme="light"] dialog .text-slate-400,
+body[data-theme="light"] dialog .text-slate-500 {
   color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] dialog label,
+body[data-theme="light"] dialog dt,
+body[data-theme="light"] dialog dd,
+body[data-theme="light"] dialog small,
+body[data-theme="light"] dialog p {
+  color: rgb(30 41 59) !important;
 }
 
 body[data-theme="light"] dialog[data-asset-detail-dialog] .text-white,
@@ -332,7 +454,7 @@ body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-950\/45,
 body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-900\/80,
 body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-slate-900\/90,
 body[data-theme="light"] dialog[data-asset-detail-dialog] .bg-white\/5 {
-  background: rgb(248 250 252 / 96%) !important;
+  background: rgb(230 234 239 / 96%) !important;
 }
 
 body[data-theme="light"] dialog[data-asset-detail-dialog] .border-white\/10,
@@ -342,15 +464,15 @@ body[data-theme="light"] dialog[data-asset-detail-dialog] .border-white\/20 {
 }
 
 body[data-theme="light"] dialog[data-asset-detail-dialog] summary:hover {
-  background: rgb(241 245 249 / 88%) !important;
+  background: rgb(226 232 240 / 78%) !important;
 }
 
 body[data-theme="light"] dialog[data-asset-detail-dialog] textarea,
 body[data-theme="light"] dialog[data-asset-detail-dialog] select,
 body[data-theme="light"] dialog[data-asset-detail-dialog] input {
-  background: rgb(255 255 255 / 96%) !important;
+  background: rgb(236 240 244 / 98%) !important;
   color: rgb(15 23 42) !important;
-  border-color: rgb(148 163 184 / 38%) !important;
+  border-color: rgb(148 163 184 / 45%) !important;
 }
 
 /* Profiles/Admin pages and dialogs */
@@ -412,9 +534,9 @@ body[data-theme="light"] [data-admin-page] nav a.bg-white\/5 {
 }
 
 body[data-theme="light"] dialog article.rounded-3xl.bg-slate-900 {
-  background: rgb(255 255 255 / 98%) !important;
+  background: rgb(234 237 241 / 97%) !important;
   color: rgb(15 23 42) !important;
-  border: 1px solid rgb(148 163 184 / 35%);
+  border: 1px solid rgb(148 163 184 / 42%);
 }
 
 body[data-theme="light"] dialog article.rounded-3xl .text-white,
@@ -429,16 +551,16 @@ body[data-theme="light"] dialog article.rounded-3xl .bg-slate-950\/70,
 body[data-theme="light"] dialog article.rounded-3xl .bg-white\/5,
 body[data-theme="light"] dialog article.rounded-3xl .border-white\/15,
 body[data-theme="light"] dialog article.rounded-3xl .border-white\/20 {
-  background: rgb(248 250 252 / 96%) !important;
-  border-color: rgb(148 163 184 / 36%) !important;
+  background: rgb(230 234 239 / 96%) !important;
+  border-color: rgb(148 163 184 / 44%) !important;
 }
 
 body[data-theme="light"] dialog article.rounded-3xl input,
 body[data-theme="light"] dialog article.rounded-3xl select,
 body[data-theme="light"] dialog article.rounded-3xl textarea {
-  background: rgb(255 255 255 / 96%) !important;
+  background: rgb(236 240 244 / 98%) !important;
   color: rgb(15 23 42) !important;
-  border-color: rgb(148 163 184 / 40%) !important;
+  border-color: rgb(148 163 184 / 46%) !important;
 }
 
 body[data-theme="light"] nav[data-user-menu-container],
