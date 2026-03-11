@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -198,3 +198,40 @@ def test_parse_proxy_trusted_hosts(app_module) -> None:
         "127.0.0.1",
         "10.0.0.1",
     ]
+
+
+def test_build_created_at_bounds_uses_utc(app_module) -> None:
+    before = datetime.now(UTC)
+    start, end = app_module.build_created_at_bounds(
+        time_preset="last_7_days", from_date=None, to_date=None
+    )
+    after = datetime.now(UTC)
+
+    assert start is not None and end is not None
+    # Both bounds must be timezone-aware UTC datetimes.
+    assert start.tzinfo is not None
+    assert end.tzinfo is not None
+    assert before <= end <= after
+    assert abs((end - start).days - 7) <= 1
+
+    # "older" preset: only an upper bound, no lower bound.
+    start_older, end_older = app_module.build_created_at_bounds(
+        time_preset="older", from_date=None, to_date=None
+    )
+    assert start_older is None
+    assert end_older is not None
+    assert end_older.tzinfo is not None
+
+    # "custom" preset with no dates returns (None, None).
+    assert app_module.build_created_at_bounds(
+        time_preset="custom", from_date=None, to_date=None
+    ) == (None, None)
+
+    # Custom date range ignores preset and returns naive datetimes from calendar dates.
+    start_d, end_d = app_module.build_created_at_bounds(
+        time_preset="last_7_days",
+        from_date=date(2024, 1, 1),
+        to_date=date(2024, 1, 31),
+    )
+    assert start_d == datetime(2024, 1, 1, 0, 0, 0)
+    assert end_d == datetime(2024, 1, 31, 23, 59, 59, 999999)

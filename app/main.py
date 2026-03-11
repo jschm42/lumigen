@@ -440,7 +440,7 @@ def build_created_at_bounds(
     from_date: date | None,
     to_date: date | None,
 ) -> tuple[datetime | None, datetime | None]:
-    now = datetime.now()
+    now = datetime.now(UTC)
 
     # Custom date range always wins over preset when at least one bound is provided.
     if from_date is not None or to_date is not None:
