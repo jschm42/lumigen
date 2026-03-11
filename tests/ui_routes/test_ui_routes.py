@@ -257,6 +257,61 @@ def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_mod
     assert 'src="/gallery?embedded=1"' in body
 
 
+def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_module, monkeypatch) -> None:
+    class _NoScalarsSession(_FakeSession):
+        def scalars(self, _query):
+            raise AssertionError("chat generations should not be queried for gallery workspace")
+
+    fake_session = _NoScalarsSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: (_ for _ in ()).throw(AssertionError("profiles should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_dimension_presets",
+        lambda _session: (_ for _ in ()).throw(AssertionError("dimension presets should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_enhancement_config",
+        lambda _session: (_ for _ in ()).throw(AssertionError("enhancement config should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: (_ for _ in ()).throw(AssertionError("session generations should not load for gallery workspace")),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30: (
+            [
+                {
+                    "token": "session:abc",
+                    "label": "Session",
+                    "subtitle": "",
+                    "age": "",
+                    "time_category": "today",
+                    "time_category_label": "Today",
+                    "latest_created_at": None,
+                }
+            ],
+            False,
+        ),
+    )
+
+    response = client.get("/?workspace_view=gallery&conversation=session:abc")
+
+    assert response.status_code == 200
+    assert 'src="/gallery?embedded=1"' in response.text
+
+
 def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(

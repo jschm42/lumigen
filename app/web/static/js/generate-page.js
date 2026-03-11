@@ -106,9 +106,107 @@
     });
   }
 
+  function setupWorkspaceNavigation() {
+    var workspaceLinks = document.querySelectorAll("[data-workspace-nav][data-workspace-view]");
+    var workspaceShell = document.querySelector("[data-chat-shell]");
+    if (!workspaceLinks.length || !workspaceShell) return;
+
+    var activeClasses = ["bg-sky-300/20", "text-sky-100"];
+    var inactiveClasses = ["bg-white/6", "text-slate-200", "hover:bg-white/12"];
+
+    function setActiveWorkspaceLink(activeView) {
+      workspaceLinks.forEach(function (link) {
+        var view = link.getAttribute("data-workspace-view") || "";
+        var isActive = view === activeView;
+        if (isActive) {
+          inactiveClasses.forEach(function (className) {
+            link.classList.remove(className);
+          });
+          activeClasses.forEach(function (className) {
+            link.classList.add(className);
+          });
+        } else {
+          activeClasses.forEach(function (className) {
+            link.classList.remove(className);
+          });
+          inactiveClasses.forEach(function (className) {
+            link.classList.add(className);
+          });
+        }
+      });
+    }
+
+    function setWorkspaceIframe(targetUrl) {
+      var iframe = workspaceShell.querySelector("iframe[data-workspace-iframe]");
+      if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.setAttribute("data-workspace-iframe", "1");
+        iframe.setAttribute("title", "workspace");
+        iframe.className = "h-full w-full border-0";
+        workspaceShell.replaceChildren(iframe);
+      }
+      if (iframe.getAttribute("src") !== targetUrl) {
+        iframe.setAttribute("src", targetUrl);
+      }
+    }
+
+    function resolveIframeUrl(view) {
+      if (view === "profiles") return "/profiles?embedded=1";
+      if (view === "gallery") return "/gallery?embedded=1";
+      if (view === "admin") return "/admin?embedded=1";
+      return "";
+    }
+
+    function applyWorkspaceView(view, url, pushHistory) {
+      var iframeUrl = resolveIframeUrl(view);
+      if (!iframeUrl) return false;
+
+      setWorkspaceIframe(iframeUrl);
+      setActiveWorkspaceLink(view);
+
+      if (pushHistory && url) {
+        window.history.pushState({ workspace_view: view }, "", url);
+      }
+      return true;
+    }
+
+    workspaceLinks.forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+
+        var view = link.getAttribute("data-workspace-view") || "";
+        var href = link.getAttribute("href") || "";
+        if (!view || !href) return;
+
+        var absoluteUrl = new URL(href, window.location.origin);
+        applyWorkspaceView(view, absoluteUrl.toString(), true);
+      });
+    });
+
+    window.addEventListener("popstate", function () {
+      var currentUrl = new URL(window.location.href);
+      var view = (currentUrl.searchParams.get("workspace_view") || "chat").toLowerCase();
+      if (!applyWorkspaceView(view, "", false)) {
+        window.location.reload();
+      }
+    });
+  }
+
   window.addEventListener("DOMContentLoaded", function () {
     setupOverlayObservers();
     setupSessionMenus();
+    setupWorkspaceNavigation();
     setupChatAutoScroll();
     scrollChatToBottom();
   });

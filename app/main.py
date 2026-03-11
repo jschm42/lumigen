@@ -905,20 +905,11 @@ def generate_page(
     session_offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    profiles = crud.list_profiles(session)
-    dimension_presets = crud.list_dimension_presets(session)
-    enhancement_config = crud.get_enhancement_config(session)
-
-    # Load chat session preferences
-    active_conversation = (conversation or "").strip()
-    chat_session_prefs = None
-    last_profile_id = None
-    last_thumb_size = "md"
-    if active_conversation and active_conversation not in {"all", "new"}:
-        chat_session_prefs = crud.get_chat_session(session, active_conversation)
-        if chat_session_prefs:
-            last_profile_id = chat_session_prefs.last_profile_id
-            last_thumb_size = chat_session_prefs.last_thumb_size or "md"
+    active_workspace_view = (workspace_view or "chat").strip().lower()
+    if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
+        active_workspace_view = "chat"
+    if active_workspace_view == "admin" and not current_user_is_admin(request):
+        active_workspace_view = "chat"
 
     # Build full session list once; we derive the rendered page slice from it.
     all_sessions, _ = build_session_items(
@@ -928,24 +919,6 @@ def generate_page(
         max_days=SESSION_MAX_DAYS,
     )
     all_session_tokens = {item["token"] for item in all_sessions}
-
-    # Get recent generations for the chat view (all generations, not limited by time)
-    recent_generations = list(
-        session.scalars(
-            select(Generation)
-            .options(selectinload(Generation.assets))
-            .order_by(Generation.created_at.desc(), Generation.id.desc())
-            .limit(250)
-        ).all()
-    )
-    recent_generations.reverse()
-    recent_generations = [
-        generation
-        for generation in recent_generations
-        if not generation_chat_hidden(generation)
-        and not generation_session_archived(generation)
-        and not generation_chat_deleted(generation)
-    ]
 
     active_conversation = (conversation or "").strip()
     if active_conversation:
@@ -968,24 +941,57 @@ def generate_page(
     ]
     session_has_more = len(all_sessions) > effective_session_offset + SESSION_PAGE_SIZE
 
-    if active_conversation == "all":
-        conversation_generations = recent_generations
-    elif active_conversation == "new":
-        conversation_generations = []
-    else:
-        conversation_generations = [
-            generation
-            for generation in list_generations_for_session_token(session, active_conversation)
-            if not generation_chat_hidden(generation)
-            and not generation_session_archived(generation)
-            and not generation_chat_deleted(generation)
-        ]
+    # Keep heavy DB queries chat-only so sidebar workspace switches stay responsive.
+    profiles = []
+    dimension_presets = []
+    enhancement_ready = False
+    upscale_ready = False
+    upscale_models: list[str] = []
+    last_profile_id = None
+    last_thumb_size = "md"
+    conversation_generations = []
 
-    active_workspace_view = (workspace_view or "chat").strip().lower()
-    if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
-        active_workspace_view = "chat"
-    if active_workspace_view == "admin" and not current_user_is_admin(request):
-        active_workspace_view = "chat"
+    if active_workspace_view == "chat":
+        profiles = crud.list_profiles(session)
+        dimension_presets = crud.list_dimension_presets(session)
+        enhancement_config = crud.get_enhancement_config(session)
+        enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
+        upscale_ready = upscale_service.is_available()
+        upscale_models = upscale_service.list_available_models()
+
+        if active_conversation not in {"all", "new"}:
+            chat_session_prefs = crud.get_chat_session(session, active_conversation)
+            if chat_session_prefs:
+                last_profile_id = chat_session_prefs.last_profile_id
+                last_thumb_size = chat_session_prefs.last_thumb_size or "md"
+
+        if active_conversation == "all":
+            recent_generations = list(
+                session.scalars(
+                    select(Generation)
+                    .options(selectinload(Generation.assets))
+                    .order_by(Generation.created_at.desc(), Generation.id.desc())
+                    .limit(250)
+                ).all()
+            )
+            recent_generations.reverse()
+            conversation_generations = [
+                generation
+                for generation in recent_generations
+                if not generation_chat_hidden(generation)
+                and not generation_session_archived(generation)
+                and not generation_chat_deleted(generation)
+            ]
+        elif active_conversation == "new":
+            conversation_generations = []
+        else:
+            conversation_generations = [
+                generation
+                for generation in list_generations_for_session_token(session, active_conversation)
+                if not generation_chat_hidden(generation)
+                and not generation_session_archived(generation)
+                and not generation_chat_deleted(generation)
+            ]
 
     return templates.TemplateResponse(
         request,
@@ -1002,11 +1008,9 @@ def generate_page(
             "workspace_view": active_workspace_view,
             "hide_footer": True,
             "hide_header": True,
-            "enhancement_ready": bool(
-                enhancement_config and enhancement_config.api_key_encrypted
-            ),
-            "upscale_ready": upscale_service.is_available(),
-            "upscale_models": upscale_service.list_available_models(),
+            "enhancement_ready": enhancement_ready,
+            "upscale_ready": upscale_ready,
+            "upscale_models": upscale_models,
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
