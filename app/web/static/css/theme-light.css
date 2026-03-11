@@ -603,3 +603,54 @@ body[data-theme="light"] [data-user-menu-container] [data-user-menu] {
   background: rgb(255 255 255 / 92%) !important;
   border-color: rgb(148 163 184 / 32%) !important;
 }
+
+/* Login page readability in light mode */
+body[data-theme="light"] [data-login-card],
+body[data-theme="light"] main > section:has(form[action="/login"]) {
+  background: rgb(255 255 255 / 90%) !important;
+  border-color: rgb(148 163 184 / 34%) !important;
+  box-shadow: 0 16px 40px rgb(15 23 42 / 10%);
+}
+
+body[data-theme="light"] [data-login-card] .text-white,
+body[data-theme="light"] [data-login-card] .text-slate-100,
+body[data-theme="light"] [data-login-card] .text-slate-200,
+body[data-theme="light"] main > section:has(form[action="/login"]) .text-white,
+body[data-theme="light"] main > section:has(form[action="/login"]) .text-slate-100,
+body[data-theme="light"] main > section:has(form[action="/login"]) .text-slate-200 {
+  color: rgb(15 23 42) !important;
+}
+
+body[data-theme="light"] [data-login-card] .text-slate-300,
+body[data-theme="light"] [data-login-card] .text-slate-400,
+body[data-theme="light"] [data-login-card] label,
+body[data-theme="light"] main > section:has(form[action="/login"]) .text-slate-300,
+body[data-theme="light"] main > section:has(form[action="/login"]) .text-slate-400,
+body[data-theme="light"] main > section:has(form[action="/login"]) label {
+  color: rgb(51 65 85) !important;
+}
+
+body[data-theme="light"] [data-login-card] input,
+body[data-theme="light"] main > section:has(form[action="/login"]) input {
+  background: rgb(241 245 249 / 96%) !important;
+  color: rgb(15 23 42) !important;
+  border-color: rgb(148 163 184 / 42%) !important;
+}
+
+body[data-theme="light"] [data-login-card] input::placeholder,
+body[data-theme="light"] main > section:has(form[action="/login"]) input::placeholder {
+  color: rgb(100 116 139) !important;
+}
+
+body[data-theme="light"] [data-login-card] [data-login-logo],
+body[data-theme="light"] main > section:has(form[action="/login"]) img[alt="Lumigen logo"] {
+  filter: brightness(0) saturate(100%) opacity(0.82);
+}
+
+body[data-theme="light"] [data-login-card] .text-emerald-100 {
+  color: rgb(6 95 70) !important;
+}
+
+body[data-theme="light"] [data-login-card] .text-rose-100 {
+  color: rgb(159 18 57) !important;
+}

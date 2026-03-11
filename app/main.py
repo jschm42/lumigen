@@ -144,7 +144,14 @@ templates.env.globals["app_version"] = settings.app_version
 
 def static_url(path: str) -> str:
     normalized = path.lstrip("/")
-    return str(app.url_path_for("static", path=normalized))
+    base_url = str(app.url_path_for("static", path=normalized))
+    file_path = static_dir / normalized
+    try:
+        version = int(file_path.stat().st_mtime)
+    except OSError:
+        return base_url
+    separator = "&" if "?" in base_url else "?"
+    return f"{base_url}{separator}v={version}"
 
 
 templates.env.globals["static_url"] = static_url
