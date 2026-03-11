@@ -90,6 +90,8 @@ Recommended pre-PR validation order:
 - Keep writes inside `StorageService`; do not bypass path safety checks.
 - Keep templates free of inline JS/CSS; add scripts in `app/web/static/js/*`.
 - Add/adjust tests in `tests/` for any backend or UI behavior change.
+- Tailwind theming policy: use only the original Tailwind light/dark theme approach (class-based dark mode). Do not introduce custom light/dark override systems that bypass Tailwind utilities.
+- If theme customization is required, implement it strictly according to Tailwind's official theme customization guidance: https://tailwindcss.com/docs/theme#customizing-your-theme
 
 ## Environment notes that are easy to miss
 - `.env.example` defaults are local-dev oriented.
