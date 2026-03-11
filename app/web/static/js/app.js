@@ -1170,8 +1170,10 @@ function setupGalleryRatings() {
       stars.forEach(function (star) {
         var value = parseInt(star.getAttribute('data-rating-value') || '0', 10);
         var isActive = Number.isFinite(value) && value <= activeRating;
-        star.classList.toggle('text-amber-300', isActive);
-        star.classList.toggle('text-slate-600', !isActive);
+        star.classList.toggle('text-amber-500', isActive);
+        star.classList.toggle('dark:text-amber-300', isActive);
+        star.classList.toggle('text-slate-500', !isActive);
+        star.classList.toggle('dark:text-slate-600', !isActive);
       });
     }
 
