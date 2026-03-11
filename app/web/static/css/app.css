@@ -1,4 +1,5 @@
 /* Theme stylesheet entry point. */
+@import url("local-fonts.css");
 @import url("theme-base.css");
 @import url("theme-dark.css");
 @import url("theme-light.css");

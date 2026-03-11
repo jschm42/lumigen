@@ -8,16 +8,9 @@
   <script src="{{ static_url('js/theme-init.js') }}"></script>
   <title>{{ title if title else "Lumigen" }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ static_url('app-logo.svg') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="{{ static_url('js/tailwind-config.js') }}"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    if (window.tailwind && window.__lumigenTailwindConfig) {
-      window.tailwind.config = window.__lumigenTailwindConfig;
-    }
-  </script>
+  <script src="{{ static_url('js/tailwind-config-apply.js') }}"></script>
   <link rel="stylesheet" href="{{ static_url('css/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
   <script src="{{ static_url('js/htmx.min.js') }}" defer></script>
