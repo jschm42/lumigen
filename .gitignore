@@ -212,3 +212,9 @@ data/
 
 node_modules/
 
+# Playwright
+playwright-report/
+test-results/
+playwright/.auth/
+!playwright/.auth/.gitkeep
+
