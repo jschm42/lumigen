@@ -74,6 +74,11 @@ MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
+MAX_UPLOAD_BYTES = (
+    settings.max_upload_size_mb * 1024 * 1024
+    if settings.max_upload_size_mb is not None
+    else None
+)
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
 ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "users", "about"}
 ADMIN_ROLE = "admin"
@@ -1085,6 +1090,7 @@ def generate_submit(
         if input_images:
             if len(input_images) + len(encoded_images) > MAX_INPUT_IMAGES:
                 raise ValueError(f"Upload up to {MAX_INPUT_IMAGES} input images.")
+            total_upload_bytes = 0
             for upload in input_images:
                 content_type = (upload.content_type or "").lower()
                 if not content_type.startswith("image/"):
@@ -1092,6 +1098,11 @@ def generate_submit(
                 data = upload.file.read()
                 if not data:
                     continue
+                total_upload_bytes += len(data)
+                if MAX_UPLOAD_BYTES is not None and total_upload_bytes > MAX_UPLOAD_BYTES:
+                    raise ValueError(
+                        f"Upload exceeds the {settings.max_upload_size_mb} MB size limit."
+                    )
                 encoded_images.append(
                     {
                         "name": upload.filename or "input",

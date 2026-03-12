@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     default_page_size: int = 24
     max_slug_length: int = 64
     thumb_max_px: int = 384
+    max_upload_size_mb: int | None = None
 
     provider_default_max_concurrent: int = 2
     provider_default_min_interval_ms: int = 250

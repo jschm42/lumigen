@@ -534,3 +534,46 @@ def test_gallery_page_passes_rating_filters_to_service(client, app_module, monke
     assert response.status_code == 200
     assert captured["min_rating"] is None
     assert captured["unrated_only"] is True
+
+
+def test_generate_submit_rejects_upload_exceeding_size_limit(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(provider="stub", upscale_model=None, params_json={})
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def __init__(self) -> None:
+            self.create_called = False
+
+        def create_generation_from_profile(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+            self.create_called = True
+            raise AssertionError("Must not be called on validation error")
+
+        def enqueue(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+    fake_generation_service = _FakeGenerationService()
+    monkeypatch.setattr(app_module, "generation_service", fake_generation_service)
+
+    # Limit is 1 MB; upload 2 MB of fake image data — patch the precomputed constant and setting
+    monkeypatch.setattr(app_module, "MAX_UPLOAD_BYTES", 1 * 1024 * 1024)
+    monkeypatch.setattr(app_module.settings, "max_upload_size_mb", 1)
+    image_data = b"\x00" * (2 * 1024 * 1024)
+
+    response = client.post(
+        "/generate",
+        data={"prompt_user": "prompt", "profile_id": "1"},
+        files={"input_images": ("test.png", image_data, "image/png")},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "exceeds" in response.headers["location"]
+    assert fake_generation_service.create_called is False
