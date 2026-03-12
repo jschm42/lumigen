@@ -6,7 +6,7 @@ Use this file as the primary onboarding source. Trust these instructions first a
 - Lumigen is a local-first AI image studio (FastAPI monolith) for image generation, gallery management, metadata sidecars, and optional upscaling.
 - Main runtime path: route (`/generate`) -> `GenerationService` -> `ProviderRegistry`/adapter -> `StorageService` + `ThumbnailService` + `SidecarService` -> DB `Asset` rows.
 - Primary stack: Python 3.12+, FastAPI, Jinja2 + HTMX, SQLite, SQLAlchemy 2, Alembic.
-- Additional tooling: `ruff`, `djlint`, `eslint`, `stylelint`, `pytest`.
+- Additional tooling: `ruff`, `djlint`, `eslint`, `stylelint`, `pytest`, `@playwright/test`.
 
 ## Repository profile
 - Project type: server-rendered web app + API in one Python service.
@@ -33,6 +33,8 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 - `python -m pytest -q tests/unit/test_gallery_service.py` -> `verified` (`5 passed`, ~0.4s).
 - `python -m pytest -q tests/ui_routes/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
 - `python -m pytest -q tests/routes tests/ui_routes` -> `verified` (`54 passed`, ~28s).
+- `npx playwright test` -> run all Playwright e2e tests (requires `npm ci` and `npx playwright install --with-deps chromium` first).
+- `npx playwright test --ui` -> open the Playwright interactive UI runner.
 - `python scripts/smoke_web_routes.py` -> `verified with caveat`: currently fails with `AssertionError: admin page does not include external admin-page.js`.
 - `ruff check app/` -> `failed here with workaround`: command not found in shell until tool installed.
 - `python -m ruff check app/` -> `failed here with workaround`: module not installed in current venv.
@@ -45,10 +47,13 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 ### Required workarounds observed
 - If `ruff`/`djlint` are missing locally, install first:
 	- `python -m pip install ruff djlint`
+- For Playwright, install browsers after `npm ci`:
+	- `npx playwright install --with-deps chromium`
 - On Windows PowerShell with script execution restrictions, use `.cmd` shims:
 	- `npm.cmd ci`
 	- `npx.cmd eslint ...`
 	- `npx.cmd stylelint ...`
+	- `npx.cmd playwright test`
 
 ## CI checks and how to replicate locally
 GitHub workflow: `.github/workflows/lint.yml`.
@@ -59,14 +64,20 @@ CI currently runs lint only (no pytest job):
 - JS lint: `npx eslint app/web/static/js/`
 - CSS lint: `npx stylelint "app/web/static/css/app.css"`
 
+A separate workflow (`.github/workflows/e2e.yml`) runs Playwright e2e tests:
+- Installs Python + Node dependencies, then runs `npx playwright test`
+- Uploads the HTML report as a workflow artifact (`playwright-report`)
+- Only the `chromium` browser is tested in CI
+
 Recommended pre-PR validation order:
 1. `alembic upgrade head`
 2. `python -m pytest -q tests/unit`
 3. `python -m pytest -q tests/routes tests/ui_routes`
-4. `ruff check app/`
-5. `djlint app/web/templates/ --lint`
-6. `npx eslint app/web/static/js/`
-7. `npx stylelint "app/web/static/css/app.css"`
+4. `npx playwright test` (requires `npm ci` and `npx playwright install --with-deps chromium`)
+5. `ruff check app/`
+6. `djlint app/web/templates/ --lint`
+7. `npx eslint app/web/static/js/`
+8. `npx stylelint "app/web/static/css/app.css"`
 
 ## Architecture map (where to edit)
 - `app/main.py`: route handlers, request validation, dependency wiring, service singletons.
@@ -100,8 +111,16 @@ Recommended pre-PR validation order:
 - `alembic.ini` uses `sqlite:///./data/app.db` (relative path): run Alembic from repo root.
 
 ## Root layout quick reference
-- Root files: `README.md`, `requirements.txt`, `pyproject.toml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`.
+- Root files: `README.md`, `requirements.txt`, `pyproject.toml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`, `playwright.config.js`.
 - Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `data/`.
+
+## Playwright e2e tests
+- Config: `playwright.config.js` (root) – defines the `chromium` project, a `setup` project that runs `tests/e2e/auth.setup.js`, and a `webServer` block that starts the app on port 8765 against an isolated SQLite database in `/tmp/lumigen-e2e/`.
+- Test files: `tests/e2e/*.spec.js` – one file per feature area (`auth`, `home`, `gallery`, `admin`, `profiles`).
+- Auth strategy: `tests/e2e/auth.setup.js` creates the first admin user via the onboarding form and saves the browser session to `playwright/.auth/admin.json`.  All spec files reuse this session via `storageState`.
+- Playwright artifacts (report, test results, auth state) are git-ignored; `playwright/.auth/.gitkeep` preserves the directory.
+- To add a new e2e test: create `tests/e2e/<feature>.spec.js`, import `{ test, expect }` from `@playwright/test`, and use the `storageState` from the `chromium` project (configured automatically).
+- Browser installation: run `npx playwright install --with-deps chromium` once after `npm ci`.
 
 ## When to search
 Only search if one of these is true:

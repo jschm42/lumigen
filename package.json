@@ -1,12 +1,15 @@
 {
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.50.0",
     "eslint": "^10.0.2",
     "stylelint": "^17.4.0",
     "stylelint-config-standard": "^40.0.0"
   },
   "scripts": {
     "lint:js": "eslint app/web/static/js/",
-    "lint:css": "stylelint app/web/static/css/app.css"
+    "lint:css": "stylelint app/web/static/css/app.css",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   }
 }
