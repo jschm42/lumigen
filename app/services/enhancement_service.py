@@ -20,9 +20,12 @@ class EnhancementService:
             config = crud.get_enhancement_config(session)
             if not config:
                 return None
-            if not config.api_key_encrypted:
+            if config.api_key_encrypted:
+                api_key = self._secrets.decrypt_api_key(config.api_key_encrypted)
+            else:
+                api_key = self._secrets.get_default_api_key(config.provider)
+            if not api_key:
                 return None
-            api_key = self._secrets.decrypt_api_key(config.api_key_encrypted)
             return {
                 "provider": config.provider,
                 "model": config.model,

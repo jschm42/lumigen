@@ -44,7 +44,7 @@ def test_decrypt_invalid_token_raises_value_error() -> None:
         service.decrypt_api_key("not-a-valid-token")
 
 
-def test_get_default_api_key_maps_known_provider_names() -> None:
+def test_get_default_api_key_maps_known_provider_names(monkeypatch: pytest.MonkeyPatch) -> None:
     service = ModelConfigService(
         Settings(
             openai_api_key="oa",
@@ -53,11 +53,60 @@ def test_get_default_api_key_maps_known_provider_names() -> None:
             bfl_api_key="bf",
         )
     )
+    # Simulate no DB-stored provider key so .env values are used
+    monkeypatch.setattr("app.services.model_config_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr("app.services.model_config_service.crud.get_provider_api_key", lambda _session, _p: None)
+
     assert service.get_default_api_key("openai") == "oa"
     assert service.get_default_api_key("OPENROUTER") == "or"
     assert service.get_default_api_key("google") == "gg"
     assert service.get_default_api_key("bfl") == "bf"
     assert service.get_default_api_key("unknown") is None
+
+
+def test_get_default_api_key_prefers_db_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = Fernet.generate_key().decode("ascii")
+    service = ModelConfigService(Settings(provider_config_key=key, openai_api_key="env-key"))
+    encrypted = service.encrypt_api_key("db-key")
+
+    monkeypatch.setattr("app.services.model_config_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr(
+        "app.services.model_config_service.crud.get_provider_api_key",
+        lambda _session, _p: SimpleNamespace(api_key_encrypted=encrypted),
+    )
+
+    result = service.get_default_api_key("openai")
+    assert result == "db-key"
+
+
+def test_has_env_api_key_returns_correct_bool() -> None:
+    service_with = ModelConfigService(Settings(openai_api_key="key"))
+    service_without = ModelConfigService(Settings(openai_api_key=None))
+    assert service_with.has_env_api_key("openai") is True
+    assert service_without.has_env_api_key("openai") is False
+    assert service_with.has_env_api_key("unknown") is False
+
+
+def test_get_provider_api_key_decrypts_db_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    key = Fernet.generate_key().decode("ascii")
+    service = ModelConfigService(Settings(provider_config_key=key))
+    encrypted = service.encrypt_api_key("stored-key")
+
+    monkeypatch.setattr("app.services.model_config_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr(
+        "app.services.model_config_service.crud.get_provider_api_key",
+        lambda _session, _p: SimpleNamespace(api_key_encrypted=encrypted),
+    )
+
+    assert service.get_provider_api_key("openai") == "stored-key"
+
+
+def test_get_provider_api_key_returns_none_when_not_stored(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = ModelConfigService(Settings())
+    monkeypatch.setattr("app.services.model_config_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr("app.services.model_config_service.crud.get_provider_api_key", lambda _session, _p: None)
+
+    assert service.get_provider_api_key("openai") is None
 
 
 def test_get_api_key_reads_custom_config_and_decrypts(monkeypatch: pytest.MonkeyPatch) -> None:

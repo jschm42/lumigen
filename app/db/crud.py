@@ -14,6 +14,7 @@ from app.db.models import (
     Generation,
     ModelConfig,
     Profile,
+    ProviderApiKey,
     StorageTemplate,
     User,
 )
@@ -230,6 +231,43 @@ def delete_model_config(session: Session, model_config: ModelConfig) -> None:
 def get_enhancement_config(session: Session) -> EnhancementConfig | None:
     stmt = select(EnhancementConfig).order_by(EnhancementConfig.id.asc())
     return session.scalar(stmt)
+
+
+def get_provider_api_key(session: Session, provider: str) -> ProviderApiKey | None:
+    stmt = select(ProviderApiKey).where(ProviderApiKey.provider == provider)
+    return session.scalar(stmt)
+
+
+def list_provider_api_keys(session: Session) -> list[ProviderApiKey]:
+    stmt = select(ProviderApiKey).order_by(ProviderApiKey.provider.asc())
+    return list(session.scalars(stmt).all())
+
+
+def upsert_provider_api_key(
+    session: Session, provider: str, api_key_encrypted: str
+) -> ProviderApiKey:
+    existing = get_provider_api_key(session, provider)
+    if existing:
+        existing.api_key_encrypted = api_key_encrypted
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
+
+    row = ProviderApiKey(provider=provider, api_key_encrypted=api_key_encrypted)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def delete_provider_api_key(session: Session, provider: str) -> bool:
+    existing = get_provider_api_key(session, provider)
+    if not existing:
+        return False
+    session.delete(existing)
+    session.commit()
+    return True
 
 
 def upsert_enhancement_config(

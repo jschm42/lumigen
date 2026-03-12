@@ -135,6 +135,14 @@ class EnhancementConfig(Base, TimestampMixin):
     )
 
 
+class ProviderApiKey(Base, TimestampMixin):
+    __tablename__ = "provider_api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(String(4096), nullable=False)
+
+
 class DimensionPreset(Base, TimestampMixin):
     __tablename__ = "dimension_presets"
 
