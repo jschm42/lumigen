@@ -56,10 +56,11 @@ class ModelConfigService:
 
     def get_default_api_key(self, provider: str) -> str | None:
         """Get the API key for a provider: DB-stored key takes priority over .env."""
-        db_key = self.get_provider_api_key(provider)
+        provider_lower = provider.lower()
+        db_key = self.get_provider_api_key(provider_lower)
         if db_key:
             return db_key
-        attr_name = self.PROVIDER_API_KEY_ATTR.get(provider.lower())
+        attr_name = self.PROVIDER_API_KEY_ATTR.get(provider_lower)
         if not attr_name:
             return None
         return getattr(self._settings, attr_name, None)
