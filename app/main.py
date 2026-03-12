@@ -80,7 +80,7 @@ MAX_UPLOAD_BYTES = (
     else None
 )
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "users", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "users", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
