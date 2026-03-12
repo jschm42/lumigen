@@ -26,7 +26,10 @@ def _json_response(method: str, url: str, status: int, payload: dict) -> httpx.R
 
 
 def test_get_config_returns_none_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    secrets = SimpleNamespace(decrypt_api_key=lambda token: "never")
+    secrets = SimpleNamespace(
+        decrypt_api_key=lambda token: "never",
+        get_default_api_key=lambda provider: None,
+    )
     service = EnhancementService(Settings(), secrets)
 
     monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
@@ -38,6 +41,25 @@ def test_get_config_returns_none_when_not_configured(monkeypatch: pytest.MonkeyP
         lambda _session: SimpleNamespace(provider="openai", model="gpt", api_key_encrypted=None),
     )
     assert service._get_config() is None
+
+
+def test_get_config_falls_back_to_provider_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    secrets = SimpleNamespace(
+        decrypt_api_key=lambda token: "never",
+        get_default_api_key=lambda provider: "provider-key" if provider == "openai" else None,
+    )
+    service = EnhancementService(Settings(), secrets)
+
+    monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr(
+        "app.services.enhancement_service.crud.get_enhancement_config",
+        lambda _session: SimpleNamespace(provider="openai", model="gpt", api_key_encrypted=None),
+    )
+    config = service._get_config()
+    assert config is not None
+    assert config["api_key"] == "provider-key"
+    assert config["provider"] == "openai"
+    assert config["model"] == "gpt"
 
 
 def test_get_config_decrypts_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

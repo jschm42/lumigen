@@ -74,8 +74,8 @@ MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
-ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "users", "about"}
+ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "users", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
@@ -1440,6 +1440,19 @@ def admin_page(
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
 
+    # Build per-provider API key info for the "API Keys" admin section
+    provider_names = provider_registry.provider_names()
+    provider_api_key_rows = {row.provider: row for row in crud.list_provider_api_keys(session)}
+    provider_api_key_info = [
+        {
+            "provider": p,
+            "has_db_key": p in provider_api_key_rows,
+            "has_env_key": model_config_service.has_env_api_key(p),
+        }
+        for p in provider_names
+        if p in model_config_service.PROVIDER_API_KEY_ATTR
+    ]
+
     return templates.TemplateResponse(
         request,
         "admin.html",
@@ -1449,7 +1462,7 @@ def admin_page(
             "dimension_presets": dimension_presets,
             "categories": categories,
             "enhancement_config": enhancement_config,
-            "providers": provider_registry.provider_names(),
+            "providers": provider_names,
             "users": users,
             "error": error or "",
             "message": message or "",
@@ -1457,8 +1470,40 @@ def admin_page(
             "active_admin_section": active_admin_section,
             "app_copyright_text": APP_COPYRIGHT_TEXT,
             "onboarding_reset_enabled": settings.auth_allow_onboarding_reset,
+            "provider_api_key_info": provider_api_key_info,
         },
     )
+
+
+@app.post("/admin/provider-api-keys/{provider}/update")
+def admin_update_provider_api_key(
+    request: Request,
+    provider: str,
+    api_key: str = Form(default=""),
+    clear_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    provider = provider.strip().lower()
+    if provider not in provider_registry.provider_names():
+        raise HTTPException(status_code=404, detail="Unsupported provider")
+    if provider not in model_config_service.PROVIDER_API_KEY_ATTR:
+        raise HTTPException(status_code=404, detail="Provider does not support API key configuration")
+    try:
+        if clear_api_key:
+            crud.delete_provider_api_key(session, provider)
+        else:
+            api_key_value = api_key.strip()
+            if api_key_value:
+                encrypted = model_config_service.encrypt_api_key(api_key_value)
+                crud.upsert_provider_api_key(session, provider, encrypted)
+    except ValueError as exc:
+        return admin_redirect("apikeys", error=str(exc))
+    return admin_redirect("apikeys", message="Saved")
 
 
 @app.post("/admin/dimension-presets")

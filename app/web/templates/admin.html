@@ -39,6 +39,7 @@
     <a href="/admin?section=dimensions{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
     <a href="/admin?section=categories{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
     <a href="/admin?section=enhancement{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'enhancement' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancement LLM</a>
+    <a href="/admin?section=apikeys{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'apikeys' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">API Keys</a>
     <a href="/admin?section=users{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'users' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Users</a>
     <a href="/admin?section=about{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'about' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">About</a>
   </nav>
@@ -413,6 +414,54 @@
         <button type="submit" class="{{ btn_primary }}">Save</button>
       </div>
     </form>
+  {% elif active_admin_section == "apikeys" %}
+    <header class="mb-1">
+      <h3 class="text-xl font-semibold text-slate-900 dark:text-white">API Keys</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Central provider API key configuration. A stored key overrides the corresponding .env key.</p>
+    </header>
+
+    {% if provider_api_key_info %}
+      <div class="space-y-4">
+        {% for info in provider_api_key_info %}
+        <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
+          <form action="/admin/provider-api-keys/{{ info.provider }}/update" method="post" class="space-y-3">
+            <div class="flex items-center gap-3">
+              <span class="text-sm font-semibold text-slate-800 capitalize dark:text-slate-100">{{ info.provider }}</span>
+              {% if info.has_db_key %}
+                <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">stored</span>
+              {% endif %}
+            </div>
+
+            {% if info.has_env_key and not info.has_db_key %}
+              <p class="text-xs text-amber-600 dark:text-amber-400">⚠ An API key for this provider is set in .env and will be used. Storing a key here will override it.</p>
+            {% elif info.has_env_key and info.has_db_key %}
+              <p class="text-xs text-amber-600 dark:text-amber-400">⚠ An API key for this provider is also set in .env — the stored key above takes priority.</p>
+            {% elif not info.has_env_key and not info.has_db_key %}
+              <p class="text-xs text-slate-500 dark:text-slate-400">No API key configured. Set one here or in .env.</p>
+            {% endif %}
+
+            <div>
+              <label for="apikey-{{ info.provider }}" class="{{ label_class }}">API key</label>
+              <input id="apikey-{{ info.provider }}" type="password" name="api_key" placeholder="{% if info.has_db_key %}leave blank to keep stored key{% else %}enter key to store{% endif %}" class="{{ input_class }}">
+            </div>
+
+            {% if info.has_db_key %}
+            <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <input type="checkbox" name="clear_api_key">
+              Clear stored key
+            </label>
+            {% endif %}
+
+            <div class="flex justify-end">
+              <button type="submit" class="{{ btn_primary }}">Save</button>
+            </div>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">No configurable providers available.</p>
+    {% endif %}
   {% elif active_admin_section == "users" %}
     <div class="flex items-center justify-between gap-3">
       <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Users</h3>
