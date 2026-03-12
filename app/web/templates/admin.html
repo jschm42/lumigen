@@ -84,10 +84,13 @@
             <textarea id="new-model-enhancement" name="enhancement_prompt" rows="3" class="{{ text_class }}"></textarea>
           </div>
 
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <input type="checkbox" name="use_custom_api_key" id="new-use-custom-api-key" onchange="toggleApiKeyField('new')">
-            Use custom API key
-          </label>
+          <div class="space-y-1">
+            <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <input type="checkbox" name="use_custom_api_key" id="new-use-custom-api-key" onchange="toggleApiKeyField('new')">
+              Use custom API key
+            </label>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Stored for this model only — takes priority over the default provider key without affecting the global API Keys configuration.</p>
+          </div>
 
           <div id="new-api-key-field" class="hidden">
             <label for="new-model-key" class="{{ label_class }}">API key</label>
@@ -172,10 +175,13 @@
             <textarea id="edit-model-enhancement-{{ config.id }}" name="enhancement_prompt" rows="3" class="{{ text_class }}">{{ config.enhancement_prompt if config.enhancement_prompt else '' }}</textarea>
           </div>
 
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <input type="checkbox" name="use_custom_api_key" id="edit-{{ config.id }}-use-custom-api-key" {% if config.use_custom_api_key %}checked{% endif %} onchange="toggleApiKeyField('edit-{{ config.id }}')">
-            Use custom API key
-          </label>
+          <div class="space-y-1">
+            <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <input type="checkbox" name="use_custom_api_key" id="edit-{{ config.id }}-use-custom-api-key" {% if config.use_custom_api_key %}checked{% endif %} onchange="toggleApiKeyField('edit-{{ config.id }}')">
+              Use custom API key
+            </label>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Stored for this model only — takes priority over the default provider key without affecting the global API Keys configuration.</p>
+          </div>
 
           <div id="edit-{{ config.id }}-api-key-field" {% if not config.use_custom_api_key %}class="hidden"{% endif %}>
             <label for="edit-model-key-{{ config.id }}" class="{{ label_class }}">API key</label>
