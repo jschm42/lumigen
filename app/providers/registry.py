@@ -15,6 +15,7 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
@@ -93,6 +94,7 @@ class ProviderRegistry:
         self.register(OpenRouterAdapter())
         self.register(GoogleAdapter())
         self.register(BFLAdapter())
+        self.register(FalAdapter())
 
     def register(self, adapter: ProviderAdapter) -> None:
         """Register *adapter* under its ``name`` attribute, replacing any existing entry."""
@@ -169,6 +171,8 @@ class ProviderRegistry:
             update["google_api_key"] = api_key
         elif provider == "bfl":
             update["bfl_api_key"] = api_key
+        elif provider == "fal":
+            update["fal_api_key"] = api_key
         else:
             return self._settings
 

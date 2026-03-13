@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     provider_bfl_max_concurrent: int = 1
     provider_bfl_min_interval_ms: int = 800
 
+    provider_fal_max_concurrent: int = 1
+    provider_fal_min_interval_ms: int = 500
+
     provider_config_key: str | None = None
 
     session_secret_key: str = "dev-insecure-session-key-change-me"
@@ -73,6 +76,7 @@ class Settings(BaseSettings):
     google_api_key: str | None = None
     google_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     bfl_api_key: str | None = None
+    fal_api_key: str | None = None
 
     @property
     def database_url(self) -> str:

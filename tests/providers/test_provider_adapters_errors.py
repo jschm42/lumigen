@@ -15,6 +15,7 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
@@ -489,3 +490,194 @@ async def test_bfl_list_models_non_json_raises_provider_error(monkeypatch: pytes
 
     with pytest.raises(ProviderError, match="non-JSON models response"):
         await adapter.list_models(settings)
+
+
+@pytest.mark.asyncio
+async def test_fal_generate_submit_429_raises_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, json
+            return _json_response("POST", url, 429, {"detail": "rate limit exceeded"})
+
+    monkeypatch.setattr("app.providers.fal_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+    )
+
+    with pytest.raises(ProviderRateLimitError):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
+async def test_fal_generate_submit_503_raises_service_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, json
+            return _json_response("POST", url, 503, {"detail": "service down"})
+
+    monkeypatch.setattr("app.providers.fal_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+    )
+
+    with pytest.raises(ProviderServiceUnavailableError):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
+async def test_fal_generate_no_request_id_raises_provider_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, json
+            return _json_response("POST", url, 200, {"status": "something"})
+
+    monkeypatch.setattr("app.providers.fal_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+    )
+
+    with pytest.raises(ProviderError, match="request_id"):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
+async def test_fal_generate_polling_failed_status_raises_provider_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, json
+            return _json_response("POST", url, 200, {"request_id": "req-f"})
+
+        async def get(self, url, headers=None):  # type: ignore[no-untyped-def]
+            _ = headers
+            return _json_response("GET", url, 200, {"status": "FAILED", "error": "model error"})
+
+    async def fast_sleep(_duration: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.providers.fal_adapter.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.providers.fal_adapter.asyncio.sleep", fast_sleep)
+
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+    )
+
+    with pytest.raises(ProviderError, match="generation failed"):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
+async def test_fal_generate_polling_5xx_exhaustion_raises_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, json
+            return _json_response("POST", url, 200, {"request_id": "req-5xx"})
+
+        async def get(self, url, headers=None):  # type: ignore[no-untyped-def]
+            _ = headers
+            return _json_response("GET", url, 503, {"detail": "down"})
+
+    async def fast_sleep(_duration: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.providers.fal_adapter.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.providers.fal_adapter.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr(FalAdapter, "MAX_POLL_ATTEMPTS", 2)
+
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+    )
+
+    with pytest.raises(ProviderServiceUnavailableError, match="polling failed"):
+        await adapter.generate(request, settings)
