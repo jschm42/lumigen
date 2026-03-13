@@ -1113,6 +1113,13 @@ function setupGallerySelection() {
     var card = clickArea.closest('[data-gallery-card]');
     if (!card) return;
 
+    var detailTrigger = card.querySelector('[data-asset-detail-trigger]');
+    if (detailTrigger) {
+      // Reuse the existing HTMX-backed trigger so the standard asset dialog opens.
+      detailTrigger.click();
+      return;
+    }
+
     var detailUrl = card.dataset.assetDetailUrl;
     if (!detailUrl) return;
     window.location.href = detailUrl;
