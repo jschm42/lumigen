@@ -75,6 +75,7 @@ MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
+MAX_FAL_MODEL_IDENTIFIER_LENGTH = 160
 MAX_UPLOAD_BYTES = (
     settings.max_upload_size_mb * 1024 * 1024
     if settings.max_upload_size_mb is not None
@@ -361,6 +362,56 @@ def validate_profile_upscale_provider(value: str) -> str | None:
     if candidate not in {"local", "fal"}:
         raise ValueError(f"Unknown upscale provider: {candidate!r}")
     return candidate
+
+
+def normalize_fal_model_identifier(value: str) -> str:
+    """Return a normalized FAL model identifier string."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("FAL model identifier is required")
+    if len(normalized) > MAX_FAL_MODEL_IDENTIFIER_LENGTH:
+        raise ValueError(
+            f"FAL model identifier must be at most {MAX_FAL_MODEL_IDENTIFIER_LENGTH} characters"
+        )
+    return normalized
+
+
+def parse_fal_model_params_json(value: str) -> dict[str, Any]:
+    """Parse FAL model parameters from JSON text into a dictionary."""
+    raw = (value or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"FAL model params must be valid JSON: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("FAL model params JSON must be an object")
+    return parsed
+
+
+def parse_profile_upscale_choice(
+    session: Session,
+    value: str,
+) -> tuple[str | None, str | None, int | None]:
+    """Resolve a profile upscale selection into provider, model identifier, and FAL model ID."""
+    choice = (value or "").strip()
+    if not choice or choice == "__none__":
+        return None, None, None
+    if choice == "fal":
+        return "fal", None, None
+    if choice.startswith("local:"):
+        local_model = validate_profile_upscale_model(choice.split(":", 1)[1])
+        return "local", local_model, None
+    if choice.startswith("falm:") or choice.startswith("topaz:"):
+        fal_model_id = parse_optional_int(choice.split(":", 1)[1])
+        if fal_model_id is None or fal_model_id <= 0:
+            raise ValueError("Selected FAL model is invalid")
+        fal_model = crud.get_topaz_upscale_model(session, fal_model_id)
+        if not fal_model:
+            raise ValueError("Selected FAL model is not available")
+        return "fal", fal_model.model_identifier, fal_model.id
+    raise ValueError("Unknown upscale option")
 
 
 def apply_openrouter_image_config(
@@ -833,12 +884,18 @@ def admin_redirect(
     *,
     message: str | None = None,
     error: str | None = None,
+    extra_params: dict[str, str | int | bool | None] | None = None,
 ) -> RedirectResponse:
     params: dict[str, str] = {"section": normalize_admin_section(section)}
     if message:
         params["message"] = message
     if error:
         params["error"] = error
+    if extra_params:
+        for key, value in extra_params.items():
+            if value is None:
+                continue
+            params[key] = str(value)
     return RedirectResponse(url=f"/admin?{urlencode(params)}", status_code=303)
 
 
@@ -973,6 +1030,7 @@ def generate_page(
     enhancement_ready = False
     upscale_ready = False
     upscale_models: list[str] = []
+    fal_upscale_models: list[Any] = []
     fal_upscale_ready = False
     last_profile_id = None
     last_thumb_size = "md"
@@ -985,6 +1043,9 @@ def generate_page(
         enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
         upscale_ready = upscale_service.is_available()
         upscale_models = upscale_service.list_available_models()
+        fal_upscale_models = crud.list_topaz_upscale_models(
+            session, enabled_only=True
+        )
         fal_upscale_ready = bool(model_config_service.get_default_api_key("fal"))
 
         if active_conversation not in {"all", "new"}:
@@ -1039,6 +1100,8 @@ def generate_page(
             "enhancement_ready": enhancement_ready,
             "upscale_ready": upscale_ready,
             "upscale_models": upscale_models,
+            "fal_upscale_models": fal_upscale_models,
+            "topaz_upscale_models": fal_upscale_models,
             "fal_upscale_ready": fal_upscale_ready,
             "error": error or "",
             "last_profile_id": last_profile_id,
@@ -1176,6 +1239,7 @@ def generate_submit(
             # Explicit "no upscaling" override
             overrides["upscale_provider"] = None
             overrides["upscale_model"] = None
+            overrides["upscale_topaz_model_id"] = None
         elif provider_choice == "__profile__" and upscale_choice == "__profile__":
             # Use profile settings — validate that the profile's upscale config is still valid
             profile_upscale_provider = str(profile.upscale_provider or "").strip().lower()
@@ -1186,6 +1250,12 @@ def generate_submit(
                 available = upscale_service.list_available_models()
                 if available and profile_upscale_model not in available:
                     raise ValueError("Profile upscale model is not available")
+            elif profile_upscale_provider == "fal":
+                profile_fal_model_id = getattr(profile, "upscale_topaz_model_id", None)
+                if profile_fal_model_id is not None:
+                    fal_model = crud.get_topaz_upscale_model(session, int(profile_fal_model_id))
+                    if not fal_model:
+                        raise ValueError("Profile FAL model is not available")
         elif provider_choice == "fal" or (provider_choice == "__profile__" and upscale_choice == "fal"):
             # FAL.ai upscale override
             fal_key = model_config_service.get_default_api_key("fal")
@@ -1193,6 +1263,30 @@ def generate_submit(
                 raise ValueError("FAL.ai API key is not configured. Set it in Admin → Upscaling.")
             overrides["upscale_provider"] = "fal"
             overrides["upscale_model"] = None
+            overrides["upscale_topaz_model_id"] = None
+        elif upscale_choice.startswith("falm:") or upscale_choice.startswith("topaz:"):
+            fal_key = model_config_service.get_default_api_key("fal")
+            if not fal_key:
+                raise ValueError("FAL.ai API key is not configured. Set it in Admin → Upscaling.")
+            fal_model_id = parse_optional_int(upscale_choice.split(":", 1)[1])
+            if fal_model_id is None or fal_model_id <= 0:
+                raise ValueError("Selected FAL model is invalid")
+            fal_model = crud.get_topaz_upscale_model(session, fal_model_id)
+            if not fal_model or not fal_model.is_enabled:
+                raise ValueError("Selected FAL model is not available")
+            overrides["upscale_provider"] = "fal"
+            overrides["upscale_model"] = fal_model.model_identifier
+            overrides["upscale_topaz_model_id"] = fal_model.id
+        elif upscale_choice.startswith("local:"):
+            local_choice = upscale_choice.split(":", 1)[1]
+            if not upscale_service.is_available():
+                raise ValueError("Local upscaler is not configured on this server")
+            available = upscale_service.list_available_models()
+            if available and local_choice not in available:
+                raise ValueError("Selected upscale model is not available")
+            overrides["upscale_provider"] = "local"
+            overrides["upscale_model"] = local_choice
+            overrides["upscale_topaz_model_id"] = None
         elif upscale_choice and upscale_choice not in {"__profile__", "__none__"}:
             # Local model override
             if not upscale_service.is_available():
@@ -1202,6 +1296,7 @@ def generate_submit(
                 raise ValueError("Selected upscale model is not available")
             overrides["upscale_provider"] = "local"
             overrides["upscale_model"] = upscale_choice
+            overrides["upscale_topaz_model_id"] = None
 
         generation = generation_service.create_generation_from_profile(
             session,
@@ -1471,6 +1566,12 @@ def admin_page(
     section: str | None = Query(default="models"),
     message: str | None = Query(default=None),
     error: str | None = Query(default=None),
+    fal_model_create_open: str | None = Query(default=None),
+    fal_model_edit_id: str | None = Query(default=None),
+    fal_model_name: str | None = Query(default=None),
+    fal_model_identifier: str | None = Query(default=None),
+    fal_model_params_json: str | None = Query(default=None),
+    fal_model_is_enabled: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     denied = require_admin_or_redirect(request)
@@ -1500,11 +1601,37 @@ def admin_page(
 
     # Build upscaling info for the "Upscaling" admin section
     fal_api_key_row = provider_api_key_rows.get("fal")
+    create_dialog_open = str(fal_model_create_open or "").strip().lower() in {
+        "1",
+        "true",
+        "on",
+        "yes",
+    }
+    try:
+        edit_dialog_model_id = parse_optional_int(fal_model_edit_id)
+    except ValueError:
+        edit_dialog_model_id = None
+    if edit_dialog_model_id is not None and edit_dialog_model_id <= 0:
+        edit_dialog_model_id = None
+    draft_enabled = str(fal_model_is_enabled or "").strip().lower() in {
+        "1",
+        "true",
+        "on",
+        "yes",
+    }
     upscaling_info = {
         "local_available": upscale_service.is_available(),
         "local_models": upscale_service.list_available_models(),
         "fal_has_db_key": fal_api_key_row is not None,
         "fal_has_env_key": bool(settings.fal_api_key),
+        "fal_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+        "topaz_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+        "fal_model_create_open": create_dialog_open,
+        "fal_model_edit_id": edit_dialog_model_id,
+        "fal_model_draft_name": fal_model_name or "",
+        "fal_model_draft_identifier": fal_model_identifier or "",
+        "fal_model_draft_params_json": fal_model_params_json if fal_model_params_json is not None else "{}",
+        "fal_model_draft_enabled": draft_enabled,
     }
 
     return templates.TemplateResponse(
@@ -1586,6 +1713,117 @@ def admin_update_fal_upscale_key(
     except ValueError as exc:
         return admin_redirect("upscaling", error=str(exc))
     return admin_redirect("upscaling", message="Saved")
+
+
+@app.post("/admin/fal-models")
+@app.post("/admin/topaz-models")
+def admin_create_topaz_model(
+    request: Request,
+    name: str = Form(...),
+    model_identifier: str = Form(...),
+    params_json: str = Form(default="{}"),
+    is_enabled: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Create a named FAL upscale model configuration."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
+    try:
+        name_value = normalize_model_config_name(name)
+        identifier_value = normalize_fal_model_identifier(model_identifier)
+        params_value = parse_fal_model_params_json(params_json)
+        crud.create_topaz_upscale_model(
+            session,
+            name=name_value,
+            model_identifier=identifier_value,
+            params_json=params_value,
+            is_enabled=enabled_value,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect(
+            "upscaling",
+            error=str(exc),
+            extra_params={
+                "fal_model_create_open": "1",
+                "fal_model_name": name,
+                "fal_model_identifier": model_identifier,
+                "fal_model_params_json": params_json,
+                "fal_model_is_enabled": "1" if enabled_value else "0",
+            },
+        )
+    return admin_redirect("upscaling", message="Saved")
+
+
+@app.post("/admin/fal-models/{topaz_model_id}/update")
+@app.post("/admin/topaz-models/{topaz_model_id}/update")
+def admin_update_topaz_model(
+    request: Request,
+    topaz_model_id: int,
+    name: str = Form(...),
+    model_identifier: str = Form(...),
+    params_json: str = Form(default="{}"),
+    is_enabled: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Update an existing FAL upscale model configuration."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    topaz_model = crud.get_topaz_upscale_model(session, topaz_model_id)
+    if not topaz_model:
+        raise HTTPException(status_code=404, detail="FAL model not found")
+    enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
+    try:
+        name_value = normalize_model_config_name(name)
+        identifier_value = normalize_fal_model_identifier(model_identifier)
+        params_value = parse_fal_model_params_json(params_json)
+        crud.update_topaz_upscale_model(
+            session,
+            topaz_model,
+            name=name_value,
+            model_identifier=identifier_value,
+            params_json=params_value,
+            is_enabled=enabled_value,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect(
+            "upscaling",
+            error=str(exc),
+            extra_params={
+                "fal_model_edit_id": topaz_model.id,
+                "fal_model_name": name,
+                "fal_model_identifier": model_identifier,
+                "fal_model_params_json": params_json,
+                "fal_model_is_enabled": "1" if enabled_value else "0",
+            },
+        )
+    return admin_redirect("upscaling", message="Saved")
+
+
+@app.post("/admin/fal-models/{topaz_model_id}/delete")
+@app.post("/admin/topaz-models/{topaz_model_id}/delete")
+def admin_delete_topaz_model(
+    request: Request,
+    topaz_model_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Delete a FAL upscale model configuration."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    topaz_model = crud.get_topaz_upscale_model(session, topaz_model_id)
+    if not topaz_model:
+        raise HTTPException(status_code=404, detail="FAL model not found")
+    crud.delete_topaz_upscale_model(session, topaz_model)
+    return admin_redirect("upscaling", message="Deleted")
 
 
 @app.post("/admin/dimension-presets")
@@ -2213,6 +2451,12 @@ def profiles_page(
             "categories": categories,
             "upscale_ready": upscale_service.is_available(),
             "upscale_models": upscale_service.list_available_models(),
+            "fal_upscale_models": crud.list_topaz_upscale_models(
+                session, enabled_only=False
+            ),
+            "topaz_upscale_models": crud.list_topaz_upscale_models(
+                session, enabled_only=False
+            ),
             "fal_upscale_ready": bool(fal_key),
             "error": error,
             "open_create_dialog": create,
@@ -2246,6 +2490,7 @@ def create_profile(
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
+    upscale_choice: str = Form(default=""),
     upscale_provider: str = Form(default=""),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
@@ -2278,12 +2523,21 @@ def create_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
-        upscale_model_value = (
-            validate_profile_upscale_model(upscale_model)
-            if upscale_provider_value == "local"
-            else None
-        )
+        if (upscale_choice or "").strip():
+            (
+                upscale_provider_value,
+                upscale_model_value,
+                upscale_topaz_model_id_value,
+            ) = parse_profile_upscale_choice(session, upscale_choice)
+        else:
+            # Backward-compatible fallback for older form payloads.
+            upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
+            upscale_model_value = (
+                validate_profile_upscale_model(upscale_model)
+                if upscale_provider_value == "local"
+                else None
+            )
+            upscale_topaz_model_id_value = None
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -2304,6 +2558,7 @@ def create_profile(
             output_format=(output_format.strip().lower() or "png"),
             upscale_provider=upscale_provider_value,
             upscale_model=upscale_model_value,
+            upscale_topaz_model_id=upscale_topaz_model_id_value,
             params_json=params_value,
             categories=categories,
             storage_template_id=resolve_default_storage_template_id(session),
@@ -2327,6 +2582,7 @@ def update_profile(
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
+    upscale_choice: str = Form(default=""),
     upscale_provider: str = Form(default=""),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
@@ -2363,12 +2619,21 @@ def update_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
-        upscale_model_value = (
-            validate_profile_upscale_model(upscale_model)
-            if upscale_provider_value == "local"
-            else None
-        )
+        if (upscale_choice or "").strip():
+            (
+                upscale_provider_value,
+                upscale_model_value,
+                upscale_topaz_model_id_value,
+            ) = parse_profile_upscale_choice(session, upscale_choice)
+        else:
+            # Backward-compatible fallback for older form payloads.
+            upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
+            upscale_model_value = (
+                validate_profile_upscale_model(upscale_model)
+                if upscale_provider_value == "local"
+                else None
+            )
+            upscale_topaz_model_id_value = None
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -2390,6 +2655,7 @@ def update_profile(
             output_format=(output_format.strip().lower() or "png"),
             upscale_provider=upscale_provider_value,
             upscale_model=upscale_model_value,
+            upscale_topaz_model_id=upscale_topaz_model_id_value,
             params_json=params_value,
             categories=categories,
         )

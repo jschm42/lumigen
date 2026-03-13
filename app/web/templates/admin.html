@@ -454,43 +454,190 @@
         {% endif %}
       </div>
 
-      <!-- FAL.ai Topaz -->
+      <!-- FAL.ai -->
       <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
-        <form action="/admin/upscaling/fal" method="post" class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center gap-3">
-            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">FAL.ai (Topaz)</span>
+            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">FAL.ai</span>
             {% if upscaling_info.fal_has_db_key %}
-              <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">stored</span>
+              <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">stored key</span>
+            {% elif upscaling_info.fal_has_env_key %}
+              <span class="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">env key</span>
+            {% else %}
+              <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">no key</span>
             {% endif %}
           </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400">
-            Uses the <a href="https://fal.ai/models/fal-ai/topaz/upscale/image" target="_blank" rel="noopener" class="underline hover:text-sky-500">fal-ai/topaz</a> upscaling model via the FAL.ai API. Requires a FAL.ai API key.
-          </p>
-
-          {% if upscaling_info.fal_has_env_key and not upscaling_info.fal_has_db_key %}
-            <p class="text-xs text-amber-600 dark:text-amber-400">⚠ A FAL_API_KEY is set in .env and will be used. Storing a key here will override it.</p>
-          {% elif upscaling_info.fal_has_env_key and upscaling_info.fal_has_db_key %}
-            <p class="text-xs text-amber-600 dark:text-amber-400">⚠ A FAL_API_KEY is also set in .env — the stored key above takes priority.</p>
-          {% elif not upscaling_info.fal_has_env_key and not upscaling_info.fal_has_db_key %}
-            <p class="text-xs text-slate-500 dark:text-slate-400">No API key configured. Set one here or add FAL_API_KEY to .env.</p>
-          {% endif %}
-
-          <div>
-            <label for="fal-api-key" class="{{ label_class }}">FAL.ai API key</label>
-            <input id="fal-api-key" type="password" name="api_key" placeholder="{% if upscaling_info.fal_has_db_key %}leave blank to keep stored key{% else %}enter key to store{% endif %}" class="{{ input_class }}">
-          </div>
-
-          {% if upscaling_info.fal_has_db_key %}
-          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <input type="checkbox" name="clear_api_key">
-            Clear stored key
-          </label>
-          {% endif %}
-
+          <p class="text-xs text-slate-500 dark:text-slate-400">FAL API keys are managed in the API Keys section.</p>
           <div class="flex justify-end">
-            <button type="submit" class="{{ btn_primary }}">Save</button>
+            <a href="/admin?section=apikeys{{ embedded_suffix }}" class="{{ btn_secondary }}">Open API Keys</a>
           </div>
-        </form>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">FAL models</h4>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Create multiple named FAL.ai upscaling presets with individual parameter JSON.</p>
+          </div>
+          <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('create-fal-model-dialog').showModal()">New model</button>
+        </div>
+
+        <div class="overflow-x-auto rounded-2xl bg-slate-100/80 dark:bg-slate-950/35">
+          <table class="min-w-full divide-y divide-slate-300/60 text-left text-sm dark:divide-white/10">
+            <thead class="bg-slate-200/70 text-slate-700 dark:bg-white/5 dark:text-slate-300">
+              <tr>
+                <th class="px-4 py-3 font-semibold">Name</th>
+                <th class="px-4 py-3 font-semibold">Model identifier</th>
+                <th class="px-4 py-3 font-semibold">Status</th>
+                <th class="px-4 py-3 font-semibold">Params</th>
+                <th class="px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
+            {% for topaz_model in upscaling_info.fal_models %}
+              <tr>
+                <td class="px-4 py-3">{{ topaz_model.name }}</td>
+                <td class="px-4 py-3"><span class="font-mono text-xs">{{ topaz_model.model_identifier }}</span></td>
+                <td class="px-4 py-3">
+                  {% if topaz_model.is_enabled %}
+                    <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">enabled</span>
+                  {% else %}
+                    <span class="rounded-full bg-slate-500/15 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300">disabled</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                  <span class="font-mono text-xs text-slate-600 dark:text-slate-300">{{ topaz_model.params_json | tojson }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="{{ btn_secondary }}"
+                      data-fal-edit-button
+                      data-model-id="{{ topaz_model.id }}"
+                      data-model-name="{{ topaz_model.name }}"
+                      data-model-identifier="{{ topaz_model.model_identifier }}"
+                      data-model-params='{{ topaz_model.params_json | tojson }}'
+                      data-model-enabled="{{ '1' if topaz_model.is_enabled else '0' }}"
+                    >
+                      Edit
+                    </button>
+                    <form action="/admin/fal-models/{{ topaz_model.id }}/delete" method="post" data-confirm-message="Delete this FAL model?" class="inline-flex">
+                      <button class="{{ btn_danger }}" type="submit">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="5" class="px-4 py-4 text-slate-500 dark:text-slate-400">No FAL models configured yet.</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% set create_enabled_default = upscaling_info.fal_model_draft_enabled if upscaling_info.fal_model_create_open else True %}
+        <dialog id="create-fal-model-dialog" {% if upscaling_info.fal_model_create_open %}data-open-on-load="true"{% endif %}>
+          <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
+            <header class="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white">New FAL model</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Create a reusable upscaling model preset.</p>
+              </div>
+              <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-fal-model-dialog').close()">&times;</button>
+            </header>
+            <form action="/admin/fal-models" method="post" class="space-y-4">
+              <div>
+                <label for="new-fal-name" class="{{ label_class }}">Display name</label>
+                <input id="new-fal-name" type="text" name="name" maxlength="50" required value="{{ upscaling_info.fal_model_draft_name }}" class="{{ input_class }}" placeholder="Topaz Standard">
+              </div>
+              <div>
+                <label for="new-fal-model-identifier" class="{{ label_class }}">FAL model identifier</label>
+                <input id="new-fal-model-identifier" type="text" name="model_identifier" required value="{{ upscaling_info.fal_model_draft_identifier }}" class="{{ input_class }}" placeholder="fal-ai/topaz/upscale/image">
+              </div>
+              <div>
+                <label for="new-fal-params" class="{{ label_class }}">Model params JSON</label>
+                <textarea id="new-fal-params" name="params_json" rows="6" class="{{ text_class }}" placeholder='{"creativity": 0.35}'>{{ upscaling_info.fal_model_draft_params_json }}</textarea>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Use parameters according to the selected FAL model documentation.</p>
+              </div>
+              <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <input type="checkbox" name="is_enabled" {% if create_enabled_default %}checked{% endif %}>
+                Enabled
+              </label>
+              <div class="flex justify-end">
+                <button type="submit" class="{{ btn_primary }}">Add model</button>
+              </div>
+            </form>
+          </article>
+        </dialog>
+
+        {% set selected_edit_model = none %}
+        {% if upscaling_info.fal_model_edit_id %}
+          {% for topaz_model in upscaling_info.fal_models %}
+            {% if topaz_model.id == upscaling_info.fal_model_edit_id %}
+              {% set selected_edit_model = topaz_model %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        <dialog id="edit-fal-model-dialog" {% if upscaling_info.fal_model_edit_id %}data-open-on-load="true"{% endif %}>
+          <article class="rounded-3xl border border-slate-300/70 bg-white p-5 text-slate-900 shadow-2xl shadow-slate-300/55 sm:p-7 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/80">
+            <header class="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Edit FAL model</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Update model configuration and parameter JSON.</p>
+              </div>
+              <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-fal-model-dialog').close()">&times;</button>
+            </header>
+            <form
+              id="edit-fal-model-form"
+              action="/admin/fal-models/{% if selected_edit_model %}{{ selected_edit_model.id }}{% else %}0{% endif %}/update"
+              method="post"
+              class="space-y-4"
+            >
+              <div>
+                <label for="edit-fal-name" class="{{ label_class }}">Display name</label>
+                <input
+                  id="edit-fal-name"
+                  type="text"
+                  name="name"
+                  maxlength="50"
+                  required
+                  class="{{ input_class }}"
+                  value="{{ upscaling_info.fal_model_draft_name if upscaling_info.fal_model_edit_id else (selected_edit_model.name if selected_edit_model else '') }}"
+                >
+              </div>
+              <div>
+                <label for="edit-fal-model-identifier" class="{{ label_class }}">FAL model identifier</label>
+                <input
+                  id="edit-fal-model-identifier"
+                  type="text"
+                  name="model_identifier"
+                  required
+                  class="{{ input_class }}"
+                  value="{{ upscaling_info.fal_model_draft_identifier if upscaling_info.fal_model_edit_id else (selected_edit_model.model_identifier if selected_edit_model else '') }}"
+                >
+              </div>
+              <div>
+                <label for="edit-fal-params" class="{{ label_class }}">Model params JSON</label>
+                <textarea id="edit-fal-params" name="params_json" rows="6" class="{{ text_class }}">{{ upscaling_info.fal_model_draft_params_json if upscaling_info.fal_model_edit_id else (selected_edit_model.params_json | tojson if selected_edit_model else '{}') }}</textarea>
+              </div>
+              <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <input
+                  id="edit-fal-enabled"
+                  type="checkbox"
+                  name="is_enabled"
+                  {% if upscaling_info.fal_model_edit_id %}{% if upscaling_info.fal_model_draft_enabled %}checked{% endif %}{% elif selected_edit_model and selected_edit_model.is_enabled %}checked{% endif %}
+                >
+                Enabled
+              </label>
+              <div class="flex justify-end">
+                <button type="submit" class="{{ btn_primary }}">Save</button>
+              </div>
+            </form>
+          </article>
+        </dialog>
       </div>
     </div>
   {% elif active_admin_section == "apikeys" %}

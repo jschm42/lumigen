@@ -94,6 +94,10 @@ class Profile(Base, TimestampMixin):
     )
     upscale_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     upscale_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    upscale_topaz_model_id: Mapped[int | None] = mapped_column(
+        ForeignKey("topaz_upscale_models.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     params_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )
@@ -105,6 +109,9 @@ class Profile(Base, TimestampMixin):
 
     storage_template: Mapped[StorageTemplate] = relationship(back_populates="profiles")
     model_config: Mapped[ModelConfig | None] = relationship(
+        back_populates="profiles"
+    )
+    upscale_topaz_model: Mapped[TopazUpscaleModel | None] = relationship(
         back_populates="profiles"
     )
     generations: Mapped[list[Generation]] = relationship(back_populates="profile")
@@ -132,6 +139,20 @@ class ModelConfig(Base, TimestampMixin):
     )
 
     profiles: Mapped[list[Profile]] = relationship(back_populates="model_config")
+
+
+class TopazUpscaleModel(Base, TimestampMixin):
+    """Named Topaz/FAL upscale configuration with model identifier and parameter payload."""
+
+    __tablename__ = "topaz_upscale_models"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    model_identifier: Mapped[str] = mapped_column(String(160), nullable=False)
+    params_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean(), default=True, nullable=False)
+
+    profiles: Mapped[list[Profile]] = relationship(back_populates="upscale_topaz_model")
 
 
 class EnhancementConfig(Base, TimestampMixin):

@@ -3,6 +3,7 @@
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
 {% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
 {% set openrouter_cfg = p.params_json.get('image_config') if p and p.params_json and (p.params_json.get('image_config') is mapping) else {} %}
+{% set fal_upscale_models = fal_upscale_models if fal_upscale_models is defined else (topaz_upscale_models if topaz_upscale_models is defined else []) %}
 {% set input_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
 {% set text_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
 {% set label_class = "block text-sm font-semibold text-slate-700 dark:text-slate-200" %}
@@ -116,33 +117,38 @@
       </select>
     </div>
     <div>
-      <label for="{{ form_dom_id }}-upscale-provider" class="{{ label_class }}">Upscale provider</label>
-      {% set selected_upscale_provider = p.upscale_provider if p and p.upscale_provider else '' %}
-      <select id="{{ form_dom_id }}-upscale-provider" name="upscale_provider" class="{{ input_class }}"
-              data-upscale-provider-select data-local-models-field="{{ form_dom_id }}-upscale-model-row">
-        <option value="" {% if not selected_upscale_provider %}selected{% endif %}>No upscaling</option>
-        <option value="local" {% if selected_upscale_provider == 'local' %}selected{% endif %}>Local (Real-ESRGAN)</option>
-        <option value="fal" {% if selected_upscale_provider == 'fal' %}selected{% endif %}>FAL.ai (Topaz)</option>
+      <label for="{{ form_dom_id }}-upscale-choice" class="{{ label_class }}">Upscale</label>
+      {% set selected_upscale_choice = '__none__' %}
+      {% if p and p.upscale_provider == 'local' and p.upscale_model %}
+        {% set selected_upscale_choice = 'local:' ~ p.upscale_model %}
+      {% elif p and p.upscale_provider == 'fal' and p.upscale_topaz_model_id %}
+        {% set selected_upscale_choice = 'falm:' ~ p.upscale_topaz_model_id %}
+      {% elif p and p.upscale_provider == 'fal' %}
+        {% set selected_upscale_choice = 'fal' %}
+      {% endif %}
+      <select id="{{ form_dom_id }}-upscale-choice" name="upscale_choice" class="{{ input_class }}">
+        <option value="__none__" {% if selected_upscale_choice == '__none__' %}selected{% endif %}>No upscaling</option>
+        {% if upscale_models %}
+          <optgroup label="Local (Real-ESRGAN)">
+            {% for model in upscale_models %}
+              {% set choice_value = 'local:' ~ model %}
+              <option value="{{ choice_value }}" {% if selected_upscale_choice == choice_value %}selected{% endif %}>{{ model }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+        <optgroup label="FAL.ai models">
+          <option value="fal" {% if selected_upscale_choice == 'fal' %}selected{% endif %}>FAL default</option>
+          {% for model in fal_upscale_models %}
+            {% set choice_value = 'falm:' ~ model.id %}
+            <option value="{{ choice_value }}" {% if selected_upscale_choice == choice_value %}selected{% endif %}>{{ model.name }}{% if not model.is_enabled %} (disabled){% endif %}</option>
+          {% endfor %}
+        </optgroup>
       </select>
       {% if not upscale_ready and not fal_upscale_ready %}
         <p class="mt-1 text-xs text-amber-300">No upscale provider is configured. Configure one in Admin → Upscaling.</p>
       {% endif %}
+      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">FAL model entries come from Admin → Upscaling → FAL models.</p>
     </div>
-  </div>
-
-  <div id="{{ form_dom_id }}-upscale-model-row" {% if selected_upscale_provider != 'local' %}class="hidden"{% endif %}>
-    <label for="{{ form_dom_id }}-upscale-model" class="{{ label_class }}">Local upscale model</label>
-    {% set selected_upscale_model = p.upscale_model if p and p.upscale_model else '' %}
-    <select id="{{ form_dom_id }}-upscale-model" name="upscale_model" class="{{ input_class }}">
-      <option value="">Select a model</option>
-      {% for model in upscale_models %}
-        <option value="{{ model }}" {% if selected_upscale_model == model %}selected{% endif %}>{{ model }}</option>
-      {% endfor %}
-    </select>
-    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Select which local model to use for upscaling.</p>
-    {% if not upscale_models %}
-      <p class="mt-1 text-xs text-amber-300">No local upscaling models found. Please provide .param/.bin files in UPSCALER_MODEL_DIR.</p>
-    {% endif %}
   </div>
 
   <div class="flex flex-wrap justify-end gap-3 pt-2">

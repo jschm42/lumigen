@@ -231,3 +231,38 @@ def test_generation_asset_and_session_preference_crud_flow(db_session: Session) 
     assert loaded_enhancement is not None
     assert loaded_enhancement.provider == "openrouter"
     assert loaded_enhancement.api_key_encrypted == "enc2"
+
+
+def test_topaz_upscale_model_crud_flow(db_session: Session) -> None:
+    created = crud.create_topaz_upscale_model(
+        db_session,
+        name="Topaz Standard",
+        model_identifier="fal-ai/topaz/upscale/image",
+        params_json={"creativity": 0.25},
+        is_enabled=True,
+    )
+    assert created.id is not None
+
+    by_name = crud.get_topaz_upscale_model_by_name(db_session, "Topaz Standard")
+    assert by_name is not None
+    assert by_name.model_identifier == "fal-ai/topaz/upscale/image"
+
+    listed_enabled = crud.list_topaz_upscale_models(db_session, enabled_only=True)
+    assert len(listed_enabled) == 1
+
+    updated = crud.update_topaz_upscale_model(
+        db_session,
+        by_name,
+        params_json={"creativity": 0.6},
+        is_enabled=False,
+    )
+    assert updated.params_json == {"creativity": 0.6}
+    assert updated.is_enabled is False
+
+    listed_enabled = crud.list_topaz_upscale_models(db_session, enabled_only=True)
+    assert listed_enabled == []
+
+    loaded = crud.get_topaz_upscale_model(db_session, created.id)
+    assert loaded is not None
+    crud.delete_topaz_upscale_model(db_session, loaded)
+    assert crud.get_topaz_upscale_model(db_session, created.id) is None

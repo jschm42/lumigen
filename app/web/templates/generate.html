@@ -280,11 +280,23 @@
                   <option value="__profile__" selected>From profile</option>
                   <option value="__none__">No upscaling</option>
                   {% if fal_upscale_ready %}
-                    <option value="fal">FAL.ai (Topaz)</option>
+                    <option value="fal">FAL.ai default</option>
+                    {% set fal_models = fal_upscale_models if fal_upscale_models is defined else (topaz_upscale_models if topaz_upscale_models is defined else []) %}
+                    {% if fal_models %}
+                      <optgroup label="FAL.ai models">
+                        {% for topaz_model in fal_models %}
+                          <option value="falm:{{ topaz_model.id }}">{{ topaz_model.name }}</option>
+                        {% endfor %}
+                      </optgroup>
+                    {% endif %}
                   {% endif %}
-                  {% for model in upscale_models %}
-                    <option value="{{ model }}">{{ model }}</option>
-                  {% endfor %}
+                  {% if upscale_models %}
+                    <optgroup label="Local (Real-ESRGAN)">
+                      {% for model in upscale_models %}
+                        <option value="local:{{ model }}">{{ model }}</option>
+                      {% endfor %}
+                    </optgroup>
+                  {% endif %}
                 </select>
               </div>
             </div>

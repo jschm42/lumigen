@@ -16,6 +16,7 @@ from app.db.models import (
     Profile,
     ProviderApiKey,
     StorageTemplate,
+    TopazUpscaleModel,
     User,
 )
 
@@ -130,6 +131,64 @@ def list_model_configs(session: Session) -> list[ModelConfig]:
     """Return all model configurations ordered by name."""
     stmt = select(ModelConfig).order_by(ModelConfig.name.asc())
     return list(session.scalars(stmt).all())
+
+
+def list_topaz_upscale_models(
+    session: Session, *, enabled_only: bool = False
+) -> list[TopazUpscaleModel]:
+    """Return Topaz upscale model configurations ordered by name."""
+    stmt = select(TopazUpscaleModel)
+    if enabled_only:
+        stmt = stmt.where(TopazUpscaleModel.is_enabled.is_(True))
+    stmt = stmt.order_by(TopazUpscaleModel.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def get_topaz_upscale_model(
+    session: Session, topaz_model_id: int
+) -> TopazUpscaleModel | None:
+    """Return a Topaz upscale model by primary key, or ``None`` if not found."""
+    stmt = select(TopazUpscaleModel).where(TopazUpscaleModel.id == topaz_model_id)
+    return session.scalar(stmt)
+
+
+def get_topaz_upscale_model_by_name(
+    session: Session, name: str
+) -> TopazUpscaleModel | None:
+    """Return a Topaz upscale model by name, or ``None`` if not found."""
+    stmt = select(TopazUpscaleModel).where(TopazUpscaleModel.name == name)
+    return session.scalar(stmt)
+
+
+def create_topaz_upscale_model(session: Session, **fields) -> TopazUpscaleModel:
+    """Create a new Topaz upscale model row and return it."""
+    row = TopazUpscaleModel(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_topaz_upscale_model(
+    session: Session,
+    topaz_model: TopazUpscaleModel,
+    **fields,
+) -> TopazUpscaleModel:
+    """Update a Topaz upscale model's fields and return the refreshed instance."""
+    for key, value in fields.items():
+        setattr(topaz_model, key, value)
+    session.add(topaz_model)
+    session.commit()
+    session.refresh(topaz_model)
+    return topaz_model
+
+
+def delete_topaz_upscale_model(
+    session: Session, topaz_model: TopazUpscaleModel
+) -> None:
+    """Delete the given Topaz upscale model from the database."""
+    session.delete(topaz_model)
+    session.commit()
 
 
 def list_dimension_presets(session: Session) -> list[DimensionPreset]:

@@ -333,6 +333,7 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
             "seed": 42,
             "params_json": {"extra": True},
             "upscale_model": " model-x ",
+            "upscale_topaz_model_id": "12",
             "category_ids": [2, 2, "3", -1],
             "input_images": [{"name": "img"}],
             "chat_session_id": "session:abc",
@@ -348,6 +349,7 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
     assert request_snapshot["n_images"] == 3
     assert request_snapshot["seed"] == 42
     assert request_snapshot["upscale_model"] == "model-x"
+    assert request_snapshot["upscale_topaz_model_id"] == 12
     assert request_snapshot["category_ids"] == [2, 3]
     assert request_snapshot["chat_session_id"] == "session:abc"
     assert request_snapshot["params_json"] == {"extra": True}

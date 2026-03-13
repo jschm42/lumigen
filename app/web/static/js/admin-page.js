@@ -45,8 +45,62 @@
     });
   }
 
+  function setFalEditDialogValues(button) {
+    var modelId = button.getAttribute("data-model-id") || "";
+    var name = button.getAttribute("data-model-name") || "";
+    var identifier = button.getAttribute("data-model-identifier") || "";
+    var params = button.getAttribute("data-model-params") || "{}";
+    var enabled = button.getAttribute("data-model-enabled") === "1";
+
+    var form = document.getElementById("edit-fal-model-form");
+    var nameInput = document.getElementById("edit-fal-name");
+    var identifierInput = document.getElementById("edit-fal-model-identifier");
+    var paramsInput = document.getElementById("edit-fal-params");
+    var enabledInput = document.getElementById("edit-fal-enabled");
+
+    if (form) {
+      form.action = "/admin/fal-models/" + encodeURIComponent(modelId) + "/update";
+    }
+    if (nameInput) {
+      nameInput.value = name;
+    }
+    if (identifierInput) {
+      identifierInput.value = identifier;
+    }
+    if (paramsInput) {
+      paramsInput.value = params;
+    }
+    if (enabledInput) {
+      enabledInput.checked = enabled;
+    }
+  }
+
+  function initFalModelDialogs() {
+    var editDialog = document.getElementById("edit-fal-model-dialog");
+    var createDialog = document.getElementById("create-fal-model-dialog");
+
+    document.querySelectorAll("[data-fal-edit-button]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        setFalEditDialogValues(button);
+        if (editDialog) {
+          editDialog.showModal();
+        }
+      });
+    });
+
+    if (createDialog && createDialog.hasAttribute("data-open-on-load")) {
+      createDialog.showModal();
+    }
+    if (editDialog && editDialog.hasAttribute("data-open-on-load")) {
+      editDialog.showModal();
+    }
+  }
+
   window.toggleApiKeyField = toggleApiKeyField;
   window.updateProviderHint = updateProviderHint;
 
-  document.addEventListener("DOMContentLoaded", initProviderHints);
+  document.addEventListener("DOMContentLoaded", function () {
+    initProviderHints();
+    initFalModelDialogs();
+  });
 })();

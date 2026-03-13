@@ -149,7 +149,7 @@ def test_generate_page_keeps_selected_older_session_visible(client, app_module, 
 
     assert response.status_code == 200
     assert "Session 022" in body
-    assert "bg-sky-300/20 text-sky-100" in body
+    assert "bg-sky-100 text-sky-900" in body
 
 
 def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, app_module) -> None:
@@ -401,6 +401,48 @@ def test_admin_page_renders_sections_and_key_warning(client, app_module, monkeyp
     assert "Manage models, presets, categories" in body
     assert "PROVIDER_CONFIG_KEY is missing" in body
     assert "/admin?section=categories" in body
+
+
+def test_admin_upscaling_renders_fal_table_and_dialogs(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module.crud, "list_model_configs", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_categories", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_users", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.provider_registry, "provider_names", lambda: ["fal"])
+    monkeypatch.setattr(app_module.crud, "list_provider_api_keys", lambda _session: [])
+    monkeypatch.setattr(app_module.upscale_service, "is_available", lambda: False)
+    monkeypatch.setattr(app_module.upscale_service, "list_available_models", lambda: [])
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_topaz_upscale_models",
+        lambda _session, enabled_only=False: [
+            SimpleNamespace(
+                id=3,
+                name="FAL Crisp",
+                model_identifier="fal-ai/topaz/upscale/image",
+                params_json={"creativity": 0.2},
+                is_enabled=True,
+            )
+        ],
+    )
+
+    response = client.get("/admin?section=upscaling")
+    body = response.text
+
+    assert response.status_code == 200
+    assert "FAL models" in body
+    assert "id=\"create-fal-model-dialog\"" in body
+    assert "id=\"edit-fal-model-dialog\"" in body
+    assert "data-fal-edit-button" in body
+    assert "Open API Keys" in body
+    assert "Model identifier" in body
+    assert "id=\"fal-api-key\"" not in body
 
 
 def test_job_cancel_htmx_chat_returns_chat_fragment(client, app_module, monkeypatch) -> None:

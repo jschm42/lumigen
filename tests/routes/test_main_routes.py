@@ -281,6 +281,66 @@ def test_generate_submit_rejects_non_positive_width(client, app_module, monkeypa
     assert fake_generation_service.create_called is False
 
 
+def test_generate_submit_with_fal_model_override_sets_fal_overrides(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    captured: dict[str, object] = {}
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="stub",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_topaz_upscale_model",
+        lambda _session, _id: SimpleNamespace(
+            id=7,
+            is_enabled=True,
+            model_identifier="fal-ai/topaz/upscale/image",
+        ),
+    )
+    monkeypatch.setattr(
+        app_module.model_config_service,
+        "get_default_api_key",
+        lambda provider: "fal-key" if provider == "fal" else None,
+    )
+
+    class _FakeGenerationService:
+        def create_generation_from_profile(self, _session, _profile, _prompt, overrides=None):  # type: ignore[no-untyped-def]
+            captured["overrides"] = dict(overrides or {})
+            return SimpleNamespace(id=17)
+
+        def enqueue(self, *_args, **_kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "prompt",
+            "profile_id": "1",
+            "upscale_model": "falm:7",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "workspace_view=chat" in response.headers["location"]
+    overrides = captured["overrides"]
+    assert overrides["upscale_provider"] == "fal"
+    assert overrides["upscale_model"] == "fal-ai/topaz/upscale/image"
+    assert overrides["upscale_topaz_model_id"] == 7
+
+
 def test_bulk_set_categories_rejects_missing_assets(client, app_module) -> None:
     fake_session = _FakeSession()
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(

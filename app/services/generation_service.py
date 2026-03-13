@@ -102,6 +102,15 @@ class GenerationService:
         else:
             upscale_model = str(profile.upscale_model or "").strip() or None
 
+        if "upscale_topaz_model_id" in effective_overrides:
+            upscale_topaz_model_id = self._parse_optional_int(
+                effective_overrides.get("upscale_topaz_model_id")
+            )
+        else:
+            upscale_topaz_model_id = self._parse_optional_int(
+                getattr(profile, "upscale_topaz_model_id", None)
+            )
+
         input_images = effective_overrides.get("input_images")
         chat_session_id = str(effective_overrides.get("chat_session_id") or "").strip()
         profile_category_ids = [item.id for item in profile.categories]
@@ -123,6 +132,7 @@ class GenerationService:
             "output_format": profile.output_format,
             "upscale_provider": profile.upscale_provider,
             "upscale_model": profile.upscale_model,
+            "upscale_topaz_model_id": getattr(profile, "upscale_topaz_model_id", None),
             "params_json": profile.params_json or {},
             "storage_template_id": profile.storage_template_id,
             "category_ids": profile_category_ids,
@@ -146,6 +156,7 @@ class GenerationService:
             "seed": seed,
             "upscale_provider": upscale_provider,
             "upscale_model": upscale_model,
+            "upscale_topaz_model_id": upscale_topaz_model_id,
             "upscaling_active": False,
             "output_format": profile.output_format,
             "provider": profile.provider,
@@ -162,6 +173,8 @@ class GenerationService:
                 "params_json": "params_json" in effective_overrides,
                 "upscale_provider": "upscale_provider" in effective_overrides,
                 "upscale_model": "upscale_model" in effective_overrides,
+                "upscale_topaz_model_id": "upscale_topaz_model_id"
+                in effective_overrides,
                 "category_ids": "category_ids" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
                 "chat_session_id": "chat_session_id" in effective_overrides,
@@ -280,6 +293,9 @@ class GenerationService:
                 upscale_model = str(
                     generation.request_snapshot_json.get("upscale_model") or ""
                 ).strip()
+                upscale_topaz_model_id = self._parse_optional_int(
+                    generation.request_snapshot_json.get("upscale_topaz_model_id")
+                )
                 upscale_enabled = bool(upscale_provider)
 
                 if upscale_enabled and upscale_provider == "local":
@@ -333,6 +349,21 @@ class GenerationService:
                             "tool": "realesrgan",
                         }
                     elif upscale_enabled and upscale_provider == "fal" and self.fal_upscale_service:
+                        topaz_config = None
+                        topaz_params: dict[str, Any] = {}
+                        topaz_model_identifier = upscale_model or None
+                        if upscale_topaz_model_id is not None and upscale_topaz_model_id > 0:
+                            topaz_config = crud.get_topaz_upscale_model(
+                                session, upscale_topaz_model_id
+                            )
+                            if not topaz_config:
+                                raise ProviderError("Selected Topaz upscale model no longer exists")
+                            if not topaz_config.is_enabled:
+                                raise ProviderError("Selected Topaz upscale model is disabled")
+                            topaz_model_identifier = topaz_config.model_identifier
+                            if isinstance(topaz_config.params_json, dict):
+                                topaz_params = dict(topaz_config.params_json)
+
                         fal_api_key = (
                             self.model_config_service.get_default_api_key("fal")
                             if self.model_config_service
@@ -347,10 +378,15 @@ class GenerationService:
                             image.data,
                             output_format,
                             fal_api_key,
+                            model_identifier=topaz_model_identifier,
+                            model_params=topaz_params,
                         )
                         upscale_meta = {
-                            "model": "topaz",
+                            "model": topaz_model_identifier or "fal-ai/topaz/upscale/image",
                             "tool": "fal",
+                            "topaz_model_id": upscale_topaz_model_id,
+                            "topaz_model_name": topaz_config.name if topaz_config else None,
+                            "topaz_params": topaz_params,
                         }
                     (
                         image_data,
