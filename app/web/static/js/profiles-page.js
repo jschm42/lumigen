@@ -5,6 +5,27 @@
     return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
   }
 
+  function setupUpscaleProviderToggle(container) {
+    var selects = container.querySelectorAll("[data-upscale-provider-select]");
+    selects.forEach(function (select) {
+      var modelRowId = select.getAttribute("data-local-models-field");
+      if (!modelRowId) return;
+
+      function update() {
+        var row = document.getElementById(modelRowId);
+        if (!row) return;
+        if (select.value === "local") {
+          row.classList.remove("hidden");
+        } else {
+          row.classList.add("hidden");
+        }
+      }
+
+      select.addEventListener("change", update);
+      update();
+    });
+  }
+
   window.addEventListener("DOMContentLoaded", function () {
     var root = document.querySelector("[data-profiles-page]");
     if (!root) return;
@@ -25,5 +46,13 @@
         editDialog.showModal();
       }
     }
+
+    setupUpscaleProviderToggle(document);
+
+    document.querySelectorAll("dialog").forEach(function (dialog) {
+      dialog.addEventListener("open", function () {
+        setupUpscaleProviderToggle(dialog);
+      });
+    });
   });
 })();

@@ -39,6 +39,7 @@
     <a href="/admin?section=dimensions{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
     <a href="/admin?section=categories{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
     <a href="/admin?section=enhancement{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'enhancement' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancement LLM</a>
+    <a href="/admin?section=upscaling{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'upscaling' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Upscaling</a>
     <a href="/admin?section=apikeys{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'apikeys' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">API Keys</a>
     <a href="/admin?section=users{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'users' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Users</a>
     <a href="/admin?section=about{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'about' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">About</a>
@@ -424,6 +425,74 @@
         <button type="submit" class="{{ btn_primary }}">Save</button>
       </div>
     </form>
+  {% elif active_admin_section == "upscaling" %}
+    <header class="mb-1">
+      <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Upscaling</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Configure upscaling providers. Upscaling can be enabled per profile or overridden per generation.</p>
+    </header>
+
+    <div class="space-y-6">
+      <!-- Local Real-ESRGAN -->
+      <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">Local (Real-ESRGAN)</span>
+          {% if upscaling_info.local_available %}
+            <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">available</span>
+          {% else %}
+            <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">not configured</span>
+          {% endif %}
+        </div>
+        {% if upscaling_info.local_available %}
+          <p class="text-sm text-slate-600 dark:text-slate-400">Real-ESRGAN is configured via <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">UPSCALER_COMMAND</code> and <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">UPSCALER_MODEL_DIR</code> in your <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">.env</code> file.</p>
+          {% if upscaling_info.local_models %}
+            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Available models: {{ upscaling_info.local_models | join(', ') }}</p>
+          {% else %}
+            <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">No model files found in UPSCALER_MODEL_DIR. Place .param/.bin files there to enable local upscaling.</p>
+          {% endif %}
+        {% else %}
+          <p class="text-sm text-slate-600 dark:text-slate-400">To enable local upscaling, set <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">UPSCALER_COMMAND</code> and optionally <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">UPSCALER_MODEL_DIR</code> in your <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">.env</code> file.</p>
+        {% endif %}
+      </div>
+
+      <!-- FAL.ai Topaz -->
+      <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
+        <form action="/admin/upscaling/fal" method="post" class="space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">FAL.ai (Topaz)</span>
+            {% if upscaling_info.fal_has_db_key %}
+              <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">stored</span>
+            {% endif %}
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Uses the <a href="https://fal.ai/models/fal-ai/topaz/upscale/image" target="_blank" rel="noopener" class="underline hover:text-sky-500">fal-ai/topaz</a> upscaling model via the FAL.ai API. Requires a FAL.ai API key.
+          </p>
+
+          {% if upscaling_info.fal_has_env_key and not upscaling_info.fal_has_db_key %}
+            <p class="text-xs text-amber-600 dark:text-amber-400">⚠ A FAL_API_KEY is set in .env and will be used. Storing a key here will override it.</p>
+          {% elif upscaling_info.fal_has_env_key and upscaling_info.fal_has_db_key %}
+            <p class="text-xs text-amber-600 dark:text-amber-400">⚠ A FAL_API_KEY is also set in .env — the stored key above takes priority.</p>
+          {% elif not upscaling_info.fal_has_env_key and not upscaling_info.fal_has_db_key %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">No API key configured. Set one here or add FAL_API_KEY to .env.</p>
+          {% endif %}
+
+          <div>
+            <label for="fal-api-key" class="{{ label_class }}">FAL.ai API key</label>
+            <input id="fal-api-key" type="password" name="api_key" placeholder="{% if upscaling_info.fal_has_db_key %}leave blank to keep stored key{% else %}enter key to store{% endif %}" class="{{ input_class }}">
+          </div>
+
+          {% if upscaling_info.fal_has_db_key %}
+          <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <input type="checkbox" name="clear_api_key">
+            Clear stored key
+          </label>
+          {% endif %}
+
+          <div class="flex justify-end">
+            <button type="submit" class="{{ btn_primary }}">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
   {% elif active_admin_section == "apikeys" %}
     <header class="mb-1">
       <h3 class="text-xl font-semibold text-slate-900 dark:text-white">API Keys</h3>

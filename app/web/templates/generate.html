@@ -279,6 +279,9 @@
                 <select id="upscale_model" name="upscale_model" data-upscale-model class="{{ input_class }} mt-1">
                   <option value="__profile__" selected>From profile</option>
                   <option value="__none__">No upscaling</option>
+                  {% if fal_upscale_ready %}
+                    <option value="fal">FAL.ai (Topaz)</option>
+                  {% endif %}
                   {% for model in upscale_models %}
                     <option value="{{ model }}">{{ model }}</option>
                   {% endfor %}

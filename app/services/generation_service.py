@@ -52,6 +52,7 @@ class GenerationService:
         sidecar_service: SidecarService,
         model_config_service: ModelConfigService | None = None,
         upscale_service: UpscaleService | None = None,
+        fal_upscale_service=None,
     ) -> None:
         self.settings = settings
         self.registry = registry
@@ -60,6 +61,7 @@ class GenerationService:
         self.sidecar_service = sidecar_service
         self.model_config_service = model_config_service
         self.upscale_service = upscale_service
+        self.fal_upscale_service = fal_upscale_service
 
     def create_generation_from_profile(
         self,
@@ -84,6 +86,13 @@ class GenerationService:
             params_json = copy.deepcopy(params_json_override)
         else:
             params_json = copy.deepcopy(profile.params_json or {})
+
+        # Resolve upscale provider and model from overrides or profile
+        if "upscale_provider" in effective_overrides:
+            upscale_provider = effective_overrides.get("upscale_provider") or None
+        else:
+            upscale_provider = profile.upscale_provider or None
+
         if "upscale_model" in effective_overrides:
             upscale_model_override = effective_overrides.get("upscale_model")
             if isinstance(upscale_model_override, str):
@@ -92,6 +101,7 @@ class GenerationService:
                 upscale_model = None
         else:
             upscale_model = str(profile.upscale_model or "").strip() or None
+
         input_images = effective_overrides.get("input_images")
         chat_session_id = str(effective_overrides.get("chat_session_id") or "").strip()
         profile_category_ids = [item.id for item in profile.categories]
@@ -111,6 +121,7 @@ class GenerationService:
             "n_images": profile.n_images,
             "seed": profile.seed,
             "output_format": profile.output_format,
+            "upscale_provider": profile.upscale_provider,
             "upscale_model": profile.upscale_model,
             "params_json": profile.params_json or {},
             "storage_template_id": profile.storage_template_id,
@@ -133,6 +144,7 @@ class GenerationService:
             "height": height,
             "n_images": max(1, n_images),
             "seed": seed,
+            "upscale_provider": upscale_provider,
             "upscale_model": upscale_model,
             "upscaling_active": False,
             "output_format": profile.output_format,
@@ -148,6 +160,7 @@ class GenerationService:
                 "n_images": "n_images" in effective_overrides,
                 "seed": "seed" in effective_overrides,
                 "params_json": "params_json" in effective_overrides,
+                "upscale_provider": "upscale_provider" in effective_overrides,
                 "upscale_model": "upscale_model" in effective_overrides,
                 "category_ids": "category_ids" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
@@ -261,14 +274,32 @@ class GenerationService:
                     .lower()
                     .lstrip(".")
                 )
+                upscale_provider = str(
+                    generation.request_snapshot_json.get("upscale_provider") or ""
+                ).strip().lower()
                 upscale_model = str(
                     generation.request_snapshot_json.get("upscale_model") or ""
                 ).strip()
-                upscale_enabled = bool(upscale_model)
-                if upscale_enabled and not self.upscale_service:
-                    raise ProviderError("Upscaling service is not available")
-                if upscale_enabled and not self.upscale_service.is_available():
-                    raise ProviderError("Upscaling is not configured on this server")
+                upscale_enabled = bool(upscale_provider)
+
+                if upscale_enabled and upscale_provider == "local":
+                    if not self.upscale_service:
+                        raise ProviderError("Upscaling service is not available")
+                    if not self.upscale_service.is_available():
+                        raise ProviderError("Upscaling is not configured on this server")
+                elif upscale_enabled and upscale_provider == "fal":
+                    if not self.fal_upscale_service:
+                        raise ProviderError("FAL.ai upscaling service is not available")
+                    fal_api_key = (
+                        self.model_config_service.get_default_api_key("fal")
+                        if self.model_config_service
+                        else None
+                    )
+                    if not fal_api_key:
+                        raise ProviderError(
+                            "FAL.ai API key is not configured. Set it in Admin → Upscaling."
+                        )
+
                 if upscale_enabled:
                     request_snapshot = dict(generation.request_snapshot_json or {})
                     request_snapshot["upscaling_active"] = True
@@ -286,7 +317,7 @@ class GenerationService:
                     image_height = image.height
                     image_mime = image.mime
                     upscale_meta = None
-                    if upscale_enabled and self.upscale_service:
+                    if upscale_enabled and upscale_provider == "local" and self.upscale_service:
                         (
                             image_data,
                             image_width,
@@ -300,6 +331,26 @@ class GenerationService:
                         upscale_meta = {
                             "model": upscale_model,
                             "tool": "realesrgan",
+                        }
+                    elif upscale_enabled and upscale_provider == "fal" and self.fal_upscale_service:
+                        fal_api_key = (
+                            self.model_config_service.get_default_api_key("fal")
+                            if self.model_config_service
+                            else None
+                        ) or ""
+                        (
+                            image_data,
+                            image_width,
+                            image_height,
+                            image_mime,
+                        ) = await self.fal_upscale_service.upscale_bytes(
+                            image.data,
+                            output_format,
+                            fal_api_key,
+                        )
+                        upscale_meta = {
+                            "model": "topaz",
+                            "tool": "fal",
                         }
                     (
                         image_data,
