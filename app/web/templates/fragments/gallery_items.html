@@ -1,0 +1,15 @@
+{% for asset in page_data.items %}
+{% include "fragments/gallery_card.html" %}
+{% endfor %}
+
+{% if page_data.page < page_data.pages %}
+<div
+  class="col-span-full flex items-center justify-center py-6 text-sm text-slate-400 dark:text-slate-500"
+  hx-get="/gallery/items?page={{ page_data.page + 1 }}&{{ gallery_query }}&thumb_size={{ thumb_size | urlencode }}"
+  hx-trigger="intersect once"
+  hx-swap="outerHTML"
+  data-gallery-sentinel
+>
+  <span class="flex items-center gap-2"><i class="bi bi-arrow-clockwise animate-spin" aria-hidden="true"></i> Loading more…</span>
+</div>
+{% endif %}

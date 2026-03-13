@@ -536,6 +536,68 @@ def test_gallery_page_passes_rating_filters_to_service(client, app_module, monke
     assert captured["unrated_only"] is True
 
 
+def test_gallery_items_route_returns_fragment(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **kwargs: SimpleNamespace(items=[], page=2, pages=2, total=0),
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=[], providers=[], categories=[]),
+    )
+
+    response = client.get("/gallery/items?page=2")
+
+    assert response.status_code == 200
+    # The fragment should NOT include the outer gallery-grid div
+    assert 'id="gallery-grid"' not in response.text
+    # The fragment should NOT include the full page layout
+    assert "<html" not in response.text
+
+
+def test_gallery_items_route_includes_sentinel_when_more_pages(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **kwargs: SimpleNamespace(items=[], page=1, pages=3, total=60),
+    )
+
+    response = client.get("/gallery/items?page=1")
+
+    assert response.status_code == 200
+    assert "data-gallery-sentinel" in response.text
+
+
+def test_gallery_items_route_no_sentinel_on_last_page(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **kwargs: SimpleNamespace(items=[], page=3, pages=3, total=60),
+    )
+
+    response = client.get("/gallery/items?page=3")
+
+    assert response.status_code == 200
+    assert "data-gallery-sentinel" not in response.text
+
+
 def test_generate_submit_rejects_upload_exceeding_size_limit(
     client, app_module, monkeypatch
 ) -> None:
