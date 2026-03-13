@@ -25,6 +25,8 @@ from app.providers.base import (
 class OpenRouterAdapter(ProviderAdapter):
     """Provider adapter for the OpenRouter image-generation API."""
     name = "openrouter"
+    display_name = "OpenRouter"
+    homepage_url = "https://openrouter.ai/settings/keys"
     _logger = logging.getLogger(__name__)
 
     async def list_models(self, settings: Settings) -> list[str]:

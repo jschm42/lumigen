@@ -23,6 +23,8 @@ class OpenAIAdapter(ProviderAdapter):
     """Provider adapter for the OpenAI image-generation API (DALL-E models)."""
 
     name = "openai"
+    display_name = "OpenAI"
+    homepage_url = "https://platform.openai.com/api-keys"
     _logger = logging.getLogger(__name__)
 
     async def list_models(self, settings: Settings) -> list[str]:

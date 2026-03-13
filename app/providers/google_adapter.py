@@ -24,6 +24,8 @@ from app.providers.base import (
 class GoogleAdapter(ProviderAdapter):
     """Provider adapter for the Google Gemini image-generation API."""
     name = "google"
+    display_name = "Google AI"
+    homepage_url = "https://aistudio.google.com/app/apikey"
     BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
     _logger = logging.getLogger(__name__)
 
