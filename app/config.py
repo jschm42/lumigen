@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     upscaler_command: str | None = None
     upscaler_model_dir: Path = Path("./data/models/realesrgan")
 
+    fal_api_key: str | None = None
+
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openrouter_api_key: str | None = None

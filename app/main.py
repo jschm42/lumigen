@@ -48,6 +48,7 @@ from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, Generation, User
 from app.providers.base import ProviderError
+from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
 from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
@@ -80,7 +81,7 @@ MAX_UPLOAD_BYTES = (
     else None
 )
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "users", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "users", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
@@ -169,6 +170,7 @@ sidecar_service = SidecarService(storage_service)
 model_config_service = ModelConfigService(settings)
 enhancement_service = EnhancementService(settings, model_config_service)
 upscale_service = UpscaleService(settings)
+fal_upscale_service = FalUpscaleService()
 provider_registry = ProviderRegistry(settings)
 generation_service = GenerationService(
     settings=settings,
@@ -178,6 +180,7 @@ generation_service = GenerationService(
     sidecar_service=sidecar_service,
     model_config_service=model_config_service,
     upscale_service=upscale_service,
+    fal_upscale_service=fal_upscale_service,
 )
 gallery_service = GalleryService(default_page_size=settings.default_page_size)
 auth_service = AuthService()
@@ -338,6 +341,7 @@ def resolve_default_storage_template_id(session: Session) -> int:
 
 
 def validate_profile_upscale_model(value: str) -> str | None:
+    """Validate and return a local upscale model name, or ``None`` if blank."""
     candidate = (value or "").strip()
     if not candidate:
         return None
@@ -346,6 +350,16 @@ def validate_profile_upscale_model(value: str) -> str | None:
         raise ValueError("No local upscale models available. Please place a model in UPSCALER_MODEL_DIR first.")
     if candidate not in local_models:
         raise ValueError("Selected upscaling model is not available locally")
+    return candidate
+
+
+def validate_profile_upscale_provider(value: str) -> str | None:
+    """Validate and return an upscale provider name, or ``None`` if no upscaling."""
+    candidate = (value or "").strip().lower()
+    if not candidate or candidate == "__none__":
+        return None
+    if candidate not in {"local", "fal"}:
+        raise ValueError(f"Unknown upscale provider: {candidate!r}")
     return candidate
 
 
@@ -959,6 +973,7 @@ def generate_page(
     enhancement_ready = False
     upscale_ready = False
     upscale_models: list[str] = []
+    fal_upscale_ready = False
     last_profile_id = None
     last_thumb_size = "md"
     conversation_generations = []
@@ -970,6 +985,7 @@ def generate_page(
         enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
         upscale_ready = upscale_service.is_available()
         upscale_models = upscale_service.list_available_models()
+        fal_upscale_ready = bool(model_config_service.get_default_api_key("fal"))
 
         if active_conversation not in {"all", "new"}:
             chat_session_prefs = crud.get_chat_session(session, active_conversation)
@@ -1023,6 +1039,7 @@ def generate_page(
             "enhancement_ready": enhancement_ready,
             "upscale_ready": upscale_ready,
             "upscale_models": upscale_models,
+            "fal_upscale_ready": fal_upscale_ready,
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
@@ -1044,6 +1061,7 @@ def generate_submit(
     aspect_ratio: str = Form(default=""),
     image_size: str = Form(default=""),
     upscale_model: str = Form(default="__profile__"),
+    upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
     csrf_token: str = Form(...),
@@ -1150,23 +1168,39 @@ def generate_submit(
         if seed_value is not None:
             overrides["seed"] = seed_value
 
+        # Handle upscale provider/model overrides
+        provider_choice = (upscale_provider_override or "__profile__").strip()
         upscale_choice = (upscale_model or "__profile__").strip()
-        if upscale_choice == "__none__":
+
+        if provider_choice == "__none__" or upscale_choice == "__none__":
+            # Explicit "no upscaling" override
+            overrides["upscale_provider"] = None
             overrides["upscale_model"] = None
-        elif upscale_choice == "__profile__":
+        elif provider_choice == "__profile__" and upscale_choice == "__profile__":
+            # Use profile settings — validate that the profile's upscale config is still valid
+            profile_upscale_provider = str(profile.upscale_provider or "").strip().lower()
             profile_upscale_model = str(profile.upscale_model or "").strip()
-            if profile_upscale_model:
+            if profile_upscale_provider == "local" and profile_upscale_model:
                 if not upscale_service.is_available():
-                    raise ValueError("Upscaler is not configured on this server")
+                    raise ValueError("Local upscaler is not configured on this server")
                 available = upscale_service.list_available_models()
                 if available and profile_upscale_model not in available:
                     raise ValueError("Profile upscale model is not available")
-        else:
+        elif provider_choice == "fal" or (provider_choice == "__profile__" and upscale_choice == "fal"):
+            # FAL.ai upscale override
+            fal_key = model_config_service.get_default_api_key("fal")
+            if not fal_key:
+                raise ValueError("FAL.ai API key is not configured. Set it in Admin → Upscaling.")
+            overrides["upscale_provider"] = "fal"
+            overrides["upscale_model"] = None
+        elif upscale_choice and upscale_choice not in {"__profile__", "__none__"}:
+            # Local model override
             if not upscale_service.is_available():
-                raise ValueError("Upscaler is not configured on this server")
+                raise ValueError("Local upscaler is not configured on this server")
             available = upscale_service.list_available_models()
             if available and upscale_choice not in available:
                 raise ValueError("Selected upscale model is not available")
+            overrides["upscale_provider"] = "local"
             overrides["upscale_model"] = upscale_choice
 
         generation = generation_service.create_generation_from_profile(
@@ -1464,6 +1498,15 @@ def admin_page(
         if p in model_config_service.PROVIDER_API_KEY_ATTR
     ]
 
+    # Build upscaling info for the "Upscaling" admin section
+    fal_api_key_row = provider_api_key_rows.get("fal")
+    upscaling_info = {
+        "local_available": upscale_service.is_available(),
+        "local_models": upscale_service.list_available_models(),
+        "fal_has_db_key": fal_api_key_row is not None,
+        "fal_has_env_key": bool(settings.fal_api_key),
+    }
+
     return templates.TemplateResponse(
         request,
         "admin.html",
@@ -1482,6 +1525,7 @@ def admin_page(
             "app_copyright_text": APP_COPYRIGHT_TEXT,
             "onboarding_reset_enabled": settings.auth_allow_onboarding_reset,
             "provider_api_key_info": provider_api_key_info,
+            "upscaling_info": upscaling_info,
         },
     )
 
@@ -1515,6 +1559,32 @@ def admin_update_provider_api_key(
     except ValueError as exc:
         return admin_redirect("apikeys", error=str(exc))
     return admin_redirect("apikeys", message="Saved")
+
+
+@app.post("/admin/upscaling/fal")
+def admin_update_fal_upscale_key(
+    request: Request,
+    api_key: str = Form(default=""),
+    clear_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Save or clear the FAL.ai API key used for upscaling."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    try:
+        if clear_api_key:
+            crud.delete_provider_api_key(session, "fal")
+        else:
+            api_key_value = api_key.strip()
+            if api_key_value:
+                encrypted = model_config_service.encrypt_api_key(api_key_value)
+                crud.upsert_provider_api_key(session, "fal", encrypted)
+    except ValueError as exc:
+        return admin_redirect("upscaling", error=str(exc))
+    return admin_redirect("upscaling", message="Saved")
 
 
 @app.post("/admin/dimension-presets")
@@ -2130,6 +2200,7 @@ def profiles_page(
     open_edit_id: int | None = None
     if edit_id is not None and crud.get_profile(session, edit_id):
         open_edit_id = edit_id
+    fal_key = model_config_service.get_default_api_key("fal")
 
     return templates.TemplateResponse(
         request,
@@ -2141,6 +2212,7 @@ def profiles_page(
             "categories": categories,
             "upscale_ready": upscale_service.is_available(),
             "upscale_models": upscale_service.list_available_models(),
+            "fal_upscale_ready": bool(fal_key),
             "error": error,
             "open_create_dialog": create,
             "open_edit_id": open_edit_id,
@@ -2173,6 +2245,7 @@ def create_profile(
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
+    upscale_provider: str = Form(default=""),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
     csrf_token: str = Form(...),
@@ -2204,7 +2277,12 @@ def create_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        upscale_model_value = validate_profile_upscale_model(upscale_model)
+        upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
+        upscale_model_value = (
+            validate_profile_upscale_model(upscale_model)
+            if upscale_provider_value == "local"
+            else None
+        )
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -2223,6 +2301,7 @@ def create_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
+            upscale_provider=upscale_provider_value,
             upscale_model=upscale_model_value,
             params_json=params_value,
             categories=categories,
@@ -2247,6 +2326,7 @@ def update_profile(
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
+    upscale_provider: str = Form(default=""),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
     csrf_token: str = Form(...),
@@ -2282,7 +2362,12 @@ def update_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        upscale_model_value = validate_profile_upscale_model(upscale_model)
+        upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
+        upscale_model_value = (
+            validate_profile_upscale_model(upscale_model)
+            if upscale_provider_value == "local"
+            else None
+        )
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -2302,6 +2387,7 @@ def update_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
+            upscale_provider=upscale_provider_value,
             upscale_model=upscale_model_value,
             params_json=params_value,
             categories=categories,

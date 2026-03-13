@@ -16,6 +16,7 @@ class ModelConfigService:
         "openrouter": "openrouter_api_key",
         "google": "google_api_key",
         "bfl": "bfl_api_key",
+        "fal": "fal_api_key",
     }
 
     def __init__(self, settings: Settings) -> None:
