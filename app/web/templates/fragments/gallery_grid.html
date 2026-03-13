@@ -1,4 +1,4 @@
-<div class="grid gap-2 {% if thumb_size == 'sm' %}grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6{% elif thumb_size == 'lg' %}grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4{% else %}grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5{% endif %}">
+<div id="gallery-grid" class="grid gap-2 {% if thumb_size == 'sm' %}grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6{% elif thumb_size == 'lg' %}grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4{% else %}grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5{% endif %}">
   {% for asset in page_data.items %}
   <article class="group relative overflow-hidden rounded-xl bg-white/95 p-2.5 shadow-md shadow-slate-300/50 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300 dark:bg-slate-900/50 dark:shadow-slate-950/45" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}" data-asset-detail-url="/assets/{{ asset.id }}">
     <div class="relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-slate-100/90 dark:bg-slate-900/75" data-gallery-card-click>
@@ -51,4 +51,16 @@
   {% else %}
     <p class="col-span-full rounded-2xl border border-slate-300/75 bg-slate-100/80 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-400">No assets found for current filters.</p>
   {% endfor %}
+
+  {% if page_data.page < page_data.pages %}
+  <div
+    class="col-span-full flex items-center justify-center py-6 text-sm text-slate-400 dark:text-slate-500"
+    hx-get="/gallery/items?page={{ page_data.page + 1 }}&{{ gallery_query }}&thumb_size={{ thumb_size | urlencode }}"
+    hx-trigger="intersect once"
+    hx-swap="outerHTML"
+    data-gallery-sentinel
+  >
+    <span class="flex items-center gap-2"><i class="bi bi-arrow-clockwise animate-spin" aria-hidden="true"></i> Loading more…</span>
+  </div>
+  {% endif %}
 </div>

@@ -1036,16 +1036,15 @@
   // ==========================================================================
 
 function setupGallerySelection() {
+  var panel = document.querySelector('[data-gallery-selection-panel]');
   var bulkForm = document.getElementById('bulk-action-form');
-  if (!bulkForm) return;
+  if (!panel || !bulkForm) return;
 
-  var cards = Array.from(document.querySelectorAll('[data-gallery-card][data-gallery-select]'));
-  var selectAll = document.querySelector('[data-gallery-select-all]');
   var countLabel = document.querySelector('[data-gallery-selection-count]');
   var actionButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
+  var deselectAllBtn = document.querySelector('[data-gallery-deselect-all]');
 
-  // Create hidden inputs for form submission
-  var hiddenInputsContainer = bulkForm;
+  // Map of assetId -> hidden input element for form submission
   var hiddenInputs = {};
 
   function createOrUpdateHiddenInput(assetId, checked) {
@@ -1056,7 +1055,7 @@ function setupGallerySelection() {
         input.type = 'hidden';
         input.name = inputName;
         input.value = assetId;
-        hiddenInputsContainer.appendChild(input);
+        bulkForm.appendChild(input);
         hiddenInputs[assetId] = input;
       }
     } else {
@@ -1068,82 +1067,64 @@ function setupGallerySelection() {
   }
 
   function updateState() {
-    var selected = 0;
-    cards.forEach(function (card) {
-      var isSelected = card.dataset.selected === 'true';
-      if (isSelected) {
-        selected += 1;
-      }
-      // Toggle ring styling for selected cards
-      card.classList.toggle('ring-sky-300', isSelected);
-      card.classList.toggle('ring-2', isSelected);
-    });
+    var selected = Object.keys(hiddenInputs).length;
 
     if (countLabel) {
       countLabel.textContent = selected + ' selected';
     }
 
+    // Show or hide the floating panel
+    panel.classList.toggle('hidden', selected === 0);
+
     actionButtons.forEach(function (button) {
       button.disabled = selected === 0;
     });
-
-    if (selectAll) {
-      if (selected === 0) {
-        selectAll.checked = false;
-        selectAll.indeterminate = false;
-      } else if (selected === cards.length) {
-        selectAll.checked = true;
-        selectAll.indeterminate = false;
-      } else {
-        selectAll.checked = false;
-        selectAll.indeterminate = true;
-      }
-    }
   }
 
-  // Click on card to toggle selection
-  cards.forEach(function (card) {
-    var clickArea = card.querySelector('[data-gallery-card-click]');
+  // Use event delegation so newly loaded cards (infinite scroll) are handled automatically
+  document.addEventListener('click', function (e) {
+    var clickArea = e.target.closest('[data-gallery-card-click]');
     if (!clickArea) return;
 
-    clickArea.addEventListener('click', function (e) {
-      // Don't toggle if clicking on a link or button or form
-      var target = e.target;
-      if (target.closest('a') || target.closest('button') || target.closest('form')) {
-        // Let default behavior happen for links (navigation) and buttons (actions)
-        return;
-      }
+    var target = e.target;
+    if (target.closest('a') || target.closest('button') || target.closest('form')) {
+      return;
+    }
 
-      // Toggle selection on click on the image area
-      var assetId = card.dataset.assetId;
-      var isSelected = card.dataset.selected === 'true';
-      card.dataset.selected = (!isSelected).toString();
-      createOrUpdateHiddenInput(assetId, !isSelected);
-      updateState();
-    });
+    var card = clickArea.closest('[data-gallery-card]');
+    if (!card) return;
 
-    clickArea.addEventListener('dblclick', function (e) {
-      var target = e.target;
-      if (target.closest('a') || target.closest('button') || target.closest('form')) {
-        return;
-      }
-
-      var detailUrl = card.dataset.assetDetailUrl;
-      if (!detailUrl) {
-        return;
-      }
-      window.location.href = detailUrl;
-    });
+    var assetId = card.dataset.assetId;
+    var isSelected = card.dataset.selected === 'true';
+    card.dataset.selected = (!isSelected).toString();
+    createOrUpdateHiddenInput(assetId, !isSelected);
+    updateState();
   });
 
-  // Select all toggle
-  if (selectAll) {
-    selectAll.addEventListener('change', function () {
-      var shouldSelect = selectAll.checked;
-      cards.forEach(function (card) {
-        card.dataset.selected = shouldSelect.toString();
-        var assetId = card.dataset.assetId;
-        createOrUpdateHiddenInput(assetId, shouldSelect);
+  document.addEventListener('dblclick', function (e) {
+    var clickArea = e.target.closest('[data-gallery-card-click]');
+    if (!clickArea) return;
+
+    var target = e.target;
+    if (target.closest('a') || target.closest('button') || target.closest('form')) {
+      return;
+    }
+
+    var card = clickArea.closest('[data-gallery-card]');
+    if (!card) return;
+
+    var detailUrl = card.dataset.assetDetailUrl;
+    if (!detailUrl) return;
+    window.location.href = detailUrl;
+  });
+
+  // Deselect all button clears selection and hides the panel
+  if (deselectAllBtn && deselectAllBtn.dataset.bound !== '1') {
+    deselectAllBtn.dataset.bound = '1';
+    deselectAllBtn.addEventListener('click', function () {
+      document.querySelectorAll('[data-gallery-card][data-selected="true"]').forEach(function (card) {
+        card.dataset.selected = 'false';
+        createOrUpdateHiddenInput(card.dataset.assetId, false);
       });
       updateState();
     });
@@ -1153,10 +1134,11 @@ function setupGallerySelection() {
 }
 
 function setupGalleryRatings() {
-  var ratingForms = Array.from(document.querySelectorAll('[data-rating-form]'));
+  var ratingForms = Array.from(document.querySelectorAll('[data-rating-form]:not([data-ratings-bound])'));
   if (ratingForms.length === 0) return;
 
   ratingForms.forEach(function (form) {
+    form.setAttribute('data-ratings-bound', '1');
     var stars = Array.from(form.querySelectorAll('[data-rating-star]'));
     var ratingInput = form.querySelector('[data-rating-input]');
     if (!ratingInput || stars.length === 0) return;
@@ -1355,6 +1337,7 @@ function setupGalleryRatings() {
 
   document.body.addEventListener('htmx:afterSwap', function () {
     ensurePostFormCsrfTokens();
+    setupGalleryRatings();
   });
 
 })();

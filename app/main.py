@@ -2413,7 +2413,7 @@ def gallery_page(
         filter_params["date_to"] = parsed_date_to.isoformat()
     gallery_query = urlencode(filter_params, doseq=True)
 
-    return_to_params: dict[str, Any] = {"page": page, "thumb_size": thumb_size_value}
+    return_to_params: dict[str, Any] = {"thumb_size": thumb_size_value}
     return_to_params.update(filter_params)
     return_to = f"/gallery?{urlencode(return_to_params, doseq=True)}"
 
@@ -2439,6 +2439,98 @@ def gallery_page(
             "message": message or "",
             "error": error or "",
             "hide_header": True,
+        },
+    )
+
+
+@app.get("/gallery/items", response_class=HTMLResponse)
+def gallery_items(
+    request: Request,
+    page: int = Query(default=2, ge=1),
+    profile_name: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    category_ids: list[int] = Query(default=[]),
+    min_rating: str | None = Query(default=None),
+    unrated: bool = Query(default=False),
+    time_preset: str | None = Query(default="today"),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    thumb_size: str | None = Query(default="md"),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    normalized_category_ids = normalize_category_ids(category_ids)
+    parsed_min_rating: int | None = None
+    try:
+        parsed_min_rating = parse_optional_int(min_rating)
+    except ValueError:
+        parsed_min_rating = None
+    min_rating_value = normalize_min_rating(parsed_min_rating)
+    time_preset_value = normalize_time_preset(time_preset)
+    parsed_date_from: date | None = None
+    parsed_date_to: date | None = None
+    try:
+        parsed_date_from = parse_optional_date(date_from)
+        parsed_date_to = parse_optional_date(date_to)
+    except ValueError:
+        parsed_date_from = None
+        parsed_date_to = None
+    if parsed_date_from and parsed_date_to and parsed_date_from > parsed_date_to:
+        parsed_date_from, parsed_date_to = parsed_date_to, parsed_date_from
+    if parsed_date_from is not None or parsed_date_to is not None:
+        time_preset_value = "custom"
+    created_after, created_before = build_created_at_bounds(
+        time_preset=time_preset_value,
+        from_date=parsed_date_from,
+        to_date=parsed_date_to,
+    )
+    thumb_size_value = normalize_thumb_size(thumb_size)
+    page_data = gallery_service.list_assets(
+        session,
+        page=page,
+        profile_name=profile_name or None,
+        provider=provider or None,
+        prompt_query=q or None,
+        category_ids=normalized_category_ids or None,
+        min_rating=None if unrated else min_rating_value,
+        unrated_only=unrated,
+        created_after=created_after,
+        created_before=created_before,
+    )
+
+    filter_params: dict[str, Any] = {}
+    if profile_name:
+        filter_params["profile_name"] = profile_name
+    if provider:
+        filter_params["provider"] = provider
+    if q:
+        filter_params["q"] = q
+    if normalized_category_ids:
+        filter_params["category_ids"] = normalized_category_ids
+    if min_rating_value is not None:
+        filter_params["min_rating"] = min_rating_value
+    if unrated:
+        filter_params["unrated"] = "1"
+    filter_params["time_preset"] = time_preset_value
+    if parsed_date_from is not None:
+        filter_params["date_from"] = parsed_date_from.isoformat()
+    if parsed_date_to is not None:
+        filter_params["date_to"] = parsed_date_to.isoformat()
+    gallery_query = urlencode(filter_params, doseq=True)
+
+    return_to_params: dict[str, Any] = {"thumb_size": thumb_size_value}
+    return_to_params.update(filter_params)
+    return_to = f"/gallery?{urlencode(return_to_params, doseq=True)}"
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/gallery_items.html",
+        {
+            "request": request,
+            "page_data": page_data,
+            "thumb_size": thumb_size_value,
+            "gallery_query": gallery_query,
+            "return_to": return_to,
         },
     )
 
