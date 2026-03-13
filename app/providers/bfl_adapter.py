@@ -23,6 +23,7 @@ from app.providers.base import (
 
 
 class BFLAdapter(ProviderAdapter):
+    """Provider adapter for the Black Forest Labs (BFL) image-generation API."""
     name = "bfl"
     BASE_URL = "https://api.bfl.ai/v1"
     MAX_POLL_ATTEMPTS = 60

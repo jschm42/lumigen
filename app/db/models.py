@@ -8,10 +8,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    pass
+    """Declarative base class for all SQLAlchemy ORM models."""
 
 
 def utc_now() -> datetime:
+    """Return the current UTC datetime."""
     return datetime.now(UTC)
 
 
@@ -42,6 +43,8 @@ asset_categories = Table(
 
 
 class TimestampMixin:
+    """Mixin that adds ``created_at`` and ``updated_at`` timestamp columns to a model."""
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
@@ -54,6 +57,8 @@ class TimestampMixin:
 
 
 class StorageTemplate(Base, TimestampMixin):
+    """Named output-path template that determines where generated images are saved."""
+
     __tablename__ = "storage_templates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -65,6 +70,8 @@ class StorageTemplate(Base, TimestampMixin):
 
 
 class Profile(Base, TimestampMixin):
+    """Generation profile combining provider, model, prompt, and output settings."""
+
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -107,6 +114,8 @@ class Profile(Base, TimestampMixin):
 
 
 class ModelConfig(Base, TimestampMixin):
+    """Named model configuration that can optionally carry a custom encrypted API key."""
+
     __tablename__ = "model_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -125,6 +134,8 @@ class ModelConfig(Base, TimestampMixin):
 
 
 class EnhancementConfig(Base, TimestampMixin):
+    """Singleton configuration for the LLM-based prompt enhancement feature."""
+
     __tablename__ = "enhancement_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -136,6 +147,8 @@ class EnhancementConfig(Base, TimestampMixin):
 
 
 class ProviderApiKey(Base, TimestampMixin):
+    """Centrally stored encrypted API key for a given image-generation provider."""
+
     __tablename__ = "provider_api_keys"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -144,6 +157,8 @@ class ProviderApiKey(Base, TimestampMixin):
 
 
 class DimensionPreset(Base, TimestampMixin):
+    """Named width/height preset for quick image dimension selection in the UI."""
+
     __tablename__ = "dimension_presets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -153,6 +168,8 @@ class DimensionPreset(Base, TimestampMixin):
 
 
 class Category(Base, TimestampMixin):
+    """User-defined tag that can be attached to profiles and assets for filtering."""
+
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -169,6 +186,8 @@ class Category(Base, TimestampMixin):
 
 
 class User(Base, TimestampMixin):
+    """Application user with a role (``admin`` or ``user``) and an active flag."""
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -179,6 +198,8 @@ class User(Base, TimestampMixin):
 
 
 class ChatSession(Base, TimestampMixin):
+    """Per-browser session that persists UI preferences such as the last profile and thumbnail size."""
+
     __tablename__ = "chat_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -197,6 +218,8 @@ class ChatSession(Base, TimestampMixin):
 
 
 class Generation(Base):
+    """Record of a single image-generation job including its status and snapshot data."""
+
     __tablename__ = "generations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -238,6 +261,8 @@ class Generation(Base):
 
 
 class Asset(Base):
+    """A single generated image file together with its sidecar, thumbnail, and metadata."""
+
     __tablename__ = "assets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

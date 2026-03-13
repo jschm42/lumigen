@@ -13,6 +13,12 @@ _EXT_RE = re.compile(r"^[a-z0-9]+$")
 
 
 class StorageService:
+    """Service for safe, atomic file I/O under a managed base directory.
+
+    All write and delete operations resolve paths through ``ensure_within_base``
+    to prevent directory traversal attacks.
+    """
+
     def __init__(self, max_slug_length: int = 64) -> None:
         self.max_slug_length = max_slug_length
 
@@ -27,6 +33,11 @@ class StorageService:
         ext: str,
         when: datetime | None = None,
     ) -> Path:
+        """Render a storage-template string into a safe relative ``Path`` for a single image.
+
+        Raises ``ValueError`` if the extension is invalid or the rendered path
+        contains a directory-traversal sequence (``..``).
+        """
         safe_ext = ext.lower().lstrip(".")
         if not _EXT_RE.match(safe_ext):
             raise ValueError(f"Invalid file extension: {ext}")
@@ -53,11 +64,13 @@ class StorageService:
         return Path(*relative_posix.parts)
 
     def resolve_managed_path(self, base_dir: Path, relative_path: str | Path) -> Path:
+        """Resolve *relative_path* under *base_dir* and verify it stays within the base."""
         base = base_dir.resolve()
         candidate = (base / Path(relative_path)).resolve()
         return ensure_within_base(candidate, base)
 
     def write_bytes_atomic(self, absolute_path: Path, data: bytes) -> None:
+        """Write *data* to *absolute_path* atomically using a sibling temp file and ``os.replace``."""
         ensure_dir(absolute_path.parent)
         tmp_path = absolute_path.parent / f".{absolute_path.name}.{uuid.uuid4().hex}.tmp"
         with tmp_path.open("wb") as handle:
@@ -67,6 +80,7 @@ class StorageService:
         os.replace(tmp_path, absolute_path)
 
     def write_json_atomic(self, absolute_path: Path, content: str) -> None:
+        """Write a UTF-8 JSON string to *absolute_path* atomically using a sibling temp file."""
         ensure_dir(absolute_path.parent)
         tmp_path = absolute_path.parent / f".{absolute_path.name}.{uuid.uuid4().hex}.tmp"
         with tmp_path.open("w", encoding="utf-8") as handle:
@@ -76,6 +90,7 @@ class StorageService:
         os.replace(tmp_path, absolute_path)
 
     def delete_relative_file(self, base_dir: Path, relative_path: str | Path) -> None:
+        """Delete a managed file and prune any resulting empty parent directories."""
         absolute_path = self.resolve_managed_path(base_dir, relative_path)
         if not absolute_path.exists():
             return
@@ -88,6 +103,10 @@ class StorageService:
         source_relative_path: str | Path,
         target_relative_path: str | Path,
     ) -> None:
+        """Atomically move a managed file to a new relative path within the same base directory.
+
+        Raises ``FileExistsError`` if the target already exists.
+        """
         source_abs = self.resolve_managed_path(base_dir, source_relative_path)
         target_abs = self.resolve_managed_path(base_dir, target_relative_path)
         if source_abs == target_abs:

@@ -9,6 +9,8 @@ from app.services.model_config_service import ModelConfigService
 
 
 class EnhancementService:
+    """Service that calls a configured LLM (OpenAI or OpenRouter) to enhance user prompts."""
+
     def __init__(
         self, settings: Settings, model_config_service: ModelConfigService
     ) -> None:
@@ -33,6 +35,7 @@ class EnhancementService:
             }
 
     async def enhance(self, prompt: str, enhancement_prompt: str | None) -> str:
+        """Send *prompt* to the configured LLM and return the enhanced prompt text."""
         config = self._get_config()
         if not config:
             raise ValueError("Enhancement LLM is not configured")

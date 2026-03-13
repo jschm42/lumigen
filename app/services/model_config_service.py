@@ -8,6 +8,8 @@ from app.db.engine import SessionLocal
 
 
 class ModelConfigService:
+    """Service for encrypting/decrypting provider API keys and resolving the active key for a provider."""
+
     # Mapping of provider names to settings attribute names
     PROVIDER_API_KEY_ATTR = {
         "openai": "openai_api_key",
@@ -26,10 +28,12 @@ class ModelConfigService:
         return Fernet(key.encode("ascii"))
 
     def encrypt_api_key(self, value: str) -> str:
+        """Encrypt *value* with Fernet and return the ASCII token string."""
         token = self._fernet().encrypt(value.encode("utf-8"))
         return token.decode("ascii")
 
     def decrypt_api_key(self, token: str) -> str:
+        """Decrypt a Fernet *token* and return the plaintext API key string."""
         try:
             raw = self._fernet().decrypt(token.encode("ascii"))
         except InvalidToken as exc:

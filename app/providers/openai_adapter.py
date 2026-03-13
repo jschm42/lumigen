@@ -20,6 +20,8 @@ from app.providers.base import (
 
 
 class OpenAIAdapter(ProviderAdapter):
+    """Provider adapter for the OpenAI image-generation API (DALL-E models)."""
+
     name = "openai"
     _logger = logging.getLogger(__name__)
 

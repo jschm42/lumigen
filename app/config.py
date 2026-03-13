@@ -9,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 VERSION = "0.1.0"
 
 class Settings(BaseSettings):
+    """Application settings loaded from environment variables and .env file."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -74,9 +76,11 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        """Return the SQLAlchemy-compatible database connection URL."""
         return f"sqlite:///{self.sqlite_path.resolve().as_posix()}"
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return the cached application settings singleton."""
     return Settings()

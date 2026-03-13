@@ -104,6 +104,13 @@ Recommended pre-PR validation order:
 - Tailwind theming policy: use only the original Tailwind light/dark theme approach (class-based dark mode). Do not introduce custom light/dark override systems that bypass Tailwind utilities.
 - If theme customization is required, implement it strictly according to Tailwind's official theme customization guidance: https://tailwindcss.com/docs/theme#customizing-your-theme
 
+## Documentation requirements
+- Every public Python class **must** have a one-line (or multi-line) docstring that describes its purpose.
+- Every public method or function (i.e. not prefixed with `_`) **must** have a docstring that describes what it does, its key parameters, and its return value (if non-obvious).
+- Private helpers (prefixed with `_`) should be documented when the logic is non-trivial.
+- Docstrings must follow standard Python conventions (PEP 257): use triple double-quotes, start with a capital letter, and end with a period.
+- When adding or modifying a class or public method, always include or update its docstring.
+
 ## Environment notes that are easy to miss
 - `.env.example` defaults are local-dev oriented.
 - Production auth requires strong `SESSION_SECRET_KEY`.
