@@ -102,6 +102,16 @@ class ProviderRegistry:
         """Return a sorted list of all registered provider names."""
         return sorted(self._adapters.keys())
 
+    def provider_meta(self) -> dict[str, dict[str, str]]:
+        """Return a dict mapping each provider name to its display_name and homepage_url."""
+        return {
+            name: {
+                "display_name": adapter.display_name,
+                "homepage_url": adapter.homepage_url,
+            }
+            for name, adapter in self._adapters.items()
+        }
+
     def get(self, provider: str) -> ProviderAdapter:
         """Return the adapter for *provider*, raising ``ProviderError`` if unknown."""
         adapter = self._adapters.get(provider)

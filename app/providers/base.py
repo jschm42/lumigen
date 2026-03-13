@@ -71,6 +71,8 @@ class ProviderServiceUnavailableError(ProviderError):
 class ProviderAdapter(ABC):
     """Abstract base class for all provider adapters."""
     name: str
+    display_name: str = ""
+    homepage_url: str = ""
     _logger: logging.Logger = logging.getLogger(__name__)
 
     def _log_request(

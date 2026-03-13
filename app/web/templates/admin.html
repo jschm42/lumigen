@@ -67,11 +67,13 @@
 
           <div>
             <label for="new-model-provider" class="{{ label_class }}">Provider</label>
-            <select id="new-model-provider" name="provider" required class="{{ input_class }}">
+            <select id="new-model-provider" name="provider" required class="{{ input_class }}" data-provider-hint-target="new-provider-hint" onchange="updateProviderHint(this)">
               {% for provider in providers %}
-                <option value="{{ provider }}">{{ provider }}</option>
+                {% set meta = provider_meta.get(provider, {}) %}
+                <option value="{{ provider }}" data-homepage="{{ meta.get('homepage_url', '') }}">{{ provider }}{% if meta.get('display_name') %} – {{ meta.get('display_name') }}{% endif %}</option>
               {% endfor %}
             </select>
+            <p id="new-provider-hint" class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 hidden"></p>
           </div>
 
           <div>
@@ -158,11 +160,13 @@
 
           <div>
             <label for="edit-model-provider-{{ config.id }}" class="{{ label_class }}">Provider</label>
-            <select id="edit-model-provider-{{ config.id }}" name="provider" required class="{{ input_class }}">
+            <select id="edit-model-provider-{{ config.id }}" name="provider" required class="{{ input_class }}" data-provider-hint-target="edit-provider-hint-{{ config.id }}" onchange="updateProviderHint(this)">
               {% for provider in providers %}
-                <option value="{{ provider }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}</option>
+                {% set meta = provider_meta.get(provider, {}) %}
+                <option value="{{ provider }}" data-homepage="{{ meta.get('homepage_url', '') }}" {% if provider == config.provider %}selected{% endif %}>{{ provider }}{% if meta.get('display_name') %} – {{ meta.get('display_name') }}{% endif %}</option>
               {% endfor %}
             </select>
+            <p id="edit-provider-hint-{{ config.id }}" class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 hidden"></p>
           </div>
 
           <div>

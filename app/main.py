@@ -1474,6 +1474,7 @@ def admin_page(
             "categories": categories,
             "enhancement_config": enhancement_config,
             "providers": provider_names,
+            "provider_meta": provider_registry.provider_meta(),
             "users": users,
             "error": error or "",
             "message": message or "",
