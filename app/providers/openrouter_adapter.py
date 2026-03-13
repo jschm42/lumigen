@@ -23,6 +23,7 @@ from app.providers.base import (
 
 
 class OpenRouterAdapter(ProviderAdapter):
+    """Provider adapter for the OpenRouter image-generation API."""
     name = "openrouter"
     _logger = logging.getLogger(__name__)
 

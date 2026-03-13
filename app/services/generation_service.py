@@ -31,10 +31,18 @@ from app.utils.paths import ensure_dir
 
 
 class GenerationCancelledError(ProviderError):
-    pass
+    """Raised inside a generation job when the request has been cancelled by the user."""
 
 
 class GenerationService:
+    """Orchestrates the full lifecycle of an image generation job.
+
+    Responsibilities include: building the provider request from a profile and
+    optional overrides, persisting the ``Generation`` row, enqueuing the async
+    background job, writing image/sidecar/thumbnail files via the storage and
+    sidecar services, and updating the final job status.
+    """
+
     def __init__(
         self,
         settings: Settings,
@@ -60,6 +68,7 @@ class GenerationService:
         prompt_user: str,
         overrides: dict[str, Any] | None = None,
     ) -> Generation:
+        """Create and persist a queued ``Generation`` row derived from *profile* and optional *overrides*."""
         prompt_final = self._compose_prompt(profile.base_prompt, prompt_user)
         storage_template = profile.storage_template
         if storage_template is None:
@@ -165,6 +174,7 @@ class GenerationService:
     def create_generation_from_snapshot(
         self, session: Session, source: Generation
     ) -> Generation:
+        """Clone *source* into a new queued generation using its frozen snapshot data."""
         profile_snapshot = copy.deepcopy(source.profile_snapshot_json or {})
         storage_snapshot = copy.deepcopy(source.storage_template_snapshot_json or {})
         request_snapshot = copy.deepcopy(source.request_snapshot_json or {})
@@ -187,11 +197,13 @@ class GenerationService:
         return crud.create_generation(session, generation)
 
     def enqueue(self, background_tasks: BackgroundTasks, generation_id: int) -> None:
+        """Add the generation job to FastAPI's background task queue."""
         background_tasks.add_task(self.run_generation_job, generation_id)
 
     def cancel_generation(
         self, session: Session, generation_id: int
     ) -> Generation | None:
+        """Mark a queued or running generation as cancelled. Returns the updated row, or ``None`` if not found."""
         generation = crud.get_generation(session, generation_id, with_assets=True)
         if not generation:
             return None
@@ -208,6 +220,7 @@ class GenerationService:
         return generation
 
     async def run_generation_job(self, generation_id: int) -> None:
+        """Execute the generation job: call the provider, save files, and update the DB status."""
         with SessionLocal() as session:
             generation = crud.get_generation(session, generation_id)
             if not generation:

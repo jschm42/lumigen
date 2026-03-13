@@ -12,13 +12,17 @@ from app.config import Settings
 
 
 class UpscaleService:
+    """Service that upscales images using the Real-ESRGAN command-line tool."""
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
     def is_available(self) -> bool:
+        """Return ``True`` if the upscaler command is configured and resolvable."""
         return self._resolve_command() is not None
 
     def list_available_models(self) -> list[str]:
+        """Return the sorted list of upscaling model names found in the model directory."""
         models: set[str] = set()
         model_dir = self._get_model_dir()
         if model_dir and model_dir.exists():
@@ -40,6 +44,7 @@ class UpscaleService:
         output_format: str,
         model: str,
     ) -> tuple[bytes, int, int, str]:
+        """Upscale *data* using Real-ESRGAN and return ``(image_bytes, width, height, mime)``."""
         cmd = self._resolve_command()
         if not cmd:
             raise ValueError('UPSCALER_COMMAND is not configured')

@@ -13,6 +13,7 @@ settings = get_settings()
 
 
 def _build_engine() -> Engine:
+    """Create and configure the SQLAlchemy engine, enabling WAL/foreign-key pragmas for SQLite."""
     connect_args: dict[str, object] = {}
     if settings.database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
@@ -37,12 +38,14 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expi
 
 
 def init_db() -> None:
+    """Create data directories and apply the full ORM schema to the database."""
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
 
 
 def get_session() -> Generator[Session, None, None]:
+    """Yield a database session and ensure it is closed after use (FastAPI dependency)."""
     session = SessionLocal()
     try:
         yield session
