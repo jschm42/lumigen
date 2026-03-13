@@ -194,6 +194,24 @@ Set provider API keys in `.env` for default usage:
 - `OPENROUTER_API_KEY`
 - `GOOGLE_API_KEY`
 - `BFL_API_KEY`
+- `FAL_API_KEY`
+
+### FAL.ai
+
+Lumigen uses the FAL.ai queue API for the `fal` provider.
+
+- API docs: <https://docs.fal.ai/examples/model-apis/generate-images-from-text>
+- Set `FAL_API_KEY` in `.env`.
+
+Popular models:
+
+- `fal-ai/flux/schnell` — FLUX Schnell (fast)
+- `fal-ai/flux/dev` — FLUX Dev
+- `fal-ai/flux-pro` — FLUX Pro
+- `fal-ai/flux-pro/v1.1` — FLUX Pro v1.1
+- `fal-ai/flux-pro/v1.1-ultra` — FLUX Pro v1.1 Ultra
+
+You can pass any additional FAL model parameters via the profile/request params JSON field.
 
 ### Google (Gemini / Imagen)
 

@@ -10,6 +10,7 @@ from PIL import Image
 from app.config import Settings
 from app.providers.base import ProviderGenerationRequest, ProviderInputImage
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
@@ -351,3 +352,114 @@ async def test_openai_list_models_calls_models_endpoint(monkeypatch: pytest.Monk
     assert calls[0]["url"] == "https://api.openai.test/v1/models"
     assert calls[0]["headers"]["Authorization"] == "Bearer openai-key"
     assert models == ["gpt-image-1"]
+
+
+@pytest.mark.asyncio
+async def test_fal_generate_calls_queue_submit_and_polling_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+    image_bytes = _png_bytes(32, 24)
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "POST", "url": url, "headers": headers or {}, "json": json})
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {"request_id": "fal-req-001"},
+            )
+
+        async def get(self, url, headers=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "GET", "url": url, "headers": headers or {}})
+            if url.endswith("/status"):
+                return _json_response("GET", url, 200, {"status": "COMPLETED"})
+            if "fal-req-001" in url and not url.endswith("/status"):
+                return _json_response(
+                    "GET",
+                    url,
+                    200,
+                    {
+                        "images": [
+                            {
+                                "url": "https://cdn.fal.ai/image.jpeg",
+                                "width": 32,
+                                "height": 24,
+                                "content_type": "image/jpeg",
+                            }
+                        ],
+                        "seed": 42,
+                    },
+                )
+            # image download
+            request = httpx.Request("GET", url)
+            return httpx.Response(200, content=image_bytes, request=request)
+
+    async def fast_sleep(_duration: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.providers.fal_adapter.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.providers.fal_adapter.asyncio.sleep", fast_sleep)
+
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="A sunset",
+        width=32,
+        height=24,
+        n_images=1,
+        seed=42,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+        params={"enable_safety_checker": False},
+    )
+
+    result = await adapter.generate(request, settings)
+
+    # Verify calls: POST (submit), GET status, GET result, GET image URL
+    assert len(calls) == 4
+    submit = calls[0]
+    assert submit["method"] == "POST"
+    assert submit["url"] == "https://queue.fal.run/fal-ai/flux/schnell"
+    assert submit["headers"]["Authorization"] == "Key fal-key"
+    assert submit["headers"]["Content-Type"] == "application/json"
+    assert submit["json"]["prompt"] == "A sunset"
+    assert submit["json"]["image_size"] == {"width": 32, "height": 24}
+    assert submit["json"]["seed"] == 42
+    assert submit["json"]["output_format"] == "jpeg"
+    assert submit["json"]["enable_safety_checker"] is False
+
+    status_call = calls[1]
+    assert status_call["method"] == "GET"
+    assert status_call["url"].endswith("/status")
+    assert "fal-req-001" in status_call["url"]
+
+    result_call = calls[2]
+    assert result_call["method"] == "GET"
+    assert "fal-req-001" in result_call["url"]
+    assert not result_call["url"].endswith("/status")
+
+    assert len(result.images) == 1
+    assert result.images[0].width == 32
+    assert result.images[0].height == 24
+    assert result.images[0].mime == "image/jpeg"
+    assert result.raw_meta["request_id"] == "fal-req-001"
+    assert result.raw_meta["model"] == "fal-ai/flux/schnell"
+
+
+@pytest.mark.asyncio
+async def test_fal_list_models_returns_known_models() -> None:
+    adapter = FalAdapter()
+    settings = Settings()
+    models = await adapter.list_models(settings)
+    assert isinstance(models, list)
+    assert len(models) > 0
+    assert "fal-ai/flux/schnell" in models
