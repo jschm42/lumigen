@@ -213,6 +213,7 @@ data/
 node_modules/
 
 # Playwright
+.playwright-mcp/
 playwright-report/
 test-results/
 playwright/.auth/
