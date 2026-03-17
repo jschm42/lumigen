@@ -7,7 +7,10 @@
 <section data-login-card class="{{ panel_class }} space-y-5">
   <div class="flex items-center justify-center gap-4 text-center">
     <img data-login-logo src="{{ static_url('app-logo.svg') }}" alt="Lumigen logo" class="h-32 w-32 invert dark:invert-0">
-    <p class="text-4xl font-semibold text-slate-900 dark:text-white">Lumigen</p>
+    <div>
+      <p class="text-4xl font-semibold text-slate-900 dark:text-white">Lumigen</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">v{{ app_version }}</p>
+    </div>
   </div>
 
   {% if users_exist %}

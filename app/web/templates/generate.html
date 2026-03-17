@@ -13,7 +13,7 @@
         <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-[82px] w-[82px] rounded-lg p-0 invert dark:invert-0">
         <span class="min-w-0">
           <span class="block truncate text-lg font-semibold text-slate-900 dark:text-white">Lumigen</span>
-          <span class="block truncate text-sm text-slate-600 dark:text-slate-400">Image Workspace</span>
+          <span class="block truncate text-xs text-slate-500 dark:text-slate-400">v{{ app_version }}</span>
         </span>
       </a>
       <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
@@ -63,8 +63,6 @@
             <i class="bi bi-gear text-base" aria-hidden="true"></i>
             <span>Settings...</span>
           </button>
-          <div class="my-2 border-t border-slate-300/70 dark:border-white/10"></div>
-          <div class="px-2 py-1.5 text-xs text-slate-600 dark:text-slate-300">Lumigen Version {{ app_version }}</div>
           <div class="my-2 border-t border-slate-300/70 dark:border-white/10"></div>
           <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white" role="menuitem">
             <i class="bi bi-box-arrow-right text-base" aria-hidden="true"></i>
@@ -416,7 +414,6 @@
         <option value="light">Light</option>
       </select>
     </div>
-    <div class="mt-4 border-t border-slate-300/70 pt-3 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">Lumigen Version {{ app_version }}</div>
   </article>
 </dialog>
 
