@@ -417,6 +417,20 @@ def parse_fal_model_params_json(value: str) -> dict[str, Any]:
     return parsed
 
 
+def parse_generic_params_json(value: str) -> dict[str, Any]:
+    """Parse generic model parameters from JSON text into a dictionary."""
+    raw = (value or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Extra params must be valid JSON: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Extra params JSON must be an object")
+    return parsed
+
+
 def parse_profile_upscale_choice(
     session: Session,
     value: str,
@@ -2579,6 +2593,7 @@ def create_profile(
     fal_resolution: str = Form(default=""),
     fal_image_size: str = Form(default=""),
     fal_extra_params: str = Form(default=""),
+    extra_params: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -2627,9 +2642,22 @@ def create_profile(
                 fal_aspect_ratio=fal_aspect_ratio,
                 fal_resolution=fal_resolution,
             )
+            # Handle FAL-specific parameters (backward compatibility)
             extra = parse_fal_model_params_json(fal_extra_params)
             for key, val in extra.items():
                 if key not in ("fal_aspect_ratio", "fal_resolution", "fal_image_size", "image_config") and val is not None:
+                    params_value[key] = val
+        else:
+            # Handle generic parameters for all other providers
+            extra = parse_generic_params_json(extra_params)
+            reserved_keys = {
+                "fal_aspect_ratio",
+                "fal_resolution",
+                "fal_image_size",
+                "image_config",
+            }
+            for key, val in extra.items():
+                if key not in reserved_keys and val is not None:
                     params_value[key] = val
         if (upscale_choice or "").strip():
             (
@@ -2691,6 +2719,7 @@ def update_profile(
     fal_resolution: str = Form(default=""),
     fal_image_size: str = Form(default=""),
     fal_extra_params: str = Form(default=""),
+    extra_params: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -2753,7 +2782,24 @@ def update_profile(
             for key in list(params_value.keys()):
                 if key not in reserved_keys:
                     del params_value[key]
+            # Handle FAL-specific parameters (backward compatibility)
             extra = parse_fal_model_params_json(fal_extra_params)
+            for key, val in extra.items():
+                if key not in reserved_keys and val is not None:
+                    params_value[key] = val
+        else:
+            # Handle generic parameters for all other providers
+            # Remove previously stored extra params (all keys except reserved ones)
+            reserved_keys = {
+                "fal_aspect_ratio",
+                "fal_resolution",
+                "fal_image_size",
+                "image_config",
+            }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            extra = parse_generic_params_json(extra_params)
             for key, val in extra.items():
                 if key not in reserved_keys and val is not None:
                     params_value[key] = val

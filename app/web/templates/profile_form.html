@@ -20,6 +20,7 @@
 {% endif %}
 {% set fal_resolution_value = p.params_json.get('fal_resolution', '') if p and p.params_json else '' %}
 {% set fal_extra_params_value = (p.params_json | dictsort | selectattr('0', 'ne', 'fal_aspect_ratio') | selectattr('0', 'ne', 'fal_resolution') | selectattr('0', 'ne', 'fal_image_size') | selectattr('0', 'ne', 'image_config') | list | dict | tojson(indent=2)) if p and p.params_json else '{}' %}
+{% set generic_extra_params_value = (p.params_json | dictsort | selectattr('0', 'ne', 'fal_aspect_ratio') | selectattr('0', 'ne', 'fal_resolution') | selectattr('0', 'ne', 'fal_image_size') | selectattr('0', 'ne', 'image_config') | list | dict | tojson(indent=2)) if p and p.params_json else '{}' %}
 {% set fal_upscale_models = fal_upscale_models if fal_upscale_models is defined else (topaz_upscale_models if topaz_upscale_models is defined else []) %}
 {% set input_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
 {% set text_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
@@ -147,10 +148,13 @@
         </select>
       </div>
     </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-300/70 bg-slate-100/80 p-4 dark:border-white/10 dark:bg-slate-900/40">
     <div class="mt-4">
-      <label for="{{ form_dom_id }}-fal-extra-params" class="{{ label_class }}">Additional parameters (JSON)</label>
-      <textarea id="{{ form_dom_id }}-fal-extra-params" name="fal_extra_params" rows="4" placeholder="{}" class="{{ text_class }} font-mono text-xs">{{ fal_extra_params_value if fal_extra_params_value != '{}' else '' }}</textarea>
-      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional JSON object with extra parameters to pass to the FAL API request.</p>
+      <label for="{{ form_dom_id }}-extra-params" class="{{ label_class }}">Additional parameters (JSON)</label>
+      <textarea id="{{ form_dom_id }}-extra-params" name="extra_params" rows="4" placeholder="{}" class="{{ text_class }} font-mono text-xs">{{ generic_extra_params_value if generic_extra_params_value != '{}' else '' }}</textarea>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional JSON object with extra parameters to pass to the provider API request.</p>
     </div>
   </div>
 
