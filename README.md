@@ -409,6 +409,16 @@ Candidate options for the new user settings dialog:
 11. Language setting (`de` / `en`) for future i18n.
 12. Accessibility profile: larger text and stronger contrast.
 
+## Version Management
+
+The app version is managed centrally through a `VERSION` file in the project root. This version is displayed in both the user menu and the admin about section.
+
+To update the version, you can either:
+1. Manually edit the `VERSION` file in the project root
+2. Use the provided script: `python scripts/update_version.py <new_version>`
+
+Example: `python scripts/update_version.py 1.2.3`
+
 ## License
 
 See `LICENSE`.

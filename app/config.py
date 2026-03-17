@@ -1,12 +1,30 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # App version
-VERSION = "0.1.0"
+def _get_version() -> str:
+    """Read the app version from the VERSION file or return a default."""
+    version_file_path = Path(__file__).resolve().parent.parent / "VERSION"
+    try:
+        with open(version_file_path, "r", encoding="utf-8") as f:
+            version = f.read().strip()
+            # Validate that the version is not empty
+            if version:
+                return version
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    
+    # Fallback to default version if file not found or error occurred
+    return "0.1.0-dev"
+
+VERSION = _get_version()
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""

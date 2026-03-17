@@ -101,6 +101,10 @@ Install linters if missing: `python -m pip install ruff djlint`
 - Add/adjust tests for every backend or UI behavior change.
 - Tailwind theming: use class-based dark mode only. Do not introduce custom light/dark override systems. Follow [Tailwind theme customization](https://tailwindcss.com/docs/theme#customizing-your-theme).
 
+## Release preparation
+- Before creating a release, update the version number in the `VERSION` file located in the project root.
+- Alternatively, use the provided script: `python scripts/update_version.py <new_version>`
+
 ## Documentation requirements
 
 - Every public Python class must have a docstring describing its purpose.
