@@ -136,6 +136,9 @@
                     data-height="{{ profile.height if profile.height is not none else '' }}"
                     data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
                     data-seed="{{ profile.seed if profile.seed is not none else '' }}"
+                    data-fal-aspect-ratio="{{ profile.params_json.get('fal_aspect_ratio', '') if profile.params_json else '' }}"
+                    data-fal-resolution="{{ profile.params_json.get('fal_resolution', '') if profile.params_json else '' }}"
+                    data-fal-image-size="{{ profile.params_json.get('fal_image_size', '') if profile.params_json else '' }}"
                   >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
                 {% endfor %}
               </select>
@@ -236,6 +239,41 @@
                     <label for="image_size" class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Size</label>
                     <select id="image_size" name="image_size" class="{{ input_class }}">
                       <option value="">from profile</option>
+                      <option value="1K">1K</option>
+                      <option value="2K">2K</option>
+                      <option value="4K">4K</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- FAL-specific controls (hidden for non-FAL providers) -->
+                <div data-fal-controls class="contents hidden">
+                  <div>
+                    <label for="fal_aspect_ratio" class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ratio</label>
+                    <select id="fal_aspect_ratio" name="fal_aspect_ratio" class="{{ input_class }}">
+                      <option value="">from profile</option>
+                      <option value="auto">auto</option>
+                      <option value="21:9">21:9</option>
+                      <option value="16:9">16:9</option>
+                      <option value="3:2">3:2</option>
+                      <option value="4:3">4:3</option>
+                      <option value="5:4">5:4</option>
+                      <option value="1:1">1:1</option>
+                      <option value="4:5">4:5</option>
+                      <option value="3:4">3:4</option>
+                      <option value="2:3">2:3</option>
+                      <option value="9:16">9:16</option>
+                      <option value="4:1">4:1</option>
+                      <option value="1:4">1:4</option>
+                      <option value="8:1">8:1</option>
+                      <option value="1:8">1:8</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="fal_resolution" class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Resolution</label>
+                    <select id="fal_resolution" name="fal_resolution" class="{{ input_class }}">
+                      <option value="">from profile</option>
+                      <option value="0.5K">0.5K</option>
                       <option value="1K">1K</option>
                       <option value="2K">2K</option>
                       <option value="4K">4K</option>

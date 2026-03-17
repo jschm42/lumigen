@@ -99,6 +99,32 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "21:9",
 }
 OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
+FAL_ALLOWED_ASPECT_RATIOS = {
+    "auto",
+    "21:9",
+    "16:9",
+    "3:2",
+    "4:3",
+    "5:4",
+    "1:1",
+    "4:5",
+    "3:4",
+    "2:3",
+    "9:16",
+    "4:1",
+    "1:4",
+    "8:1",
+    "1:8",
+}
+FAL_ALLOWED_RESOLUTIONS = {"0.5K", "1K", "2K", "4K"}
+FAL_IMAGE_SIZE_TO_ASPECT_RATIO = {
+    "square_hd": "1:1",
+    "square": "1:1",
+    "portrait_4_3": "3:4",
+    "portrait_16_9": "9:16",
+    "landscape_4_3": "4:3",
+    "landscape_16_9": "16:9",
+}
 
 
 def parse_proxy_trusted_hosts(raw: str) -> str | list[str]:
@@ -147,6 +173,7 @@ static_dir = Path(__file__).resolve().parent / "web" / "static"
 
 templates = Jinja2Templates(directory=str(template_dir))
 templates.env.globals["app_version"] = settings.app_version
+templates.env.filters["dict"] = dict
 
 
 def static_url(path: str) -> str:
@@ -460,6 +487,50 @@ def apply_openrouter_image_config(
         merged["image_config"] = image_config
     else:
         merged.pop("image_config", None)
+    return merged
+
+
+def apply_fal_image_config(
+    *,
+    params_json: dict[str, Any],
+    provider: str,
+    fal_aspect_ratio: str,
+    fal_resolution: str,
+    allow_clear: bool = True,
+) -> dict[str, Any]:
+    """Return params merged with validated FAL ratio/resolution settings."""
+    merged = copy.deepcopy(params_json or {})
+    provider_value = (provider or "").strip().lower()
+
+    if provider_value != "fal":
+        merged.pop("fal_aspect_ratio", None)
+        merged.pop("fal_resolution", None)
+        return merged
+
+    ratio_value = (fal_aspect_ratio or "").strip()
+    resolution_value = (fal_resolution or "").strip().upper()
+
+    if not ratio_value:
+        legacy_size = str(merged.get("fal_image_size") or "").strip()
+        ratio_value = FAL_IMAGE_SIZE_TO_ASPECT_RATIO.get(legacy_size, "")
+
+    if ratio_value and ratio_value not in FAL_ALLOWED_ASPECT_RATIOS:
+        raise ValueError("Invalid FAL aspect ratio selected")
+    if resolution_value and resolution_value not in FAL_ALLOWED_RESOLUTIONS:
+        raise ValueError("Invalid FAL resolution selected")
+
+    if ratio_value:
+        merged["fal_aspect_ratio"] = ratio_value
+    elif allow_clear:
+        merged.pop("fal_aspect_ratio", None)
+
+    if resolution_value:
+        merged["fal_resolution"] = resolution_value
+    elif allow_clear:
+        merged.pop("fal_resolution", None)
+
+    # Remove legacy key after migrating to explicit ratio/resolution.
+    merged.pop("fal_image_size", None)
     return merged
 
 
@@ -1123,6 +1194,9 @@ def generate_submit(
     seed: str = Form(default=""),
     aspect_ratio: str = Form(default=""),
     image_size: str = Form(default=""),
+    fal_aspect_ratio: str = Form(default=""),
+    fal_resolution: str = Form(default=""),
+    fal_image_size: str = Form(default=""),
     upscale_model: str = Form(default="__profile__"),
     upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
@@ -1197,7 +1271,7 @@ def generate_submit(
 
         provider_value = str(profile.provider or "").strip().lower()
 
-        # Apply OpenRouter-specific or standard dimension overrides
+        # Apply OpenRouter-specific, FAL-specific, or standard dimension overrides
         if provider_value == "openrouter":
             # For OpenRouter: process aspect_ratio and image_size
             params_json_copy = dict(profile.params_json or {})
@@ -1206,6 +1280,20 @@ def generate_submit(
                 provider=provider_value,
                 aspect_ratio=aspect_ratio,
                 image_size=image_size,
+                allow_clear=False,
+            )
+            overrides["params_json"] = params_json_with_overrides
+        elif provider_value == "fal":
+            # For FAL: process explicit aspect ratio + resolution settings.
+            params_json_copy = dict(profile.params_json or {})
+            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
+                # Backward-compatibility for older forms still submitting fal_image_size.
+                params_json_copy["fal_image_size"] = (fal_image_size or "").strip()
+            params_json_with_overrides = apply_fal_image_config(
+                params_json=params_json_copy,
+                provider=provider_value,
+                fal_aspect_ratio=fal_aspect_ratio,
+                fal_resolution=fal_resolution,
                 allow_clear=False,
             )
             overrides["params_json"] = params_json_with_overrides
@@ -2487,6 +2575,10 @@ def create_profile(
     height: str = Form(default=""),
     openrouter_aspect_ratio: str = Form(default=""),
     openrouter_image_size: str = Form(default=""),
+    fal_aspect_ratio: str = Form(default=""),
+    fal_resolution: str = Form(default=""),
+    fal_image_size: str = Form(default=""),
+    fal_extra_params: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -2510,6 +2602,9 @@ def create_profile(
         if provider_value == "openrouter":
             width_value = None
             height_value = None
+        elif provider_value == "fal":
+            width_value = None
+            height_value = None
         else:
             width_value = parse_optional_int(width)
             height_value = parse_optional_int(height)
@@ -2523,6 +2618,19 @@ def create_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
+        if provider_value == "fal":
+            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
+                params_value["fal_image_size"] = (fal_image_size or "").strip()
+            params_value = apply_fal_image_config(
+                params_json=params_value,
+                provider=provider_value,
+                fal_aspect_ratio=fal_aspect_ratio,
+                fal_resolution=fal_resolution,
+            )
+            extra = parse_fal_model_params_json(fal_extra_params)
+            for key, val in extra.items():
+                if key not in ("fal_aspect_ratio", "fal_resolution", "fal_image_size", "image_config") and val is not None:
+                    params_value[key] = val
         if (upscale_choice or "").strip():
             (
                 upscale_provider_value,
@@ -2579,6 +2687,10 @@ def update_profile(
     height: str = Form(default=""),
     openrouter_aspect_ratio: str = Form(default=""),
     openrouter_image_size: str = Form(default=""),
+    fal_aspect_ratio: str = Form(default=""),
+    fal_resolution: str = Form(default=""),
+    fal_image_size: str = Form(default=""),
+    fal_extra_params: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
@@ -2606,6 +2718,9 @@ def update_profile(
         if provider_value == "openrouter":
             width_value = None
             height_value = None
+        elif provider_value == "fal":
+            width_value = None
+            height_value = None
         else:
             width_value = parse_optional_int(width)
             height_value = parse_optional_int(height)
@@ -2619,6 +2734,29 @@ def update_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
+        if provider_value == "fal":
+            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
+                params_value["fal_image_size"] = (fal_image_size or "").strip()
+            params_value = apply_fal_image_config(
+                params_json=params_value,
+                provider=provider_value,
+                fal_aspect_ratio=fal_aspect_ratio,
+                fal_resolution=fal_resolution,
+            )
+            # Remove previously stored extra params (all keys except reserved ones)
+            reserved_keys = {
+                "fal_aspect_ratio",
+                "fal_resolution",
+                "fal_image_size",
+                "image_config",
+            }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            extra = parse_fal_model_params_json(fal_extra_params)
+            for key, val in extra.items():
+                if key not in reserved_keys and val is not None:
+                    params_value[key] = val
         if (upscale_choice or "").strip():
             (
                 upscale_provider_value,

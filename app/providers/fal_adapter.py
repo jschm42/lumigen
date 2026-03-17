@@ -32,6 +32,15 @@ _KNOWN_MODELS: list[str] = [
     "fal-ai/aura-flow",
 ]
 
+_LEGACY_FAL_IMAGE_SIZE_TO_ASPECT_RATIO: dict[str, str] = {
+    "square_hd": "1:1",
+    "square": "1:1",
+    "portrait_4_3": "3:4",
+    "portrait_16_9": "9:16",
+    "landscape_4_3": "4:3",
+    "landscape_16_9": "16:9",
+}
+
 
 class FalAdapter(ProviderAdapter):
     """Provider adapter for the FAL.ai image-generation API (queue-based)."""
@@ -254,8 +263,25 @@ class FalAdapter(ProviderAdapter):
             "prompt": request.prompt,
         }
 
-        if request.width and request.height:
-            payload["image_size"] = {"width": request.width, "height": request.height}
+        fal_aspect_ratio = None
+        fal_resolution = None
+        fal_image_size = None
+        if isinstance(request.params, dict):
+            fal_aspect_ratio = (
+                str(request.params.get("fal_aspect_ratio") or "").strip() or None
+            )
+            fal_resolution = (
+                str(request.params.get("fal_resolution") or "").strip().upper() or None
+            )
+            fal_image_size = (request.params.get("fal_image_size") or "").strip() or None
+
+        if not fal_aspect_ratio and fal_image_size:
+            fal_aspect_ratio = _LEGACY_FAL_IMAGE_SIZE_TO_ASPECT_RATIO.get(fal_image_size)
+
+        if fal_aspect_ratio:
+            payload["aspect_ratio"] = fal_aspect_ratio
+        if fal_resolution:
+            payload["resolution"] = fal_resolution
 
         if request.n_images and request.n_images > 1:
             payload["num_images"] = request.n_images
@@ -269,7 +295,11 @@ class FalAdapter(ProviderAdapter):
 
         if isinstance(request.params, dict):
             for key, value in request.params.items():
-                if key not in payload and value is not None:
+                if (
+                    key not in payload
+                    and key not in {"fal_aspect_ratio", "fal_resolution", "fal_image_size"}
+                    and value is not None
+                ):
                     payload[key] = value
 
         return payload

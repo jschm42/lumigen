@@ -370,36 +370,44 @@
     function syncProviderSpecificOptions(selected) {
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
+      var isFal = provider === 'fal';
+      var useCustomDimensions = !isOpenRouter && !isFal;
       
       var dimensionControls = form.querySelector('[data-dimension-controls]');
       var standardDimensions = form.querySelector('[data-standard-dimensions]');
       var openrouterControls = form.querySelector('[data-openrouter-controls]');
+      var falControls = form.querySelector('[data-fal-controls]');
       var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
       var imageSizeInput = form.querySelector('[name="image_size"]');
+      var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+      var falResolutionInput = form.querySelector('[name="fal_resolution"]');
       
       // Toggle visibility based on provider
       if (dimensionControls) {
-        dimensionControls.classList.toggle('hidden', isOpenRouter);
+        dimensionControls.classList.toggle('hidden', !useCustomDimensions);
       }
       if (standardDimensions) {
-        standardDimensions.classList.toggle('hidden', isOpenRouter);
+        standardDimensions.classList.toggle('hidden', !useCustomDimensions);
       }
       if (openrouterControls) {
         openrouterControls.classList.toggle('hidden', !isOpenRouter);
       }
+      if (falControls) {
+        falControls.classList.toggle('hidden', !isFal);
+      }
       
       // Disable/enable and clear values based on provider
       if (widthInput) {
-        widthInput.disabled = isOpenRouter;
-        if (isOpenRouter) widthInput.value = '';
+        widthInput.disabled = !useCustomDimensions;
+        if (!useCustomDimensions) widthInput.value = '';
       }
       if (heightInput) {
-        heightInput.disabled = isOpenRouter;
-        if (isOpenRouter) heightInput.value = '';
+        heightInput.disabled = !useCustomDimensions;
+        if (!useCustomDimensions) heightInput.value = '';
       }
       if (dimensionPreset) {
-        dimensionPreset.disabled = isOpenRouter;
-        if (isOpenRouter) {
+        dimensionPreset.disabled = !useCustomDimensions;
+        if (!useCustomDimensions) {
           dimensionPreset.value = '';
         }
       }
@@ -411,6 +419,26 @@
         imageSizeInput.disabled = !isOpenRouter;
         if (!isOpenRouter) imageSizeInput.value = '';
       }
+      if (falAspectRatioInput) {
+        falAspectRatioInput.disabled = !isFal;
+        if (!isFal) falAspectRatioInput.value = '';
+      }
+      if (falResolutionInput) {
+        falResolutionInput.disabled = !isFal;
+        if (!isFal) falResolutionInput.value = '';
+      }
+    }
+
+    function legacyFalImageSizeToRatio(value) {
+      var map = {
+        square_hd: '1:1',
+        square: '1:1',
+        portrait_4_3: '3:4',
+        portrait_16_9: '9:16',
+        landscape_4_3: '4:3',
+        landscape_16_9: '16:9'
+      };
+      return map[String(value || '').trim()] || '';
     }
 
     function applyProfileDefaults() {
@@ -421,6 +449,20 @@
       if (heightInput) heightInput.value = selected.dataset.height || '';
       if (imagesInput) imagesInput.value = selected.dataset.nImages || '';
       if (seedInput) seedInput.value = selected.dataset.seed || '';
+
+      var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+      var falResolutionInput = form.querySelector('[name="fal_resolution"]');
+      if (falAspectRatioInput) {
+        var ratio = String(selected.dataset.falAspectRatio || '').trim();
+        if (!ratio) {
+          ratio = legacyFalImageSizeToRatio(selected.dataset.falImageSize || '');
+        }
+        falAspectRatioInput.value = ratio;
+      }
+      if (falResolutionInput) {
+        falResolutionInput.value = String(selected.dataset.falResolution || '').trim();
+      }
+
       syncProviderSpecificOptions(selected);
 
       syncDimensionPreset(widthInput, heightInput, dimensionPreset);
@@ -701,22 +743,27 @@
     var openrouterSection = form.querySelector('[data-profile-openrouter]');
     var openrouterRatio = form.querySelector('[data-profile-openrouter-ratio]');
     var openrouterSize = form.querySelector('[data-profile-openrouter-size]');
+    var falSection = form.querySelector('[data-profile-fal]');
+    var falAspectRatio = form.querySelector('[name="fal_aspect_ratio"]');
+    var falResolution = form.querySelector('[name="fal_resolution"]');
 
     function syncProfileProviderState() {
       var selected = modelSelect.options[modelSelect.selectedIndex];
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
+      var isFal = provider === 'fal';
+      var showDimensions = !isOpenRouter && !isFal;
 
       if (dimensionsSection) {
-        dimensionsSection.classList.toggle('hidden', isOpenRouter);
+        dimensionsSection.classList.toggle('hidden', !showDimensions);
       }
       if (widthInput) {
-        widthInput.disabled = isOpenRouter;
-        if (isOpenRouter) widthInput.value = '';
+        widthInput.disabled = !showDimensions;
+        if (!showDimensions) widthInput.value = '';
       }
       if (heightInput) {
-        heightInput.disabled = isOpenRouter;
-        if (isOpenRouter) heightInput.value = '';
+        heightInput.disabled = !showDimensions;
+        if (!showDimensions) heightInput.value = '';
       }
 
       if (openrouterSection) {
@@ -729,6 +776,18 @@
       if (openrouterSize) {
         openrouterSize.disabled = !isOpenRouter;
         if (!isOpenRouter) openrouterSize.value = '';
+      }
+
+      if (falSection) {
+        falSection.classList.toggle('hidden', !isFal);
+      }
+      if (falAspectRatio) {
+        falAspectRatio.disabled = !isFal;
+        if (!isFal) falAspectRatio.value = '';
+      }
+      if (falResolution) {
+        falResolution.disabled = !isFal;
+        if (!isFal) falResolution.value = '';
       }
     }
 

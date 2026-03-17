@@ -3,6 +3,23 @@
 {% set form_dom_id = form_dom_id if form_dom_id else 'profile-form' %}
 {% set model_field_id = model_field_id if model_field_id else form_dom_id ~ '-model-config' %}
 {% set openrouter_cfg = p.params_json.get('image_config') if p and p.params_json and (p.params_json.get('image_config') is mapping) else {} %}
+{% set fal_aspect_ratio_value = p.params_json.get('fal_aspect_ratio', '') if p and p.params_json else '' %}
+{% if not fal_aspect_ratio_value and p and p.params_json %}
+  {% set legacy_fal_image_size = p.params_json.get('fal_image_size', '') %}
+  {% if legacy_fal_image_size in ['square_hd', 'square'] %}
+    {% set fal_aspect_ratio_value = '1:1' %}
+  {% elif legacy_fal_image_size == 'portrait_4_3' %}
+    {% set fal_aspect_ratio_value = '3:4' %}
+  {% elif legacy_fal_image_size == 'portrait_16_9' %}
+    {% set fal_aspect_ratio_value = '9:16' %}
+  {% elif legacy_fal_image_size == 'landscape_4_3' %}
+    {% set fal_aspect_ratio_value = '4:3' %}
+  {% elif legacy_fal_image_size == 'landscape_16_9' %}
+    {% set fal_aspect_ratio_value = '16:9' %}
+  {% endif %}
+{% endif %}
+{% set fal_resolution_value = p.params_json.get('fal_resolution', '') if p and p.params_json else '' %}
+{% set fal_extra_params_value = (p.params_json | dictsort | selectattr('0', 'ne', 'fal_aspect_ratio') | selectattr('0', 'ne', 'fal_resolution') | selectattr('0', 'ne', 'fal_image_size') | selectattr('0', 'ne', 'image_config') | list | dict | tojson(indent=2)) if p and p.params_json else '{}' %}
 {% set fal_upscale_models = fal_upscale_models if fal_upscale_models is defined else (topaz_upscale_models if topaz_upscale_models is defined else []) %}
 {% set input_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
 {% set text_class = "mt-1.5 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
@@ -92,6 +109,48 @@
           <option value="4K" {% if selected_size == '4K' %}selected{% endif %}>4K</option>
         </select>
       </div>
+    </div>
+  </div>
+
+  <div class="hidden rounded-2xl border border-slate-300/70 bg-slate-100/80 p-4 dark:border-white/10 dark:bg-slate-900/40" data-profile-fal>
+    <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">FAL uses aspect ratio and resolution settings instead of fixed pixel dimensions.</p>
+    <div class="grid gap-4 md:grid-cols-2">
+      <div>
+        <label for="{{ form_dom_id }}-fal-aspect-ratio" class="{{ label_class }}">FAL aspect ratio</label>
+        <select id="{{ form_dom_id }}-fal-aspect-ratio" name="fal_aspect_ratio" class="{{ input_class }}">
+          <option value="">Use model default</option>
+          <option value="auto" {% if fal_aspect_ratio_value == 'auto' %}selected{% endif %}>auto</option>
+          <option value="21:9" {% if fal_aspect_ratio_value == '21:9' %}selected{% endif %}>21:9</option>
+          <option value="16:9" {% if fal_aspect_ratio_value == '16:9' %}selected{% endif %}>16:9</option>
+          <option value="3:2" {% if fal_aspect_ratio_value == '3:2' %}selected{% endif %}>3:2</option>
+          <option value="4:3" {% if fal_aspect_ratio_value == '4:3' %}selected{% endif %}>4:3</option>
+          <option value="5:4" {% if fal_aspect_ratio_value == '5:4' %}selected{% endif %}>5:4</option>
+          <option value="1:1" {% if fal_aspect_ratio_value == '1:1' %}selected{% endif %}>1:1</option>
+          <option value="4:5" {% if fal_aspect_ratio_value == '4:5' %}selected{% endif %}>4:5</option>
+          <option value="3:4" {% if fal_aspect_ratio_value == '3:4' %}selected{% endif %}>3:4</option>
+          <option value="2:3" {% if fal_aspect_ratio_value == '2:3' %}selected{% endif %}>2:3</option>
+          <option value="9:16" {% if fal_aspect_ratio_value == '9:16' %}selected{% endif %}>9:16</option>
+          <option value="4:1" {% if fal_aspect_ratio_value == '4:1' %}selected{% endif %}>4:1</option>
+          <option value="1:4" {% if fal_aspect_ratio_value == '1:4' %}selected{% endif %}>1:4</option>
+          <option value="8:1" {% if fal_aspect_ratio_value == '8:1' %}selected{% endif %}>8:1</option>
+          <option value="1:8" {% if fal_aspect_ratio_value == '1:8' %}selected{% endif %}>1:8</option>
+        </select>
+      </div>
+      <div>
+        <label for="{{ form_dom_id }}-fal-resolution" class="{{ label_class }}">FAL resolution</label>
+        <select id="{{ form_dom_id }}-fal-resolution" name="fal_resolution" class="{{ input_class }}">
+          <option value="">Use model default</option>
+          <option value="0.5K" {% if fal_resolution_value == '0.5K' %}selected{% endif %}>0.5K</option>
+          <option value="1K" {% if fal_resolution_value == '1K' %}selected{% endif %}>1K</option>
+          <option value="2K" {% if fal_resolution_value == '2K' %}selected{% endif %}>2K</option>
+          <option value="4K" {% if fal_resolution_value == '4K' %}selected{% endif %}>4K</option>
+        </select>
+      </div>
+    </div>
+    <div class="mt-4">
+      <label for="{{ form_dom_id }}-fal-extra-params" class="{{ label_class }}">Additional parameters (JSON)</label>
+      <textarea id="{{ form_dom_id }}-fal-extra-params" name="fal_extra_params" rows="4" placeholder="{}" class="{{ text_class }} font-mono text-xs">{{ fal_extra_params_value if fal_extra_params_value != '{}' else '' }}</textarea>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional JSON object with extra parameters to pass to the FAL API request.</p>
     </div>
   </div>
 
