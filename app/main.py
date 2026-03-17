@@ -3248,6 +3248,7 @@ def rerun_generation(
     request: Request,
     generation_id: int,
     background_tasks: BackgroundTasks,
+    view: str = Query(default="default"),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -3259,9 +3260,14 @@ def rerun_generation(
     generation = generation_service.create_generation_from_snapshot(session, source)
     generation_service.enqueue(background_tasks, generation.id)
 
+    template_name = (
+        "fragments/chat_generation_item.html"
+        if view.strip().lower() == "chat"
+        else "fragments/job_status.html"
+    )
     return templates.TemplateResponse(
         request,
-        "fragments/job_status.html",
+        template_name,
         {
             "request": request,
             "generation": generation,
