@@ -474,6 +474,78 @@ def test_rerun_generation_not_found_returns_404(client, app_module, monkeypatch)
     assert response.json()["detail"] == "Generation not found"
 
 
+def test_rerun_generation_default_view_returns_job_status_fragment(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    source = SimpleNamespace(id=10, status="failed")
+    new_gen = SimpleNamespace(
+        id=11,
+        status="queued",
+        error=None,
+        failure_sidecar_path=None,
+        assets=[],
+        profile_name="default",
+        provider="stub",
+        model="stub-model",
+        prompt_user="hello",
+        request_snapshot_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_generation", lambda _session, _id: source)
+
+    class _FakeGenerationService:
+        def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            return new_gen
+
+        def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            pass
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post("/generations/10/rerun")
+    assert response.status_code == 200
+    assert b"job-11" in response.content
+
+
+def test_rerun_generation_chat_view_returns_chat_fragment(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    source = SimpleNamespace(id=10, status="failed")
+    new_gen = SimpleNamespace(
+        id=12,
+        status="queued",
+        error=None,
+        failure_sidecar_path=None,
+        assets=[],
+        profile_name="default",
+        provider="stub",
+        model="stub-model",
+        prompt_user="hello",
+        request_snapshot_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_generation", lambda _session, _id: source)
+
+    class _FakeGenerationService:
+        def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            return new_gen
+
+        def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            pass
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post("/generations/10/rerun?view=chat")
+    assert response.status_code == 200
+    assert b"chat-generation-12" in response.content
+
+
 def test_asset_file_missing_asset_returns_404(client, app_module) -> None:
     fake_session = _FakeSession()
     fake_session._scalar_value = None
