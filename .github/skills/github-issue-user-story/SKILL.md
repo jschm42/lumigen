@@ -37,6 +37,7 @@ Trigger phrases:
 5. Write acceptance criteria as testable, observable statements.
 6. Add fallback behavior criteria (for example, behavior when optional data is missing).
 7. Return clean markdown with stable section headers.
+8. Ask the user if they want to add the issue to GitHub.
 
 ## Output Template
 Use this structure unless the user requests a different format.
