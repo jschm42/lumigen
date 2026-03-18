@@ -79,3 +79,6 @@ Before finalizing output, verify:
 - Prefer explicit limits (length, optional/required) over vague language.
 - Avoid nested bullets to keep GitHub rendering clean.
 - Use consistent domain terms throughout the issue.
+
+## GitHub Integration
+After generating the issue, ask the user if they want to automatically create the issue in GitHub. If they confirm, use the GitHub CLI or API to create the issue in the repository.
