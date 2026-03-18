@@ -1,14 +1,34 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # App version
-VERSION = "0.1.0"
+def _get_version() -> str:
+    """Read the app version from the VERSION file or return a default."""
+    version_file_path = Path(__file__).resolve().parent.parent / "VERSION"
+    try:
+        with open(version_file_path, "r", encoding="utf-8") as f:
+            version = f.read().strip()
+            # Validate that the version is not empty
+            if version:
+                return version
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    
+    # Fallback to default version if file not found or error occurred
+    return "0.1.0-dev"
+
+VERSION = _get_version()
 
 class Settings(BaseSettings):
+    """Application settings loaded from environment variables and .env file."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -27,6 +47,7 @@ class Settings(BaseSettings):
     default_page_size: int = 24
     max_slug_length: int = 64
     thumb_max_px: int = 384
+    max_upload_size_mb: int | None = None
 
     provider_default_max_concurrent: int = 2
     provider_default_min_interval_ms: int = 250
@@ -49,6 +70,9 @@ class Settings(BaseSettings):
     provider_bfl_max_concurrent: int = 1
     provider_bfl_min_interval_ms: int = 800
 
+    provider_fal_max_concurrent: int = 1
+    provider_fal_min_interval_ms: int = 500
+
     provider_config_key: str | None = None
 
     session_secret_key: str = "dev-insecure-session-key-change-me"
@@ -63,6 +87,8 @@ class Settings(BaseSettings):
     upscaler_command: str | None = None
     upscaler_model_dir: Path = Path("./data/models/realesrgan")
 
+    fal_api_key: str | None = None
+
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openrouter_api_key: str | None = None
@@ -70,12 +96,15 @@ class Settings(BaseSettings):
     google_api_key: str | None = None
     google_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     bfl_api_key: str | None = None
+    fal_api_key: str | None = None
 
     @property
     def database_url(self) -> str:
+        """Return the SQLAlchemy-compatible database connection URL."""
         return f"sqlite:///{self.sqlite_path.resolve().as_posix()}"
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return the cached application settings singleton."""
     return Settings()

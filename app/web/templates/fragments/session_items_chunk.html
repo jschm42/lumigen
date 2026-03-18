@@ -1,0 +1,21 @@
+{% set ns = namespace(prev=session_prev_category or '') %}
+{% for item in session_items %}
+  {% if item.time_category != ns.prev %}
+    <div class="mb-1 mt-2">
+      <span class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ item.time_category_label }}</span>
+    </div>
+  {% endif %}
+  {% include 'fragments/session_item.html' %}
+  {% set ns.prev = item.time_category %}
+{% endfor %}
+
+{% if session_has_more %}
+  <div
+    class="mt-2 flex justify-center text-xs text-slate-400 dark:text-slate-500"
+    hx-get="/sessions/list-fragment?offset={{ session_next_offset }}&limit=10&prev_category={{ session_next_prev_category | urlencode }}&active_conversation={{ active_conversation | urlencode }}&workspace_view={{ workspace_view | urlencode }}"
+    hx-trigger="intersect once root:#session-list threshold:0.85"
+    hx-swap="outerHTML"
+  >
+    Loading more sessions...
+  </div>
+{% endif %}

@@ -1,19 +1,27 @@
 {% extends "layout.html" %}
 {% block content %}
-{% set panel_class = "mx-auto mt-16 w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/62 p-6 shadow-panel backdrop-blur sm:p-8" %}
-{% set input_class = "mt-2 w-full rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/35" %}
+{% set panel_class = "mx-auto mt-16 w-full max-w-md rounded-3xl border border-slate-300/70 bg-white/95 p-6 shadow-xl shadow-slate-300/45 backdrop-blur sm:p-8 dark:border-white/10 dark:bg-slate-900/60 dark:shadow-panel" %}
+{% set input_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
 {% set btn_primary = "inline-flex w-full items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
 
-<section class="{{ panel_class }} space-y-5">
+<section data-login-card class="{{ panel_class }} space-y-5">
+  <div class="flex items-center justify-center gap-4 text-center">
+    <img data-login-logo src="{{ static_url('app-logo.svg') }}" alt="Lumigen logo" class="h-32 w-32 invert dark:invert-0">
+    <div>
+      <p class="text-4xl font-semibold text-slate-900 dark:text-white">Lumigen</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">v{{ app_version }}</p>
+    </div>
+  </div>
+
   {% if users_exist %}
     <header>
-      <h2 class="text-2xl font-semibold text-white">Login</h2>
-      <p class="mt-1 text-sm text-slate-400">Melde dich mit deinem Konto an.</p>
+      <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Login</h2>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Melde dich mit deinem Konto an.</p>
     </header>
   {% else %}
     <header>
-      <h2 class="text-2xl font-semibold text-white">Ersteinrichtung</h2>
-      <p class="mt-1 text-sm text-slate-400">Lege den ersten Admin-Benutzer an.</p>
+      <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Ersteinrichtung</h2>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Lege den ersten Admin-Benutzer an.</p>
     </header>
   {% endif %}
 
@@ -30,12 +38,12 @@
     <input type="hidden" name="next" value="{{ next }}">
 
     <div>
-      <label for="username" class="text-sm font-semibold text-slate-200">Username</label>
+      <label for="username" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Username</label>
       <input id="username" name="username" type="text" autocomplete="username" required class="{{ input_class }}">
     </div>
 
     <div>
-      <label for="password" class="text-sm font-semibold text-slate-200">Passwort</label>
+      <label for="password" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Passwort</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required class="{{ input_class }}">
     </div>
 

@@ -48,6 +48,7 @@ from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, Generation, User
 from app.providers.base import ProviderError
+from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
 from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
@@ -74,8 +75,14 @@ MAX_INPUT_IMAGES = 5
 MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
+MAX_FAL_MODEL_IDENTIFIER_LENGTH = 160
+MAX_UPLOAD_BYTES = (
+    settings.max_upload_size_mb * 1024 * 1024
+    if settings.max_upload_size_mb is not None
+    else None
+)
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "users", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "users", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
@@ -92,6 +99,32 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "21:9",
 }
 OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
+FAL_ALLOWED_ASPECT_RATIOS = {
+    "auto",
+    "21:9",
+    "16:9",
+    "3:2",
+    "4:3",
+    "5:4",
+    "1:1",
+    "4:5",
+    "3:4",
+    "2:3",
+    "9:16",
+    "4:1",
+    "1:4",
+    "8:1",
+    "1:8",
+}
+FAL_ALLOWED_RESOLUTIONS = {"0.5K", "1K", "2K", "4K"}
+FAL_IMAGE_SIZE_TO_ASPECT_RATIO = {
+    "square_hd": "1:1",
+    "square": "1:1",
+    "portrait_4_3": "3:4",
+    "portrait_16_9": "9:16",
+    "landscape_4_3": "4:3",
+    "landscape_16_9": "16:9",
+}
 
 
 def parse_proxy_trusted_hosts(raw: str) -> str | list[str]:
@@ -140,11 +173,19 @@ static_dir = Path(__file__).resolve().parent / "web" / "static"
 
 templates = Jinja2Templates(directory=str(template_dir))
 templates.env.globals["app_version"] = settings.app_version
+templates.env.filters["dict"] = dict
 
 
 def static_url(path: str) -> str:
     normalized = path.lstrip("/")
-    return str(app.url_path_for("static", path=normalized))
+    base_url = str(app.url_path_for("static", path=normalized))
+    file_path = static_dir / normalized
+    try:
+        version = int(file_path.stat().st_mtime)
+    except OSError:
+        return base_url
+    separator = "&" if "?" in base_url else "?"
+    return f"{base_url}{separator}v={version}"
 
 
 templates.env.globals["static_url"] = static_url
@@ -157,6 +198,7 @@ sidecar_service = SidecarService(storage_service)
 model_config_service = ModelConfigService(settings)
 enhancement_service = EnhancementService(settings, model_config_service)
 upscale_service = UpscaleService(settings)
+fal_upscale_service = FalUpscaleService()
 provider_registry = ProviderRegistry(settings)
 generation_service = GenerationService(
     settings=settings,
@@ -166,6 +208,7 @@ generation_service = GenerationService(
     sidecar_service=sidecar_service,
     model_config_service=model_config_service,
     upscale_service=upscale_service,
+    fal_upscale_service=fal_upscale_service,
 )
 gallery_service = GalleryService(default_page_size=settings.default_page_size)
 auth_service = AuthService()
@@ -326,6 +369,7 @@ def resolve_default_storage_template_id(session: Session) -> int:
 
 
 def validate_profile_upscale_model(value: str) -> str | None:
+    """Validate and return a local upscale model name, or ``None`` if blank."""
     candidate = (value or "").strip()
     if not candidate:
         return None
@@ -335,6 +379,80 @@ def validate_profile_upscale_model(value: str) -> str | None:
     if candidate not in local_models:
         raise ValueError("Selected upscaling model is not available locally")
     return candidate
+
+
+def validate_profile_upscale_provider(value: str) -> str | None:
+    """Validate and return an upscale provider name, or ``None`` if no upscaling."""
+    candidate = (value or "").strip().lower()
+    if not candidate or candidate == "__none__":
+        return None
+    if candidate not in {"local", "fal"}:
+        raise ValueError(f"Unknown upscale provider: {candidate!r}")
+    return candidate
+
+
+def normalize_fal_model_identifier(value: str) -> str:
+    """Return a normalized FAL model identifier string."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("FAL model identifier is required")
+    if len(normalized) > MAX_FAL_MODEL_IDENTIFIER_LENGTH:
+        raise ValueError(
+            f"FAL model identifier must be at most {MAX_FAL_MODEL_IDENTIFIER_LENGTH} characters"
+        )
+    return normalized
+
+
+def parse_fal_model_params_json(value: str) -> dict[str, Any]:
+    """Parse FAL model parameters from JSON text into a dictionary."""
+    raw = (value or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"FAL model params must be valid JSON: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("FAL model params JSON must be an object")
+    return parsed
+
+
+def parse_generic_params_json(value: str) -> dict[str, Any]:
+    """Parse generic model parameters from JSON text into a dictionary."""
+    raw = (value or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Extra params must be valid JSON: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Extra params JSON must be an object")
+    return parsed
+
+
+def parse_profile_upscale_choice(
+    session: Session,
+    value: str,
+) -> tuple[str | None, str | None, int | None]:
+    """Resolve a profile upscale selection into provider, model identifier, and FAL model ID."""
+    choice = (value or "").strip()
+    if not choice or choice == "__none__":
+        return None, None, None
+    if choice == "fal":
+        return "fal", None, None
+    if choice.startswith("local:"):
+        local_model = validate_profile_upscale_model(choice.split(":", 1)[1])
+        return "local", local_model, None
+    if choice.startswith("falm:") or choice.startswith("topaz:"):
+        fal_model_id = parse_optional_int(choice.split(":", 1)[1])
+        if fal_model_id is None or fal_model_id <= 0:
+            raise ValueError("Selected FAL model is invalid")
+        fal_model = crud.get_topaz_upscale_model(session, fal_model_id)
+        if not fal_model:
+            raise ValueError("Selected FAL model is not available")
+        return "fal", fal_model.model_identifier, fal_model.id
+    raise ValueError("Unknown upscale option")
 
 
 def apply_openrouter_image_config(
@@ -386,6 +504,50 @@ def apply_openrouter_image_config(
     return merged
 
 
+def apply_fal_image_config(
+    *,
+    params_json: dict[str, Any],
+    provider: str,
+    fal_aspect_ratio: str,
+    fal_resolution: str,
+    allow_clear: bool = True,
+) -> dict[str, Any]:
+    """Return params merged with validated FAL ratio/resolution settings."""
+    merged = copy.deepcopy(params_json or {})
+    provider_value = (provider or "").strip().lower()
+
+    if provider_value != "fal":
+        merged.pop("fal_aspect_ratio", None)
+        merged.pop("fal_resolution", None)
+        return merged
+
+    ratio_value = (fal_aspect_ratio or "").strip()
+    resolution_value = (fal_resolution or "").strip().upper()
+
+    if not ratio_value:
+        legacy_size = str(merged.get("fal_image_size") or "").strip()
+        ratio_value = FAL_IMAGE_SIZE_TO_ASPECT_RATIO.get(legacy_size, "")
+
+    if ratio_value and ratio_value not in FAL_ALLOWED_ASPECT_RATIOS:
+        raise ValueError("Invalid FAL aspect ratio selected")
+    if resolution_value and resolution_value not in FAL_ALLOWED_RESOLUTIONS:
+        raise ValueError("Invalid FAL resolution selected")
+
+    if ratio_value:
+        merged["fal_aspect_ratio"] = ratio_value
+    elif allow_clear:
+        merged.pop("fal_aspect_ratio", None)
+
+    if resolution_value:
+        merged["fal_resolution"] = resolution_value
+    elif allow_clear:
+        merged.pop("fal_resolution", None)
+
+    # Remove legacy key after migrating to explicit ratio/resolution.
+    merged.pop("fal_image_size", None)
+    return merged
+
+
 def normalize_thumb_size(value: str | None) -> str:
     candidate = (value or "md").strip().lower()
     if candidate in {"sm", "md", "lg"}:
@@ -410,7 +572,16 @@ def normalize_time_preset(value: str | None) -> str:
         "this_month": "last_30_days",
     }
     candidate = aliases.get(candidate, candidate)
-    if candidate in {"today", "last_7_days", "last_30_days", "custom"}:
+    if candidate in {
+        "today",
+        "last_7_days",
+        "last_30_days",
+        "last_60_days",
+        "last_120_days",
+        "last_year",
+        "older",
+        "custom",
+    }:
         return candidate
     return "today"
 
@@ -453,6 +624,14 @@ def build_created_at_bounds(
         return now - timedelta(days=7), now
     if time_preset == "last_30_days":
         return now - timedelta(days=30), now
+    if time_preset == "last_60_days":
+        return now - timedelta(days=60), now
+    if time_preset == "last_120_days":
+        return now - timedelta(days=120), now
+    if time_preset == "last_year":
+        return now - timedelta(days=365), now
+    if time_preset == "older":
+        return None, now - timedelta(days=365)
 
     return now - timedelta(days=1), now
 
@@ -522,23 +701,47 @@ def format_session_age(created_at: datetime | None) -> str:
 
 
 def get_session_time_category(created_at: datetime | None) -> str:
-    """Categorize a session by its creation time: 'today', 'last7days', or 'last30days'."""
+    """Categorize a session by recency for grouped rendering in the sidebar."""
     if not created_at or created_at == datetime.min:
-        return "last30days"
+        return "older"
 
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     seven_days_ago = today_start - timedelta(days=7)
+    thirty_days_ago = today_start - timedelta(days=30)
+    sixty_days_ago = today_start - timedelta(days=60)
+    onehundredtwenty_days_ago = today_start - timedelta(days=120)
+    one_year_ago = today_start - timedelta(days=365)
 
     if created_at >= today_start:
         return "today"
-    elif created_at >= seven_days_ago:
+    if created_at >= seven_days_ago:
         return "last7days"
-    else:
+    if created_at >= thirty_days_ago:
         return "last30days"
+    if created_at >= sixty_days_ago:
+        return "last60days"
+    if created_at >= onehundredtwenty_days_ago:
+        return "last120days"
+    if created_at >= one_year_ago:
+        return "lastyear"
+    return "older"
 
 
-SESSION_MAX_DAYS = 30
+def get_session_time_category_label(value: str) -> str:
+    labels = {
+        "today": "Today",
+        "last7days": "Last 7 days",
+        "last30days": "Last 30 days",
+        "last60days": "Last 60 days",
+        "last120days": "Last 120 days",
+        "lastyear": "Last year",
+        "older": "Older",
+    }
+    return labels.get(value, "Older")
+
+
+SESSION_MAX_DAYS: int | None = None
 SESSION_PAGE_SIZE = 10
 
 
@@ -546,40 +749,33 @@ def build_session_items(
     session: Session,
     offset: int = 0,
     limit: int = SESSION_PAGE_SIZE,
-    max_days: int = SESSION_MAX_DAYS,
+    max_days: int | None = SESSION_MAX_DAYS,
 ) -> tuple[list[dict[str, Any]], bool]:
     """
     Build session items with pagination and time categorization.
     Returns (session_items, has_more).
     """
-    from sqlalchemy import and_
-
-    now = datetime.now()
-    cutoff_date = now - timedelta(days=max_days)
-
-    # Get generations within the time range
-    query = (
-        select(Generation)
-        .options(selectinload(Generation.assets))
-        .where(
-            and_(
-                Generation.created_at >= cutoff_date,
-            )
-        )
-        .order_by(Generation.created_at.desc(), Generation.id.desc())
-    )
+    query = select(Generation).options(selectinload(Generation.assets))
+    if max_days is not None:
+        now = datetime.now(UTC)
+        cutoff_date = now - timedelta(days=max_days)
+        query = query.where(Generation.created_at >= cutoff_date)
+    query = query.order_by(Generation.created_at.desc(), Generation.id.desc())
 
     # First, get all generations to build session index
     all_generations = list(session.scalars(query).all())
-    all_generations = [
-        g for g in all_generations
-        if not generation_chat_hidden(g)
-    ]
+    hidden_tokens: set[str] = set()
+    for generation in all_generations:
+        token = generation_session_token(generation)
+        if generation_chat_hidden(generation) or generation_chat_deleted(generation) or generation_session_archived(generation):
+            hidden_tokens.add(token)
 
     # Build session index
     session_index: dict[str, dict[str, Any]] = {}
     for generation in all_generations:
         token = generation_session_token(generation)
+        if token in hidden_tokens:
+            continue
         custom_title = generation_session_title(generation)
         created_at = generation.created_at or datetime.min
         item = session_index.get(token)
@@ -633,6 +829,7 @@ def build_session_items(
             "subtitle": latest_label or started_label,
             "age": format_session_age(latest_at),
             "time_category": get_session_time_category(latest_at),
+            "time_category_label": get_session_time_category_label(get_session_time_category(latest_at)),
             "latest_created_at": latest_at,
         })
 
@@ -650,6 +847,16 @@ def generation_session_title(generation: Generation) -> str:
 def generation_chat_hidden(generation: Generation) -> bool:
     snapshot = generation.request_snapshot_json or {}
     return bool(snapshot.get("chat_hidden"))
+
+
+def generation_session_archived(generation: Generation) -> bool:
+    snapshot = generation.request_snapshot_json or {}
+    return bool(snapshot.get("chat_archived"))
+
+
+def generation_chat_deleted(generation: Generation) -> bool:
+    snapshot = generation.request_snapshot_json or {}
+    return bool(snapshot.get("chat_deleted"))
 
 
 def list_generations_for_session_token(
@@ -762,12 +969,18 @@ def admin_redirect(
     *,
     message: str | None = None,
     error: str | None = None,
+    extra_params: dict[str, str | int | bool | None] | None = None,
 ) -> RedirectResponse:
     params: dict[str, str] = {"section": normalize_admin_section(section)}
     if message:
         params["message"] = message
     if error:
         params["error"] = error
+    if extra_params:
+        for key, value in extra_params.items():
+            if value is None:
+                continue
+            params[key] = str(value)
     return RedirectResponse(url=f"/admin?{urlencode(params)}", status_code=303)
 
 
@@ -860,51 +1073,17 @@ def generate_page(
     session_offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    profiles = crud.list_profiles(session)
-    dimension_presets = crud.list_dimension_presets(session)
-    enhancement_config = crud.get_enhancement_config(session)
+    active_workspace_view = (workspace_view or "chat").strip().lower()
+    if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
+        active_workspace_view = "chat"
+    if active_workspace_view == "admin" and not current_user_is_admin(request):
+        active_workspace_view = "chat"
 
-    # Load chat session preferences
-    active_conversation = (conversation or "").strip()
-    chat_session_prefs = None
-    last_profile_id = None
-    last_thumb_size = "md"
-    if active_conversation and active_conversation not in {"all", "new"}:
-        chat_session_prefs = crud.get_chat_session(session, active_conversation)
-        if chat_session_prefs:
-            last_profile_id = chat_session_prefs.last_profile_id
-            last_thumb_size = chat_session_prefs.last_thumb_size or "md"
-
-    # Use the new build_session_items function with pagination
-    session_items, session_has_more = build_session_items(
-        session,
-        offset=session_offset,
-        limit=SESSION_PAGE_SIZE,
-        max_days=SESSION_MAX_DAYS,
-    )
-
-    # Get recent generations for the chat view (all generations, not limited by time)
-    recent_generations = list(
-        session.scalars(
-            select(Generation)
-            .options(selectinload(Generation.assets))
-            .order_by(Generation.created_at.desc(), Generation.id.desc())
-            .limit(250)
-        ).all()
-    )
-    recent_generations.reverse()
-    recent_generations = [
-        generation
-        for generation in recent_generations
-        if not generation_chat_hidden(generation)
-    ]
-
-    # Build full session list for active conversation check
-    # (we need all sessions to find the active one, not just the paginated ones)
+    # Build full session list once; we derive the rendered page slice from it.
     all_sessions, _ = build_session_items(
         session,
         offset=0,
-        limit=9999,  # Get all to check active conversation
+        limit=100000,
         max_days=SESSION_MAX_DAYS,
     )
     all_session_tokens = {item["token"] for item in all_sessions}
@@ -914,24 +1093,79 @@ def generate_page(
         if active_conversation not in {"all", "new"} and active_conversation not in all_session_tokens:
             active_conversation = ""
     if not active_conversation:
-        active_conversation = session_items[0]["token"] if session_items else "new"
+        active_conversation = all_sessions[0]["token"] if all_sessions else "new"
 
-    if active_conversation == "all":
-        conversation_generations = recent_generations
-    elif active_conversation == "new":
-        conversation_generations = []
-    else:
-        conversation_generations = [
-            generation
-            for generation in recent_generations
-            if generation_session_token(generation) == active_conversation
-        ]
+    effective_session_offset = session_offset
+    if active_conversation not in {"", "all", "new"}:
+        active_index = next(
+            (idx for idx, item in enumerate(all_sessions) if item["token"] == active_conversation),
+            -1,
+        )
+        if active_index >= 0:
+            effective_session_offset = (active_index // SESSION_PAGE_SIZE) * SESSION_PAGE_SIZE
 
-    active_workspace_view = (workspace_view or "chat").strip().lower()
-    if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
-        active_workspace_view = "chat"
-    if active_workspace_view == "admin" and not current_user_is_admin(request):
-        active_workspace_view = "chat"
+    session_items = all_sessions[
+        effective_session_offset:effective_session_offset + SESSION_PAGE_SIZE
+    ]
+    session_has_more = len(all_sessions) > effective_session_offset + SESSION_PAGE_SIZE
+
+    # Keep heavy DB queries chat-only so sidebar workspace switches stay responsive.
+    profiles = []
+    dimension_presets = []
+    enhancement_ready = False
+    upscale_ready = False
+    upscale_models: list[str] = []
+    fal_upscale_models: list[Any] = []
+    fal_upscale_ready = False
+    last_profile_id = None
+    last_thumb_size = "md"
+    conversation_generations = []
+
+    if active_workspace_view == "chat":
+        profiles = crud.list_profiles(session)
+        dimension_presets = crud.list_dimension_presets(session)
+        enhancement_config = crud.get_enhancement_config(session)
+        enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
+        upscale_ready = upscale_service.is_available()
+        upscale_models = upscale_service.list_available_models()
+        fal_upscale_models = crud.list_topaz_upscale_models(
+            session, enabled_only=True
+        )
+        fal_upscale_ready = bool(model_config_service.get_default_api_key("fal"))
+
+        if active_conversation not in {"all", "new"}:
+            chat_session_prefs = crud.get_chat_session(session, active_conversation)
+            if chat_session_prefs:
+                last_profile_id = chat_session_prefs.last_profile_id
+                last_thumb_size = chat_session_prefs.last_thumb_size or "md"
+
+        if active_conversation == "all":
+            recent_generations = list(
+                session.scalars(
+                    select(Generation)
+                    .options(selectinload(Generation.assets))
+                    .order_by(Generation.created_at.desc(), Generation.id.desc())
+                    .limit(250)
+                ).all()
+            )
+            recent_generations.reverse()
+            conversation_generations = [
+                generation
+                for generation in recent_generations
+                if not generation_chat_hidden(generation)
+                and not generation_session_archived(generation)
+                and not generation_chat_deleted(generation)
+            ]
+        elif active_conversation == "new":
+            conversation_generations = []
+        else:
+            conversation_generations = [
+                generation
+                for generation in list_generations_for_session_token(session, active_conversation)
+                if not generation_chat_hidden(generation)
+                and not generation_session_archived(generation)
+                and not generation_chat_deleted(generation)
+            ]
 
     return templates.TemplateResponse(
         request,
@@ -943,16 +1177,17 @@ def generate_page(
             "conversation_generations": conversation_generations,
             "session_items": session_items,
             "session_has_more": session_has_more,
-            "session_offset": session_offset,
+            "session_offset": effective_session_offset,
             "active_conversation": active_conversation,
             "workspace_view": active_workspace_view,
             "hide_footer": True,
             "hide_header": True,
-            "enhancement_ready": bool(
-                enhancement_config and enhancement_config.api_key_encrypted
-            ),
-            "upscale_ready": upscale_service.is_available(),
-            "upscale_models": upscale_service.list_available_models(),
+            "enhancement_ready": enhancement_ready,
+            "upscale_ready": upscale_ready,
+            "upscale_models": upscale_models,
+            "fal_upscale_models": fal_upscale_models,
+            "topaz_upscale_models": fal_upscale_models,
+            "fal_upscale_ready": fal_upscale_ready,
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
@@ -973,7 +1208,11 @@ def generate_submit(
     seed: str = Form(default=""),
     aspect_ratio: str = Form(default=""),
     image_size: str = Form(default=""),
+    fal_aspect_ratio: str = Form(default=""),
+    fal_resolution: str = Form(default=""),
+    fal_image_size: str = Form(default=""),
     upscale_model: str = Form(default="__profile__"),
+    upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
     csrf_token: str = Form(...),
@@ -1020,6 +1259,7 @@ def generate_submit(
         if input_images:
             if len(input_images) + len(encoded_images) > MAX_INPUT_IMAGES:
                 raise ValueError(f"Upload up to {MAX_INPUT_IMAGES} input images.")
+            total_upload_bytes = 0
             for upload in input_images:
                 content_type = (upload.content_type or "").lower()
                 if not content_type.startswith("image/"):
@@ -1027,6 +1267,11 @@ def generate_submit(
                 data = upload.file.read()
                 if not data:
                     continue
+                total_upload_bytes += len(data)
+                if MAX_UPLOAD_BYTES is not None and total_upload_bytes > MAX_UPLOAD_BYTES:
+                    raise ValueError(
+                        f"Upload exceeds the {settings.max_upload_size_mb} MB size limit."
+                    )
                 encoded_images.append(
                     {
                         "name": upload.filename or "input",
@@ -1040,7 +1285,7 @@ def generate_submit(
 
         provider_value = str(profile.provider or "").strip().lower()
 
-        # Apply OpenRouter-specific or standard dimension overrides
+        # Apply OpenRouter-specific, FAL-specific, or standard dimension overrides
         if provider_value == "openrouter":
             # For OpenRouter: process aspect_ratio and image_size
             params_json_copy = dict(profile.params_json or {})
@@ -1049,6 +1294,20 @@ def generate_submit(
                 provider=provider_value,
                 aspect_ratio=aspect_ratio,
                 image_size=image_size,
+                allow_clear=False,
+            )
+            overrides["params_json"] = params_json_with_overrides
+        elif provider_value == "fal":
+            # For FAL: process explicit aspect ratio + resolution settings.
+            params_json_copy = dict(profile.params_json or {})
+            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
+                # Backward-compatibility for older forms still submitting fal_image_size.
+                params_json_copy["fal_image_size"] = (fal_image_size or "").strip()
+            params_json_with_overrides = apply_fal_image_config(
+                params_json=params_json_copy,
+                provider=provider_value,
+                fal_aspect_ratio=fal_aspect_ratio,
+                fal_resolution=fal_resolution,
                 allow_clear=False,
             )
             overrides["params_json"] = params_json_with_overrides
@@ -1074,24 +1333,72 @@ def generate_submit(
         if seed_value is not None:
             overrides["seed"] = seed_value
 
+        # Handle upscale provider/model overrides
+        provider_choice = (upscale_provider_override or "__profile__").strip()
         upscale_choice = (upscale_model or "__profile__").strip()
-        if upscale_choice == "__none__":
+
+        if provider_choice == "__none__" or upscale_choice == "__none__":
+            # Explicit "no upscaling" override
+            overrides["upscale_provider"] = None
             overrides["upscale_model"] = None
-        elif upscale_choice == "__profile__":
+            overrides["upscale_topaz_model_id"] = None
+        elif provider_choice == "__profile__" and upscale_choice == "__profile__":
+            # Use profile settings — validate that the profile's upscale config is still valid
+            profile_upscale_provider = str(profile.upscale_provider or "").strip().lower()
             profile_upscale_model = str(profile.upscale_model or "").strip()
-            if profile_upscale_model:
+            if profile_upscale_provider == "local" and profile_upscale_model:
                 if not upscale_service.is_available():
-                    raise ValueError("Upscaler is not configured on this server")
+                    raise ValueError("Local upscaler is not configured on this server")
                 available = upscale_service.list_available_models()
                 if available and profile_upscale_model not in available:
                     raise ValueError("Profile upscale model is not available")
-        else:
+            elif profile_upscale_provider == "fal":
+                profile_fal_model_id = getattr(profile, "upscale_topaz_model_id", None)
+                if profile_fal_model_id is not None:
+                    fal_model = crud.get_topaz_upscale_model(session, int(profile_fal_model_id))
+                    if not fal_model:
+                        raise ValueError("Profile FAL model is not available")
+        elif provider_choice == "fal" or (provider_choice == "__profile__" and upscale_choice == "fal"):
+            # FAL.ai upscale override
+            fal_key = model_config_service.get_default_api_key("fal")
+            if not fal_key:
+                raise ValueError("FAL.ai API key is not configured. Set it in Admin → Upscaling.")
+            overrides["upscale_provider"] = "fal"
+            overrides["upscale_model"] = None
+            overrides["upscale_topaz_model_id"] = None
+        elif upscale_choice.startswith("falm:") or upscale_choice.startswith("topaz:"):
+            fal_key = model_config_service.get_default_api_key("fal")
+            if not fal_key:
+                raise ValueError("FAL.ai API key is not configured. Set it in Admin → Upscaling.")
+            fal_model_id = parse_optional_int(upscale_choice.split(":", 1)[1])
+            if fal_model_id is None or fal_model_id <= 0:
+                raise ValueError("Selected FAL model is invalid")
+            fal_model = crud.get_topaz_upscale_model(session, fal_model_id)
+            if not fal_model or not fal_model.is_enabled:
+                raise ValueError("Selected FAL model is not available")
+            overrides["upscale_provider"] = "fal"
+            overrides["upscale_model"] = fal_model.model_identifier
+            overrides["upscale_topaz_model_id"] = fal_model.id
+        elif upscale_choice.startswith("local:"):
+            local_choice = upscale_choice.split(":", 1)[1]
             if not upscale_service.is_available():
-                raise ValueError("Upscaler is not configured on this server")
+                raise ValueError("Local upscaler is not configured on this server")
+            available = upscale_service.list_available_models()
+            if available and local_choice not in available:
+                raise ValueError("Selected upscale model is not available")
+            overrides["upscale_provider"] = "local"
+            overrides["upscale_model"] = local_choice
+            overrides["upscale_topaz_model_id"] = None
+        elif upscale_choice and upscale_choice not in {"__profile__", "__none__"}:
+            # Local model override
+            if not upscale_service.is_available():
+                raise ValueError("Local upscaler is not configured on this server")
             available = upscale_service.list_available_models()
             if available and upscale_choice not in available:
                 raise ValueError("Selected upscale model is not available")
+            overrides["upscale_provider"] = "local"
             overrides["upscale_model"] = upscale_choice
+            overrides["upscale_topaz_model_id"] = None
 
         generation = generation_service.create_generation_from_profile(
             session,
@@ -1222,6 +1529,52 @@ def delete_chat_session(
     for generation in generations:
         snapshot = dict(generation.request_snapshot_json or {})
         snapshot["chat_hidden"] = True
+        snapshot["chat_deleted"] = True
+        snapshot.pop("chat_archived", None)
+        snapshot.pop("chat_session_id", None)
+        snapshot.pop("chat_session_title", None)
+        generation.request_snapshot_json = snapshot
+        session.add(generation)
+    session.commit()
+
+    requested_active = (active_conversation or "").strip()
+    next_conversation = "new" if requested_active == token else (requested_active or "new")
+    return generate_workspace_redirect(
+        conversation=next_conversation,
+        workspace_view=workspace_view,
+    )
+
+
+@app.post("/sessions/archive")
+def archive_chat_session(
+    request: Request,
+    session_token: str = Form(...),
+    active_conversation: str = Form(default=""),
+    workspace_view: str = Form(default="chat"),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Invalid session token",
+        )
+
+    generations = list_generations_for_session_token(session, token)
+    if not generations:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Session not found",
+        )
+
+    for generation in generations:
+        snapshot = dict(generation.request_snapshot_json or {})
+        snapshot["chat_archived"] = True
+        snapshot.pop("chat_deleted", None)
         generation.request_snapshot_json = snapshot
         session.add(generation)
     session.commit()
@@ -1315,6 +1668,12 @@ def admin_page(
     section: str | None = Query(default="models"),
     message: str | None = Query(default=None),
     error: str | None = Query(default=None),
+    fal_model_create_open: str | None = Query(default=None),
+    fal_model_edit_id: str | None = Query(default=None),
+    fal_model_name: str | None = Query(default=None),
+    fal_model_identifier: str | None = Query(default=None),
+    fal_model_params_json: str | None = Query(default=None),
+    fal_model_is_enabled: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     denied = require_admin_or_redirect(request)
@@ -1329,6 +1688,54 @@ def admin_page(
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
 
+    # Build per-provider API key info for the "API Keys" admin section
+    provider_names = provider_registry.provider_names()
+    provider_api_key_rows = {row.provider: row for row in crud.list_provider_api_keys(session)}
+    provider_api_key_info = [
+        {
+            "provider": p,
+            "has_db_key": p in provider_api_key_rows,
+            "has_env_key": model_config_service.has_env_api_key(p),
+        }
+        for p in provider_names
+        if p in model_config_service.PROVIDER_API_KEY_ATTR
+    ]
+
+    # Build upscaling info for the "Upscaling" admin section
+    fal_api_key_row = provider_api_key_rows.get("fal")
+    create_dialog_open = str(fal_model_create_open or "").strip().lower() in {
+        "1",
+        "true",
+        "on",
+        "yes",
+    }
+    try:
+        edit_dialog_model_id = parse_optional_int(fal_model_edit_id)
+    except ValueError:
+        edit_dialog_model_id = None
+    if edit_dialog_model_id is not None and edit_dialog_model_id <= 0:
+        edit_dialog_model_id = None
+    draft_enabled = str(fal_model_is_enabled or "").strip().lower() in {
+        "1",
+        "true",
+        "on",
+        "yes",
+    }
+    upscaling_info = {
+        "local_available": upscale_service.is_available(),
+        "local_models": upscale_service.list_available_models(),
+        "fal_has_db_key": fal_api_key_row is not None,
+        "fal_has_env_key": bool(settings.fal_api_key),
+        "fal_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+        "topaz_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+        "fal_model_create_open": create_dialog_open,
+        "fal_model_edit_id": edit_dialog_model_id,
+        "fal_model_draft_name": fal_model_name or "",
+        "fal_model_draft_identifier": fal_model_identifier or "",
+        "fal_model_draft_params_json": fal_model_params_json if fal_model_params_json is not None else "{}",
+        "fal_model_draft_enabled": draft_enabled,
+    }
+
     return templates.TemplateResponse(
         request,
         "admin.html",
@@ -1338,7 +1745,8 @@ def admin_page(
             "dimension_presets": dimension_presets,
             "categories": categories,
             "enhancement_config": enhancement_config,
-            "providers": provider_registry.provider_names(),
+            "providers": provider_names,
+            "provider_meta": provider_registry.provider_meta(),
             "users": users,
             "error": error or "",
             "message": message or "",
@@ -1346,8 +1754,178 @@ def admin_page(
             "active_admin_section": active_admin_section,
             "app_copyright_text": APP_COPYRIGHT_TEXT,
             "onboarding_reset_enabled": settings.auth_allow_onboarding_reset,
+            "provider_api_key_info": provider_api_key_info,
+            "upscaling_info": upscaling_info,
         },
     )
+
+
+@app.post("/admin/provider-api-keys/{provider}/update")
+def admin_update_provider_api_key(
+    request: Request,
+    provider: str,
+    api_key: str = Form(default=""),
+    clear_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    provider = provider.strip().lower()
+    if provider not in provider_registry.provider_names():
+        raise HTTPException(status_code=404, detail="Unsupported provider")
+    if provider not in model_config_service.PROVIDER_API_KEY_ATTR:
+        raise HTTPException(status_code=404, detail="Provider does not support API key configuration")
+    try:
+        if clear_api_key:
+            crud.delete_provider_api_key(session, provider)
+        else:
+            api_key_value = api_key.strip()
+            if api_key_value:
+                encrypted = model_config_service.encrypt_api_key(api_key_value)
+                crud.upsert_provider_api_key(session, provider, encrypted)
+    except ValueError as exc:
+        return admin_redirect("apikeys", error=str(exc))
+    return admin_redirect("apikeys", message="Saved")
+
+
+@app.post("/admin/upscaling/fal")
+def admin_update_fal_upscale_key(
+    request: Request,
+    api_key: str = Form(default=""),
+    clear_api_key: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Save or clear the FAL.ai API key used for upscaling."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    try:
+        if clear_api_key:
+            crud.delete_provider_api_key(session, "fal")
+        else:
+            api_key_value = api_key.strip()
+            if api_key_value:
+                encrypted = model_config_service.encrypt_api_key(api_key_value)
+                crud.upsert_provider_api_key(session, "fal", encrypted)
+    except ValueError as exc:
+        return admin_redirect("upscaling", error=str(exc))
+    return admin_redirect("upscaling", message="Saved")
+
+
+@app.post("/admin/fal-models")
+@app.post("/admin/topaz-models")
+def admin_create_topaz_model(
+    request: Request,
+    name: str = Form(...),
+    model_identifier: str = Form(...),
+    params_json: str = Form(default="{}"),
+    is_enabled: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Create a named FAL upscale model configuration."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
+    try:
+        name_value = normalize_model_config_name(name)
+        identifier_value = normalize_fal_model_identifier(model_identifier)
+        params_value = parse_fal_model_params_json(params_json)
+        crud.create_topaz_upscale_model(
+            session,
+            name=name_value,
+            model_identifier=identifier_value,
+            params_json=params_value,
+            is_enabled=enabled_value,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect(
+            "upscaling",
+            error=str(exc),
+            extra_params={
+                "fal_model_create_open": "1",
+                "fal_model_name": name,
+                "fal_model_identifier": model_identifier,
+                "fal_model_params_json": params_json,
+                "fal_model_is_enabled": "1" if enabled_value else "0",
+            },
+        )
+    return admin_redirect("upscaling", message="Saved")
+
+
+@app.post("/admin/fal-models/{topaz_model_id}/update")
+@app.post("/admin/topaz-models/{topaz_model_id}/update")
+def admin_update_topaz_model(
+    request: Request,
+    topaz_model_id: int,
+    name: str = Form(...),
+    model_identifier: str = Form(...),
+    params_json: str = Form(default="{}"),
+    is_enabled: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Update an existing FAL upscale model configuration."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    topaz_model = crud.get_topaz_upscale_model(session, topaz_model_id)
+    if not topaz_model:
+        raise HTTPException(status_code=404, detail="FAL model not found")
+    enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
+    try:
+        name_value = normalize_model_config_name(name)
+        identifier_value = normalize_fal_model_identifier(model_identifier)
+        params_value = parse_fal_model_params_json(params_json)
+        crud.update_topaz_upscale_model(
+            session,
+            topaz_model,
+            name=name_value,
+            model_identifier=identifier_value,
+            params_json=params_value,
+            is_enabled=enabled_value,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect(
+            "upscaling",
+            error=str(exc),
+            extra_params={
+                "fal_model_edit_id": topaz_model.id,
+                "fal_model_name": name,
+                "fal_model_identifier": model_identifier,
+                "fal_model_params_json": params_json,
+                "fal_model_is_enabled": "1" if enabled_value else "0",
+            },
+        )
+    return admin_redirect("upscaling", message="Saved")
+
+
+@app.post("/admin/fal-models/{topaz_model_id}/delete")
+@app.post("/admin/topaz-models/{topaz_model_id}/delete")
+def admin_delete_topaz_model(
+    request: Request,
+    topaz_model_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Delete a FAL upscale model configuration."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    topaz_model = crud.get_topaz_upscale_model(session, topaz_model_id)
+    if not topaz_model:
+        raise HTTPException(status_code=404, detail="FAL model not found")
+    crud.delete_topaz_upscale_model(session, topaz_model)
+    return admin_redirect("upscaling", message="Deleted")
 
 
 @app.post("/admin/dimension-presets")
@@ -1897,6 +2475,47 @@ def list_sessions(
     })
 
 
+@app.get("/sessions/list-fragment", response_class=HTMLResponse)
+def list_sessions_fragment(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=SESSION_PAGE_SIZE, ge=1, le=50),
+    prev_category: str = Query(default=""),
+    active_conversation: str = Query(default="new"),
+    workspace_view: str = Query(default="chat"),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    session_items, session_has_more = build_session_items(
+        session,
+        offset=offset,
+        limit=limit,
+        max_days=SESSION_MAX_DAYS,
+    )
+    next_offset = offset + len(session_items)
+    next_prev_category = prev_category
+    if session_items:
+        next_prev_category = str(session_items[-1].get("time_category") or "")
+
+    safe_workspace_view = (workspace_view or "chat").strip().lower()
+    if safe_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
+        safe_workspace_view = "chat"
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/session_items_chunk.html",
+        {
+            "request": request,
+            "session_items": session_items,
+            "session_has_more": session_has_more,
+            "session_next_offset": next_offset,
+            "session_prev_category": prev_category,
+            "session_next_prev_category": next_prev_category,
+            "active_conversation": active_conversation,
+            "workspace_view": safe_workspace_view,
+        },
+    )
+
+
 @app.get("/profiles/new", response_class=HTMLResponse)
 def new_profile_page(
     _request: Request,
@@ -1922,6 +2541,7 @@ def profiles_page(
     open_edit_id: int | None = None
     if edit_id is not None and crud.get_profile(session, edit_id):
         open_edit_id = edit_id
+    fal_key = model_config_service.get_default_api_key("fal")
 
     return templates.TemplateResponse(
         request,
@@ -1933,6 +2553,13 @@ def profiles_page(
             "categories": categories,
             "upscale_ready": upscale_service.is_available(),
             "upscale_models": upscale_service.list_available_models(),
+            "fal_upscale_models": crud.list_topaz_upscale_models(
+                session, enabled_only=False
+            ),
+            "topaz_upscale_models": crud.list_topaz_upscale_models(
+                session, enabled_only=False
+            ),
+            "fal_upscale_ready": bool(fal_key),
             "error": error,
             "open_create_dialog": create,
             "open_edit_id": open_edit_id,
@@ -1962,9 +2589,16 @@ def create_profile(
     height: str = Form(default=""),
     openrouter_aspect_ratio: str = Form(default=""),
     openrouter_image_size: str = Form(default=""),
+    fal_aspect_ratio: str = Form(default=""),
+    fal_resolution: str = Form(default=""),
+    fal_image_size: str = Form(default=""),
+    fal_extra_params: str = Form(default=""),
+    extra_params: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
+    upscale_choice: str = Form(default=""),
+    upscale_provider: str = Form(default=""),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
     csrf_token: str = Form(...),
@@ -1983,6 +2617,9 @@ def create_profile(
         if provider_value == "openrouter":
             width_value = None
             height_value = None
+        elif provider_value == "fal":
+            width_value = None
+            height_value = None
         else:
             width_value = parse_optional_int(width)
             height_value = parse_optional_int(height)
@@ -1996,7 +2633,47 @@ def create_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        upscale_model_value = validate_profile_upscale_model(upscale_model)
+        if provider_value == "fal":
+            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
+                params_value["fal_image_size"] = (fal_image_size or "").strip()
+            params_value = apply_fal_image_config(
+                params_json=params_value,
+                provider=provider_value,
+                fal_aspect_ratio=fal_aspect_ratio,
+                fal_resolution=fal_resolution,
+            )
+            # Handle FAL-specific parameters (backward compatibility)
+            extra = parse_fal_model_params_json(fal_extra_params)
+            for key, val in extra.items():
+                if key not in ("fal_aspect_ratio", "fal_resolution", "fal_image_size", "image_config") and val is not None:
+                    params_value[key] = val
+        else:
+            # Handle generic parameters for all other providers
+            extra = parse_generic_params_json(extra_params)
+            reserved_keys = {
+                "fal_aspect_ratio",
+                "fal_resolution",
+                "fal_image_size",
+                "image_config",
+            }
+            for key, val in extra.items():
+                if key not in reserved_keys and val is not None:
+                    params_value[key] = val
+        if (upscale_choice or "").strip():
+            (
+                upscale_provider_value,
+                upscale_model_value,
+                upscale_topaz_model_id_value,
+            ) = parse_profile_upscale_choice(session, upscale_choice)
+        else:
+            # Backward-compatible fallback for older form payloads.
+            upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
+            upscale_model_value = (
+                validate_profile_upscale_model(upscale_model)
+                if upscale_provider_value == "local"
+                else None
+            )
+            upscale_topaz_model_id_value = None
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -2015,7 +2692,9 @@ def create_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
+            upscale_provider=upscale_provider_value,
             upscale_model=upscale_model_value,
+            upscale_topaz_model_id=upscale_topaz_model_id_value,
             params_json=params_value,
             categories=categories,
             storage_template_id=resolve_default_storage_template_id(session),
@@ -2036,9 +2715,16 @@ def update_profile(
     height: str = Form(default=""),
     openrouter_aspect_ratio: str = Form(default=""),
     openrouter_image_size: str = Form(default=""),
+    fal_aspect_ratio: str = Form(default=""),
+    fal_resolution: str = Form(default=""),
+    fal_image_size: str = Form(default=""),
+    fal_extra_params: str = Form(default=""),
+    extra_params: str = Form(default=""),
     n_images: int = Form(default=1),
     seed: str = Form(default=""),
     output_format: str = Form(default="png"),
+    upscale_choice: str = Form(default=""),
+    upscale_provider: str = Form(default=""),
     upscale_model: str = Form(default=""),
     category_ids: list[int] = Form(default=[]),
     csrf_token: str = Form(...),
@@ -2061,6 +2747,9 @@ def update_profile(
         if provider_value == "openrouter":
             width_value = None
             height_value = None
+        elif provider_value == "fal":
+            width_value = None
+            height_value = None
         else:
             width_value = parse_optional_int(width)
             height_value = parse_optional_int(height)
@@ -2074,7 +2763,61 @@ def update_profile(
             aspect_ratio=openrouter_aspect_ratio,
             image_size=openrouter_image_size,
         )
-        upscale_model_value = validate_profile_upscale_model(upscale_model)
+        if provider_value == "fal":
+            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
+                params_value["fal_image_size"] = (fal_image_size or "").strip()
+            params_value = apply_fal_image_config(
+                params_json=params_value,
+                provider=provider_value,
+                fal_aspect_ratio=fal_aspect_ratio,
+                fal_resolution=fal_resolution,
+            )
+            # Remove previously stored extra params (all keys except reserved ones)
+            reserved_keys = {
+                "fal_aspect_ratio",
+                "fal_resolution",
+                "fal_image_size",
+                "image_config",
+            }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            # Handle FAL-specific parameters (backward compatibility)
+            extra = parse_fal_model_params_json(fal_extra_params)
+            for key, val in extra.items():
+                if key not in reserved_keys and val is not None:
+                    params_value[key] = val
+        else:
+            # Handle generic parameters for all other providers
+            # Remove previously stored extra params (all keys except reserved ones)
+            reserved_keys = {
+                "fal_aspect_ratio",
+                "fal_resolution",
+                "fal_image_size",
+                "image_config",
+            }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            extra = parse_generic_params_json(extra_params)
+            for key, val in extra.items():
+                if key not in reserved_keys and val is not None:
+                    params_value[key] = val
+        if (upscale_choice or "").strip():
+            (
+                upscale_provider_value,
+                upscale_model_value,
+                upscale_topaz_model_id_value,
+            ) = parse_profile_upscale_choice(session, upscale_choice)
+        else:
+            # Backward-compatible fallback for older form payloads.
+            upscale_provider_value = validate_profile_upscale_provider(upscale_provider)
+            upscale_model_value = (
+                validate_profile_upscale_model(upscale_model)
+                if upscale_provider_value == "local"
+                else None
+            )
+            upscale_topaz_model_id_value = None
         normalized_category_ids = normalize_category_ids(category_ids)
         categories = crud.list_categories_by_ids(session, normalized_category_ids)
         if len(categories) != len(normalized_category_ids):
@@ -2094,7 +2837,9 @@ def update_profile(
             n_images=max(1, n_images),
             seed=parse_optional_int(seed),
             output_format=(output_format.strip().lower() or "png"),
+            upscale_provider=upscale_provider_value,
             upscale_model=upscale_model_value,
+            upscale_topaz_model_id=upscale_topaz_model_id_value,
             params_json=params_value,
             categories=categories,
         )
@@ -2127,24 +2872,23 @@ def delete_profile(
     return RedirectResponse(url="/profiles", status_code=303)
 
 
-@app.get("/gallery", response_class=HTMLResponse)
-def gallery_page(
-    request: Request,
-    page: int = Query(default=1, ge=1),
-    profile_name: str | None = Query(default=None),
-    provider: str | None = Query(default=None),
-    q: str | None = Query(default=None),
-    category_ids: list[int] = Query(default=[]),
-    min_rating: str | None = Query(default=None),
-    unrated: bool = Query(default=False),
-    time_preset: str | None = Query(default="today"),
-    date_from: str | None = Query(default=None),
-    date_to: str | None = Query(default=None),
-    thumb_size: str | None = Query(default="md"),
-    message: str | None = Query(default=None),
-    error: str | None = Query(default=None),
-    session: Session = Depends(get_session),
-) -> HTMLResponse:
+def _parse_gallery_filters(
+    profile_name: str | None,
+    provider: str | None,
+    q: str | None,
+    category_ids: list[int],
+    min_rating: str | None,
+    unrated: bool,
+    time_preset: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    thumb_size: str | None,
+) -> dict[str, Any]:
+    """Parse and normalise gallery filter query parameters.
+
+    Returns a dict with all normalised values and derived fields ready for
+    both template rendering and ``gallery_service.list_assets``.
+    """
     normalized_category_ids = normalize_category_ids(category_ids)
     parsed_min_rating: int | None = None
     try:
@@ -2171,19 +2915,6 @@ def gallery_page(
         to_date=parsed_date_to,
     )
     thumb_size_value = normalize_thumb_size(thumb_size)
-    page_data = gallery_service.list_assets(
-        session,
-        page=page,
-        profile_name=profile_name or None,
-        provider=provider or None,
-        prompt_query=q or None,
-        category_ids=normalized_category_ids or None,
-        min_rating=None if unrated else min_rating_value,
-        unrated_only=unrated,
-        created_after=created_after,
-        created_before=created_before,
-    )
-    options = gallery_service.list_filter_options(session)
 
     filter_params: dict[str, Any] = {}
     if profile_name:
@@ -2203,11 +2934,73 @@ def gallery_page(
         filter_params["date_from"] = parsed_date_from.isoformat()
     if parsed_date_to is not None:
         filter_params["date_to"] = parsed_date_to.isoformat()
-    gallery_query = urlencode(filter_params, doseq=True)
 
-    return_to_params: dict[str, Any] = {"page": page, "thumb_size": thumb_size_value}
+    gallery_query = urlencode(filter_params, doseq=True)
+    return_to_params: dict[str, Any] = {"thumb_size": thumb_size_value}
     return_to_params.update(filter_params)
     return_to = f"/gallery?{urlencode(return_to_params, doseq=True)}"
+
+    return {
+        "normalized_category_ids": normalized_category_ids,
+        "min_rating_value": min_rating_value,
+        "time_preset_value": time_preset_value,
+        "parsed_date_from": parsed_date_from,
+        "parsed_date_to": parsed_date_to,
+        "created_after": created_after,
+        "created_before": created_before,
+        "thumb_size_value": thumb_size_value,
+        "filter_params": filter_params,
+        "gallery_query": gallery_query,
+        "return_to": return_to,
+    }
+
+
+@app.get("/gallery", response_class=HTMLResponse)
+def gallery_page(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    profile_name: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    category_ids: list[int] = Query(default=[]),
+    min_rating: str | None = Query(default=None),
+    unrated: bool = Query(default=False),
+    time_preset: str | None = Query(default="today"),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    thumb_size: str | None = Query(default="md"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    filters = _parse_gallery_filters(
+        profile_name=profile_name,
+        provider=provider,
+        q=q,
+        category_ids=category_ids,
+        min_rating=min_rating,
+        unrated=unrated,
+        time_preset=time_preset,
+        date_from=date_from,
+        date_to=date_to,
+        thumb_size=thumb_size,
+    )
+    page_data = gallery_service.list_assets(
+        session,
+        page=page,
+        profile_name=profile_name or None,
+        provider=provider or None,
+        prompt_query=q or None,
+        category_ids=filters["normalized_category_ids"] or None,
+        min_rating=None if unrated else filters["min_rating_value"],
+        unrated_only=unrated,
+        created_after=filters["created_after"],
+        created_before=filters["created_before"],
+    )
+    options = gallery_service.list_filter_options(session)
+
+    parsed_date_from = filters["parsed_date_from"]
+    parsed_date_to = filters["parsed_date_to"]
 
     return templates.TemplateResponse(
         request,
@@ -2218,19 +3011,73 @@ def gallery_page(
             "profile_name": profile_name or "",
             "provider": provider or "",
             "q": q or "",
-            "selected_category_ids": normalized_category_ids,
-            "min_rating": min_rating_value,
+            "selected_category_ids": filters["normalized_category_ids"],
+            "min_rating": filters["min_rating_value"],
             "unrated_only": unrated,
-            "time_preset": time_preset_value,
+            "time_preset": filters["time_preset_value"],
             "date_from": parsed_date_from.isoformat() if parsed_date_from else "",
             "date_to": parsed_date_to.isoformat() if parsed_date_to else "",
-            "thumb_size": thumb_size_value,
-            "gallery_query": gallery_query,
-            "return_to": return_to,
+            "thumb_size": filters["thumb_size_value"],
+            "gallery_query": filters["gallery_query"],
+            "return_to": filters["return_to"],
             "filter_options": options,
             "message": message or "",
             "error": error or "",
             "hide_header": True,
+        },
+    )
+
+
+@app.get("/gallery/items", response_class=HTMLResponse)
+def gallery_items(
+    request: Request,
+    page: int = Query(default=2, ge=1),
+    profile_name: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    category_ids: list[int] = Query(default=[]),
+    min_rating: str | None = Query(default=None),
+    unrated: bool = Query(default=False),
+    time_preset: str | None = Query(default="today"),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    thumb_size: str | None = Query(default="md"),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    filters = _parse_gallery_filters(
+        profile_name=profile_name,
+        provider=provider,
+        q=q,
+        category_ids=category_ids,
+        min_rating=min_rating,
+        unrated=unrated,
+        time_preset=time_preset,
+        date_from=date_from,
+        date_to=date_to,
+        thumb_size=thumb_size,
+    )
+    page_data = gallery_service.list_assets(
+        session,
+        page=page,
+        profile_name=profile_name or None,
+        provider=provider or None,
+        prompt_query=q or None,
+        category_ids=filters["normalized_category_ids"] or None,
+        min_rating=None if unrated else filters["min_rating_value"],
+        unrated_only=unrated,
+        created_after=filters["created_after"],
+        created_before=filters["created_before"],
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/gallery_items.html",
+        {
+            "request": request,
+            "page_data": page_data,
+            "thumb_size": filters["thumb_size_value"],
+            "gallery_query": filters["gallery_query"],
+            "return_to": filters["return_to"],
         },
     )
 
@@ -2447,6 +3294,7 @@ def rerun_generation(
     request: Request,
     generation_id: int,
     background_tasks: BackgroundTasks,
+    view: str = Query(default="default"),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -2458,9 +3306,14 @@ def rerun_generation(
     generation = generation_service.create_generation_from_snapshot(session, source)
     generation_service.enqueue(background_tasks, generation.id)
 
+    template_name = (
+        "fragments/chat_generation_item.html"
+        if view.strip().lower() == "chat"
+        else "fragments/job_status.html"
+    )
     return templates.TemplateResponse(
         request,
-        "fragments/job_status.html",
+        template_name,
         {
             "request": request,
             "generation": generation,

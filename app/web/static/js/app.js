@@ -12,6 +12,9 @@
 (function () {
   'use strict';
 
+  var THEME_STORAGE_KEY = 'lumigen_theme';
+  var mediaThemeListenerBound = false;
+
   // ==========================================================================
   // Utility Functions
   // ==========================================================================
@@ -28,6 +31,83 @@
     var meta = document.querySelector('meta[name="csrf-token"]');
     if (!meta) return '';
     return String(meta.getAttribute('content') || '').trim();
+  }
+
+  function getSavedTheme() {
+    try {
+      var saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'light' || saved === 'dark' || saved === 'system') {
+        return saved;
+      }
+    } catch (_error) {
+      // localStorage can be unavailable in strict browser modes.
+    }
+    return 'system';
+  }
+
+  function getSystemTheme() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  function applyTheme(theme) {
+    var effective = theme === 'system' ? getSystemTheme() : theme;
+    var normalized = effective === 'light' ? 'light' : 'dark';
+    var root = document.documentElement;
+    var body = document.body;
+    var colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+
+    root.classList.toggle('dark', normalized === 'dark');
+    root.style.colorScheme = normalized;
+    if (body) {
+      body.style.colorScheme = normalized;
+    }
+    if (colorSchemeMeta) {
+      colorSchemeMeta.setAttribute('content', normalized === 'light' ? 'light dark' : 'dark light');
+    }
+  }
+
+  function persistTheme(theme) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (_error) {
+      // Ignore persistence failures and keep runtime state only.
+    }
+  }
+
+  function initTheme() {
+    applyTheme(getSavedTheme());
+
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', function (event) {
+        if (!event || event.key !== THEME_STORAGE_KEY) return;
+        applyTheme(getSavedTheme());
+      });
+
+      // Fallback for contexts where storage events are not delivered as expected.
+      window.addEventListener('focus', function () {
+        applyTheme(getSavedTheme());
+      });
+    }
+
+    if (mediaThemeListenerBound || !window.matchMedia) return;
+    var query = window.matchMedia('(prefers-color-scheme: dark)');
+    var syncFromSystem = function () {
+      if (getSavedTheme() === 'system') {
+        applyTheme('system');
+      }
+    };
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', syncFromSystem);
+      mediaThemeListenerBound = true;
+      return;
+    }
+    if (typeof query.addListener === 'function') {
+      query.addListener(syncFromSystem);
+      mediaThemeListenerBound = true;
+    }
   }
 
   function ensurePostFormCsrfTokens() {
@@ -290,36 +370,44 @@
     function syncProviderSpecificOptions(selected) {
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
+      var isFal = provider === 'fal';
+      var useCustomDimensions = !isOpenRouter && !isFal;
       
       var dimensionControls = form.querySelector('[data-dimension-controls]');
       var standardDimensions = form.querySelector('[data-standard-dimensions]');
       var openrouterControls = form.querySelector('[data-openrouter-controls]');
+      var falControls = form.querySelector('[data-fal-controls]');
       var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
       var imageSizeInput = form.querySelector('[name="image_size"]');
+      var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+      var falResolutionInput = form.querySelector('[name="fal_resolution"]');
       
       // Toggle visibility based on provider
       if (dimensionControls) {
-        dimensionControls.classList.toggle('hidden', isOpenRouter);
+        dimensionControls.classList.toggle('hidden', !useCustomDimensions);
       }
       if (standardDimensions) {
-        standardDimensions.classList.toggle('hidden', isOpenRouter);
+        standardDimensions.classList.toggle('hidden', !useCustomDimensions);
       }
       if (openrouterControls) {
         openrouterControls.classList.toggle('hidden', !isOpenRouter);
       }
+      if (falControls) {
+        falControls.classList.toggle('hidden', !isFal);
+      }
       
       // Disable/enable and clear values based on provider
       if (widthInput) {
-        widthInput.disabled = isOpenRouter;
-        if (isOpenRouter) widthInput.value = '';
+        widthInput.disabled = !useCustomDimensions;
+        if (!useCustomDimensions) widthInput.value = '';
       }
       if (heightInput) {
-        heightInput.disabled = isOpenRouter;
-        if (isOpenRouter) heightInput.value = '';
+        heightInput.disabled = !useCustomDimensions;
+        if (!useCustomDimensions) heightInput.value = '';
       }
       if (dimensionPreset) {
-        dimensionPreset.disabled = isOpenRouter;
-        if (isOpenRouter) {
+        dimensionPreset.disabled = !useCustomDimensions;
+        if (!useCustomDimensions) {
           dimensionPreset.value = '';
         }
       }
@@ -331,6 +419,26 @@
         imageSizeInput.disabled = !isOpenRouter;
         if (!isOpenRouter) imageSizeInput.value = '';
       }
+      if (falAspectRatioInput) {
+        falAspectRatioInput.disabled = !isFal;
+        if (!isFal) falAspectRatioInput.value = '';
+      }
+      if (falResolutionInput) {
+        falResolutionInput.disabled = !isFal;
+        if (!isFal) falResolutionInput.value = '';
+      }
+    }
+
+    function legacyFalImageSizeToRatio(value) {
+      var map = {
+        square_hd: '1:1',
+        square: '1:1',
+        portrait_4_3: '3:4',
+        portrait_16_9: '9:16',
+        landscape_4_3: '4:3',
+        landscape_16_9: '16:9'
+      };
+      return map[String(value || '').trim()] || '';
     }
 
     function applyProfileDefaults() {
@@ -341,6 +449,20 @@
       if (heightInput) heightInput.value = selected.dataset.height || '';
       if (imagesInput) imagesInput.value = selected.dataset.nImages || '';
       if (seedInput) seedInput.value = selected.dataset.seed || '';
+
+      var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+      var falResolutionInput = form.querySelector('[name="fal_resolution"]');
+      if (falAspectRatioInput) {
+        var ratio = String(selected.dataset.falAspectRatio || '').trim();
+        if (!ratio) {
+          ratio = legacyFalImageSizeToRatio(selected.dataset.falImageSize || '');
+        }
+        falAspectRatioInput.value = ratio;
+      }
+      if (falResolutionInput) {
+        falResolutionInput.value = String(selected.dataset.falResolution || '').trim();
+      }
+
       syncProviderSpecificOptions(selected);
 
       syncDimensionPreset(widthInput, heightInput, dimensionPreset);
@@ -409,17 +531,17 @@
       inputFileState.slice(0, 5).forEach(function (file, index) {
         var objectUrl = URL.createObjectURL(file);
         var wrapper = document.createElement('div');
-        wrapper.className = 'preview-image-wrapper';
+        wrapper.className = 'relative h-20 w-20 overflow-hidden rounded-xl border border-slate-300/55 bg-white/95 shadow-md shadow-slate-200/60 dark:border-white/15 dark:bg-slate-900/80 dark:shadow-slate-950/60';
         var img = document.createElement('img');
         img.src = objectUrl;
         img.alt = file.name || 'input image';
-        img.className = 'preview-image';
+        img.className = 'h-full w-full object-cover';
         img.addEventListener('load', function () {
           URL.revokeObjectURL(objectUrl);
         });
         var removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'preview-image-remove';
+        removeBtn.className = 'absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300/85 bg-rose-500/90 text-[11px] font-bold text-slate-900 transition hover:border-rose-200 hover:bg-rose-500/80 dark:border-white/35 dark:bg-slate-900/90 dark:text-white dark:hover:border-rose-200 dark:hover:bg-rose-500/80';
         removeBtn.textContent = 'x';
         if (!canUseDataTransfer) {
           removeBtn.disabled = true;
@@ -564,9 +686,8 @@
 
         enhanceBtn.disabled = true;
         enhanceBtn.setAttribute('aria-busy', 'true');
-        var enhanceIcon = enhanceBtn.querySelector('.material-symbols-outlined');
+        var enhanceIcon = enhanceBtn.querySelector('.bi');
         if (enhanceIcon) {
-          enhanceIcon.textContent = 'auto_fix_high';
           enhanceIcon.classList.add('animate-pulse');
         }
 
@@ -594,7 +715,6 @@
           enhanceBtn.disabled = false;
           enhanceBtn.removeAttribute('aria-busy');
           if (enhanceIcon) {
-            enhanceIcon.textContent = 'auto_fix_high';
             enhanceIcon.classList.remove('animate-pulse');
           }
         }
@@ -623,22 +743,27 @@
     var openrouterSection = form.querySelector('[data-profile-openrouter]');
     var openrouterRatio = form.querySelector('[data-profile-openrouter-ratio]');
     var openrouterSize = form.querySelector('[data-profile-openrouter-size]');
+    var falSection = form.querySelector('[data-profile-fal]');
+    var falAspectRatio = form.querySelector('[name="fal_aspect_ratio"]');
+    var falResolution = form.querySelector('[name="fal_resolution"]');
 
     function syncProfileProviderState() {
       var selected = modelSelect.options[modelSelect.selectedIndex];
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
+      var isFal = provider === 'fal';
+      var showDimensions = !isOpenRouter && !isFal;
 
       if (dimensionsSection) {
-        dimensionsSection.classList.toggle('hidden', isOpenRouter);
+        dimensionsSection.classList.toggle('hidden', !showDimensions);
       }
       if (widthInput) {
-        widthInput.disabled = isOpenRouter;
-        if (isOpenRouter) widthInput.value = '';
+        widthInput.disabled = !showDimensions;
+        if (!showDimensions) widthInput.value = '';
       }
       if (heightInput) {
-        heightInput.disabled = isOpenRouter;
-        if (isOpenRouter) heightInput.value = '';
+        heightInput.disabled = !showDimensions;
+        if (!showDimensions) heightInput.value = '';
       }
 
       if (openrouterSection) {
@@ -651,6 +776,18 @@
       if (openrouterSize) {
         openrouterSize.disabled = !isOpenRouter;
         if (!isOpenRouter) openrouterSize.value = '';
+      }
+
+      if (falSection) {
+        falSection.classList.toggle('hidden', !isFal);
+      }
+      if (falAspectRatio) {
+        falAspectRatio.disabled = !isFal;
+        if (!isFal) falAspectRatio.value = '';
+      }
+      if (falResolution) {
+        falResolution.disabled = !isFal;
+        if (!isFal) falResolution.value = '';
       }
     }
 
@@ -958,16 +1095,15 @@
   // ==========================================================================
 
 function setupGallerySelection() {
+  var panel = document.querySelector('[data-gallery-selection-panel]');
   var bulkForm = document.getElementById('bulk-action-form');
-  if (!bulkForm) return;
+  if (!panel || !bulkForm) return;
 
-  var cards = Array.from(document.querySelectorAll('[data-gallery-card][data-gallery-select]'));
-  var selectAll = document.querySelector('[data-gallery-select-all]');
   var countLabel = document.querySelector('[data-gallery-selection-count]');
   var actionButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
+  var deselectAllBtn = document.querySelector('[data-gallery-deselect-all]');
 
-  // Create hidden inputs for form submission
-  var hiddenInputsContainer = bulkForm;
+  // Map of assetId -> hidden input element for form submission
   var hiddenInputs = {};
 
   function createOrUpdateHiddenInput(assetId, checked) {
@@ -978,7 +1114,7 @@ function setupGallerySelection() {
         input.type = 'hidden';
         input.name = inputName;
         input.value = assetId;
-        hiddenInputsContainer.appendChild(input);
+        bulkForm.appendChild(input);
         hiddenInputs[assetId] = input;
       }
     } else {
@@ -990,82 +1126,71 @@ function setupGallerySelection() {
   }
 
   function updateState() {
-    var selected = 0;
-    cards.forEach(function (card) {
-      var isSelected = card.dataset.selected === 'true';
-      if (isSelected) {
-        selected += 1;
-      }
-      // Toggle ring styling for selected cards
-      card.classList.toggle('ring-sky-300', isSelected);
-      card.classList.toggle('ring-2', isSelected);
-    });
+    var selected = Object.keys(hiddenInputs).length;
 
     if (countLabel) {
       countLabel.textContent = selected + ' selected';
     }
 
+    // Show or hide the floating panel
+    panel.classList.toggle('hidden', selected === 0);
+
     actionButtons.forEach(function (button) {
       button.disabled = selected === 0;
     });
-
-    if (selectAll) {
-      if (selected === 0) {
-        selectAll.checked = false;
-        selectAll.indeterminate = false;
-      } else if (selected === cards.length) {
-        selectAll.checked = true;
-        selectAll.indeterminate = false;
-      } else {
-        selectAll.checked = false;
-        selectAll.indeterminate = true;
-      }
-    }
   }
 
-  // Click on card to toggle selection
-  cards.forEach(function (card) {
-    var clickArea = card.querySelector('[data-gallery-card-click]');
+  // Use event delegation so newly loaded cards (infinite scroll) are handled automatically
+  document.addEventListener('click', function (e) {
+    var clickArea = e.target.closest('[data-gallery-card-click]');
     if (!clickArea) return;
 
-    clickArea.addEventListener('click', function (e) {
-      // Don't toggle if clicking on a link or button or form
-      var target = e.target;
-      if (target.closest('a') || target.closest('button') || target.closest('form')) {
-        // Let default behavior happen for links (navigation) and buttons (actions)
-        return;
-      }
+    var target = e.target;
+    if (target.closest('a') || target.closest('button') || target.closest('form')) {
+      return;
+    }
 
-      // Toggle selection on click on the image area
-      var assetId = card.dataset.assetId;
-      var isSelected = card.dataset.selected === 'true';
-      card.dataset.selected = (!isSelected).toString();
-      createOrUpdateHiddenInput(assetId, !isSelected);
-      updateState();
-    });
+    var card = clickArea.closest('[data-gallery-card]');
+    if (!card) return;
 
-    clickArea.addEventListener('dblclick', function (e) {
-      var target = e.target;
-      if (target.closest('a') || target.closest('button') || target.closest('form')) {
-        return;
-      }
-
-      var detailUrl = card.dataset.assetDetailUrl;
-      if (!detailUrl) {
-        return;
-      }
-      window.location.href = detailUrl;
-    });
+    var assetId = card.dataset.assetId;
+    var isSelected = card.dataset.selected === 'true';
+    card.dataset.selected = (!isSelected).toString();
+    createOrUpdateHiddenInput(assetId, !isSelected);
+    updateState();
   });
 
-  // Select all toggle
-  if (selectAll) {
-    selectAll.addEventListener('change', function () {
-      var shouldSelect = selectAll.checked;
-      cards.forEach(function (card) {
-        card.dataset.selected = shouldSelect.toString();
-        var assetId = card.dataset.assetId;
-        createOrUpdateHiddenInput(assetId, shouldSelect);
+  document.addEventListener('dblclick', function (e) {
+    var clickArea = e.target.closest('[data-gallery-card-click]');
+    if (!clickArea) return;
+
+    var target = e.target;
+    if (target.closest('a') || target.closest('button') || target.closest('form')) {
+      return;
+    }
+
+    var card = clickArea.closest('[data-gallery-card]');
+    if (!card) return;
+
+    var detailTrigger = card.querySelector('[data-asset-detail-trigger]');
+    if (detailTrigger) {
+      // Reuse the existing HTMX-backed trigger so the standard asset dialog opens.
+      detailTrigger.click();
+      return;
+    }
+
+    var detailUrl = card.dataset.assetDetailUrl;
+    if (!detailUrl) return;
+    window.location.href = detailUrl;
+  });
+
+  // Deselect all button clears selection and hides the panel
+  if (deselectAllBtn && deselectAllBtn.dataset.bound !== '1') {
+    deselectAllBtn.dataset.bound = '1';
+    deselectAllBtn.addEventListener('click', function () {
+      document.querySelectorAll('[data-gallery-card][data-selected="true"]').forEach(function (card) {
+        card.dataset.selected = 'false';
+        createOrUpdateHiddenInput(card.dataset.assetId, false);
       });
       updateState();
     });
@@ -1075,10 +1200,11 @@ function setupGallerySelection() {
 }
 
 function setupGalleryRatings() {
-  var ratingForms = Array.from(document.querySelectorAll('[data-rating-form]'));
+  var ratingForms = Array.from(document.querySelectorAll('[data-rating-form]:not([data-ratings-bound])'));
   if (ratingForms.length === 0) return;
 
   ratingForms.forEach(function (form) {
+    form.setAttribute('data-ratings-bound', '1');
     var stars = Array.from(form.querySelectorAll('[data-rating-star]'));
     var ratingInput = form.querySelector('[data-rating-input]');
     if (!ratingInput || stars.length === 0) return;
@@ -1092,8 +1218,10 @@ function setupGalleryRatings() {
       stars.forEach(function (star) {
         var value = parseInt(star.getAttribute('data-rating-value') || '0', 10);
         var isActive = Number.isFinite(value) && value <= activeRating;
-        star.classList.toggle('text-amber-300', isActive);
-        star.classList.toggle('text-slate-600', !isActive);
+        star.classList.toggle('text-amber-500', isActive);
+        star.classList.toggle('dark:text-amber-300', isActive);
+        star.classList.toggle('text-slate-500', !isActive);
+        star.classList.toggle('dark:text-slate-600', !isActive);
       });
     }
 
@@ -1170,46 +1298,79 @@ function setupGalleryRatings() {
   // ==========================================================================
 
   function setupUserMenu() {
+    var settingsDialog = document.querySelector('[data-user-settings-dialog]');
+    var settingsCloseButton = settingsDialog ? settingsDialog.querySelector('[data-user-settings-close]') : null;
+    var themeSelect = settingsDialog ? settingsDialog.querySelector('[data-user-theme-select]') : null;
+
+    function closeSettingsDialog() {
+      if (settingsDialog && settingsDialog.open) {
+        settingsDialog.close();
+      }
+    }
+
+    function openSettingsDialog() {
+      if (settingsDialog && !settingsDialog.open) {
+        settingsDialog.showModal();
+      }
+    }
+
+    if (settingsCloseButton && settingsCloseButton.dataset.bound !== '1') {
+      settingsCloseButton.dataset.bound = '1';
+      settingsCloseButton.addEventListener('click', closeSettingsDialog);
+    }
+
+    if (settingsDialog && settingsDialog.dataset.bound !== '1') {
+      settingsDialog.dataset.bound = '1';
+      settingsDialog.addEventListener('click', function (event) {
+        var rect = settingsDialog.getBoundingClientRect();
+        var isOutside =
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom;
+        if (isOutside) {
+          closeSettingsDialog();
+        }
+      });
+    }
+
+    if (themeSelect && themeSelect.dataset.bound !== '1') {
+      themeSelect.dataset.bound = '1';
+      themeSelect.value = getSavedTheme();
+      themeSelect.addEventListener('change', function () {
+        var selected = 'system';
+        if (themeSelect.value === 'light' || themeSelect.value === 'dark') {
+          selected = themeSelect.value;
+        }
+        applyTheme(selected);
+        persistTheme(selected);
+      });
+    }
+
     document.querySelectorAll('[data-user-menu-container]').forEach(function (container) {
-      var toggle = container.querySelector('[data-user-menu-toggle]');
-      var menu = container.querySelector('[data-user-menu]');
-      var chevron = container.querySelector('[data-user-menu-chevron]');
-      if (!toggle || !menu) return;
-
-      function openMenu() {
-        menu.classList.remove('hidden');
-        toggle.setAttribute('aria-expanded', 'true');
-        if (chevron) chevron.textContent = 'expand_less';
-      }
-
-      function closeMenu() {
-        menu.classList.add('hidden');
-        toggle.setAttribute('aria-expanded', 'false');
-        if (chevron) chevron.textContent = 'expand_more';
-      }
-
-      toggle.addEventListener('click', function (event) {
-        event.stopPropagation();
-        if (menu.classList.contains('hidden')) {
-          openMenu();
-        } else {
-          closeMenu();
-        }
-      });
-
-      // Close when clicking outside the container
-      document.addEventListener('click', function (event) {
-        if (!container.contains(event.target)) {
-          closeMenu();
-        }
-      });
+      var settingsButton = container.querySelector('[data-user-settings-open]');
 
       // Close on Escape key
       document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
-          closeMenu();
+          if (container && container.open) {
+            container.open = false;
+          }
+          closeSettingsDialog();
         }
       });
+
+      if (settingsButton && settingsButton.dataset.bound !== '1') {
+        settingsButton.dataset.bound = '1';
+        settingsButton.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (container && container.open) {
+            container.open = false;
+          }
+          openSettingsDialog();
+        });
+      }
     });
   }
 
@@ -1218,6 +1379,7 @@ function setupGalleryRatings() {
   // ==========================================================================
 
   function init() {
+    initTheme();
     ensurePostFormCsrfTokens();
     setupHtmxCsrf();
     setupConfirmDialog();
@@ -1241,6 +1403,7 @@ function setupGalleryRatings() {
 
   document.body.addEventListener('htmx:afterSwap', function () {
     ensurePostFormCsrfTokens();
+    setupGalleryRatings();
   });
 
 })();

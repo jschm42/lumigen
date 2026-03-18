@@ -15,6 +15,7 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
@@ -23,6 +24,8 @@ from app.providers.stub_adapter import StubAdapter
 
 @dataclass
 class ProviderPolicy:
+    """Concurrency and retry settings applied to a specific provider's executor."""
+
     max_concurrent: int
     min_interval_ms: int
     retry_max_attempts: int
@@ -31,6 +34,8 @@ class ProviderPolicy:
 
 
 class ProviderExecutor:
+    """Enforces concurrency limits, request spacing, and exponential-backoff retries for a provider."""
+
     def __init__(self, policy: ProviderPolicy) -> None:
         self._policy = policy
         self._semaphore = asyncio.Semaphore(max(1, policy.max_concurrent))
@@ -50,6 +55,7 @@ class ProviderExecutor:
             self._last_started_at = now
 
     async def run(self, func) -> ProviderGenerationResult:  # type: ignore[no-untyped-def]
+        """Execute *func* under the semaphore and spacing lock, retrying on rate-limit errors."""
         attempts = max(1, self._policy.retry_max_attempts)
         for attempt in range(1, attempts + 1):
             try:
@@ -74,6 +80,8 @@ class ProviderExecutor:
 
 
 class ProviderRegistry:
+    """Registry that holds all provider adapters and dispatches generation requests through their executors."""
+
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._adapters: dict[str, ProviderAdapter] = {}
@@ -86,14 +94,28 @@ class ProviderRegistry:
         self.register(OpenRouterAdapter())
         self.register(GoogleAdapter())
         self.register(BFLAdapter())
+        self.register(FalAdapter())
 
     def register(self, adapter: ProviderAdapter) -> None:
+        """Register *adapter* under its ``name`` attribute, replacing any existing entry."""
         self._adapters[adapter.name] = adapter
 
     def provider_names(self) -> list[str]:
+        """Return a sorted list of all registered provider names."""
         return sorted(self._adapters.keys())
 
+    def provider_meta(self) -> dict[str, dict[str, str]]:
+        """Return a dict mapping each provider name to its display_name and homepage_url."""
+        return {
+            name: {
+                "display_name": adapter.display_name,
+                "homepage_url": adapter.homepage_url,
+            }
+            for name, adapter in self._adapters.items()
+        }
+
     def get(self, provider: str) -> ProviderAdapter:
+        """Return the adapter for *provider*, raising ``ProviderError`` if unknown."""
         adapter = self._adapters.get(provider)
         if not adapter:
             raise ProviderError(f"Unknown provider: {provider}")
@@ -133,12 +155,14 @@ class ProviderRegistry:
     async def generate(
         self, provider: str, request: ProviderGenerationRequest
     ) -> ProviderGenerationResult:
+        """Dispatch *request* to the named *provider* via its executor and return the result."""
         adapter = self.get(provider)
         settings = self._settings_for_provider(provider, request.api_key)
         executor = self._executor_for(provider)
         return await executor.run(lambda: adapter.generate(request, settings))
 
     async def list_models(self, provider: str) -> list[str]:
+        """Return sorted, deduplicated model IDs available from *provider*."""
         adapter = self.get(provider)
         models = await adapter.list_models(self._settings_for_provider(provider, None))
         normalized = [str(item).strip() for item in models if str(item).strip()]
@@ -157,6 +181,8 @@ class ProviderRegistry:
             update["google_api_key"] = api_key
         elif provider == "bfl":
             update["bfl_api_key"] = api_key
+        elif provider == "fal":
+            update["fal_api_key"] = api_key
         else:
             return self._settings
 

@@ -164,7 +164,7 @@ Use a narrower trusted host/IP list instead of `*` when possible.
 7. Optional smoke check:
 
 ```bash
-python3.12 -m pytest -q tests/routes tests/frontend
+python3.12 -m pytest -q tests/routes tests/ui_routes
 ```
 
 ### Dev-only onboarding reset
@@ -194,6 +194,24 @@ Set provider API keys in `.env` for default usage:
 - `OPENROUTER_API_KEY`
 - `GOOGLE_API_KEY`
 - `BFL_API_KEY`
+- `FAL_API_KEY`
+
+### FAL.ai
+
+Lumigen uses the FAL.ai queue API for the `fal` provider.
+
+- API docs: <https://docs.fal.ai/examples/model-apis/generate-images-from-text>
+- Set `FAL_API_KEY` in `.env`.
+
+Popular models:
+
+- `fal-ai/flux/schnell` — FLUX Schnell (fast)
+- `fal-ai/flux/dev` — FLUX Dev
+- `fal-ai/flux-pro` — FLUX Pro
+- `fal-ai/flux-pro/v1.1` — FLUX Pro v1.1
+- `fal-ai/flux-pro/v1.1-ultra` — FLUX Pro v1.1 Ultra
+
+You can pass any additional FAL model parameters via the profile/request params JSON field.
 
 ### Google (Gemini / Imagen)
 
@@ -355,13 +373,58 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 - Backend tests run with `pytest`.
 - Run all backend tests: `pytest -q`
 - Run focused suites: `pytest -q tests/unit` and `pytest -q tests/routes`
-- Frontend route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/frontend`
+- UI route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/ui_routes`
 - Coverage baseline (terminal report): `pytest --cov=app --cov-report=term-missing -q`
 
-## Optional frontend migration path
+## Theme stylesheet structure
 
-The repository can include a Next.js frontend under `frontend/` as a migration path from server-rendered templates. It reads from the same SQLite data and forwards generation requests to FastAPI.
+Lumigen now keeps theme styles split for easier manual edits while preserving one stable include in templates.
+
+- `app/web/static/css/app.css`: entry file imported by `layout.html`.
+- `app/web/static/css/theme-base.css`: shared styles (fonts, dialogs, utility classes, non-theme behavior).
+- `app/web/static/css/theme-dark.css`: dark-theme-only overrides (add rules here when needed).
+- `app/web/static/css/theme-light.css`: all `body[data-theme="light"]` overrides.
+
+Editing workflow:
+
+1. Put cross-theme styles in `theme-base.css`.
+2. Put light-mode adjustments in `theme-light.css`.
+3. Put dark-mode adjustments in `theme-dark.css`.
+4. Keep `app.css` as imports only so existing template references remain unchanged.
+
+## Settings ideas (roadmap)
+
+Candidate options for the new user settings dialog:
+
+1. Theme: `dark` / `light` / `system`.
+2. Session list density: compact vs comfortable rows.
+3. Session list behavior: infinite-scroll toggle and page size.
+4. Session visibility: show/hide archived sessions.
+5. Default workspace on open: chat/profiles/gallery/admin.
+6. Chat thumbnail default size: `sm` / `md` / `lg`.
+7. Prompt input submit behavior: Enter vs Ctrl+Enter.
+8. Auto-open advanced generation options.
+9. Confirm dialogs toggle for archive/delete actions.
+10. Gallery defaults: time preset, sort, and minimum rating.
+11. Language setting (`de` / `en`) for future i18n.
+12. Accessibility profile: larger text and stronger contrast.
+
+## Version Management
+
+The app version is managed centrally through a `VERSION` file in the project root. This version is displayed in both the user menu and the admin about section.
+
+To update the version, you can either:
+1. Manually edit the `VERSION` file in the project root
+2. Use the provided script: `python scripts/update_version.py <new_version>`
+
+Example: `python scripts/update_version.py 1.2.3`
 
 ## License
 
 See `LICENSE`.
+
+Third-party asset licenses:
+
+- Bootstrap Icons font (`app/web/static/fonts/bootstrap-icons.woff2`, `app/web/static/fonts/bootstrap-icons.woff`): MIT
+- See `licenses/bootstrap-icons-MIT.txt` and `licenses/bootstrap-icons-NOTICE.md`
+- Overview: `THIRD_PARTY_LICENSES.md`

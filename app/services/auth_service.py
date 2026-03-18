@@ -8,7 +8,10 @@ import secrets
 
 
 class AuthService:
+    """Service for hashing and verifying passwords using the scrypt algorithm."""
+
     def hash_password(self, password: str) -> str:
+        """Hash *password* with scrypt and return an encoded string including the salt."""
         raw = (password or "").strip()
         if len(raw) < 8:
             raise ValueError("Password must be at least 8 characters")
@@ -36,6 +39,7 @@ class AuthService:
         )
 
     def verify_password(self, password: str, encoded_hash: str) -> bool:
+        """Return ``True`` if *password* matches the scrypt-encoded *encoded_hash*."""
         raw = (password or "").strip()
         if not raw or not encoded_hash:
             return False

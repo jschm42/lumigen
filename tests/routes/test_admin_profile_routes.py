@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 
 class _FakeSession:
@@ -270,6 +271,70 @@ def test_admin_update_enhancement_clear_existing_key(client, app_module, monkeyp
     assert called["api_key_encrypted"] is None
 
 
+def test_admin_create_fal_model_success(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    called: dict[str, object] = {}
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    def fake_create(session, **kwargs):  # type: ignore[no-untyped-def]
+        called["session"] = session
+        called.update(kwargs)
+
+    monkeypatch.setattr(app_module.crud, "create_topaz_upscale_model", fake_create)
+
+    response = client.post(
+        "/admin/fal-models",
+        data={
+            "name": "Topaz Standard",
+            "model_identifier": "fal-ai/topaz/upscale/image",
+            "params_json": '{"creativity": 0.25}',
+            "is_enabled": "on",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin?section=upscaling&message=Saved"
+    assert called["session"] is fake_session
+    assert called["name"] == "Topaz Standard"
+    assert called["model_identifier"] == "fal-ai/topaz/upscale/image"
+    assert called["params_json"] == {"creativity": 0.25}
+    assert called["is_enabled"] is True
+
+
+def test_admin_create_fal_model_invalid_json_preserves_form_draft(client, app_module) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.post(
+        "/admin/fal-models",
+        data={
+            "name": "Broken FAL",
+            "model_identifier": "fal-ai/topaz/upscale/image",
+            "params_json": '{"creativity": }',
+            "is_enabled": "on",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    parsed = urlsplit(response.headers["location"])
+    query = parse_qs(parsed.query)
+    assert parsed.path == "/admin"
+    assert query["section"] == ["upscaling"]
+    assert query["fal_model_create_open"] == ["1"]
+    assert query["fal_model_name"] == ["Broken FAL"]
+    assert query["fal_model_identifier"] == ["fal-ai/topaz/upscale/image"]
+    assert query["fal_model_params_json"] == ['{"creativity": }']
+    assert query["fal_model_is_enabled"] == ["1"]
+    assert "error" in query
+
+
 def test_create_profile_openrouter_ignores_size_and_saves_params(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
     called: dict[str, object] = {}
@@ -316,6 +381,50 @@ def test_create_profile_openrouter_ignores_size_and_saves_params(client, app_mod
     assert called["output_format"] == "webp"
     assert called["params_json"]["image_config"]["aspect_ratio"] == "1:1"
     assert called["params_json"]["image_config"]["image_size"] == "1K"
+
+
+def test_create_profile_with_fal_model_upscale_choice(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    called: dict[str, object] = {}
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_model_config",
+        lambda _session, _id: SimpleNamespace(id=3, provider="stub", model="stub-model"),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_topaz_upscale_model",
+        lambda _session, _id: SimpleNamespace(id=5, is_enabled=True, model_identifier="fal-ai/topaz/upscale/image"),
+    )
+    monkeypatch.setattr(app_module.crud, "list_categories_by_ids", lambda _session, _ids: [])
+    monkeypatch.setattr(app_module, "resolve_default_storage_template_id", lambda _session: 1)
+
+    def fake_create_profile(session, **kwargs):  # type: ignore[no-untyped-def]
+        called["session"] = session
+        called.update(kwargs)
+
+    monkeypatch.setattr(app_module.crud, "create_profile", fake_create_profile)
+
+    response = client.post(
+        "/profiles",
+        data={
+            "name": "Topaz Profile",
+            "model_config_id": "3",
+            "upscale_choice": "falm:5",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/profiles"
+    assert called["session"] is fake_session
+    assert called["upscale_provider"] == "fal"
+    assert called["upscale_model"] == "fal-ai/topaz/upscale/image"
+    assert called["upscale_topaz_model_id"] == 5
 
 
 def test_create_profile_category_mismatch_returns_error_redirect(client, app_module, monkeypatch) -> None:

@@ -31,10 +31,18 @@ from app.utils.paths import ensure_dir
 
 
 class GenerationCancelledError(ProviderError):
-    pass
+    """Raised inside a generation job when the request has been cancelled by the user."""
 
 
 class GenerationService:
+    """Orchestrates the full lifecycle of an image generation job.
+
+    Responsibilities include: building the provider request from a profile and
+    optional overrides, persisting the ``Generation`` row, enqueuing the async
+    background job, writing image/sidecar/thumbnail files via the storage and
+    sidecar services, and updating the final job status.
+    """
+
     def __init__(
         self,
         settings: Settings,
@@ -44,6 +52,7 @@ class GenerationService:
         sidecar_service: SidecarService,
         model_config_service: ModelConfigService | None = None,
         upscale_service: UpscaleService | None = None,
+        fal_upscale_service=None,
     ) -> None:
         self.settings = settings
         self.registry = registry
@@ -52,6 +61,7 @@ class GenerationService:
         self.sidecar_service = sidecar_service
         self.model_config_service = model_config_service
         self.upscale_service = upscale_service
+        self.fal_upscale_service = fal_upscale_service
 
     def create_generation_from_profile(
         self,
@@ -60,6 +70,7 @@ class GenerationService:
         prompt_user: str,
         overrides: dict[str, Any] | None = None,
     ) -> Generation:
+        """Create and persist a queued ``Generation`` row derived from *profile* and optional *overrides*."""
         prompt_final = self._compose_prompt(profile.base_prompt, prompt_user)
         storage_template = profile.storage_template
         if storage_template is None:
@@ -75,6 +86,13 @@ class GenerationService:
             params_json = copy.deepcopy(params_json_override)
         else:
             params_json = copy.deepcopy(profile.params_json or {})
+
+        # Resolve upscale provider and model from overrides or profile
+        if "upscale_provider" in effective_overrides:
+            upscale_provider = effective_overrides.get("upscale_provider") or None
+        else:
+            upscale_provider = profile.upscale_provider or None
+
         if "upscale_model" in effective_overrides:
             upscale_model_override = effective_overrides.get("upscale_model")
             if isinstance(upscale_model_override, str):
@@ -83,6 +101,16 @@ class GenerationService:
                 upscale_model = None
         else:
             upscale_model = str(profile.upscale_model or "").strip() or None
+
+        if "upscale_topaz_model_id" in effective_overrides:
+            upscale_topaz_model_id = self._parse_optional_int(
+                effective_overrides.get("upscale_topaz_model_id")
+            )
+        else:
+            upscale_topaz_model_id = self._parse_optional_int(
+                getattr(profile, "upscale_topaz_model_id", None)
+            )
+
         input_images = effective_overrides.get("input_images")
         chat_session_id = str(effective_overrides.get("chat_session_id") or "").strip()
         profile_category_ids = [item.id for item in profile.categories]
@@ -102,7 +130,9 @@ class GenerationService:
             "n_images": profile.n_images,
             "seed": profile.seed,
             "output_format": profile.output_format,
+            "upscale_provider": profile.upscale_provider,
             "upscale_model": profile.upscale_model,
+            "upscale_topaz_model_id": getattr(profile, "upscale_topaz_model_id", None),
             "params_json": profile.params_json or {},
             "storage_template_id": profile.storage_template_id,
             "category_ids": profile_category_ids,
@@ -124,7 +154,9 @@ class GenerationService:
             "height": height,
             "n_images": max(1, n_images),
             "seed": seed,
+            "upscale_provider": upscale_provider,
             "upscale_model": upscale_model,
+            "upscale_topaz_model_id": upscale_topaz_model_id,
             "upscaling_active": False,
             "output_format": profile.output_format,
             "provider": profile.provider,
@@ -139,7 +171,10 @@ class GenerationService:
                 "n_images": "n_images" in effective_overrides,
                 "seed": "seed" in effective_overrides,
                 "params_json": "params_json" in effective_overrides,
+                "upscale_provider": "upscale_provider" in effective_overrides,
                 "upscale_model": "upscale_model" in effective_overrides,
+                "upscale_topaz_model_id": "upscale_topaz_model_id"
+                in effective_overrides,
                 "category_ids": "category_ids" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
                 "chat_session_id": "chat_session_id" in effective_overrides,
@@ -165,6 +200,7 @@ class GenerationService:
     def create_generation_from_snapshot(
         self, session: Session, source: Generation
     ) -> Generation:
+        """Clone *source* into a new queued generation using its frozen snapshot data."""
         profile_snapshot = copy.deepcopy(source.profile_snapshot_json or {})
         storage_snapshot = copy.deepcopy(source.storage_template_snapshot_json or {})
         request_snapshot = copy.deepcopy(source.request_snapshot_json or {})
@@ -187,11 +223,13 @@ class GenerationService:
         return crud.create_generation(session, generation)
 
     def enqueue(self, background_tasks: BackgroundTasks, generation_id: int) -> None:
+        """Add the generation job to FastAPI's background task queue."""
         background_tasks.add_task(self.run_generation_job, generation_id)
 
     def cancel_generation(
         self, session: Session, generation_id: int
     ) -> Generation | None:
+        """Mark a queued or running generation as cancelled. Returns the updated row, or ``None`` if not found."""
         generation = crud.get_generation(session, generation_id, with_assets=True)
         if not generation:
             return None
@@ -208,6 +246,7 @@ class GenerationService:
         return generation
 
     async def run_generation_job(self, generation_id: int) -> None:
+        """Execute the generation job: call the provider, save files, and update the DB status."""
         with SessionLocal() as session:
             generation = crud.get_generation(session, generation_id)
             if not generation:
@@ -248,14 +287,35 @@ class GenerationService:
                     .lower()
                     .lstrip(".")
                 )
+                upscale_provider = str(
+                    generation.request_snapshot_json.get("upscale_provider") or ""
+                ).strip().lower()
                 upscale_model = str(
                     generation.request_snapshot_json.get("upscale_model") or ""
                 ).strip()
-                upscale_enabled = bool(upscale_model)
-                if upscale_enabled and not self.upscale_service:
-                    raise ProviderError("Upscaling service is not available")
-                if upscale_enabled and not self.upscale_service.is_available():
-                    raise ProviderError("Upscaling is not configured on this server")
+                upscale_topaz_model_id = self._parse_optional_int(
+                    generation.request_snapshot_json.get("upscale_topaz_model_id")
+                )
+                upscale_enabled = bool(upscale_provider)
+
+                if upscale_enabled and upscale_provider == "local":
+                    if not self.upscale_service:
+                        raise ProviderError("Upscaling service is not available")
+                    if not self.upscale_service.is_available():
+                        raise ProviderError("Upscaling is not configured on this server")
+                elif upscale_enabled and upscale_provider == "fal":
+                    if not self.fal_upscale_service:
+                        raise ProviderError("FAL.ai upscaling service is not available")
+                    fal_api_key = (
+                        self.model_config_service.get_default_api_key("fal")
+                        if self.model_config_service
+                        else None
+                    )
+                    if not fal_api_key:
+                        raise ProviderError(
+                            "FAL.ai API key is not configured. Set it in Admin → Upscaling."
+                        )
+
                 if upscale_enabled:
                     request_snapshot = dict(generation.request_snapshot_json or {})
                     request_snapshot["upscaling_active"] = True
@@ -273,7 +333,7 @@ class GenerationService:
                     image_height = image.height
                     image_mime = image.mime
                     upscale_meta = None
-                    if upscale_enabled and self.upscale_service:
+                    if upscale_enabled and upscale_provider == "local" and self.upscale_service:
                         (
                             image_data,
                             image_width,
@@ -287,6 +347,46 @@ class GenerationService:
                         upscale_meta = {
                             "model": upscale_model,
                             "tool": "realesrgan",
+                        }
+                    elif upscale_enabled and upscale_provider == "fal" and self.fal_upscale_service:
+                        topaz_config = None
+                        topaz_params: dict[str, Any] = {}
+                        topaz_model_identifier = upscale_model or None
+                        if upscale_topaz_model_id is not None and upscale_topaz_model_id > 0:
+                            topaz_config = crud.get_topaz_upscale_model(
+                                session, upscale_topaz_model_id
+                            )
+                            if not topaz_config:
+                                raise ProviderError("Selected Topaz upscale model no longer exists")
+                            if not topaz_config.is_enabled:
+                                raise ProviderError("Selected Topaz upscale model is disabled")
+                            topaz_model_identifier = topaz_config.model_identifier
+                            if isinstance(topaz_config.params_json, dict):
+                                topaz_params = dict(topaz_config.params_json)
+
+                        fal_api_key = (
+                            self.model_config_service.get_default_api_key("fal")
+                            if self.model_config_service
+                            else None
+                        ) or ""
+                        (
+                            image_data,
+                            image_width,
+                            image_height,
+                            image_mime,
+                        ) = await self.fal_upscale_service.upscale_bytes(
+                            image.data,
+                            output_format,
+                            fal_api_key,
+                            model_identifier=topaz_model_identifier,
+                            model_params=topaz_params,
+                        )
+                        upscale_meta = {
+                            "model": topaz_model_identifier or "fal-ai/topaz/upscale/image",
+                            "tool": "fal",
+                            "topaz_model_id": upscale_topaz_model_id,
+                            "topaz_model_name": topaz_config.name if topaz_config else None,
+                            "topaz_params": topaz_params,
                         }
                     (
                         image_data,

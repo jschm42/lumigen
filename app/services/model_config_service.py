@@ -8,12 +8,15 @@ from app.db.engine import SessionLocal
 
 
 class ModelConfigService:
+    """Service for encrypting/decrypting provider API keys and resolving the active key for a provider."""
+
     # Mapping of provider names to settings attribute names
     PROVIDER_API_KEY_ATTR = {
         "openai": "openai_api_key",
         "openrouter": "openrouter_api_key",
         "google": "google_api_key",
         "bfl": "bfl_api_key",
+        "fal": "fal_api_key",
     }
 
     def __init__(self, settings: Settings) -> None:
@@ -26,10 +29,12 @@ class ModelConfigService:
         return Fernet(key.encode("ascii"))
 
     def encrypt_api_key(self, value: str) -> str:
+        """Encrypt *value* with Fernet and return the ASCII token string."""
         token = self._fernet().encrypt(value.encode("utf-8"))
         return token.decode("ascii")
 
     def decrypt_api_key(self, token: str) -> str:
+        """Decrypt a Fernet *token* and return the plaintext API key string."""
         try:
             raw = self._fernet().decrypt(token.encode("ascii"))
         except InvalidToken as exc:
@@ -46,12 +51,31 @@ class ModelConfigService:
                 return None
             return self.decrypt_api_key(config.api_key_encrypted)
 
+    def get_provider_api_key(self, provider: str) -> str | None:
+        """Get the centrally stored provider API key from the DB, if configured."""
+        with SessionLocal() as session:
+            row = crud.get_provider_api_key(session, provider.lower())
+            if not row:
+                return None
+            return self.decrypt_api_key(row.api_key_encrypted)
+
     def get_default_api_key(self, provider: str) -> str | None:
-        """Get the default API key from settings for a given provider."""
-        attr_name = self.PROVIDER_API_KEY_ATTR.get(provider.lower())
+        """Get the API key for a provider: DB-stored key takes priority over .env."""
+        provider_lower = provider.lower()
+        db_key = self.get_provider_api_key(provider_lower)
+        if db_key:
+            return db_key
+        attr_name = self.PROVIDER_API_KEY_ATTR.get(provider_lower)
         if not attr_name:
             return None
         return getattr(self._settings, attr_name, None)
+
+    def has_env_api_key(self, provider: str) -> bool:
+        """Return True if the provider has an API key set in the environment (.env)."""
+        attr_name = self.PROVIDER_API_KEY_ATTR.get(provider.lower())
+        if not attr_name:
+            return False
+        return bool(getattr(self._settings, attr_name, None))
 
     def get_model_config(self, model_config_id: int):
         """Get a model config by ID."""

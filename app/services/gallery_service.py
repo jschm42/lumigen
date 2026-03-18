@@ -12,6 +12,8 @@ from app.db.models import Asset, Category, Generation
 
 @dataclass
 class GalleryPage:
+    """A single page of gallery assets together with pagination metadata."""
+
     items: list[Asset]
     page: int
     page_size: int
@@ -21,6 +23,8 @@ class GalleryPage:
 
 @dataclass
 class GalleryFilterOptions:
+    """Distinct values available for filtering the gallery (used to populate filter UI)."""
+
     profile_names: list[str]
     providers: list[str]
     statuses: list[str]
@@ -28,6 +32,8 @@ class GalleryFilterOptions:
 
 
 class GalleryService:
+    """Service that queries and paginates the asset gallery with optional filtering."""
+
     def __init__(self, default_page_size: int = 24) -> None:
         self.default_page_size = default_page_size
 
@@ -46,6 +52,7 @@ class GalleryService:
         created_after: datetime | None = None,
         created_before: datetime | None = None,
     ) -> GalleryPage:
+        """Return a paginated, optionally filtered page of assets ordered newest-first."""
         safe_page_size = max(1, min(200, page_size or self.default_page_size))
         safe_page = max(1, page)
 
@@ -90,6 +97,7 @@ class GalleryService:
         return GalleryPage(items=items, page=safe_page, page_size=safe_page_size, total=total, pages=pages)
 
     def list_filter_options(self, session: Session) -> GalleryFilterOptions:
+        """Return the distinct profile names, providers, statuses, and categories available for filtering."""
         profile_stmt = (
             select(Generation.profile_name)
             .join(Asset)

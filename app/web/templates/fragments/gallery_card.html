@@ -1,0 +1,48 @@
+<article class="group relative overflow-hidden rounded-xl bg-white/95 p-2.5 shadow-md shadow-slate-300/50 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300 dark:bg-slate-900/50 dark:shadow-slate-950/45" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}" data-asset-detail-url="/assets/{{ asset.id }}">
+  <div class="relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-slate-100/90 dark:bg-slate-900/75" data-gallery-card-click>
+    <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="h-full w-full object-contain">
+
+    <!-- Full Overlay with Blur -->
+    <div class="absolute inset-0 z-10 flex items-center justify-center bg-slate-200/70 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-70 dark:bg-slate-950/70">
+      <!-- Buttons at Bottom -->
+      <div class="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-2 bg-gradient-to-t from-slate-300/95 via-slate-300/65 to-transparent p-3 pt-12 dark:from-slate-950/90 dark:via-slate-950/50">
+        <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300/85 bg-white/90 text-slate-700 transition hover:border-sky-400 hover:bg-sky-100 hover:text-sky-800 dark:border-white/30 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/20 dark:hover:text-sky-100">
+          <i class="bi bi-download text-xl" aria-hidden="true"></i>
+        </a>
+        <a href="/assets/{{ asset.id }}" hx-get="/assets/{{ asset.id }}" hx-target="#asset-detail-dialog-content" hx-swap="innerHTML" aria-label="View details" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300/85 bg-white/90 text-slate-700 transition hover:border-sky-400 hover:bg-sky-100 hover:text-sky-800 dark:border-white/30 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/20 dark:hover:text-sky-100" data-asset-detail-trigger>
+          <i class="bi bi-info-circle text-xl" aria-hidden="true"></i>
+        </a>
+        <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" data-confirm-message="Delete this asset?">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+          <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-300/70 bg-rose-100/90 text-rose-700 transition hover:border-rose-400 hover:bg-rose-200 dark:border-rose-300/50 dark:bg-slate-900/80 dark:text-rose-100 dark:hover:border-rose-300 dark:hover:bg-rose-500/30" aria-label="Delete asset" title="Delete">
+            <i class="bi bi-trash text-xl" aria-hidden="true"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-1.5 flex items-center">
+    <form
+      method="post"
+      action="/assets/{{ asset.id }}/rating"
+      class="flex items-center gap-0 {% if asset.rating is none %}opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100{% endif %}"
+      aria-label="Set rating for asset {{ asset.id }}"
+      data-rating-form
+      data-current-rating="{{ asset.rating if asset.rating is not none else 0 }}"
+    >
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <input type="hidden" name="rating" value="{{ asset.rating if asset.rating is not none else 0 }}" data-rating-input>
+      {% for value in [1, 2, 3, 4, 5] %}
+        <button
+          type="button"
+          data-rating-star
+          data-rating-value="{{ value }}"
+          class="inline-flex h-4 w-4 items-center justify-center text-[13px] leading-none transition {% if (asset.rating or 0) >= value %}text-amber-500 dark:text-amber-300{% else %}text-slate-500 dark:text-slate-600{% endif %}"
+          title="Set {{ value }} stars"
+          aria-label="Set {{ value }} stars"
+        >★</button>
+      {% endfor %}
+    </form>
+  </div>
+</article>

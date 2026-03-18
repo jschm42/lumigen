@@ -103,6 +103,16 @@ def test_registry_settings_for_provider_applies_custom_api_key() -> None:
     assert unchanged is settings
 
 
+def test_registry_settings_for_provider_applies_fal_api_key() -> None:
+    settings = Settings()
+    registry = ProviderRegistry(settings)
+
+    overridden = registry._settings_for_provider("fal", "fal-custom-key")
+
+    assert overridden is not settings
+    assert overridden.fal_api_key == "fal-custom-key"
+
+
 def test_registry_provider_names_and_unknown_provider() -> None:
     settings = Settings()
     registry = ProviderRegistry(settings)
@@ -110,6 +120,7 @@ def test_registry_provider_names_and_unknown_provider() -> None:
     names = registry.provider_names()
     assert "stub" in names
     assert "openai" in names
+    assert "fal" in names
 
     with pytest.raises(ProviderError, match="Unknown provider"):
         registry.get("does-not-exist")

@@ -11,6 +11,8 @@ from app.config import Settings
 
 @dataclass
 class ProviderGenerationRequest:
+    """Parameters for a single image-generation request sent to a provider."""
+
     prompt: str
     width: int | None
     height: int | None
@@ -25,12 +27,16 @@ class ProviderGenerationRequest:
 
 @dataclass
 class ProviderInputImage:
+    """Raw image bytes with MIME type, used as input for image-to-image generation."""
+
     data: bytes
     mime: str
 
 
 @dataclass
 class ProviderImage:
+    """A single generated image together with its dimensions and optional metadata."""
+
     data: bytes
     mime: str
     width: int
@@ -40,28 +46,33 @@ class ProviderImage:
 
 @dataclass
 class ProviderGenerationResult:
+    """The result of a generation request: a list of images and optional raw metadata."""
+
     images: list[ProviderImage]
     raw_meta: dict[str, Any] = field(default_factory=dict)
 
 
 class ProviderError(RuntimeError):
-    pass
+    """Base exception for all provider-related errors."""
 
 
 class ProviderConfigError(ProviderError):
-    pass
+    """Raised when a provider is misconfigured (e.g. missing or invalid API key)."""
 
 
 class ProviderRateLimitError(ProviderError):
-    pass
+    """Raised when the provider returns a rate-limit (429) response."""
 
 
 class ProviderServiceUnavailableError(ProviderError):
-    pass
+    """Raised when the provider service is temporarily unavailable (e.g. 503)."""
 
 
 class ProviderAdapter(ABC):
+    """Abstract base class for all provider adapters."""
     name: str
+    display_name: str = ""
+    homepage_url: str = ""
     _logger: logging.Logger = logging.getLogger(__name__)
 
     def _log_request(
@@ -92,7 +103,9 @@ class ProviderAdapter(ABC):
     async def generate(
         self, request: ProviderGenerationRequest, settings: Settings
     ) -> ProviderGenerationResult:
+        """Send *request* to the provider and return the generation result."""
         raise NotImplementedError
 
     async def list_models(self, settings: Settings) -> list[str]:
+        """Return the list of model IDs available from this provider. Defaults to an empty list."""
         return []

@@ -9,6 +9,8 @@ from app.services.model_config_service import ModelConfigService
 
 
 class EnhancementService:
+    """Service that calls a configured LLM (OpenAI or OpenRouter) to enhance user prompts."""
+
     def __init__(
         self, settings: Settings, model_config_service: ModelConfigService
     ) -> None:
@@ -20,9 +22,12 @@ class EnhancementService:
             config = crud.get_enhancement_config(session)
             if not config:
                 return None
-            if not config.api_key_encrypted:
+            if config.api_key_encrypted:
+                api_key = self._secrets.decrypt_api_key(config.api_key_encrypted)
+            else:
+                api_key = self._secrets.get_default_api_key(config.provider)
+            if not api_key:
                 return None
-            api_key = self._secrets.decrypt_api_key(config.api_key_encrypted)
             return {
                 "provider": config.provider,
                 "model": config.model,
@@ -30,6 +35,7 @@ class EnhancementService:
             }
 
     async def enhance(self, prompt: str, enhancement_prompt: str | None) -> str:
+        """Send *prompt* to the configured LLM and return the enhanced prompt text."""
         config = self._get_config()
         if not config:
             raise ValueError("Enhancement LLM is not configured")

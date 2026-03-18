@@ -15,7 +15,11 @@ from app.providers.base import (
 
 
 class StubAdapter(ProviderAdapter):
+    """Stub provider adapter that generates placeholder colour-block images for testing."""
+
     name = "stub"
+    display_name = "Stub (testing)"
+    homepage_url = ""
 
     async def list_models(self, settings: Settings) -> list[str]:
         _ = settings
