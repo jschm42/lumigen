@@ -1,41 +1,32 @@
 # Lumigen
 
-Lumigen is your local AI image studio.
-Create images from prompts, keep everything organized, and iterate quickly with profiles, sessions, and a clean gallery workflow — all from one lightweight web app.
+**One interface. All your AI image providers.**
 
-## App preview
-
-> Put your screenshots here so they render on GitHub: `docs/screenshots/`
+Stop switching between FAL, OpenAI, Google and OpenRouter. 
+Lumigen connects them all in one lightweight local app - 
+no subscription, no tracking, your images stay on your machine.
 
 ![Generation Session](docs/screenshots/generation_session_view.png)
 ![Image Gallery](docs/screenshots/gallery_view.png)
 
+
 ## Why Lumigen
 
-- 🏡 **Local-first by default**: your images, metadata, and DB stay under `./data`
-- ⚡ **Fast creative loop**: generate, tweak, rerun, and compare in seconds
-- 🧩 **Flexible providers**: connect OpenAI, OpenRouter, Google, BFL
-- 🗂️ **Profiles & categories**: save your favorite setups and keep outputs tidy
-- 🖼️ **Gallery workflow**: browse, filter, download, and manage assets easily
-- 🔍 **Reproducible history**: snapshots help you understand how each image was created
-- 🚀 **Optional upscaling**: improve output resolution with Real-ESRGAN
+Tired of juggling multiple image generation platforms? 
+Lumigen gives you a single, clean workspace to generate, 
+compare, and organize AI images — across all major providers.
 
-## Tech stack
-
-- Backend: FastAPI + Jinja2 + HTMX
-- Database: SQLite + SQLAlchemy 2 + Alembic
-- HTTP clients: `httpx`
-- Image processing: `Pillow`
-- Secret encryption for model keys: `cryptography` (Fernet)
-
-## Project structure
-
-- `app/main.py`: route definitions and service wiring
-- `app/services/`: generation, storage, thumbnails, sidecars, gallery, enhancement
-- `app/providers/`: provider adapters and registry with retry/rate-limit policy
-- `app/db/`: SQLAlchemy models, CRUD helpers, DB session/engine
-- `alembic/`: schema migrations
-- `scripts/`: Docker run/update helpers and provider key generation
+- 🔀 **One app, many providers**: FAL, OpenAI, OpenRouter, 
+  Google, BFL — switch in seconds
+- 🏡 **Your data, your machine**: images and history stay 
+  under `./data`, always
+- ⚡ **Fast creative loop**: generate, tweak, rerun, 
+  and compare without leaving the app
+- 🗂️ **Stay organized**: profiles, categories, and a 
+  full gallery workflow built in
+- 🔍 **Full history**: every image is reproducible, 
+  metadata and all
+- 🚀 **Optional upscaling**: Real-ESRGAN support built in
 
 ## Getting started
 
