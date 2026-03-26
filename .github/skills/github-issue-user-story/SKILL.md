@@ -81,4 +81,14 @@ Before finalizing output, verify:
 - Use consistent domain terms throughout the issue.
 
 ## GitHub Integration
-After generating the issue, ask the user if they want to automatically create the issue in GitHub. If they confirm, use the GitHub CLI or API to create the issue in the repository.
+After generating the issue, ask the user if they want to automatically create the issue in GitHub. If they confirm, follow this procedure exactly:
+
+### Issue Body File Handling
+- ALWAYS write the issue body to a **uniquely named temporary file** per issue, e.g. `temp_issue_<slug>.md` where `<slug>` is a short kebab-case version of the title (max 30 chars).
+- NEVER reuse a generic filename like `temp_issue_body.md` — a pre-existing file with that name will silently contain stale content from a previous issue.
+- Before writing, check whether the file already exists. If it does, overwrite it using an edit tool (not `create_file`).
+- After writing, read back the first 5 lines of the file to verify the content matches the intended issue before running the CLI command.
+- Use `gh issue create --repo <owner>/<repo> --title "<title>" --body-file <file>` to create the issue.
+- Use `gh issue edit <number> --repo <owner>/<repo> --body-file <file>` to update an existing issue.
+- After the CLI command succeeds, fetch the issue via the GitHub API and verify the `body` field starts with the expected content. If it does not match, the file contained stale content — correct the file and re-run the edit command.
+- Clean up the temporary file after a successful and verified create/edit.
