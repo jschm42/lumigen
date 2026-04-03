@@ -152,9 +152,9 @@ test.describe("Home page (authenticated)", () => {
 
       /* Inject a fake chat generation item that includes the Re-Generate button */
       await page.evaluate((prompt) => {
-        var chatHistory = document.getElementById("chat-history");
+        const chatHistory = document.getElementById("chat-history");
         if (!chatHistory) return;
-        var div = document.createElement("div");
+        const div = document.createElement("div");
         div.className = "chat-generation space-y-3";
         div.setAttribute("id", "chat-generation-test");
         div.innerHTML =
@@ -194,9 +194,9 @@ test.describe("Home page (authenticated)", () => {
 
       /* Inject a fake chat item with the same hover-button markup used in the template */
       await page.evaluate((prompt) => {
-        var chatHistory = document.getElementById("chat-history");
+        const chatHistory = document.getElementById("chat-history");
         if (!chatHistory) return;
-        var div = document.createElement("div");
+        const div = document.createElement("div");
         div.className = "chat-generation space-y-3";
         div.innerHTML =
           '<div class="flex justify-end">' +
