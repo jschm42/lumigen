@@ -137,6 +137,24 @@
     });
   }
 
+  function setupHtmxDebugLogging() {
+    if (typeof document.body.addEventListener !== 'function') return;
+    document.body.addEventListener('htmx:targetError', function (event) {
+      if (!event) return;
+      var detail = event.detail || {};
+      var issue = detail.target || detail.targetSpec || detail.elt || 'unknown target';
+      var sourceEl = detail.elt || event.target || null;
+      var requestPath = sourceEl && sourceEl.getAttribute ? sourceEl.getAttribute('hx-get') || sourceEl.getAttribute('hx-post') || sourceEl.getAttribute('hx-put') || sourceEl.getAttribute('hx-delete') || '' : '';
+
+      console.error('[htmx:targetError] Swap target not found.', {
+        issue: issue,
+        requestPath: requestPath,
+        sourceElement: sourceEl,
+        detail: detail
+      });
+    });
+  }
+
   function setupConfirmDialog() {
     var dialog = document.querySelector('[data-confirm-dialog]');
     if (!dialog) return;
@@ -1382,6 +1400,7 @@ function setupGalleryRatings() {
     initTheme();
     ensurePostFormCsrfTokens();
     setupHtmxCsrf();
+    setupHtmxDebugLogging();
     setupConfirmDialog();
     setupSeedButtons();
     setupModelSelects();

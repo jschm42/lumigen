@@ -3,7 +3,13 @@ from __future__ import annotations
 import base64
 import copy
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from io import BytesIO
 from pathlib import Path
 from typing import Any

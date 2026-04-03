@@ -10,10 +10,16 @@ import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 import uvicorn
 from fastapi import (
@@ -1191,6 +1197,62 @@ def generate_page(
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
+        },
+    )
+
+
+@app.get("/workspace/profiles", response_class=HTMLResponse)
+def workspace_profiles_fragment(request: Request) -> HTMLResponse:
+    """Return the embedded profiles workspace fragment."""
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Profiles",
+            "workspace_src": "/profiles?embedded=1",
+            "fallback_href": "/profiles",
+        },
+    )
+
+
+@app.get("/workspace/gallery", response_class=HTMLResponse)
+def workspace_gallery_fragment(request: Request) -> HTMLResponse:
+    """Return the embedded gallery workspace fragment."""
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Gallery",
+            "workspace_src": "/gallery?embedded=1",
+            "fallback_href": "/gallery",
+        },
+    )
+
+
+@app.get("/workspace/admin", response_class=HTMLResponse)
+def workspace_admin_fragment(
+    request: Request,
+    section: str | None = Query(default="models"),
+) -> HTMLResponse:
+    """Return the embedded admin workspace fragment for the active section."""
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    section_value = normalize_admin_section(section)
+    embedded_src = f"/admin?{urlencode({'section': section_value, 'embedded': '1'})}"
+    fallback_href = f"/admin?{urlencode({'section': section_value})}"
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Admin",
+            "workspace_src": embedded_src,
+            "fallback_href": fallback_href,
         },
     )
 
@@ -2649,13 +2711,17 @@ def create_profile(
                     params_value[key] = val
         else:
             # Handle generic parameters for all other providers
-            extra = parse_generic_params_json(extra_params)
+            # Remove previously stored extra params (all keys except reserved ones)
             reserved_keys = {
                 "fal_aspect_ratio",
                 "fal_resolution",
                 "fal_image_size",
                 "image_config",
             }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            extra = parse_generic_params_json(extra_params)
             for key, val in extra.items():
                 if key not in reserved_keys and val is not None:
                     params_value[key] = val

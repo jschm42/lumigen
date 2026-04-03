@@ -32,7 +32,7 @@ compare, and organize AI images — across all major providers.
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13+
 - pip
 - Optional: Docker
 

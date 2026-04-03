@@ -173,40 +173,10 @@
       });
     }
 
-    function setWorkspaceIframe(targetUrl) {
-      var iframe = workspaceShell.querySelector("iframe[data-workspace-iframe]");
-      if (!iframe) {
-        iframe = document.createElement("iframe");
-        iframe.setAttribute("data-workspace-iframe", "1");
-        iframe.setAttribute("title", "workspace");
-        iframe.className = "h-full w-full border-0";
-        workspaceShell.replaceChildren(iframe);
-      }
-      if (iframe.getAttribute("src") !== targetUrl) {
-        iframe.setAttribute("src", targetUrl);
-      }
-    }
+    // Removed iframe-related functions as we're now using HTMX for workspace navigation
 
-    function resolveIframeUrl(view) {
-      if (view === "profiles") return "/profiles?embedded=1";
-      if (view === "gallery") return "/gallery?embedded=1";
-      if (view === "admin") return "/admin?embedded=1";
-      return "";
-    }
-
-    function applyWorkspaceView(view, url, pushHistory) {
-      var iframeUrl = resolveIframeUrl(view);
-      if (!iframeUrl) return false;
-
-      setWorkspaceIframe(iframeUrl);
-      setActiveWorkspaceLink(view);
-
-      if (pushHistory && url) {
-        window.history.pushState({ workspace_view: view }, "", url);
-      }
-      return true;
-    }
-
+    // Workspace links now use HTMX attributes, so we don't need to handle clicks manually
+    // We still need to update the active link styling
     workspaceLinks.forEach(function (link) {
       link.addEventListener("click", function (event) {
         if (
@@ -220,22 +190,38 @@
           return;
         }
 
-        event.preventDefault();
-
+        // Update active link styling
         var view = link.getAttribute("data-workspace-view") || "";
-        var href = link.getAttribute("href") || "";
-        if (!view || !href) return;
-
-        var absoluteUrl = new URL(href, window.location.origin);
-        applyWorkspaceView(view, absoluteUrl.toString(), true);
+        if (view) {
+          setActiveWorkspaceLink(view);
+        }
       });
     });
 
+    // Handle browser back/forward navigation
     window.addEventListener("popstate", function () {
       var currentUrl = new URL(window.location.href);
       var view = (currentUrl.searchParams.get("workspace_view") || "chat").toLowerCase();
-      if (!applyWorkspaceView(view, "", false)) {
-        window.location.reload();
+      var targetUrl = "";
+      
+      // Update active link styling
+      setActiveWorkspaceLink(view);
+      
+      // Load content via HTMX if needed
+      if (view !== "chat") {
+        if (view === "profiles") targetUrl = "/workspace/profiles";
+        else if (view === "gallery") targetUrl = "/workspace/gallery";
+        else if (view === "admin") targetUrl = "/workspace/admin";
+        
+        if (targetUrl) {
+          // Trigger HTMX load
+          var workspaceContent = document.getElementById("workspace-content");
+          if (workspaceContent) {
+            workspaceContent.setAttribute("hx-get", targetUrl);
+            htmx.process(workspaceContent);
+            htmx.trigger(workspaceContent, "load");
+          }
+        }
       }
     });
   }

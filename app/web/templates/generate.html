@@ -34,10 +34,28 @@
     </div>
 
     <nav class="mt-4 shrink-0 border-t border-slate-300/60 pt-3 dark:border-white/5">
-      <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="profiles" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}">Profiles</a>
-      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="gallery" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}">Gallery</a>
+      <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="profiles" 
+         class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/profiles" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Profiles</a>
+      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="gallery" 
+         class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/gallery" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Gallery</a>
       {% if request.session.get('user_role') == 'admin' %}
-      <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="admin" class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}">Admin</a>
+      <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="admin" 
+         class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/admin" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Admin</a>
       {% endif %}
       <details class="relative mt-2" data-user-menu-container>
         <summary
@@ -75,11 +93,12 @@
 
   <section class="{{ panel_class }} relative h-full min-h-0 overflow-hidden" data-chat-shell data-workspace-embedded="{{ '1' if workspace_view != 'chat' else '0' }}" data-last-thumb-size="{{ last_thumb_size }}">
     {% if workspace_view != "chat" %}
-      <iframe
-        title="workspace"
-        src="{% if workspace_view == 'profiles' %}/profiles?embedded=1{% elif workspace_view == 'gallery' %}/gallery?embedded=1{% elif workspace_view == 'admin' %}/admin?embedded=1{% endif %}"
-        class="h-full w-full border-0"
-      ></iframe>
+      <div id="workspace-content" 
+           hx-get="{% if workspace_view == 'profiles' %}/workspace/profiles{% elif workspace_view == 'gallery' %}/workspace/gallery{% elif workspace_view == 'admin' %}/workspace/admin{% endif %}" 
+           hx-trigger="load" 
+           class="h-full w-full">
+        <!-- Content will be loaded here via HTMX -->
+      </div>
     {% elif not profiles %}
       <div class="h-full p-5">
         <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -87,6 +106,7 @@
         </div>
       </div>
     {% else %}
+      <div id="workspace-content" class="relative h-full w-full">
       <div id="chat-history" class="subtle-scrollbar h-full space-y-5 overflow-y-auto px-4 sm:px-5">
         {% if error %}
           {% with error_message=error %}
@@ -364,6 +384,7 @@
           </div>
         </div>
       </form>
+      </div>
     {% endif %}
   </section>
 </div>
