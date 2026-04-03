@@ -6,20 +6,20 @@
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-0 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/20" %}
 
-<div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] gap-4 overflow-hidden lg:grid-cols-[18rem_minmax(0,1fr)]">
-  <aside class="{{ panel_class }} flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-sky-200/35 via-white to-slate-100/90 ring-1 ring-sky-400/20 p-4 dark:from-sky-900/20 dark:via-slate-900/70 dark:to-slate-900/70 dark:ring-sky-300/20">
+<div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] gap-3 overflow-hidden grid-rows-[auto_1fr] lg:grid-rows-none lg:grid-cols-[18rem_minmax(0,1fr)]">
+  <aside class="{{ panel_class }} flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-sky-200/35 via-white to-slate-100/90 ring-1 ring-sky-400/20 p-2 lg:p-4 dark:from-sky-900/20 dark:via-slate-900/70 dark:to-slate-900/70 dark:ring-sky-300/20">
     <div class="shrink-0">
-      <a href="/" class="mb-3 flex items-center gap-3 rounded-2xl bg-white px-3 py-2 transition hover:bg-sky-50 dark:bg-white/10 dark:hover:bg-white/20">
-        <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-[82px] w-[82px] rounded-lg p-0 invert dark:invert-0">
+      <a href="/" class="mb-2 flex items-center gap-2 rounded-2xl bg-white px-2 py-1.5 transition hover:bg-sky-50 dark:bg-white/10 dark:hover:bg-white/20 lg:mb-3 lg:gap-3 lg:px-3 lg:py-2">
+        <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-9 w-9 shrink-0 rounded-lg p-0 invert dark:invert-0 lg:h-[82px] lg:w-[82px]">
         <span class="min-w-0">
-          <span class="block truncate text-lg font-semibold text-slate-900 dark:text-white">Lumigen</span>
-          <span class="block truncate text-xs text-slate-500 dark:text-slate-400">v{{ app_version }}</span>
+          <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white lg:text-lg">Lumigen</span>
+          <span class="hidden truncate text-xs text-slate-500 dark:text-slate-400 lg:block">v{{ app_version }}</span>
         </span>
       </a>
-      <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
+      <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full py-1.5 text-xs lg:py-2 lg:text-sm">New Session</a>
     </div>
 
-    <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" id="session-list">
+    <div class="subtle-scrollbar mt-4 hidden min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 lg:block" id="session-list">
       <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white{% endif %}">
         All Sessions
       </a>
@@ -78,16 +78,32 @@
             role="menuitem"
             data-user-settings-open
           >
-            <i class="bi bi-gear text-base" aria-hidden="true"></i>
-            <span>Settings...</span>
-          </button>
-          <div class="my-2 border-t border-slate-300/70 dark:border-white/10"></div>
-          <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white" role="menuitem">
-            <i class="bi bi-box-arrow-right text-base" aria-hidden="true"></i>
-            <span>Logout</span>
-          </a>
-        </div>
-      </details>
+            <i class="bi bi-person-circle text-base" aria-hidden="true"></i>
+            <span class="hidden truncate text-left lg:inline lg:flex-1">{{ request.session.get('username') or 'User' }}</span>
+            <i class="bi bi-chevron-down text-sm" aria-hidden="true"></i>
+          </summary>
+          <div
+            class="absolute bottom-full left-0 mb-2 min-w-[10rem] rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-300/70 dark:bg-slate-800 dark:ring-white/10 lg:right-0"
+            data-user-menu
+            role="menu"
+          >
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
+              role="menuitem"
+              data-user-settings-open
+            >
+              <i class="bi bi-gear text-base" aria-hidden="true"></i>
+              <span>Settings...</span>
+            </button>
+            <div class="my-2 border-t border-slate-300/70 dark:border-white/10"></div>
+            <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white" role="menuitem">
+              <i class="bi bi-box-arrow-right text-base" aria-hidden="true"></i>
+              <span>Logout</span>
+            </a>
+          </div>
+        </details>
+      </div>
     </nav>
   </aside>
 
