@@ -3355,6 +3355,30 @@ def delete_generation(
     return RedirectResponse(url="/gallery", status_code=303)
 
 
+def _create_generation_for_retry(
+    session: Session, source: Generation, profile_id: int | None
+) -> Generation:
+    """Create a new queued generation for a retry request.
+
+    If *profile_id* refers to an existing profile, the generation is built
+    from that profile using the original prompt and any chat session context
+    from *source*.  Otherwise falls back to cloning the source generation's
+    own snapshot data.
+    """
+    if profile_id is not None:
+        profile = crud.get_profile(session, profile_id)
+        if profile is not None:
+            request_snapshot = source.request_snapshot_json or {}
+            overrides: dict = {}
+            chat_session_id = request_snapshot.get("chat_session_id")
+            if chat_session_id:
+                overrides["chat_session_id"] = chat_session_id
+            return generation_service.create_generation_from_profile(
+                session, profile, source.prompt_user, overrides=overrides
+            )
+    return generation_service.create_generation_from_snapshot(session, source)
+
+
 @app.post("/generations/{generation_id}/rerun", response_class=HTMLResponse)
 def rerun_generation(
     request: Request,
@@ -3362,6 +3386,7 @@ def rerun_generation(
     background_tasks: BackgroundTasks,
     view: str = Query(default="default"),
     csrf_token: str = Form(...),
+    profile_id: int | None = Form(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     validate_csrf_or_raise(request, csrf_token)
@@ -3369,7 +3394,7 @@ def rerun_generation(
     if not source:
         raise HTTPException(status_code=404, detail="Generation not found")
 
-    generation = generation_service.create_generation_from_snapshot(session, source)
+    generation = _create_generation_for_retry(session, source, profile_id)
     generation_service.enqueue(background_tasks, generation.id)
 
     template_name = (
