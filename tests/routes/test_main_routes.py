@@ -498,9 +498,11 @@ def test_rerun_generation_default_view_returns_job_status_fragment(
 
     class _FakeGenerationService:
         def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            """Return the pre-built generation stub."""
             return new_gen
 
         def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
             pass
 
     monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
@@ -534,9 +536,11 @@ def test_rerun_generation_chat_view_returns_chat_fragment(
 
     class _FakeGenerationService:
         def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            """Return the pre-built generation stub."""
             return new_gen
 
         def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
             pass
 
     monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
@@ -580,12 +584,14 @@ def test_rerun_generation_with_profile_id_uses_profile(
 
     class _FakeGenerationService:
         def create_generation_from_profile(self, _session, profile, prompt_user, overrides=None):  # type: ignore[no-untyped-def]
+            """Capture arguments and return the pre-built generation stub."""
             captured["profile"] = profile
             captured["prompt_user"] = prompt_user
             captured["overrides"] = overrides
             return new_gen
 
         def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
             pass
 
     monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
@@ -625,9 +631,11 @@ def test_rerun_generation_with_unknown_profile_id_falls_back_to_snapshot(
 
     class _FakeGenerationService:
         def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            """Return the pre-built generation stub."""
             return new_gen
 
         def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
             pass
 
     monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())

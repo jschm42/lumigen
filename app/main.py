@@ -3309,9 +3309,10 @@ def rerun_generation(
         profile = crud.get_profile(session, profile_id)
         if profile is not None:
             request_snapshot = source.request_snapshot_json or {}
-            overrides: dict = {
-                "chat_session_id": request_snapshot.get("chat_session_id"),
-            }
+            overrides: dict = {}
+            chat_session_id = request_snapshot.get("chat_session_id")
+            if chat_session_id:
+                overrides["chat_session_id"] = chat_session_id
             generation = generation_service.create_generation_from_profile(
                 session, profile, source.prompt_user, overrides=overrides
             )
