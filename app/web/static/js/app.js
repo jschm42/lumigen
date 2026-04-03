@@ -363,6 +363,7 @@
   function setupGenerationForm(form) {
     var profileSelect = form.querySelector('[data-generation-profile]');
     if (!profileSelect) return;
+    var conversationInput = form.querySelector('[name="conversation"]');
 
     var widthInput = form.querySelector('[name="width"]');
     var heightInput = form.querySelector('[name="height"]');
@@ -386,6 +387,50 @@
     var advancedPanel = form.querySelector('[data-advanced-panel]');
     var submitBtn = form.querySelector('[data-generate-submit]');
     var _generationLocked = false;
+    var PROFILE_SESSION_KEY_PREFIX = 'lumigen_selected_profile:';
+
+    function getConversationKey() {
+      if (!conversationInput) return '';
+      return String(conversationInput.value || '').trim();
+    }
+
+    function getProfileSessionStorageKey() {
+      var conversationKey = getConversationKey();
+      if (!conversationKey) return '';
+      return PROFILE_SESSION_KEY_PREFIX + conversationKey;
+    }
+
+    function saveSelectedProfileToSession() {
+      var storageKey = getProfileSessionStorageKey();
+      if (!storageKey) return;
+      var profileId = String(profileSelect.value || '').trim();
+      if (!profileId) return;
+      try {
+        sessionStorage.setItem(storageKey, profileId);
+      } catch (_error) {
+        // Ignore storage write failures in restricted browser modes.
+      }
+    }
+
+    function restoreSelectedProfileFromSession() {
+      var storageKey = getProfileSessionStorageKey();
+      if (!storageKey) return false;
+      var storedProfileId = '';
+      try {
+        storedProfileId = String(sessionStorage.getItem(storageKey) || '').trim();
+      } catch (_error) {
+        return false;
+      }
+      if (!storedProfileId || profileSelect.value === storedProfileId) {
+        return false;
+      }
+      var hasOption = Array.from(profileSelect.options).some(function (option) {
+        return option.value === storedProfileId;
+      });
+      if (!hasOption) return false;
+      profileSelect.value = storedProfileId;
+      return true;
+    }
 
     function lockGenerationForm() {
       /* Disable the submit button, show a loading spinner, and set the
@@ -429,16 +474,20 @@
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
       var isFal = provider === 'fal';
-      var useCustomDimensions = !isOpenRouter && !isFal;
+      var isGoogle = provider === 'google';
+      var useCustomDimensions = !isOpenRouter && !isFal && !isGoogle;
       
       var dimensionControls = form.querySelector('[data-dimension-controls]');
       var standardDimensions = form.querySelector('[data-standard-dimensions]');
       var openrouterControls = form.querySelector('[data-openrouter-controls]');
       var falControls = form.querySelector('[data-fal-controls]');
+      var googleControls = form.querySelector('[data-google-controls]');
       var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
       var imageSizeInput = form.querySelector('[name="image_size"]');
       var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
       var falResolutionInput = form.querySelector('[name="fal_resolution"]');
+      var googleAspectRatioInput = form.querySelector('[name="google_aspect_ratio"]');
+      var googleResolutionInput = form.querySelector('[name="google_resolution"]');
       
       // Toggle visibility based on provider
       if (dimensionControls) {
@@ -452,6 +501,9 @@
       }
       if (falControls) {
         falControls.classList.toggle('hidden', !isFal);
+      }
+      if (googleControls) {
+        googleControls.classList.toggle('hidden', !isGoogle);
       }
       
       // Disable/enable and clear values based on provider
@@ -484,6 +536,14 @@
       if (falResolutionInput) {
         falResolutionInput.disabled = !isFal;
         if (!isFal) falResolutionInput.value = '';
+      }
+      if (googleAspectRatioInput) {
+        googleAspectRatioInput.disabled = !isGoogle;
+        if (!isGoogle) googleAspectRatioInput.value = '';
+      }
+      if (googleResolutionInput) {
+        googleResolutionInput.disabled = !isGoogle;
+        if (!isGoogle) googleResolutionInput.value = '';
       }
       updateGenerationFrame();
     }
@@ -531,6 +591,7 @@
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isFal = provider === 'fal';
       var isOpenRouter = provider === 'openrouter';
+      var isGoogle = provider === 'google';
 
       if (isFal) {
         var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
@@ -546,6 +607,15 @@
         var orVal = aspectRatioInput ? aspectRatioInput.value.trim() : '';
         if (orVal) {
           return parseRatioString(orVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      if (isGoogle) {
+        var googleAspectRatioInput = form.querySelector('[name="google_aspect_ratio"]');
+        var gVal = googleAspectRatioInput ? googleAspectRatioInput.value.trim() : '';
+        if (gVal) {
+          return parseRatioString(gVal) || [1, 1];
         }
         return [1, 1];
       }
@@ -604,14 +674,40 @@
       if (falResolutionInput) {
         falResolutionInput.value = String(selected.dataset.falResolution || '').trim();
       }
+      var googleAspectRatioInput = form.querySelector('[name="google_aspect_ratio"]');
+      var googleResolutionInput = form.querySelector('[name="google_resolution"]');
+      if (googleAspectRatioInput) {
+        googleAspectRatioInput.value = String(selected.dataset.googleAspectRatio || '').trim();
+      }
+      if (googleResolutionInput) {
+        googleResolutionInput.value = String(selected.dataset.googleResolution || '').trim();
+      }
 
       syncProviderSpecificOptions(selected);
 
       syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+      saveSelectedProfileToSession();
     }
 
     profileSelect.addEventListener('change', applyProfileDefaults);
+
+    if (!profileSelect.dataset.restoreBound) {
+      profileSelect.dataset.restoreBound = '1';
+      var restoreProfileSelection = function () {
+        if (restoreSelectedProfileFromSession()) {
+          applyProfileDefaults();
+        }
+      };
+      window.addEventListener('focus', restoreProfileSelection);
+      window.addEventListener('pageshow', restoreProfileSelection);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+          restoreProfileSelection();
+        }
+      });
+    }
     
+    restoreSelectedProfileFromSession();
     // Call on initial page load to ensure correct visibility
     applyProfileDefaults();
 
@@ -645,6 +741,11 @@
     var falAspectRatioSelect = form.querySelector('[name="fal_aspect_ratio"]');
     if (falAspectRatioSelect) {
       falAspectRatioSelect.addEventListener('change', updateGenerationFrame);
+    }
+
+    var googleAspectRatioSelect = form.querySelector('[name="google_aspect_ratio"]');
+    if (googleAspectRatioSelect) {
+      googleAspectRatioSelect.addEventListener('change', updateGenerationFrame);
     }
 
     function syncInputFiles() {

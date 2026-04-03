@@ -139,6 +139,7 @@ For implementing or understanding image requests to various providers, refer to 
 - FAL.AI: https://fal.ai/models/fal-ai/nano-banana-2/api
 - BFL: https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint
 - OpenAI: https://developers.openai.com/api/docs/guides/image-generation
+- Google Gemini: https://ai.google.dev/gemini-api/docs/image-generation
 
 ## When to search
 Only search if one of these is true:

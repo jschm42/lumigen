@@ -341,6 +341,53 @@ def test_generate_submit_with_fal_model_override_sets_fal_overrides(
     assert overrides["upscale_topaz_model_id"] == 7
 
 
+def test_generate_submit_with_google_controls_sets_image_config_overrides(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    captured: dict[str, object] = {}
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="google",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={"image_config": {"legacy": "keep"}},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def create_generation_from_profile(self, _session, _profile, _prompt, overrides=None):  # type: ignore[no-untyped-def]
+            captured["overrides"] = dict(overrides or {})
+            return SimpleNamespace(id=18)
+
+        def enqueue(self, *_args, **_kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "prompt",
+            "profile_id": "1",
+            "google_aspect_ratio": "16:9",
+            "google_resolution": "2K",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "workspace_view=chat" in response.headers["location"]
+    overrides = captured["overrides"]
+    assert overrides["params_json"]["image_config"]["aspect_ratio"] == "16:9"
+    assert overrides["params_json"]["image_config"]["image_size"] == "2K"
+    assert overrides["params_json"]["image_config"]["legacy"] == "keep"
+
+
 def test_bulk_set_categories_rejects_missing_assets(client, app_module) -> None:
     fake_session = _FakeSession()
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(

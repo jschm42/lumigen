@@ -141,14 +141,17 @@ class GoogleAdapter(ProviderAdapter):
                 }
             )
 
-        output_format = self._normalize_output_format(request.output_format)
         generation_config: dict[str, Any] = {
-            "responseModalities": ["IMAGE"],
+            "responseModalities": ["TEXT", "IMAGE"],
             "candidateCount": max(1, int(request.n_images)),
-            "responseMimeType": self._mime_from_format(output_format),
         }
         if request.seed is not None:
             generation_config["seed"] = int(request.seed)
+
+        if isinstance(request.params, dict):
+            image_config = self._normalize_image_config(request.params.get("image_config"))
+            if image_config:
+                generation_config["imageConfig"] = image_config
 
         payload: dict[str, Any] = {
             "contents": [{"role": "user", "parts": parts}],
@@ -157,7 +160,7 @@ class GoogleAdapter(ProviderAdapter):
 
         if isinstance(request.params, dict):
             for key, value in request.params.items():
-                if key not in payload and value is not None:
+                if key != "image_config" and key not in payload and value is not None:
                     payload[key] = value
 
         return payload
@@ -172,14 +175,38 @@ class GoogleAdapter(ProviderAdapter):
             parameters["seed"] = int(request.seed)
 
         if isinstance(request.params, dict):
+            image_config = self._normalize_image_config(request.params.get("image_config"))
+            if image_config:
+                parameters["imageConfig"] = image_config
+
+        if isinstance(request.params, dict):
             for key, value in request.params.items():
-                if key not in parameters and value is not None:
+                if key != "image_config" and key not in parameters and value is not None:
                     parameters[key] = value
 
         return {
             "instances": [{"prompt": request.prompt}],
             "parameters": parameters,
         }
+
+    def _normalize_image_config(self, value: Any) -> dict[str, Any]:
+        """Return Google imageConfig payload with canonical camelCase keys."""
+        if not isinstance(value, dict):
+            return {}
+
+        normalized: dict[str, Any] = {}
+        key_map = {
+            "aspect_ratio": "aspectRatio",
+            "image_size": "imageSize",
+            "aspectRatio": "aspectRatio",
+            "imageSize": "imageSize",
+        }
+        for key, raw in value.items():
+            if raw is None:
+                continue
+            target_key = key_map.get(str(key), str(key))
+            normalized[target_key] = raw
+        return normalized
 
     def _extract_images(
         self,
@@ -290,16 +317,52 @@ class GoogleAdapter(ProviderAdapter):
             return int(fallback_width), int(fallback_height)
 
     def _extract_error_message(self, response: httpx.Response) -> str:
+        def _collect_strings(value: Any) -> list[str]:
+            if isinstance(value, str):
+                text = value.strip()
+                return [text] if text else []
+            if isinstance(value, list):
+                items: list[str] = []
+                for entry in value:
+                    items.extend(_collect_strings(entry))
+                return items
+            if isinstance(value, dict):
+                items = []
+                preferred_keys = (
+                    "message",
+                    "description",
+                    "details",
+                    "status",
+                    "reason",
+                    "field",
+                )
+                for key in preferred_keys:
+                    if key in value:
+                        items.extend(_collect_strings(value.get(key)))
+                for key, entry in value.items():
+                    if key in preferred_keys:
+                        continue
+                    items.extend(_collect_strings(entry))
+                return items
+            return []
+
         try:
             data = response.json()
-        except Exception:
+        except ValueError:
             text = response.text.strip()
             return text[:400] if text else "Unknown error"
 
-        error_obj = data.get("error")
-        if isinstance(error_obj, dict):
-            message = error_obj.get("message")
-            if isinstance(message, str) and message.strip():
-                return message.strip()
+        error_obj = data.get("error") if isinstance(data, dict) else data
+        messages = _collect_strings(error_obj)
+        if messages:
+            return " | ".join(messages)[:400]
+
+        fallback = _collect_strings(data)
+        if fallback:
+            return " | ".join(fallback)[:400]
+
+        text = response.text.strip()
+        if text:
+            return text[:400]
         text = str(data)
-        return text[:400]
+        return text[:400] if text else "Unknown error"

@@ -83,7 +83,18 @@ async def test_google_generate_calls_expected_endpoint_and_payload(monkeypatch: 
         seed=12,
         output_format="png",
         model="gemini-2.0-flash-preview-image-generation",
-        params={"safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}]},
+        params={
+            "safetySettings": [
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_ONLY_HIGH",
+                }
+            ],
+            "image_config": {
+                "aspect_ratio": "16:9",
+                "image_size": "2K",
+            },
+        },
     )
 
     result = await adapter.generate(request, settings)
@@ -94,9 +105,12 @@ async def test_google_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     assert call["headers"]["Content-Type"] == "application/json"
     assert call["params"]["key"] == "google-key"
     assert call["json"]["contents"][0]["parts"][0]["text"] == "A river"
-    assert call["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
+    assert call["json"]["generationConfig"]["responseModalities"] == ["TEXT", "IMAGE"]
     assert call["json"]["generationConfig"]["candidateCount"] == 1
     assert call["json"]["generationConfig"]["seed"] == 12
+    assert "responseMimeType" not in call["json"]["generationConfig"]
+    assert call["json"]["generationConfig"]["imageConfig"]["aspectRatio"] == "16:9"
+    assert call["json"]["generationConfig"]["imageConfig"]["imageSize"] == "2K"
     assert "safetySettings" in call["json"]
     assert len(result.images) == 1
     assert result.images[0].width == 22

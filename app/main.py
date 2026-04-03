@@ -105,6 +105,23 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "21:9",
 }
 OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
+GOOGLE_ALLOWED_ASPECT_RATIOS = {
+    "1:1",
+    "1:4",
+    "1:8",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:1",
+    "4:3",
+    "4:5",
+    "5:4",
+    "8:1",
+    "9:16",
+    "16:9",
+    "21:9",
+}
+GOOGLE_ALLOWED_RESOLUTIONS = {"512", "1K", "2K", "4K"}
 FAL_ALLOWED_ASPECT_RATIOS = {
     "auto",
     "21:9",
@@ -551,6 +568,56 @@ def apply_fal_image_config(
 
     # Remove legacy key after migrating to explicit ratio/resolution.
     merged.pop("fal_image_size", None)
+    return merged
+
+
+def apply_google_image_config(
+    *,
+    params_json: dict[str, Any],
+    provider: str,
+    google_aspect_ratio: str,
+    google_resolution: str,
+    allow_clear: bool = True,
+) -> dict[str, Any]:
+    """Return params merged with validated Google ratio/resolution settings."""
+    merged = copy.deepcopy(params_json or {})
+    provider_value = (provider or "").strip().lower()
+    image_config_raw = merged.get("image_config")
+    image_config = (
+        copy.deepcopy(image_config_raw) if isinstance(image_config_raw, dict) else {}
+    )
+
+    if provider_value != "google":
+        image_config.pop("aspect_ratio", None)
+        image_config.pop("image_size", None)
+        if image_config:
+            merged["image_config"] = image_config
+        else:
+            merged.pop("image_config", None)
+        return merged
+
+    ratio_value = (google_aspect_ratio or "").strip()
+    resolution_value = (google_resolution or "").strip().upper()
+
+    if ratio_value and ratio_value not in GOOGLE_ALLOWED_ASPECT_RATIOS:
+        raise ValueError("Invalid Google aspect ratio selected")
+    if resolution_value and resolution_value not in GOOGLE_ALLOWED_RESOLUTIONS:
+        raise ValueError("Invalid Google resolution selected")
+
+    if ratio_value:
+        image_config["aspect_ratio"] = ratio_value
+    elif allow_clear:
+        image_config.pop("aspect_ratio", None)
+
+    if resolution_value:
+        image_config["image_size"] = resolution_value
+    elif allow_clear:
+        image_config.pop("image_size", None)
+
+    if image_config:
+        merged["image_config"] = image_config
+    else:
+        merged.pop("image_config", None)
     return merged
 
 
@@ -1273,6 +1340,8 @@ def generate_submit(
     fal_aspect_ratio: str = Form(default=""),
     fal_resolution: str = Form(default=""),
     fal_image_size: str = Form(default=""),
+    google_aspect_ratio: str = Form(default=""),
+    google_resolution: str = Form(default=""),
     upscale_model: str = Form(default="__profile__"),
     upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
@@ -1351,7 +1420,7 @@ def generate_submit(
                 "FAL provider does not support input images."
             )
 
-        # Apply OpenRouter-specific, FAL-specific, or standard dimension overrides
+        # Apply OpenRouter-specific, FAL-specific, Google-specific, or standard dimension overrides
         if provider_value == "openrouter":
             # For OpenRouter: process aspect_ratio and image_size
             params_json_copy = dict(profile.params_json or {})
@@ -1374,6 +1443,17 @@ def generate_submit(
                 provider=provider_value,
                 fal_aspect_ratio=fal_aspect_ratio,
                 fal_resolution=fal_resolution,
+                allow_clear=False,
+            )
+            overrides["params_json"] = params_json_with_overrides
+        elif provider_value == "google":
+            # For Google: process explicit aspect ratio + resolution settings.
+            params_json_copy = dict(profile.params_json or {})
+            params_json_with_overrides = apply_google_image_config(
+                params_json=params_json_copy,
+                provider=provider_value,
+                google_aspect_ratio=google_aspect_ratio,
+                google_resolution=google_resolution,
                 allow_clear=False,
             )
             overrides["params_json"] = params_json_with_overrides
