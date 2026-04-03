@@ -370,6 +370,9 @@
     var _generationLocked = false;
 
     function lockGenerationForm() {
+      /* Disable the submit button, show a loading spinner, and set the
+         textarea to readonly to prevent duplicate submissions while a
+         generation request is in flight. */
       _generationLocked = true;
       if (submitBtn) {
         submitBtn.disabled = true;
@@ -386,6 +389,9 @@
     }
 
     function unlockGenerationForm() {
+      /* Re-enable the submit button, restore the arrow-up icon, and remove
+         readonly from the textarea after a generation request completes
+         (whether it succeeded or failed). */
       _generationLocked = false;
       if (submitBtn) {
         submitBtn.disabled = false;
