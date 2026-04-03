@@ -13,6 +13,48 @@
 {% set snapshot = generation.request_snapshot_json or {} %}
 {% set upscaling_active = snapshot.get('upscaling_active') %}
 {% set running_status_text = 'Upscaling...' if generation.status == 'running' and upscaling_active else 'Generating...' %}
+{% set provider_value = (snapshot.get('provider') or generation.provider or '')|string|lower %}
+{% set params_json = snapshot.get('params_json') if snapshot.get('params_json') is mapping else {} %}
+{% set image_config = params_json.get('image_config') if params_json.get('image_config') is mapping else {} %}
+{% set ratio_value = '' %}
+
+{% if provider_value == 'openrouter' %}
+  {% set ratio_value = (params_json.get('aspect_ratio') or '')|string|trim %}
+{% elif provider_value == 'fal' %}
+  {% set ratio_value = (params_json.get('fal_aspect_ratio') or '')|string|trim %}
+  {% if ratio_value == 'auto' %}
+    {% set ratio_value = '' %}
+  {% endif %}
+{% elif provider_value == 'google' %}
+  {% set ratio_value = (image_config.get('aspect_ratio') or '')|string|trim %}
+{% endif %}
+
+{% set panel_aspect_ratio = '1 / 1' %}
+{% if ratio_value and ':' in ratio_value %}
+  {% set ratio_parts = ratio_value.split(':') %}
+  {% if ratio_parts|length == 2 %}
+    {% set ratio_w = ratio_parts[0]|float %}
+    {% set ratio_h = ratio_parts[1]|float %}
+    {% if ratio_w > 0 and ratio_h > 0 %}
+      {% set panel_aspect_ratio = (ratio_w|string) ~ ' / ' ~ (ratio_h|string) %}
+    {% endif %}
+  {% endif %}
+{% elif ratio_value and '/' in ratio_value %}
+  {% set ratio_parts = ratio_value.split('/') %}
+  {% if ratio_parts|length == 2 %}
+    {% set ratio_w = ratio_parts[0]|float %}
+    {% set ratio_h = ratio_parts[1]|float %}
+    {% if ratio_w > 0 and ratio_h > 0 %}
+      {% set panel_aspect_ratio = (ratio_w|string) ~ ' / ' ~ (ratio_h|string) %}
+    {% endif %}
+  {% endif %}
+{% else %}
+  {% set width_value = snapshot.get('width')|int %}
+  {% set height_value = snapshot.get('height')|int %}
+  {% if width_value > 0 and height_value > 0 %}
+    {% set panel_aspect_ratio = (width_value|string) ~ ' / ' ~ (height_value|string) %}
+  {% endif %}
+{% endif %}
 
 <div id="chat-generation-{{ generation.id }}"
      class="chat-generation space-y-3"
@@ -109,10 +151,14 @@
       {% elif generation.status == 'succeeded' %}
         <p class="text-sm text-slate-600 dark:text-slate-400">Job completed, but no assets were generated.</p>
       {% elif generation.status in ['queued', 'running'] %}
-        <div class="flex min-h-[220px] w-full items-center justify-center rounded-xl border border-slate-300/75 bg-slate-100/80 px-4 py-6 dark:border-white/10 dark:bg-slate-900/60">
-          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <i class="bi bi-arrow-repeat animate-spin"></i>
-            <span class="text-sm font-medium">{{ running_status_text }}</span>
+        <div class="w-full max-w-[30rem]">
+          <div class="relative w-full overflow-hidden rounded-xl border border-slate-300/75 bg-slate-100/80 dark:border-white/10 dark:bg-slate-900/60" style="aspect-ratio: {{ panel_aspect_ratio }};">
+            <div class="absolute inset-0 flex items-center justify-center px-4 py-6">
+              <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+                <i class="bi bi-arrow-repeat animate-spin"></i>
+                <span class="text-sm font-medium">{{ running_status_text }}</span>
+              </div>
+            </div>
           </div>
         </div>
       {% endif %}

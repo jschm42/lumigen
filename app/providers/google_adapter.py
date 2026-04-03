@@ -82,9 +82,22 @@ class GoogleAdapter(ProviderAdapter):
         payload = self._build_payload(request, use_predict=use_predict)
         self._log_request("POST", url, headers, payload)
 
-        timeout = httpx.Timeout(120.0, connect=10.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, params=params, json=payload)
+        timeout = httpx.Timeout(240.0, connect=15.0)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, headers=headers, params=params, json=payload)
+        except httpx.ReadTimeout as exc:
+            raise ProviderServiceUnavailableError(
+                "Google request timed out while waiting for image generation."
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise ProviderServiceUnavailableError(
+                "Google request timed out."
+            ) from exc
+        except httpx.RequestError as exc:
+            raise ProviderServiceUnavailableError(
+                f"Google request failed: {exc.__class__.__name__}."
+            ) from exc
 
         if response.status_code == 429:
             raise ProviderRateLimitError("Google rate limit reached (429).")

@@ -69,6 +69,80 @@ async def test_google_generate_429_raises_rate_limit(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
+async def test_google_generate_read_timeout_raises_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, params=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, params, json
+            request = httpx.Request("POST", url)
+            raise httpx.ReadTimeout("", request=request)
+
+    monkeypatch.setattr("app.providers.google_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = GoogleAdapter()
+    settings = Settings(google_api_key="google-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gemini-3.1-flash-image-preview",
+    )
+
+    with pytest.raises(ProviderServiceUnavailableError, match="timed out"):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
+async def test_google_generate_request_error_raises_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, params=None, json=None):  # type: ignore[no-untyped-def]
+            _ = headers, params, json
+            request = httpx.Request("POST", url)
+            raise httpx.ConnectError("boom", request=request)
+
+    monkeypatch.setattr("app.providers.google_adapter.httpx.AsyncClient", FakeAsyncClient)
+
+    adapter = GoogleAdapter()
+    settings = Settings(google_api_key="google-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gemini-3.1-flash-image-preview",
+    )
+
+    with pytest.raises(ProviderServiceUnavailableError, match="request failed"):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
 async def test_google_generate_400_uses_details_when_message_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
