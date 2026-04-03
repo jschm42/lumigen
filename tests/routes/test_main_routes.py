@@ -771,3 +771,73 @@ def test_generate_submit_rejects_upload_exceeding_size_limit(
     assert response.status_code == 303
     assert "exceeds" in response.headers["location"]
     assert fake_generation_service.create_called is False
+
+
+def test_download_session_returns_zip(client, app_module, monkeypatch, tmp_path) -> None:
+    fake_session = _FakeSession()
+    image_file = tmp_path / "img.png"
+    image_file.write_bytes(b"\x89PNG\r\n")
+
+    asset = SimpleNamespace(
+        id=1,
+        file_path="img.png",
+        mime="image/png",
+        generation=None,
+    )
+    generation = SimpleNamespace(
+        id=42,
+        request_snapshot_json={"chat_session_id": "session:dl"},
+        profile_name="My Profile",
+        prompt_user="a cat",
+        prompt_final="a cat",
+        model="fast-model",
+        provider="openai",
+        status="done",
+        created_at=None,
+        finished_at=None,
+        assets=[asset],
+    )
+    asset.generation = generation
+
+    fake_session._scalars_result = [generation]
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "asset_absolute_path",
+        lambda _asset, which="file": image_file,
+    )
+
+    response = client.get("/sessions/download?session_token=session:dl")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert "attachment" in response.headers["content-disposition"]
+    assert ".zip" in response.headers["content-disposition"]
+
+    import io as _io
+    import zipfile as _zf
+    zdata = _io.BytesIO(response.content)
+    with _zf.ZipFile(zdata) as zfile:
+        names = zfile.namelist()
+        assert "session.md" in names
+        assert any(n.startswith("images/") for n in names)
+        md = zfile.read("session.md").decode()
+        assert "a cat" in md
+
+
+def test_download_session_invalid_token_returns_400(client) -> None:
+    response = client.get("/sessions/download?session_token=new")
+    assert response.status_code == 400
+
+
+def test_download_session_not_found_returns_404(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    fake_session._scalars_result = []
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    response = client.get("/sessions/download?session_token=session:missing")
+    assert response.status_code == 404

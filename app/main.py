@@ -3,11 +3,13 @@ from __future__ import annotations
 import base64
 import copy
 import hmac
+import io
 import json
 import logging
 import os
 import secrets
 import uuid
+import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
@@ -1584,6 +1586,130 @@ def archive_chat_session(
     return generate_workspace_redirect(
         conversation=next_conversation,
         workspace_view=workspace_view,
+    )
+
+
+def _build_session_markdown(
+    session_title: str,
+    token: str,
+    generations: list[Generation],
+    image_names: dict[int, list[str]],
+) -> str:
+    """Build a markdown summary for a session download archive.
+
+    Args:
+        session_title: Human-readable title for the session.
+        token: The session token (used as fallback identifier).
+        generations: Ordered list of Generation records for the session.
+        image_names: Mapping of generation ID to list of image filenames in the ZIP.
+
+    Returns:
+        A UTF-8 markdown string describing the session.
+    """
+    lines: list[str] = []
+    lines.append(f"# {session_title}\n")
+    if generations:
+        first_dt = generations[0].created_at
+        last_dt = generations[-1].finished_at or generations[-1].created_at
+        if first_dt:
+            lines.append(f"**Started:** {first_dt.strftime('%Y-%m-%d %H:%M UTC')}\n")
+        if last_dt and last_dt != first_dt:
+            lines.append(f"**Last activity:** {last_dt.strftime('%Y-%m-%d %H:%M UTC')}\n")
+    lines.append(f"**Session token:** `{token}`\n")
+    lines.append(f"**Generations:** {len(generations)}\n")
+    lines.append("\n---\n")
+
+    for idx, gen in enumerate(generations, start=1):
+        ts = gen.created_at.strftime("%Y-%m-%d %H:%M UTC") if gen.created_at else "unknown"
+        lines.append(f"\n## Generation {idx} — {ts}\n")
+        lines.append(f"**Prompt:** {gen.prompt_user or '_(none)_'}\n")
+        if gen.prompt_final and gen.prompt_final != gen.prompt_user:
+            lines.append(f"**Final prompt:** {gen.prompt_final}\n")
+        lines.append(f"**Model:** {gen.model or '_(unknown)_'}\n")
+        lines.append(f"**Provider:** {gen.provider or '_(unknown)_'}\n")
+        lines.append(f"**Status:** {gen.status or '_(unknown)_'}\n")
+        names = image_names.get(gen.id, [])
+        if names:
+            lines.append("\n**Images:**\n")
+            for name in names:
+                lines.append(f"- `{name}`\n")
+
+    return "".join(lines)
+
+
+@app.get("/sessions/download")
+def download_session(
+    request: Request,
+    session_token: str = Query(...),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Download all images and a markdown summary for a session as a ZIP archive.
+
+    Args:
+        request: The incoming HTTP request.
+        session_token: Token identifying the chat session to download.
+        session: Database session dependency.
+
+    Returns:
+        A ZIP file response containing all session images and a markdown summary.
+    """
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        raise HTTPException(status_code=400, detail="Invalid session token")
+
+    generations = list(
+        session.scalars(
+            select(Generation)
+            .options(selectinload(Generation.assets))
+            .order_by(Generation.created_at.asc(), Generation.id.asc())
+        ).all()
+    )
+    generations = [g for g in generations if generation_session_token(g) == token]
+
+    if not generations:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Determine the session title for the archive filename and markdown.
+    session_title = generation_session_title(generations[0]) if generations else ""
+    if not session_title:
+        session_title = str(generations[0].profile_name or "Session") if generations else "Session"
+    slug = slugify(session_title, max_length=48, fallback="session")
+    date_str = generations[0].created_at.strftime("%Y%m%d") if generations[0].created_at else "unknown"
+    zip_filename = f"session-{slug}-{date_str}.zip"
+
+    # Build the ZIP in memory.
+    buf = io.BytesIO()
+    image_names: dict[int, list[str]] = {}
+    global_index = 1
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for gen in generations:
+            gen_names: list[str] = []
+            for asset in gen.assets:
+                try:
+                    abs_path = generation_service.asset_absolute_path(asset, which="file")
+                except ValueError:
+                    logging.getLogger(__name__).warning(
+                        "Skipping asset %s for session download: path could not be resolved",
+                        getattr(asset, "id", "?"),
+                    )
+                    continue
+                if not abs_path.exists():
+                    continue
+                ext = Path(asset.file_path).suffix or ".png"
+                arc_name = f"images/{global_index:03d}{ext}"
+                zf.write(abs_path, arcname=arc_name)
+                gen_names.append(arc_name)
+                global_index += 1
+            image_names[gen.id] = gen_names
+
+        markdown_content = _build_session_markdown(session_title, token, generations, image_names)
+        zf.writestr("session.md", markdown_content.encode("utf-8"))
+
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
     )
 
 
