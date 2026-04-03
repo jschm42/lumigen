@@ -427,6 +427,7 @@
         falResolutionInput.disabled = !isFal;
         if (!isFal) falResolutionInput.value = '';
       }
+      updateGenerationFrame();
     }
 
     function legacyFalImageSizeToRatio(value) {
@@ -439,6 +440,89 @@
         landscape_16_9: '16:9'
       };
       return map[String(value || '').trim()] || '';
+    }
+
+    /**
+     * Parse a ratio string in "W:H" or "WxH" format.
+     * Returns [width, height] as numbers, or null if invalid.
+     */
+    function parseRatioString(str) {
+      if (!str || typeof str !== 'string') return null;
+      var parts;
+      if (str.indexOf(':') !== -1) {
+        parts = str.split(':');
+      } else if (str.indexOf('x') !== -1) {
+        parts = str.split('x');
+      } else {
+        return null;
+      }
+      if (parts.length !== 2) return null;
+      var w = parseFloat(parts[0]);
+      var h = parseFloat(parts[1]);
+      if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) return null;
+      return [w, h];
+    }
+
+    /**
+     * Derive the active aspect ratio [w, h] from whichever control set is
+     * currently visible (FAL, OpenRouter, or standard width/height).
+     * Falls back to [1, 1] when no explicit ratio is set.
+     */
+    function getActiveRatio() {
+      var selected = profileSelect.options[profileSelect.selectedIndex];
+      var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
+      var isFal = provider === 'fal';
+      var isOpenRouter = provider === 'openrouter';
+
+      if (isFal) {
+        var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+        var falVal = falAspectRatioInput ? falAspectRatioInput.value.trim() : '';
+        if (falVal && falVal !== 'auto') {
+          return parseRatioString(falVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      if (isOpenRouter) {
+        var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
+        var orVal = aspectRatioInput ? aspectRatioInput.value.trim() : '';
+        if (orVal) {
+          return parseRatioString(orVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      var wVal = widthInput ? parseFloat(widthInput.value) : 0;
+      var hVal = heightInput ? parseFloat(heightInput.value) : 0;
+      if (wVal > 0 && hVal > 0) return [wVal, hVal];
+      return [1, 1];
+    }
+
+    /**
+     * Update the generation frame element to reflect the currently active
+     * aspect ratio.  The frame is constrained to a 112 px maximum in either
+     * dimension so extreme ratios (e.g. 21:9 or 1:8) stay within their
+     * container.
+     */
+    function updateGenerationFrame() {
+      var frame = form.querySelector('[data-generation-frame]');
+      if (!frame) return;
+      var MAX = 112;
+      var ratio = getActiveRatio();
+      var w = ratio[0];
+      var h = ratio[1];
+      if (w <= 0 || h <= 0) { w = 1; h = 1; }
+      var displayW, displayH;
+      if (w >= h) {
+        displayW = MAX;
+        displayH = Math.max(1, Math.round(MAX * h / w));
+      } else {
+        displayH = MAX;
+        displayW = Math.max(1, Math.round(MAX * w / h));
+      }
+      frame.style.width = displayW + 'px';
+      frame.style.height = displayH + 'px';
+      frame.style.aspectRatio = w + ' / ' + h;
     }
 
     function applyProfileDefaults() {
@@ -482,14 +566,27 @@
         widthInput.value = parts[0].trim();
         heightInput.value = parts[1].trim();
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
 
       widthInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
       heightInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
+    }
+
+    var aspectRatioSelect = form.querySelector('[name="aspect_ratio"]');
+    if (aspectRatioSelect) {
+      aspectRatioSelect.addEventListener('change', updateGenerationFrame);
+    }
+
+    var falAspectRatioSelect = form.querySelector('[name="fal_aspect_ratio"]');
+    if (falAspectRatioSelect) {
+      falAspectRatioSelect.addEventListener('change', updateGenerationFrame);
     }
 
     function syncInputFiles() {
