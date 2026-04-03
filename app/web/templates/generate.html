@@ -78,32 +78,16 @@
             role="menuitem"
             data-user-settings-open
           >
-            <i class="bi bi-person-circle text-base" aria-hidden="true"></i>
-            <span class="hidden truncate text-left lg:inline lg:flex-1">{{ request.session.get('username') or 'User' }}</span>
-            <i class="bi bi-chevron-down text-sm" aria-hidden="true"></i>
-          </summary>
-          <div
-            class="absolute bottom-full left-0 mb-2 min-w-[10rem] rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-300/70 dark:bg-slate-800 dark:ring-white/10 lg:right-0"
-            data-user-menu
-            role="menu"
-          >
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
-              role="menuitem"
-              data-user-settings-open
-            >
-              <i class="bi bi-gear text-base" aria-hidden="true"></i>
-              <span>Settings...</span>
-            </button>
-            <div class="my-2 border-t border-slate-300/70 dark:border-white/10"></div>
-            <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white" role="menuitem">
-              <i class="bi bi-box-arrow-right text-base" aria-hidden="true"></i>
-              <span>Logout</span>
-            </a>
-          </div>
+            <i class="bi bi-gear text-base" aria-hidden="true"></i>
+            <span>Settings...</span>
+          </button>
+          <div class="my-2 border-t border-slate-300/70 dark:border-white/10"></div>
+          <a href="/logout" class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white" role="menuitem">
+            <i class="bi bi-box-arrow-right text-base" aria-hidden="true"></i>
+            <span>Logout</span>
+          </a>
+        </div>
         </details>
-      </div>
     </nav>
   </aside>
 
