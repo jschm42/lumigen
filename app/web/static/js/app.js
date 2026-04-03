@@ -384,6 +384,46 @@
     var promptInput = form.querySelector('[name="prompt_user"]');
     var advancedToggle = form.querySelector('[data-advanced-toggle]');
     var advancedPanel = form.querySelector('[data-advanced-panel]');
+    var submitBtn = form.querySelector('[data-generate-submit]');
+    var _generationLocked = false;
+
+    function lockGenerationForm() {
+      /* Disable the submit button, show a loading spinner, and set the
+         textarea to readonly to prevent duplicate submissions while a
+         generation request is in flight. */
+      _generationLocked = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
+        var icon = submitBtn.querySelector('.bi');
+        if (icon) {
+          icon.classList.remove('bi-arrow-up');
+          icon.classList.add('bi-hourglass-split', 'animate-spin');
+        }
+      }
+      if (promptInput) {
+        promptInput.setAttribute('readonly', '');
+      }
+    }
+
+    function unlockGenerationForm() {
+      /* Re-enable the submit button, restore the arrow-up icon, and remove
+         readonly from the textarea after a generation request completes
+         (whether it succeeded or failed). */
+      _generationLocked = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.removeAttribute('aria-busy');
+        var icon = submitBtn.querySelector('.bi');
+        if (icon) {
+          icon.classList.remove('bi-hourglass-split', 'animate-spin');
+          icon.classList.add('bi-arrow-up');
+        }
+      }
+      if (promptInput) {
+        promptInput.removeAttribute('readonly');
+      }
+    }
 
     function syncProviderSpecificOptions(selected) {
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
@@ -783,6 +823,10 @@
         if (event.key !== 'Enter') return;
         if (event.shiftKey) return;
         if (event.isComposing || event.keyCode === 229) return;
+        if (_generationLocked) {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         if (typeof form.requestSubmit === 'function') {
           form.requestSubmit();
@@ -835,6 +879,19 @@
         }
       });
     }
+
+    form.addEventListener('submit', function (event) {
+      if (_generationLocked) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      lockGenerationForm();
+    });
+
+    form.addEventListener('htmx:afterRequest', function () {
+      unlockGenerationForm();
+    });
 
     applyProfileDefaults();
   }
