@@ -329,6 +329,11 @@
   var profileSelect = document.querySelector("[data-generation-profile]");
 
   function syncRetryProfileIds() {
+    /**
+     * Synchronize the currently selected profile ID into all retry form
+     * hidden inputs, so that clicking Retry re-runs with the active profile
+     * rather than the profile from the original failed request.
+     */
     if (!profileSelect) return;
     var profileId = profileSelect.value || "";
     var inputs = document.querySelectorAll("[data-retry-profile-id]");
