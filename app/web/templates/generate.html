@@ -33,18 +33,50 @@
       {% endif %}
     </div>
 
-    <nav class="mt-2 shrink-0 border-t border-slate-300/60 pt-2 dark:border-white/5 lg:mt-4 lg:pt-3">
-      <div class="flex flex-wrap items-center gap-1 lg:block">
-        <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="profiles" class="inline-flex items-center rounded-xl px-2.5 py-1.5 text-xs font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %} lg:mb-2 lg:w-full lg:px-3 lg:py-2 lg:text-sm">Profiles</a>
-        <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="gallery" class="inline-flex items-center rounded-xl px-2.5 py-1.5 text-xs font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %} lg:mb-2 lg:w-full lg:px-3 lg:py-2 lg:text-sm">Gallery</a>
-        {% if request.session.get('user_role') == 'admin' %}
-        <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="admin" class="inline-flex items-center rounded-xl px-2.5 py-1.5 text-xs font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %} lg:w-full lg:px-3 lg:py-2 lg:text-sm">Admin</a>
-        {% endif %}
-        <details class="relative lg:mt-2" data-user-menu-container>
-          <summary
-            class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-xl bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20 lg:w-full lg:gap-2 lg:px-3 lg:py-2 lg:text-sm"
-            data-user-menu-toggle
-            aria-haspopup="menu"
+    <nav class="mt-4 shrink-0 border-t border-slate-300/60 pt-3 dark:border-white/5">
+      <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="profiles" 
+         class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/profiles" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Profiles</a>
+      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="gallery" 
+         class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/gallery" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Gallery</a>
+      {% if request.session.get('user_role') == 'admin' %}
+      <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="admin" 
+         class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/admin" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Admin</a>
+      {% endif %}
+      <details class="relative mt-2" data-user-menu-container>
+        <summary
+          class="inline-flex w-full cursor-pointer list-none items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20"
+          data-user-menu-toggle
+          aria-haspopup="menu"
+        >
+          <i class="bi bi-person-circle text-base" aria-hidden="true"></i>
+          <span class="flex-1 truncate text-left">{{ request.session.get('username') or 'User' }}</span>
+          <i class="bi bi-chevron-down text-sm" aria-hidden="true"></i>
+        </summary>
+        <div
+          class="absolute bottom-full left-0 right-0 mb-2 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-slate-300/70 dark:bg-slate-800 dark:ring-white/10"
+          data-user-menu
+          role="menu"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
+            role="menuitem"
+            data-user-settings-open
           >
             <i class="bi bi-person-circle text-base" aria-hidden="true"></i>
             <span class="hidden truncate text-left lg:inline lg:flex-1">{{ request.session.get('username') or 'User' }}</span>
@@ -77,11 +109,12 @@
 
   <section class="{{ panel_class }} relative h-full min-h-0 overflow-hidden" data-chat-shell data-workspace-embedded="{{ '1' if workspace_view != 'chat' else '0' }}" data-last-thumb-size="{{ last_thumb_size }}">
     {% if workspace_view != "chat" %}
-      <iframe
-        title="workspace"
-        src="{% if workspace_view == 'profiles' %}/profiles?embedded=1{% elif workspace_view == 'gallery' %}/gallery?embedded=1{% elif workspace_view == 'admin' %}/admin?embedded=1{% endif %}"
-        class="h-full w-full border-0"
-      ></iframe>
+      <div id="workspace-content" 
+           hx-get="{% if workspace_view == 'profiles' %}/workspace/profiles{% elif workspace_view == 'gallery' %}/workspace/gallery{% elif workspace_view == 'admin' %}/workspace/admin{% endif %}" 
+           hx-trigger="load" 
+           class="h-full w-full">
+        <!-- Content will be loaded here via HTMX -->
+      </div>
     {% elif not profiles %}
       <div class="h-full p-5">
         <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -89,6 +122,7 @@
         </div>
       </div>
     {% else %}
+      <div id="workspace-content" class="relative h-full w-full">
       <div id="chat-history" class="subtle-scrollbar h-full space-y-5 overflow-y-auto px-4 sm:px-5">
         {% if error %}
           {% with error_message=error %}
@@ -187,7 +221,7 @@
               <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300/80 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20" data-input-trigger aria-label="Select images" title="Select images"><i class="bi bi-paperclip text-xl" aria-hidden="true"></i></button>
               <textarea id="prompt_user" name="prompt_user" rows="2" required class="{{ textarea_class }} min-h-[3rem] max-h-[18rem] flex-1 resize-y bg-slate-50 px-2 py-2 focus:ring-0 dark:bg-slate-950/25" placeholder="Describe your image..."></textarea>
               <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300/80 bg-white text-sm font-semibold text-slate-600 transition hover:bg-rose-100 hover:text-rose-700 disabled:opacity-40 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-rose-500/20 dark:hover:text-rose-100" data-input-clear title="Remove images">x</button>
-              <button type="submit" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-300 text-slate-950 transition hover:bg-sky-200" title="Generate"><i class="bi bi-arrow-up text-xl" aria-hidden="true"></i></button>
+              <button type="submit" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-300 text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" data-generate-submit title="Generate"><i class="bi bi-arrow-up text-xl" aria-hidden="true"></i></button>
             </div>
 
             <div data-advanced-panel class="mt-2 hidden rounded-2xl bg-slate-100/80 p-2.5 space-y-1.5 dark:bg-slate-950/45">
@@ -311,6 +345,11 @@
                 </div>
               </div>
 
+              <!-- Aspect Ratio Preview Frame -->
+              <div class="flex items-center justify-center py-0.5" aria-hidden="true">
+                <div data-generation-frame class="rounded-xl border-2 border-dashed border-slate-400/40 bg-slate-200/40 transition-all duration-200 dark:border-slate-600/40 dark:bg-slate-800/30" style="width: 7rem; height: 7rem;"></div>
+              </div>
+
               <!-- Upscale mode -->
               <div class="rounded-xl bg-slate-200/80 p-1.5 dark:bg-slate-900/30">
                 <label for="upscale_model" class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Upscale</label>
@@ -366,6 +405,7 @@
           </div>
         </div>
       </form>
+      </div>
     {% endif %}
   </section>
 </div>

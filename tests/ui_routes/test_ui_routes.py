@@ -233,7 +233,7 @@ def test_generation_input_image_thumbnail_endpoint_returns_image_bytes(client, a
     assert response.content == b"abc"
 
 
-def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_module, monkeypatch) -> None:
+def test_generate_page_gallery_workspace_renders_htmx_content(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession(generations=[])
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
@@ -253,8 +253,8 @@ def test_generate_page_gallery_workspace_renders_embedded_iframe(client, app_mod
     body = response.text
 
     assert response.status_code == 200
-    assert 'title="workspace"' in body
-    assert 'src="/gallery?embedded=1"' in body
+    assert 'id="workspace-content"' in body
+    assert 'hx-get="/workspace/gallery"' in body
 
 
 def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_module, monkeypatch) -> None:
@@ -309,7 +309,23 @@ def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_mod
     response = client.get("/?workspace_view=gallery&conversation=session:abc")
 
     assert response.status_code == 200
+    assert 'hx-get="/workspace/gallery"' in response.text
+
+
+def test_workspace_gallery_fragment_renders_embedded_iframe(client) -> None:
+    response = client.get("/workspace/gallery")
+
+    assert response.status_code == 200
     assert 'src="/gallery?embedded=1"' in response.text
+    assert '<iframe' in response.text
+
+
+def test_workspace_profiles_fragment_renders_embedded_iframe(client) -> None:
+    response = client.get("/workspace/profiles")
+
+    assert response.status_code == 200
+    assert 'src="/profiles?embedded=1"' in response.text
+    assert '<iframe' in response.text
 
 
 def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
