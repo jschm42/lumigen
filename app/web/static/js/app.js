@@ -384,6 +384,46 @@
     var promptInput = form.querySelector('[name="prompt_user"]');
     var advancedToggle = form.querySelector('[data-advanced-toggle]');
     var advancedPanel = form.querySelector('[data-advanced-panel]');
+    var submitBtn = form.querySelector('[data-generate-submit]');
+    var _generationLocked = false;
+
+    function lockGenerationForm() {
+      /* Disable the submit button, show a loading spinner, and set the
+         textarea to readonly to prevent duplicate submissions while a
+         generation request is in flight. */
+      _generationLocked = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
+        var icon = submitBtn.querySelector('.bi');
+        if (icon) {
+          icon.classList.remove('bi-arrow-up');
+          icon.classList.add('bi-hourglass-split', 'animate-spin');
+        }
+      }
+      if (promptInput) {
+        promptInput.setAttribute('readonly', '');
+      }
+    }
+
+    function unlockGenerationForm() {
+      /* Re-enable the submit button, restore the arrow-up icon, and remove
+         readonly from the textarea after a generation request completes
+         (whether it succeeded or failed). */
+      _generationLocked = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.removeAttribute('aria-busy');
+        var icon = submitBtn.querySelector('.bi');
+        if (icon) {
+          icon.classList.remove('bi-hourglass-split', 'animate-spin');
+          icon.classList.add('bi-arrow-up');
+        }
+      }
+      if (promptInput) {
+        promptInput.removeAttribute('readonly');
+      }
+    }
 
     function syncProviderSpecificOptions(selected) {
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
@@ -445,6 +485,7 @@
         falResolutionInput.disabled = !isFal;
         if (!isFal) falResolutionInput.value = '';
       }
+      updateGenerationFrame();
     }
 
     function legacyFalImageSizeToRatio(value) {
@@ -457,6 +498,89 @@
         landscape_16_9: '16:9'
       };
       return map[String(value || '').trim()] || '';
+    }
+
+    /**
+     * Parse a ratio string in "W:H" or "WxH" format.
+     * Returns [width, height] as numbers, or null if invalid.
+     */
+    function parseRatioString(str) {
+      if (!str || typeof str !== 'string') return null;
+      var parts;
+      if (str.indexOf(':') !== -1) {
+        parts = str.split(':');
+      } else if (str.indexOf('x') !== -1) {
+        parts = str.split('x');
+      } else {
+        return null;
+      }
+      if (parts.length !== 2) return null;
+      var w = parseFloat(parts[0]);
+      var h = parseFloat(parts[1]);
+      if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) return null;
+      return [w, h];
+    }
+
+    /**
+     * Derive the active aspect ratio [w, h] from whichever control set is
+     * currently visible (FAL, OpenRouter, or standard width/height).
+     * Falls back to [1, 1] when no explicit ratio is set.
+     */
+    function getActiveRatio() {
+      var selected = profileSelect.options[profileSelect.selectedIndex];
+      var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
+      var isFal = provider === 'fal';
+      var isOpenRouter = provider === 'openrouter';
+
+      if (isFal) {
+        var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+        var falVal = falAspectRatioInput ? falAspectRatioInput.value.trim() : '';
+        if (falVal && falVal !== 'auto') {
+          return parseRatioString(falVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      if (isOpenRouter) {
+        var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
+        var orVal = aspectRatioInput ? aspectRatioInput.value.trim() : '';
+        if (orVal) {
+          return parseRatioString(orVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      var wVal = widthInput ? parseFloat(widthInput.value) : 0;
+      var hVal = heightInput ? parseFloat(heightInput.value) : 0;
+      if (wVal > 0 && hVal > 0) return [wVal, hVal];
+      return [1, 1];
+    }
+
+    /**
+     * Update the generation frame element to reflect the currently active
+     * aspect ratio.  The frame is constrained to a 112 px maximum in either
+     * dimension so extreme ratios (e.g. 21:9 or 1:8) stay within their
+     * container.
+     */
+    function updateGenerationFrame() {
+      var frame = form.querySelector('[data-generation-frame]');
+      if (!frame) return;
+      var MAX = 112;
+      var ratio = getActiveRatio();
+      var w = ratio[0];
+      var h = ratio[1];
+      if (w <= 0 || h <= 0) { w = 1; h = 1; }
+      var displayW, displayH;
+      if (w >= h) {
+        displayW = MAX;
+        displayH = Math.max(1, Math.round(MAX * h / w));
+      } else {
+        displayH = MAX;
+        displayW = Math.max(1, Math.round(MAX * w / h));
+      }
+      frame.style.width = displayW + 'px';
+      frame.style.height = displayH + 'px';
+      frame.style.aspectRatio = w + ' / ' + h;
     }
 
     function applyProfileDefaults() {
@@ -500,14 +624,27 @@
         widthInput.value = parts[0].trim();
         heightInput.value = parts[1].trim();
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
 
       widthInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
       heightInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
+    }
+
+    var aspectRatioSelect = form.querySelector('[name="aspect_ratio"]');
+    if (aspectRatioSelect) {
+      aspectRatioSelect.addEventListener('change', updateGenerationFrame);
+    }
+
+    var falAspectRatioSelect = form.querySelector('[name="fal_aspect_ratio"]');
+    if (falAspectRatioSelect) {
+      falAspectRatioSelect.addEventListener('change', updateGenerationFrame);
     }
 
     function syncInputFiles() {
@@ -686,6 +823,10 @@
         if (event.key !== 'Enter') return;
         if (event.shiftKey) return;
         if (event.isComposing || event.keyCode === 229) return;
+        if (_generationLocked) {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         if (typeof form.requestSubmit === 'function') {
           form.requestSubmit();
@@ -738,6 +879,19 @@
         }
       });
     }
+
+    form.addEventListener('submit', function (event) {
+      if (_generationLocked) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      lockGenerationForm();
+    });
+
+    form.addEventListener('htmx:afterRequest', function () {
+      unlockGenerationForm();
+    });
 
     applyProfileDefaults();
   }

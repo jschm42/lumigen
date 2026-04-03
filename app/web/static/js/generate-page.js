@@ -233,6 +233,7 @@
     setupWorkspaceNavigation();
     setupChatAutoScroll();
     scrollChatToBottom();
+    syncRetryProfileIds();
   });
 
   if (typeof window.addEventListener === "function") {
@@ -277,6 +278,7 @@
         if (currentThumbSize) {
           applyThumbSize(currentThumbSize);
         }
+        syncRetryProfileIds();
       }
     });
   }
@@ -311,12 +313,28 @@
   }
 
   var profileSelect = document.querySelector("[data-generation-profile]");
+
+  function syncRetryProfileIds() {
+    /**
+     * Synchronize the currently selected profile ID into all retry form
+     * hidden inputs, so that clicking Retry re-runs with the active profile
+     * rather than the profile from the original failed request.
+     */
+    if (!profileSelect) return;
+    var profileId = profileSelect.value || "";
+    var inputs = document.querySelectorAll("[data-retry-profile-id]");
+    inputs.forEach(function (input) {
+      input.value = profileId;
+    });
+  }
+
   if (profileSelect) {
     profileSelect.addEventListener("change", function () {
       var profileId = parseInt(profileSelect.value, 10);
       if (!isNaN(profileId) && profileId > 0) {
         saveSessionPreference({ profile_id: profileId });
       }
+      syncRetryProfileIds();
     });
   }
 
