@@ -771,3 +771,47 @@ def test_generate_submit_rejects_upload_exceeding_size_limit(
     assert response.status_code == 303
     assert "exceeds" in response.headers["location"]
     assert fake_generation_service.create_called is False
+
+
+def test_generate_submit_rejects_input_images_for_fal_provider(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="fal",
+        model="fal-ai/flux/schnell",
+        upscale_model=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def __init__(self) -> None:
+            self.create_called = False
+
+        def create_generation_from_profile(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+            self.create_called = True
+            raise AssertionError("Must not be called on validation error")
+
+        def enqueue(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+    fake_generation_service = _FakeGenerationService()
+    monkeypatch.setattr(app_module, "generation_service", fake_generation_service)
+
+    image_data = b"\x89PNG\r\n\x1a\n"
+    response = client.post(
+        "/generate",
+        data={"prompt_user": "prompt", "profile_id": "1"},
+        files={"input_images": ("test.png", image_data, "image/png")},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "FAL+provider+does+not+support+input+images" in response.headers["location"]
+    assert fake_generation_service.create_called is False

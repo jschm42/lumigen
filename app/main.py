@@ -1346,6 +1346,10 @@ def generate_submit(
             overrides["input_images"] = encoded_images
 
         provider_value = str(profile.provider or "").strip().lower()
+        if provider_value == "fal" and encoded_images:
+            raise ValueError(
+                "FAL provider does not support input images."
+            )
 
         # Apply OpenRouter-specific, FAL-specific, or standard dimension overrides
         if provider_value == "openrouter":

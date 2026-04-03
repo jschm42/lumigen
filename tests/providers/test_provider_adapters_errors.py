@@ -11,6 +11,7 @@ from app.config import Settings
 from app.providers.base import (
     ProviderError,
     ProviderGenerationRequest,
+    ProviderInputImage,
     ProviderRateLimitError,
     ProviderServiceUnavailableError,
 )
@@ -680,4 +681,23 @@ async def test_fal_generate_polling_5xx_exhaustion_raises_service_unavailable(
     )
 
     with pytest.raises(ProviderServiceUnavailableError, match="polling failed"):
+        await adapter.generate(request, settings)
+
+
+@pytest.mark.asyncio
+async def test_fal_with_input_images_raises_provider_error() -> None:
+    adapter = FalAdapter()
+    settings = Settings(fal_api_key="fal-key")
+    request = ProviderGenerationRequest(
+        prompt="p",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="jpeg",
+        model="fal-ai/flux/schnell",
+        input_images=[ProviderInputImage(data=b"abc", mime="image/png")],
+    )
+
+    with pytest.raises(ProviderError, match="FAL provider does not support input images"):
         await adapter.generate(request, settings)
