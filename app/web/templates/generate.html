@@ -132,7 +132,7 @@
         hx-target="#chat-history"
         hx-swap="beforeend"
         hx-encoding="multipart/form-data"
-        hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}var clearBtn=this.querySelector('[data-input-clear]');if(clearBtn){clearBtn.click();}}"
+        hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}}"
         method="post"
         enctype="multipart/form-data"
         class="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between"
@@ -197,7 +197,7 @@
               title="Enhance prompt"
             ><i class="bi bi-magic text-2xl" aria-hidden="true"></i></button>
             <input id="input_images" name="input_images" type="file" accept="image/*" multiple data-input-images class="sr-only">
-            <input type="hidden" name="style_ids" id="style_ids_input" value="">
+            <input type="hidden" name="style_ids" id="style_ids_input" value="{{ last_selected_style_ids }}">
 
             <div class="mb-1.5 min-h-[2.75rem] pr-16">
               <div class="subtle-scrollbar flex flex-nowrap gap-2 overflow-x-auto" data-input-preview aria-live="polite"></div>

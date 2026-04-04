@@ -374,13 +374,7 @@
     var inputPreview = form.querySelector('[data-input-preview]');
     var inputClear = form.querySelector('[data-input-clear]');
     var inputTrigger = form.querySelector('[data-input-trigger]');
-    var inputFileState = [];
-    var canUseDataTransfer = false;
-    try {
-      canUseDataTransfer = typeof DataTransfer !== 'undefined' && !!new DataTransfer();
-    } catch (_error) {
-      canUseDataTransfer = false;
-    }
+    var inputImageState = [];
     var enhanceBtn = form.querySelector('[data-enhance-prompt]');
     var promptInput = form.querySelector('[name="prompt_user"]');
     var advancedToggle = form.querySelector('[data-advanced-toggle]');
@@ -398,6 +392,109 @@
       var conversationKey = getConversationKey();
       if (!conversationKey) return '';
       return PROFILE_SESSION_KEY_PREFIX + conversationKey;
+    }
+
+    function hasPersistableConversation() {
+      var conversationKey = getConversationKey();
+      return !!conversationKey && conversationKey !== 'new' && conversationKey !== 'all';
+    }
+
+    function resetNativeInputElement() {
+      if (inputImages) {
+        inputImages.value = '';
+      }
+    }
+
+    async function fetchSessionInputImages() {
+      if (!hasPersistableConversation()) {
+        inputImageState = [];
+        renderInputPreviews();
+        return;
+      }
+      try {
+        var response = await fetch('/api/session-input-images?chat_session_id=' + encodeURIComponent(getConversationKey()));
+        if (!response.ok) {
+          throw new Error('Failed to load session input images.');
+        }
+        var payload = await response.json();
+        inputImageState = Array.isArray(payload.items) ? payload.items.slice(0, 5) : [];
+        renderInputPreviews();
+      } catch (_error) {
+        inputImageState = [];
+        renderInputPreviews();
+      }
+    }
+
+    async function uploadInputImageFile(file) {
+      if (!hasPersistableConversation()) return null;
+      var formData = new FormData();
+      formData.append('chat_session_id', getConversationKey());
+      formData.append('input_image', file);
+      var response = await fetch('/api/session-input-images/upload', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error('Upload failed.');
+      }
+      var payload = await response.json();
+      return payload && payload.item ? payload.item : null;
+    }
+
+    async function addAssetInputImage(assetId) {
+      if (!hasPersistableConversation()) return null;
+      var response = await fetch('/api/session-input-images/asset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          chat_session_id: getConversationKey(),
+          asset_id: Number(assetId),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to add asset input image.');
+      }
+      var payload = await response.json();
+      return payload && payload.item ? payload.item : null;
+    }
+
+    async function removeSessionInputImage(sessionInputImageId) {
+      if (!hasPersistableConversation()) return;
+      await fetch('/api/session-input-images/remove', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          chat_session_id: getConversationKey(),
+          session_input_image_id: Number(sessionInputImageId),
+        }),
+      });
+    }
+
+    async function clearSessionInputImages() {
+      if (!hasPersistableConversation()) {
+        inputImageState = [];
+        renderInputPreviews();
+        return;
+      }
+      await fetch('/api/session-input-images/clear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({ chat_session_id: getConversationKey() }),
+      });
+      inputImageState = [];
+      renderInputPreviews();
     }
 
     function saveSelectedProfileToSession() {
@@ -748,67 +845,45 @@
       googleAspectRatioSelect.addEventListener('change', updateGenerationFrame);
     }
 
-    function syncInputFiles() {
-      if (!inputImages) return;
-      if (!canUseDataTransfer) {
-        return false;
-      }
-      try {
-        var dataTransfer = new DataTransfer();
-        inputFileState.forEach(function (file) {
-          dataTransfer.items.add(file);
-        });
-        inputImages.files = dataTransfer.files;
-        return true;
-      } catch (_error) {
-        canUseDataTransfer = false;
-        return false;
-      }
-    }
-
     function renderInputPreviews() {
-      if (!inputImages || !inputPreview) return;
+      if (!inputPreview) return;
       inputPreview.innerHTML = '';
 
-      var selectedCount = canUseDataTransfer
-        ? inputFileState.length
-        : Array.from(inputImages.files || []).length;
+      var selectedCount = inputImageState.length;
 
       if (selectedCount > 5) {
-        inputImages.setCustomValidity('Max 5 images allowed.');
-      } else {
+        if (inputImages) {
+          inputImages.setCustomValidity('Max 5 images allowed.');
+        }
+      } else if (inputImages) {
         inputImages.setCustomValidity('');
       }
 
       if (inputClear) {
-        inputClear.disabled = inputFileState.length === 0;
+        inputClear.disabled = inputImageState.length === 0;
       }
 
-      inputFileState.slice(0, 5).forEach(function (file, index) {
-        var objectUrl = URL.createObjectURL(file);
+      inputImageState.slice(0, 5).forEach(function (item) {
+        var thumbUrl = item && item.thumbnail_url ? String(item.thumbnail_url) : '';
+        if (!thumbUrl) return;
         var wrapper = document.createElement('div');
         wrapper.className = 'relative h-20 w-20 overflow-hidden rounded-xl border border-slate-300/55 bg-white/95 shadow-md shadow-slate-200/60 dark:border-white/15 dark:bg-slate-900/80 dark:shadow-slate-950/60';
         var img = document.createElement('img');
-        img.src = objectUrl;
-        img.alt = file.name || 'input image';
+        img.src = thumbUrl;
+        img.alt = item.file_name || 'input image';
         img.className = 'h-full w-full object-cover';
-        img.addEventListener('load', function () {
-          URL.revokeObjectURL(objectUrl);
-        });
         var removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300/85 bg-rose-500/90 text-[11px] font-bold text-slate-900 transition hover:border-rose-200 hover:bg-rose-500/80 dark:border-white/35 dark:bg-slate-900/90 dark:text-white dark:hover:border-rose-200 dark:hover:bg-rose-500/80';
         removeBtn.textContent = 'x';
-        if (!canUseDataTransfer) {
-          removeBtn.disabled = true;
-          removeBtn.title = 'Use clear button to remove images';
-          removeBtn.classList.add('opacity-40', 'cursor-not-allowed');
-        }
-        removeBtn.addEventListener('click', function () {
-          if (!canUseDataTransfer) return;
-          inputFileState.splice(index, 1);
-          syncInputFiles();
-          renderInputPreviews();
+        removeBtn.addEventListener('click', async function () {
+          if (!item.id) return;
+          try {
+            await removeSessionInputImage(item.id);
+            await fetchSessionInputImages();
+          } catch (_error) {
+            alert('Failed to remove input image.');
+          }
         });
         wrapper.appendChild(img);
         wrapper.appendChild(removeBtn);
@@ -816,91 +891,79 @@
       });
     }
 
-    function addSelectedFiles(fileList) {
-      var incoming = Array.from(fileList || []);
-      if (incoming.length === 0) return;
-
-      incoming.forEach(function (file) {
-        var isDuplicate = inputFileState.some(function (existing) {
-          return existing.name === file.name
-            && existing.size === file.size
-            && existing.lastModified === file.lastModified;
-        });
-        if (!isDuplicate) {
-          inputFileState.push(file);
-        }
-      });
-
-      if (inputFileState.length > 5) {
-        inputFileState = inputFileState.slice(0, 5);
-      }
-
-      syncInputFiles();
-      renderInputPreviews();
-    }
-
     if (inputImages) {
-      inputImages.addEventListener('change', function () {
-        if (!canUseDataTransfer) {
-          inputFileState = Array.from(inputImages.files || []).slice(0, 5);
-          renderInputPreviews();
+      inputImages.addEventListener('change', async function () {
+        var selectedFiles = Array.from(inputImages.files || []);
+        if (!selectedFiles.length) {
           return;
         }
-        var nativeSelectedFiles = Array.from(inputImages.files || []);
-        addSelectedFiles(nativeSelectedFiles);
 
-        if (canUseDataTransfer) {
-          // Keep files assigned to the input for submit.
-        } else {
-          inputFileState = nativeSelectedFiles.slice(0, 5);
-          renderInputPreviews();
+        if (!hasPersistableConversation()) {
+          resetNativeInputElement();
+          alert('Please select or create a chat session first.');
+          return;
+        }
+
+        var remaining = Math.max(0, 5 - inputImageState.length);
+        if (remaining <= 0) {
+          resetNativeInputElement();
+          alert('Upload up to 5 input images.');
+          return;
+        }
+
+        var filesToUpload = selectedFiles.slice(0, remaining);
+        try {
+          await Promise.all(filesToUpload.map(function (file) {
+            return uploadInputImageFile(file);
+          }));
+          await fetchSessionInputImages();
+        } catch (_error) {
+          alert('Failed to upload one or more input images.');
+        } finally {
+          resetNativeInputElement();
         }
       });
       renderInputPreviews();
+      fetchSessionInputImages();
     }
 
     if (inputTrigger && inputImages) {
       inputTrigger.addEventListener('click', function () {
-        if (canUseDataTransfer) {
-          inputImages.value = '';
-        }
+        resetNativeInputElement();
         inputImages.click();
       });
     }
 
     if (inputClear) {
-      inputClear.addEventListener('click', function () {
-        inputFileState = [];
-        if (canUseDataTransfer) {
-          syncInputFiles();
-        } else if (inputImages) {
-          inputImages.value = '';
+      inputClear.addEventListener('click', async function () {
+        try {
+          await clearSessionInputImages();
+        } catch (_error) {
+          alert('Failed to clear input images.');
+        } finally {
+          resetNativeInputElement();
+          await fetchSessionInputImages();
         }
-        renderInputPreviews();
+      });
+    }
+
+    if (conversationInput) {
+      conversationInput.addEventListener('change', function () {
+        fetchSessionInputImages();
       });
     }
 
     async function addImageFromAsset(assetId) {
-      if (inputFileState.length >= 5) return;
+      if (inputImageState.length >= 5) return;
+      if (!hasPersistableConversation()) {
+        alert('Please select or create a chat session first.');
+        return;
+      }
       try {
-        var response = await fetch('/assets/' + encodeURIComponent(assetId) + '/file');
-        if (!response.ok) return;
-        var blob = await response.blob();
-        var mime = blob.type || 'image/webp';
-        var mimeToExt = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
-        var ext = mimeToExt[mime] || 'webp';
-        var filename = 'asset_' + assetId + '.' + ext;
-        var isDuplicate = inputFileState.some(function (f) { return f.name === filename; });
-        if (isDuplicate) return;
-        var file = new File([blob], filename, { type: mime });
-        inputFileState.push(file);
-        if (inputFileState.length > 5) {
-          inputFileState = inputFileState.slice(0, 5);
-        }
-        syncInputFiles();
-        renderInputPreviews();
+        await addAssetInputImage(assetId);
+        await fetchSessionInputImages();
       } catch (_error) {
-        // Silently ignore fetch errors
+        alert('Failed to add asset as input image.');
       }
     }
 

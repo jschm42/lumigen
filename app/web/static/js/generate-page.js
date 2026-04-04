@@ -1,6 +1,11 @@
 (function () {
   var THEME_STORAGE_KEY = "lumigen_theme";
-  var STYLE_SELECTION_STORAGE_KEY = "lumigen_selected_style_ids";
+
+  function getActiveConversationToken() {
+    var conversationInput = document.querySelector('[name="conversation"]');
+    if (!conversationInput) return "";
+    return String(conversationInput.value || "").trim();
+  }
 
   function getSavedThemeMode() {
     try {
@@ -285,9 +290,7 @@
   }
 
   function saveSessionPreference(data) {
-    var conversationInput = document.querySelector('[name="conversation"]');
-    if (!conversationInput) return;
-    var chatSessionId = conversationInput.value.trim();
+    var chatSessionId = getActiveConversationToken();
     if (!chatSessionId || chatSessionId === "all" || chatSessionId === "new") return;
 
     var payload = { chat_session_id: chatSessionId };
@@ -296,6 +299,9 @@
     }
     if (data.thumb_size !== undefined) {
       payload.last_thumb_size = data.thumb_size;
+    }
+    if (data.selected_style_ids !== undefined) {
+      payload.selected_style_ids = data.selected_style_ids;
     }
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
@@ -393,15 +399,8 @@
   }
 
   var initialStyleIdsValue = "";
-  try {
-    initialStyleIdsValue = sessionStorage.getItem(STYLE_SELECTION_STORAGE_KEY) || "";
-  } catch (_error) {
-    initialStyleIdsValue = "";
-  }
-  if (!initialStyleIdsValue) {
-    var initialStyleInput = document.getElementById("style_ids_input");
-    initialStyleIdsValue = initialStyleInput ? initialStyleInput.value : "";
-  }
+  var initialStyleInput = document.getElementById("style_ids_input");
+  initialStyleIdsValue = initialStyleInput ? initialStyleInput.value : "";
   var selectedStyleIds = parseSelectedStyleIdsCsv(initialStyleIdsValue);
 
   function renderSelectedStyles(syncSessionPreference) {
@@ -414,14 +413,7 @@
     }
 
     if (syncSessionPreference !== false) {
-      try {
-        sessionStorage.setItem(
-          STYLE_SELECTION_STORAGE_KEY,
-          selectedStyleIds.join(",")
-        );
-      } catch (_error) {
-        // Ignore sessionStorage write failures (private mode/quota).
-      }
+      saveSessionPreference({ selected_style_ids: selectedStyleIds.join(",") });
     }
 
     if (selectedStyleIds.length === 0) {

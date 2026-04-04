@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import hmac
 import io
 import json
@@ -94,6 +95,7 @@ MAX_UPLOAD_BYTES = (
     if settings.max_upload_size_mb is not None
     else None
 )
+SESSION_INPUT_IMAGE_UPLOAD_SUBDIR = Path("temp") / "session-inputs"
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
 ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "styles", "users", "about"}
 ADMIN_ROLE = "admin"
@@ -1236,6 +1238,7 @@ def generate_page(
     fal_upscale_ready = False
     last_profile_id = None
     last_thumb_size = "md"
+    last_selected_style_ids = ""
     conversation_generations = []
     styles: list[Any] = []
 
@@ -1257,6 +1260,7 @@ def generate_page(
             if chat_session_prefs:
                 last_profile_id = chat_session_prefs.last_profile_id
                 last_thumb_size = chat_session_prefs.last_thumb_size or "md"
+                last_selected_style_ids = chat_session_prefs.selected_style_ids or ""
 
         if active_conversation == "all":
             recent_generations = list(
@@ -1311,8 +1315,91 @@ def generate_page(
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
+            "last_selected_style_ids": last_selected_style_ids,
         },
     )
+
+
+def _session_input_base_dir() -> Path:
+    """Return the managed base directory for temporary session input images."""
+    base_dir = (settings.data_dir / SESSION_INPUT_IMAGE_UPLOAD_SUBDIR).resolve()
+    ensure_dir(base_dir)
+    return base_dir
+
+
+def _session_input_subdir(chat_session_id: str) -> Path:
+    """Return a deterministic subdirectory path for one chat session's temp inputs."""
+    session_hash = hashlib.sha1(chat_session_id.encode("utf-8")).hexdigest()[:20]
+    return Path(session_hash)
+
+
+def _sanitize_mime_type(value: str | None) -> str:
+    """Return a normalized MIME type for image payload validation."""
+    mime = str(value or "").strip().lower()
+    return mime if mime.startswith("image/") else "image/webp"
+
+
+def _guess_extension(filename: str | None, mime_type: str) -> str:
+    """Guess a safe file extension from filename or MIME type."""
+    suffix = Path(str(filename or "")).suffix.lower().lstrip(".")
+    if suffix in {"png", "jpg", "jpeg", "webp", "gif"}:
+        return "jpg" if suffix == "jpeg" else suffix
+    if mime_type == "image/png":
+        return "png"
+    if mime_type == "image/jpeg":
+        return "jpg"
+    if mime_type == "image/gif":
+        return "gif"
+    return "webp"
+
+
+def _parse_style_ids_csv(value: str | None) -> list[int]:
+    """Parse a CSV string of style IDs into a de-duplicated positive-int list."""
+    parsed: list[int] = []
+    for raw in str(value or "").split(","):
+        token = raw.strip()
+        if not token or not token.isdigit():
+            continue
+        style_id = int(token)
+        if style_id <= 0 or style_id in parsed:
+            continue
+        parsed.append(style_id)
+    return parsed
+
+
+def _session_input_item_payload(row) -> dict[str, Any]:
+    """Build a normalized JSON payload for one persisted session input image."""
+    if row.source_type == "asset" and row.asset_id:
+        return {
+            "id": row.id,
+            "source_type": row.source_type,
+            "asset_id": row.asset_id,
+            "file_name": row.file_name,
+            "mime_type": row.mime_type,
+            "thumbnail_url": f"/assets/{row.asset_id}/thumb",
+        }
+    return {
+        "id": row.id,
+        "source_type": row.source_type,
+        "asset_id": None,
+        "file_name": row.file_name,
+        "mime_type": row.mime_type,
+        "thumbnail_url": f"/api/session-input-images/{row.id}/thumb",
+    }
+
+
+def _delete_temp_session_input_files(row) -> None:
+    """Delete temporary uploaded files for a session input image row if present."""
+    if row.source_type != "uploaded":
+        return
+    base_dir = _session_input_base_dir()
+    for relative_path in [row.thumbnail_file_path, row.original_file_path]:
+        if not relative_path:
+            continue
+        try:
+            storage_service.delete_relative_file(base_dir, relative_path)
+        except ValueError:
+            continue
 
 
 @app.get("/workspace/profiles", response_class=HTMLResponse)
@@ -1410,15 +1497,20 @@ def generate_submit(
         else:
             resolved_conversation = conversation_value
         overrides["chat_session_id"] = resolved_conversation
+        crud.upsert_chat_session_preferences(
+            session,
+            chat_session_id=resolved_conversation,
+        )
 
         prompt_user_original = prompt_user
 
         # Parse and inject selected style prompts
-        parsed_style_ids = [
-            int(sid.strip())
-            for sid in (style_ids or "").split(",")
-            if sid.strip().isdigit()
-        ]
+        chat_session_prefs = crud.get_chat_session(session, resolved_conversation)
+        parsed_style_ids = _parse_style_ids_csv(
+            chat_session_prefs.selected_style_ids if chat_session_prefs else ""
+        )
+        if not parsed_style_ids:
+            parsed_style_ids = _parse_style_ids_csv(style_ids)
         selected_styles: list[Any] = []
         style_prompt_parts: list[str] = []
         if parsed_style_ids:
@@ -1427,13 +1519,65 @@ def generate_submit(
             if style_prompt_parts:
                 prompt_user = prompt_user.rstrip() + "\n" + "\n".join(style_prompt_parts)
 
+        selected_style_ids_csv = ",".join(str(style.id) for style in selected_styles)
+        crud.upsert_chat_session_preferences(
+            session,
+            chat_session_id=resolved_conversation,
+            selected_style_ids=selected_style_ids_csv,
+        )
+
         overrides["prompt_user_original"] = prompt_user_original
         overrides["selected_style_ids"] = [style.id for style in selected_styles]
         overrides["selected_style_names"] = [style.name for style in selected_styles]
 
         encoded_images: list[dict[str, str]] = []
 
-        # Handle input_image_asset_id (from asset detail page)
+        # Resolve DB-persisted session input images first.
+        session_input_images = crud.list_session_input_images(session, resolved_conversation)
+        for row in session_input_images:
+            if row.source_type == "asset" and row.asset_id:
+                asset = session.scalar(
+                    select(Asset)
+                    .options(selectinload(Asset.generation))
+                    .where(Asset.id == row.asset_id)
+                )
+                if not asset or not asset.generation:
+                    continue
+                absolute_path = generation_service.asset_absolute_path(asset, which="file")
+                if not absolute_path.exists():
+                    continue
+                with open(absolute_path, "rb") as f:
+                    image_data = f.read()
+                encoded_images.append(
+                    {
+                        "name": row.file_name or f"asset_{asset.id}",
+                        "mime": row.mime_type or asset.mime,
+                        "b64": base64.b64encode(image_data).decode("ascii"),
+                    }
+                )
+                continue
+
+            if row.source_type == "uploaded" and row.original_file_path:
+                try:
+                    absolute_path = storage_service.resolve_managed_path(
+                        _session_input_base_dir(),
+                        row.original_file_path,
+                    )
+                except ValueError:
+                    continue
+                if not absolute_path.exists():
+                    continue
+                with open(absolute_path, "rb") as f:
+                    image_data = f.read()
+                encoded_images.append(
+                    {
+                        "name": row.file_name or "input",
+                        "mime": _sanitize_mime_type(row.mime_type),
+                        "b64": base64.b64encode(image_data).decode("ascii"),
+                    }
+                )
+
+        # Backward compatibility: handle legacy form param input_image_asset_id.
         asset_id_value = parse_optional_int(input_image_asset_id)
         if asset_id_value is not None:
             asset = session.scalar(
@@ -1454,7 +1598,7 @@ def generate_submit(
                         }
                     )
 
-        # Handle uploaded input_images
+        # Backward compatibility: handle direct uploaded form input_images.
         if input_images:
             if len(input_images) + len(encoded_images) > MAX_INPUT_IMAGES:
                 raise ValueError(f"Upload up to {MAX_INPUT_IMAGES} input images.")
@@ -2018,14 +2162,25 @@ def admin_page(
     if denied:
         return denied
 
-    model_configs = crud.list_model_configs(session)
-    dimension_presets = crud.list_dimension_presets(session)
-    categories = crud.list_categories(session)
-    styles = crud.list_styles(session)
-    users = crud.list_users(session)
-    enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
+
+    # Load only section-relevant data so unrelated admin sections do not require
+    # every DB query (important for lightweight/fake sessions in tests).
+    model_configs = crud.list_model_configs(session) if active_admin_section == "models" else []
+    dimension_presets = (
+        crud.list_dimension_presets(session)
+        if active_admin_section == "dimensions"
+        else []
+    )
+    categories = crud.list_categories(session) if active_admin_section == "categories" else []
+    styles = crud.list_styles(session) if active_admin_section == "styles" else []
+    users = crud.list_users(session) if active_admin_section == "users" else []
+    enhancement_config = (
+        crud.get_enhancement_config(session)
+        if active_admin_section == "enhancement"
+        else None
+    )
 
     # Build per-provider API key info for the "API Keys" admin section
     provider_names = provider_registry.provider_names()
@@ -2040,40 +2195,55 @@ def admin_page(
         if p in model_config_service.PROVIDER_API_KEY_ATTR
     ]
 
-    # Build upscaling info for the "Upscaling" admin section
-    fal_api_key_row = provider_api_key_rows.get("fal")
-    create_dialog_open = str(fal_model_create_open or "").strip().lower() in {
-        "1",
-        "true",
-        "on",
-        "yes",
-    }
-    try:
-        edit_dialog_model_id = parse_optional_int(fal_model_edit_id)
-    except ValueError:
-        edit_dialog_model_id = None
-    if edit_dialog_model_id is not None and edit_dialog_model_id <= 0:
-        edit_dialog_model_id = None
-    draft_enabled = str(fal_model_is_enabled or "").strip().lower() in {
-        "1",
-        "true",
-        "on",
-        "yes",
-    }
+    # Build upscaling info for the "Upscaling" admin section.
     upscaling_info = {
-        "local_available": upscale_service.is_available(),
-        "local_models": upscale_service.list_available_models(),
-        "fal_has_db_key": fal_api_key_row is not None,
+        "local_available": False,
+        "local_models": [],
+        "fal_has_db_key": False,
         "fal_has_env_key": bool(settings.fal_api_key),
-        "fal_models": crud.list_topaz_upscale_models(session, enabled_only=False),
-        "topaz_models": crud.list_topaz_upscale_models(session, enabled_only=False),
-        "fal_model_create_open": create_dialog_open,
-        "fal_model_edit_id": edit_dialog_model_id,
+        "fal_models": [],
+        "topaz_models": [],
+        "fal_model_create_open": False,
+        "fal_model_edit_id": None,
         "fal_model_draft_name": fal_model_name or "",
         "fal_model_draft_identifier": fal_model_identifier or "",
         "fal_model_draft_params_json": fal_model_params_json if fal_model_params_json is not None else "{}",
-        "fal_model_draft_enabled": draft_enabled,
+        "fal_model_draft_enabled": False,
     }
+    if active_admin_section == "upscaling":
+        fal_api_key_row = provider_api_key_rows.get("fal")
+        create_dialog_open = str(fal_model_create_open or "").strip().lower() in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
+        try:
+            edit_dialog_model_id = parse_optional_int(fal_model_edit_id)
+        except ValueError:
+            edit_dialog_model_id = None
+        if edit_dialog_model_id is not None and edit_dialog_model_id <= 0:
+            edit_dialog_model_id = None
+        draft_enabled = str(fal_model_is_enabled or "").strip().lower() in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
+        upscaling_info = {
+            "local_available": upscale_service.is_available(),
+            "local_models": upscale_service.list_available_models(),
+            "fal_has_db_key": fal_api_key_row is not None,
+            "fal_has_env_key": bool(settings.fal_api_key),
+            "fal_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+            "topaz_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+            "fal_model_create_open": create_dialog_open,
+            "fal_model_edit_id": edit_dialog_model_id,
+            "fal_model_draft_name": fal_model_name or "",
+            "fal_model_draft_identifier": fal_model_identifier or "",
+            "fal_model_draft_params_json": fal_model_params_json if fal_model_params_json is not None else "{}",
+            "fal_model_draft_enabled": draft_enabled,
+        }
 
     return templates.TemplateResponse(
         request,
@@ -2950,6 +3120,7 @@ async def update_session_preferences(
 
     last_profile_id = payload.get("last_profile_id")
     last_thumb_size = payload.get("last_thumb_size")
+    selected_style_ids = payload.get("selected_style_ids")
 
     # Validate profile_id if provided
     if last_profile_id is not None:
@@ -2965,13 +3136,238 @@ async def update_session_preferences(
                 {"success": False, "error": "Invalid thumb size"}, status_code=400
             )
 
-    crud.upsert_chat_session_preferences(
-        session,
-        chat_session_id=chat_session_id,
-        last_profile_id=last_profile_id,
-        last_thumb_size=last_thumb_size,
-    )
+    selected_style_ids_csv: str | None = None
+    if selected_style_ids is not None:
+        if not isinstance(selected_style_ids, str):
+            return JSONResponse(
+                {"success": False, "error": "Invalid selected style IDs"}, status_code=400
+            )
+        selected_style_ids_csv = ",".join(
+            str(style_id) for style_id in _parse_style_ids_csv(selected_style_ids)
+        )
+
+    upsert_kwargs: dict[str, Any] = {
+        "chat_session_id": chat_session_id,
+        "last_profile_id": last_profile_id,
+        "last_thumb_size": last_thumb_size,
+    }
+    if selected_style_ids is not None:
+        upsert_kwargs["selected_style_ids"] = selected_style_ids_csv
+
+    crud.upsert_chat_session_preferences(session, **upsert_kwargs)
     return JSONResponse({"success": True, "error": None})
+
+
+@app.get("/api/session-input-images", response_class=JSONResponse)
+def list_session_input_images(
+    chat_session_id: str = Query(...),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Return DB-persisted session input images for one chat session."""
+    token = (chat_session_id or "").strip()
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID", "items": []}, status_code=400)
+
+    rows = crud.list_session_input_images(session, token)
+    return JSONResponse(
+        {
+            "success": True,
+            "error": None,
+            "items": [_session_input_item_payload(row) for row in rows],
+        }
+    )
+
+
+@app.post("/api/session-input-images/upload", response_class=JSONResponse)
+async def upload_session_input_image(
+    request: Request,
+    chat_session_id: str = Form(...),
+    input_image: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Persist one uploaded input image for a chat session and return preview metadata."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    token = (chat_session_id or "").strip()
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID"}, status_code=400)
+
+    existing = crud.list_session_input_images(session, token)
+    if len(existing) >= MAX_INPUT_IMAGES:
+        return JSONResponse(
+            {"success": False, "error": f"Upload up to {MAX_INPUT_IMAGES} input images."},
+            status_code=400,
+        )
+
+    content_type = _sanitize_mime_type(input_image.content_type)
+    if not content_type.startswith("image/"):
+        return JSONResponse({"success": False, "error": "Input images must be valid image files."}, status_code=400)
+
+    data = await input_image.read()
+    if not data:
+        return JSONResponse({"success": False, "error": "Uploaded image is empty."}, status_code=400)
+    if MAX_UPLOAD_BYTES is not None and len(data) > MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            {"success": False, "error": f"Upload exceeds the {settings.max_upload_size_mb} MB size limit."},
+            status_code=400,
+        )
+
+    crud.upsert_chat_session_preferences(session, chat_session_id=token)
+
+    session_subdir = _session_input_subdir(token)
+    file_stem = uuid.uuid4().hex
+    ext = _guess_extension(input_image.filename, content_type)
+    original_rel = (session_subdir / f"{file_stem}.{ext}").as_posix()
+    base_dir = _session_input_base_dir()
+    original_abs = storage_service.resolve_managed_path(base_dir, original_rel)
+    storage_service.write_bytes_atomic(original_abs, data)
+
+    thumbnail_rel = thumbnail_service.create_thumbnail(base_dir, original_rel)
+
+    row = crud.create_session_input_image(
+        session,
+        chat_session_id=token,
+        source_type="uploaded",
+        sort_index=len(existing),
+        asset_id=None,
+        original_file_path=original_rel,
+        thumbnail_file_path=thumbnail_rel.as_posix(),
+        file_name=input_image.filename or f"input.{ext}",
+        mime_type=content_type,
+    )
+
+    return JSONResponse({"success": True, "error": None, "item": _session_input_item_payload(row)})
+
+
+@app.post("/api/session-input-images/asset", response_class=JSONResponse)
+async def add_asset_as_session_input_image(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Persist an existing asset as a session input image reference."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    payload = await request.json()
+    token = str(payload.get("chat_session_id") or "").strip()
+    asset_id = payload.get("asset_id")
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID"}, status_code=400)
+    if not isinstance(asset_id, int) or asset_id <= 0:
+        return JSONResponse({"success": False, "error": "Invalid asset ID"}, status_code=400)
+
+    asset = crud.get_asset(session, asset_id, with_generation=True)
+    if not asset or not asset.generation:
+        return JSONResponse({"success": False, "error": "Asset not found"}, status_code=404)
+
+    existing = crud.list_session_input_images(session, token)
+    if len(existing) >= MAX_INPUT_IMAGES:
+        return JSONResponse(
+            {"success": False, "error": f"Upload up to {MAX_INPUT_IMAGES} input images."},
+            status_code=400,
+        )
+
+    already_exists = any(
+        row.source_type == "asset" and row.asset_id == asset_id for row in existing
+    )
+    if already_exists:
+        return JSONResponse({"success": True, "error": None, "item": None})
+
+    crud.upsert_chat_session_preferences(session, chat_session_id=token)
+    row = crud.create_session_input_image(
+        session,
+        chat_session_id=token,
+        source_type="asset",
+        sort_index=len(existing),
+        asset_id=asset.id,
+        original_file_path=None,
+        thumbnail_file_path=None,
+        file_name=f"asset_{asset.id}",
+        mime_type=asset.mime,
+    )
+    return JSONResponse({"success": True, "error": None, "item": _session_input_item_payload(row)})
+
+
+@app.post("/api/session-input-images/remove", response_class=JSONResponse)
+async def remove_session_input_image(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Remove one session input image and delete associated temp files if needed."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    payload = await request.json()
+    row_id = payload.get("session_input_image_id")
+    token = str(payload.get("chat_session_id") or "").strip()
+    if not isinstance(row_id, int) or row_id <= 0:
+        return JSONResponse({"success": False, "error": "Invalid input image ID"}, status_code=400)
+
+    row = crud.get_session_input_image(session, row_id)
+    if not row:
+        return JSONResponse({"success": True, "error": None})
+    if token and row.chat_session_id != token:
+        return JSONResponse({"success": False, "error": "Session mismatch"}, status_code=400)
+
+    _delete_temp_session_input_files(row)
+    crud.delete_session_input_image(session, row)
+    return JSONResponse({"success": True, "error": None})
+
+
+@app.post("/api/session-input-images/clear", response_class=JSONResponse)
+async def clear_session_input_images(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Clear all session input images and temp files for one chat session."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    payload = await request.json()
+    token = str(payload.get("chat_session_id") or "").strip()
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID"}, status_code=400)
+
+    rows = crud.list_session_input_images(session, token)
+    for row in rows:
+        _delete_temp_session_input_files(row)
+    crud.clear_session_input_images(session, token)
+    return JSONResponse({"success": True, "error": None})
+
+
+@app.get("/api/session-input-images/{session_input_image_id}/thumb")
+def session_input_image_thumb(
+    session_input_image_id: int,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """Serve thumbnail image for one persisted session input image."""
+    row = crud.get_session_input_image(session, session_input_image_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Session input image not found")
+
+    if row.source_type == "asset" and row.asset_id:
+        asset = crud.get_asset(session, row.asset_id, with_generation=True)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        thumb_path = generation_service.asset_absolute_path(asset, which="thumbnail")
+        if not thumb_path.exists():
+            raise HTTPException(status_code=404, detail="Thumbnail missing")
+        return FileResponse(path=thumb_path, media_type="image/webp")
+
+    if not row.thumbnail_file_path:
+        raise HTTPException(status_code=404, detail="Thumbnail missing")
+    thumb_path = storage_service.resolve_managed_path(
+        _session_input_base_dir(),
+        row.thumbnail_file_path,
+    )
+    if not thumb_path.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail missing")
+    return FileResponse(path=thumb_path, media_type="image/webp")
 
 
 @app.get("/api/sessions", response_class=JSONResponse)
@@ -3296,36 +3692,16 @@ def update_profile(
                 fal_aspect_ratio=fal_aspect_ratio,
                 fal_resolution=fal_resolution,
             )
-            # Remove previously stored extra params (all keys except reserved ones)
-            reserved_keys = {
-                "fal_aspect_ratio",
-                "fal_resolution",
-                "fal_image_size",
-                "image_config",
-            }
-            for key in list(params_value.keys()):
-                if key not in reserved_keys:
-                    del params_value[key]
             # Handle FAL-specific parameters (backward compatibility)
             extra = parse_fal_model_params_json(fal_extra_params)
             for key, val in extra.items():
-                if key not in reserved_keys and val is not None:
+                if val is not None:
                     params_value[key] = val
         else:
             # Handle generic parameters for all other providers
-            # Remove previously stored extra params (all keys except reserved ones)
-            reserved_keys = {
-                "fal_aspect_ratio",
-                "fal_resolution",
-                "fal_image_size",
-                "image_config",
-            }
-            for key in list(params_value.keys()):
-                if key not in reserved_keys:
-                    del params_value[key]
             extra = parse_generic_params_json(extra_params)
             for key, val in extra.items():
-                if key not in reserved_keys and val is not None:
+                if val is not None:
                     params_value[key] = val
         if (upscale_choice or "").strip():
             (
