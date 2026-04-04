@@ -288,6 +288,18 @@ class Generation(Base):
     )
 
 
+class Style(Base, TimestampMixin):
+    """Reusable prompt fragment that can be selected during image generation."""
+
+    __tablename__ = "styles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(String(120), nullable=False)
+    prompt: Mapped[str] = mapped_column(String(1000), nullable=False)
+    image_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+
+
 class Asset(Base):
     """A single generated image file together with its sidecar, thumbnail, and metadata."""
 
