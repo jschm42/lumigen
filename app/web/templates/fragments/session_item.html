@@ -19,6 +19,12 @@
       data-session-title="{{ item.label }}"
       role="menuitem"
     >Rename</button>
+    <a
+      href="/sessions/download?session_token={{ item.token | urlencode }}"
+      download
+      class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10"
+      role="menuitem"
+    >Download</a>
     <form action="/sessions/archive" method="post" data-confirm-message="Archive session? It will be hidden but not deleted.">
       <input type="hidden" name="session_token" value="{{ item.token }}">
       <input type="hidden" name="active_conversation" value="{{ active_conversation }}">

@@ -1567,6 +1567,41 @@ function setupGalleryRatings() {
   }
 
   // ==========================================================================
+  // Chat: Re-Generate from prompt bubble
+  // ==========================================================================
+
+  /**
+   * Set up the Re-Generate hover button on user prompt bubbles.
+   *
+   * Uses event delegation so buttons injected via HTMX are handled automatically.
+   * On click, fills the generation form textarea with the prompt text and
+   * submits the form to start a new generation with the current profile.
+   */
+  function setupChatRegenerate() {
+    document.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-regenerate-prompt]');
+      if (!btn) return;
+      var promptText = btn.getAttribute('data-regenerate-prompt');
+      if (promptText === null) return;
+
+      var form = document.querySelector('[data-generation-form]');
+      if (!form) return;
+
+      var promptInput = form.querySelector('[name="prompt_user"]');
+      if (!promptInput) return;
+
+      promptInput.value = promptText;
+      promptInput.focus();
+
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+  }
+
+  // ==========================================================================
   // User Menu Popup
   // ==========================================================================
 
@@ -1662,6 +1697,7 @@ function setupGalleryRatings() {
     setupGenerationForms();
     setupProfileForms();
     setupChatAddToInput();
+    setupChatRegenerate();
     setupUserMenu();
     setupGalleryFilters();
     setupGallerySelection();

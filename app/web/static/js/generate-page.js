@@ -379,4 +379,108 @@
     applyThumbSize(currentThumbSize);
   }
 
+  // ---- Styles picker ----
+
+  var selectedStyleIds = [];
+
+  function renderSelectedStyles() {
+    var row = document.getElementById("selected-styles-row");
+    var hiddenInput = document.getElementById("style_ids_input");
+    if (!row) return;
+
+    if (hiddenInput) {
+      hiddenInput.value = selectedStyleIds.join(",");
+    }
+
+    if (selectedStyleIds.length === 0) {
+      row.innerHTML = "";
+      return;
+    }
+
+    var chips = selectedStyleIds.map(function (id) {
+      var btn = document.querySelector(".styles-picker-item[data-style-id='" + id + "']");
+      var name = btn ? (btn.getAttribute("data-style-name") || String(id)) : String(id);
+      var imgEl = btn ? btn.querySelector("img") : null;
+      var imgSrc = imgEl ? imgEl.getAttribute("src") : "";
+
+      return (
+        '<span class="inline-flex items-center gap-1.5 rounded-xl border border-sky-300/60 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800 dark:border-sky-300/30 dark:bg-sky-300/10 dark:text-sky-100">' +
+        (imgSrc
+          ? '<img src="' + imgSrc + '" alt="" class="h-5 w-5 rounded object-cover">'
+          : "") +
+        '<span>' + escapeHtml(name) + "</span>" +
+        '<button type="button" class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full text-sky-600 hover:bg-sky-200 hover:text-sky-900 dark:text-sky-300 dark:hover:bg-sky-300/20" data-remove-style-id="' + id + '" aria-label="Remove style">×</button>' +
+        "</span>"
+      );
+    });
+
+    row.innerHTML =
+      '<div class="subtle-scrollbar flex flex-nowrap gap-1.5 overflow-x-auto pb-1 pt-0.5">' +
+      chips.join("") +
+      "</div>";
+
+    row.querySelectorAll("[data-remove-style-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var removeId = parseInt(btn.getAttribute("data-remove-style-id"), 10);
+        selectedStyleIds = selectedStyleIds.filter(function (id) { return id !== removeId; });
+        // Sync the picker button state
+        var pickerBtn = document.querySelector(".styles-picker-item[data-style-id='" + removeId + "']");
+        if (pickerBtn) {
+          pickerBtn.setAttribute("aria-pressed", "false");
+          pickerBtn.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+        }
+        renderSelectedStyles();
+      });
+    });
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement("div");
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+  }
+
+  function initStylesPicker() {
+    var pickerBtn = document.getElementById("styles-picker-btn");
+    var dialog = document.getElementById("styles-picker-dialog");
+    if (!pickerBtn || !dialog) return;
+
+    pickerBtn.addEventListener("click", function () {
+      dialog.showModal();
+    });
+
+    dialog.querySelectorAll(".styles-picker-item").forEach(function (item) {
+      item.addEventListener("click", function () {
+        var id = parseInt(item.getAttribute("data-style-id"), 10);
+        if (isNaN(id)) return;
+        var idx = selectedStyleIds.indexOf(id);
+        if (idx === -1) {
+          selectedStyleIds.push(id);
+          item.setAttribute("aria-pressed", "true");
+          item.classList.add("ring-2", "ring-sky-400", "border-sky-400");
+        } else {
+          selectedStyleIds.splice(idx, 1);
+          item.setAttribute("aria-pressed", "false");
+          item.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+        }
+        renderSelectedStyles();
+      });
+    });
+  }
+
+  // Clear selected styles when the input-clear button is clicked
+  var inputClearBtn = document.querySelector("[data-input-clear]");
+  if (inputClearBtn) {
+    inputClearBtn.addEventListener("click", function () {
+      selectedStyleIds = [];
+      document.querySelectorAll(".styles-picker-item").forEach(function (item) {
+        item.setAttribute("aria-pressed", "false");
+        item.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+      });
+      renderSelectedStyles();
+    });
+  }
+
+  initStylesPicker();
+
 })();

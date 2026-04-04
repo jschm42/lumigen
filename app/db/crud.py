@@ -16,6 +16,7 @@ from app.db.models import (
     Profile,
     ProviderApiKey,
     StorageTemplate,
+    Style,
     TopazUpscaleModel,
     User,
 )
@@ -499,3 +500,48 @@ def upsert_chat_session_preferences(
     session.commit()
     session.refresh(row)
     return row
+
+
+def list_styles(session: Session) -> list[Style]:
+    """Return all styles ordered by name."""
+    stmt = select(Style).order_by(Style.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def get_style(session: Session, style_id: int) -> Style | None:
+    """Return a style by primary key, or ``None`` if not found."""
+    stmt = select(Style).where(Style.id == style_id)
+    return session.scalar(stmt)
+
+
+def get_styles_by_ids(session: Session, style_ids: list[int]) -> list[Style]:
+    """Return the styles whose IDs are in *style_ids*, ordered by name."""
+    if not style_ids:
+        return []
+    stmt = select(Style).where(Style.id.in_(style_ids)).order_by(Style.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def create_style(session: Session, **fields) -> Style:
+    """Create a new style from the given field values and return it."""
+    row = Style(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_style(session: Session, style: Style, **fields) -> Style:
+    """Update the given style's fields and return the refreshed instance."""
+    for key, value in fields.items():
+        setattr(style, key, value)
+    session.add(style)
+    session.commit()
+    session.refresh(style)
+    return style
+
+
+def delete_style(session: Session, style: Style) -> None:
+    """Delete the given style from the database."""
+    session.delete(style)
+    session.commit()
