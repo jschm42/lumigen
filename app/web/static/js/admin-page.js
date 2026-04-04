@@ -98,9 +98,109 @@
 
   window.toggleApiKeyField = toggleApiKeyField;
   window.updateProviderHint = updateProviderHint;
+  window.adminImport = adminImport;
 
   document.addEventListener("DOMContentLoaded", function () {
     initProviderHints();
     initFalModelDialogs();
   });
+
+  function adminImport() {
+    var fileInput = document.getElementById("import-file");
+    var conflictSelect = document.getElementById("import-conflict");
+    var dryRunCheck = document.getElementById("import-dry-run");
+    var resultDiv = document.getElementById("import-result");
+    var submitBtn = document.getElementById("import-submit-btn");
+
+    if (!fileInput || !fileInput.files || !fileInput.files.length) {
+      _showImportError(resultDiv, "Please select a JSON file to import.");
+      return;
+    }
+
+    var metaTag = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = metaTag ? metaTag.getAttribute("content") : "";
+
+    var formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+    formData.append("conflict_strategy", conflictSelect ? conflictSelect.value : "skip");
+    formData.append("dry_run", dryRunCheck && dryRunCheck.checked ? "true" : "false");
+    formData.append("csrf_token", csrfToken);
+
+    if (submitBtn) submitBtn.disabled = true;
+    _showImportLoading(resultDiv);
+
+    fetch("/admin/import", {
+      method: "POST",
+      body: formData,
+    })
+      .then(function (resp) { return resp.json().then(function (data) { return { status: resp.status, data: data }; }); })
+      .then(function (obj) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (obj.status !== 200) {
+          _showImportError(resultDiv, obj.data.error || "Import failed.");
+          return;
+        }
+        _showImportResults(resultDiv, obj.data);
+      })
+      .catch(function (err) {
+        if (submitBtn) submitBtn.disabled = false;
+        _showImportError(resultDiv, "Request failed: " + err.message);
+      });
+  }
+
+  function _showImportLoading(resultDiv) {
+    resultDiv.className = "mt-2 rounded-2xl border border-slate-300/60 bg-white/90 px-4 py-3 text-sm text-slate-800 dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100";
+    resultDiv.textContent = "Importing…";
+  }
+
+  function _showImportError(resultDiv, msg) {
+    resultDiv.className = "mt-2 rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-100";
+    resultDiv.textContent = msg;
+  }
+
+  function _showImportResults(resultDiv, data) {
+    var isDryRun = data.dry_run;
+    var results = data.results || [];
+    var html = "";
+
+    if (!results.length) {
+      html = '<p class="text-slate-600 dark:text-slate-400">' + (data.message || "No entities imported.") + "</p>";
+    } else {
+      if (isDryRun) {
+        html += '<p class="mb-3 font-semibold text-amber-700 dark:text-amber-300">Dry-run preview — no changes were saved.</p>';
+      }
+      results.forEach(function (r) {
+        html += '<div class="mb-4">';
+        html += '<p class="font-semibold capitalize text-slate-800 dark:text-slate-100">' + _esc(r.entity_type) + "</p>";
+        html += '<ul class="mt-1 space-y-0.5 text-xs">';
+        html += '<li><span class="text-emerald-600 dark:text-emerald-400">Created: ' + r.created + "</span></li>";
+        html += '<li><span class="text-sky-600 dark:text-sky-400">Updated: ' + r.updated + "</span></li>";
+        html += '<li><span class="text-slate-500 dark:text-slate-400">Skipped: ' + r.skipped + "</span></li>";
+        if (r.failed) {
+          html += '<li><span class="text-rose-600 dark:text-rose-400">Failed: ' + r.failed + "</span></li>";
+        }
+        html += "</ul>";
+        var failedRecords = (r.records || []).filter(function (rec) { return rec.outcome === "failed"; });
+        if (failedRecords.length) {
+          html += '<ul class="mt-1 space-y-0.5 text-xs text-rose-600 dark:text-rose-400">';
+          failedRecords.forEach(function (rec) {
+            html += "<li>&bull; " + _esc(rec.name) + ": " + _esc(rec.reason) + "</li>";
+          });
+          html += "</ul>";
+        }
+        html += "</div>";
+      });
+    }
+
+    resultDiv.className = "mt-2 rounded-2xl border border-slate-300/60 bg-white/90 px-4 py-3 text-sm dark:border-white/10 dark:bg-slate-950/40";
+    resultDiv.innerHTML = html;
+  }
+
+  function _esc(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
 })();

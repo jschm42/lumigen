@@ -43,6 +43,7 @@
     <a href="/admin?section=upscaling{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'upscaling' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Upscaling</a>
     <a href="/admin?section=apikeys{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'apikeys' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">API Keys</a>
     <a href="/admin?section=users{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'users' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Users</a>
+    <a href="/admin?section=transfer{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'transfer' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Transfer</a>
     <a href="/admin?section=about{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'about' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">About</a>
   </nav>
 
@@ -924,6 +925,52 @@
       </article>
     </dialog>
     {% endfor %}
+  {% elif active_admin_section == "transfer" %}
+    <header class="mb-1">
+      <h3 class="text-xl font-semibold text-slate-900 dark:text-white">Transfer</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Export configuration to JSON or import from a previously exported file.</p>
+    </header>
+
+    <div class="space-y-6">
+      <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-5 dark:border-white/10 dark:bg-slate-950/35">
+        <h4 class="text-base font-semibold text-slate-800 dark:text-slate-100">Export</h4>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Download configuration as a JSON file.</p>
+        <div class="mt-4 flex flex-wrap gap-3">
+          <a href="/admin/export?export_type=models" class="{{ btn_secondary }}">Export Models</a>
+          <a href="/admin/export?export_type=profiles" class="{{ btn_secondary }}">Export Profiles</a>
+          <a href="/admin/export?export_type=styles" class="{{ btn_secondary }}">Export Styles</a>
+          <a href="/admin/export?export_type=all" class="{{ btn_primary }}">Export All</a>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-5 dark:border-white/10 dark:bg-slate-950/35">
+        <h4 class="text-base font-semibold text-slate-800 dark:text-slate-100">Import</h4>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Upload a JSON export file. Preview changes with dry-run before committing.</p>
+        <div class="mt-4 space-y-4" id="transfer-import-section">
+          <div>
+            <label for="import-file" class="{{ label_class }}">JSON file</label>
+            <input id="import-file" type="file" accept=".json,application/json" class="mt-2 block w-full text-sm text-slate-700 dark:text-slate-200 file:mr-3 file:rounded-xl file:border file:border-slate-300/70 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-700 hover:file:border-sky-400/60 hover:file:bg-sky-50 dark:file:border-white/20 dark:file:bg-white/5 dark:file:text-slate-200">
+          </div>
+          <div>
+            <label for="import-conflict" class="{{ label_class }}">Conflict strategy</label>
+            <select id="import-conflict" class="{{ input_class }} mt-2">
+              <option value="skip">Skip existing</option>
+              <option value="overwrite">Overwrite existing</option>
+              <option value="rename">Rename imported duplicate</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="import-dry-run" class="h-4 w-4 rounded border-slate-300 dark:border-white/30">
+            <label for="import-dry-run" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Dry run (preview only, no changes saved)</label>
+          </div>
+          <div class="flex gap-3">
+            <button id="import-submit-btn" type="button" class="{{ btn_primary }}" onclick="adminImport()">Import</button>
+          </div>
+          <div id="import-result" class="hidden"></div>
+        </div>
+      </div>
+    </div>
+
   {% elif active_admin_section == "about" %}
     <header class="mb-1">
       <h3 class="text-xl font-semibold text-slate-900 dark:text-white">About</h3>

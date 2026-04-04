@@ -64,6 +64,16 @@ from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
+from app.services.import_export_service import (
+    export_all,
+    export_models,
+    export_profiles,
+    export_styles,
+    import_models,
+    import_profiles,
+    import_styles,
+    validate_import_payload,
+)
 from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
@@ -97,7 +107,7 @@ MAX_UPLOAD_BYTES = (
 )
 SESSION_INPUT_IMAGE_UPLOAD_SUBDIR = Path("temp") / "session-inputs"
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "styles", "users", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "styles", "users", "transfer", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
@@ -3067,6 +3077,117 @@ def admin_reset_onboarding(
     crud.delete_all_users(session)
     clear_auth_session(request)
     return RedirectResponse(url="/login?message=Onboarding+reset", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Admin import / export
+# ---------------------------------------------------------------------------
+
+_EXPORT_TYPE_PARAM = Query(default="all")
+
+
+@app.get("/admin/export")
+def admin_export(
+    request: Request,
+    export_type: str = _EXPORT_TYPE_PARAM,
+    session: Session = Depends(get_session),
+) -> Response:
+    """Download a JSON export of Profiles, Models, Styles, or all three combined.
+
+    The ``export_type`` query parameter controls what is exported:
+    ``profiles``, ``models``, ``styles``, or ``all`` (default).
+    """
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    valid_types = {"profiles", "models", "styles", "all"}
+    export_type = (export_type or "all").strip().lower()
+    if export_type not in valid_types:
+        export_type = "all"
+
+    if export_type == "profiles":
+        payload = export_profiles(session)
+        filename = "lumigen-profiles.json"
+    elif export_type == "models":
+        payload = export_models(session)
+        filename = "lumigen-models.json"
+    elif export_type == "styles":
+        payload = export_styles(session)
+        filename = "lumigen-styles.json"
+    else:
+        payload = export_all(session)
+        filename = "lumigen-export.json"
+
+    content = json.dumps(payload, indent=2, ensure_ascii=False)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/admin/import")
+async def admin_import(
+    request: Request,
+    file: UploadFile = File(...),
+    conflict_strategy: str = Form(default="skip"),
+    dry_run: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Import Profiles, Models, and/or Styles from a previously exported JSON file.
+
+    Accepts ``conflict_strategy`` of ``skip``, ``overwrite``, or ``rename``.
+    When ``dry_run`` is *true* no database changes are committed and a full
+    preview summary is returned.
+    """
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return JSONResponse({"error": "Admin access required."}, status_code=403)
+
+    if conflict_strategy not in {"skip", "overwrite", "rename"}:
+        return JSONResponse(
+            {"error": f"Invalid conflict_strategy '{conflict_strategy}'."},
+            status_code=400,
+        )
+
+    raw_bytes = await file.read()
+    try:
+        payload = json.loads(raw_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return JSONResponse({"error": f"Invalid JSON: {exc}"}, status_code=400)
+
+    try:
+        _version, profiles_list, models_list, styles_list = validate_import_payload(payload)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    results = []
+    if models_list:
+        results.append(
+            import_models(session, models_list, conflict_strategy, dry_run=dry_run).to_dict()
+        )
+    if profiles_list:
+        results.append(
+            import_profiles(session, profiles_list, conflict_strategy, dry_run=dry_run).to_dict()
+        )
+    if styles_list:
+        results.append(
+            import_styles(session, styles_list, conflict_strategy, dry_run=dry_run).to_dict()
+        )
+
+    if not results:
+        return JSONResponse(
+            {
+                "dry_run": dry_run,
+                "results": [],
+                "message": "No importable entities found in the uploaded file.",
+            }
+        )
+
+    return JSONResponse({"dry_run": dry_run, "results": results})
 
 
 @app.post("/api/enhance", response_class=JSONResponse)
