@@ -448,7 +448,7 @@
               {% if style.image_path %}
                 <img src="/admin/styles/{{ style.id }}/image" alt="{{ style.name }}" class="h-12 w-12 rounded-lg object-cover border border-slate-300/60 dark:border-white/15">
               {% else %}
-                <div class="h-12 w-12 rounded-lg border border-dashed border-slate-300/60 bg-slate-100 dark:border-white/15 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 text-xs">—</div>
+                <div class="h-12 w-12 rounded-lg border border-dashed border-slate-300/60 bg-slate-100 dark:border-white/15 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 text-xs" role="img" aria-label="No thumbnail">—</div>
               {% endif %}
             </td>
             <td class="px-4 py-3 font-medium">{{ style.name }}</td>

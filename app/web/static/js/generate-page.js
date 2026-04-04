@@ -471,7 +471,6 @@
   // Clear selected styles when the input-clear button is clicked
   var inputClearBtn = document.querySelector("[data-input-clear]");
   if (inputClearBtn) {
-    var originalInputClear = inputClearBtn.onclick;
     inputClearBtn.addEventListener("click", function () {
       selectedStyleIds = [];
       document.querySelectorAll(".styles-picker-item").forEach(function (item) {
