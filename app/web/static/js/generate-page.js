@@ -1,5 +1,6 @@
 (function () {
   var THEME_STORAGE_KEY = "lumigen_theme";
+  var STYLE_SELECTION_STORAGE_KEY = "lumigen_selected_style_ids";
 
   function getSavedThemeMode() {
     try {
@@ -296,7 +297,6 @@
     if (data.thumb_size !== undefined) {
       payload.last_thumb_size = data.thumb_size;
     }
-
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
 
@@ -381,15 +381,47 @@
 
   // ---- Styles picker ----
 
-  var selectedStyleIds = [];
+  function parseSelectedStyleIdsCsv(value) {
+    return String(value || "")
+      .split(",")
+      .map(function (item) {
+        return parseInt(item.trim(), 10);
+      })
+      .filter(function (item) {
+        return !isNaN(item) && item > 0;
+      });
+  }
 
-  function renderSelectedStyles() {
+  var initialStyleIdsValue = "";
+  try {
+    initialStyleIdsValue = sessionStorage.getItem(STYLE_SELECTION_STORAGE_KEY) || "";
+  } catch (_error) {
+    initialStyleIdsValue = "";
+  }
+  if (!initialStyleIdsValue) {
+    var initialStyleInput = document.getElementById("style_ids_input");
+    initialStyleIdsValue = initialStyleInput ? initialStyleInput.value : "";
+  }
+  var selectedStyleIds = parseSelectedStyleIdsCsv(initialStyleIdsValue);
+
+  function renderSelectedStyles(syncSessionPreference) {
     var row = document.getElementById("selected-styles-row");
     var hiddenInput = document.getElementById("style_ids_input");
     if (!row) return;
 
     if (hiddenInput) {
       hiddenInput.value = selectedStyleIds.join(",");
+    }
+
+    if (syncSessionPreference !== false) {
+      try {
+        sessionStorage.setItem(
+          STYLE_SELECTION_STORAGE_KEY,
+          selectedStyleIds.join(",")
+        );
+      } catch (_error) {
+        // Ignore sessionStorage write failures (private mode/quota).
+      }
     }
 
     if (selectedStyleIds.length === 0) {
@@ -450,6 +482,12 @@
     });
 
     dialog.querySelectorAll(".styles-picker-item").forEach(function (item) {
+      var initialId = parseInt(item.getAttribute("data-style-id"), 10);
+      if (!isNaN(initialId) && selectedStyleIds.indexOf(initialId) !== -1) {
+        item.setAttribute("aria-pressed", "true");
+        item.classList.add("ring-2", "ring-sky-400", "border-sky-400");
+      }
+
       item.addEventListener("click", function () {
         var id = parseInt(item.getAttribute("data-style-id"), 10);
         if (isNaN(id)) return;
@@ -482,5 +520,6 @@
   }
 
   initStylesPicker();
+  renderSelectedStyles(false);
 
 })();

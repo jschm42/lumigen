@@ -1411,17 +1411,25 @@ def generate_submit(
             resolved_conversation = conversation_value
         overrides["chat_session_id"] = resolved_conversation
 
+        prompt_user_original = prompt_user
+
         # Parse and inject selected style prompts
         parsed_style_ids = [
             int(sid.strip())
             for sid in (style_ids or "").split(",")
             if sid.strip().isdigit()
         ]
+        selected_styles: list[Any] = []
+        style_prompt_parts: list[str] = []
         if parsed_style_ids:
             selected_styles = crud.get_styles_by_ids(session, parsed_style_ids)
             style_prompt_parts = [s.prompt for s in selected_styles if s.prompt.strip()]
             if style_prompt_parts:
                 prompt_user = prompt_user.rstrip() + "\n" + "\n".join(style_prompt_parts)
+
+        overrides["prompt_user_original"] = prompt_user_original
+        overrides["selected_style_ids"] = [style.id for style in selected_styles]
+        overrides["selected_style_names"] = [style.name for style in selected_styles]
 
         encoded_images: list[dict[str, str]] = []
 

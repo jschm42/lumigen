@@ -89,6 +89,7 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     assert 'data-user-settings-dialog' in body
     assert 'data-user-theme-select' in body
     assert '<option value="system">System</option>' in body
+    assert 'id="style_ids_input" value=""' in body
 
 
 def test_generate_page_keeps_selected_older_session_visible(client, app_module, monkeypatch) -> None:
@@ -156,11 +157,13 @@ def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, 
     generation = SimpleNamespace(
         id=10,
         status="succeeded",
-        prompt_user="Prompt with references",
+        prompt_user="Prompt with references\ncinematic lighting",
         profile_name="Default",
         provider="stub",
         model="stub-v1",
         request_snapshot_json={
+            "prompt_user_original": "Prompt with references",
+            "selected_style_names": ["Cinematic"],
             "input_images": [
                 {"name": "a.png", "mime": "image/png", "b64": "YWJj"},
                 {"name": "b.png", "mime": "image/png", "b64": "ZGVm"},
@@ -183,6 +186,8 @@ def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, 
     assert 'src="/generations/10/input-images/0"' in body
     assert 'src="/generations/10/input-images/1"' in body
     assert 'Prompt with references' in body
+    assert 'Cinematic' in body
+    assert 'cinematic lighting' not in body
 
 
 def test_job_status_chat_fragment_renders_add_to_input_button_on_assets(client, app_module) -> None:
@@ -591,11 +596,15 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
             status="succeeded",
             provider="stub",
             model="stub-v1",
+            prompt_user="forest scene\nvintage film",
             prompt_final="prompt",
             failure_sidecar_path=None,
             profile_snapshot_json={},
             storage_template_snapshot_json={},
-            request_snapshot_json={},
+            request_snapshot_json={
+                "prompt_user_original": "forest scene",
+                "selected_style_names": ["Vintage"],
+            },
         ),
         categories=[],
         width=1024,
@@ -625,6 +634,9 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert 'max-h-[75vh]' in body
     assert 'href="/assets/44/file"' in body
     assert 'Original size' in body
+    assert 'User prompt' in body
+    assert 'forest scene' in body
+    assert 'Vintage' in body
 
 
 def test_asset_detail_htmx_returns_dialog_fragment_only(client, app_module, monkeypatch) -> None:

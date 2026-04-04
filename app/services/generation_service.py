@@ -154,8 +154,19 @@ class GenerationService:
 
         request_snapshot = {
             "prompt_user": prompt_user,
+            "prompt_user_original": str(
+                effective_overrides.get("prompt_user_original") or prompt_user
+            ),
             "prompt_final": prompt_final,
             "chat_session_id": chat_session_id or None,
+            "selected_style_ids": self._parse_int_list(
+                effective_overrides.get("selected_style_ids", [])
+            ),
+            "selected_style_names": [
+                str(name).strip()
+                for name in effective_overrides.get("selected_style_names", [])
+                if str(name).strip()
+            ],
             "width": width,
             "height": height,
             "n_images": max(1, n_images),

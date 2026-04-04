@@ -377,6 +377,9 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
             "category_ids": [2, 2, "3", -1],
             "input_images": [{"name": "img"}],
             "chat_session_id": "session:abc",
+            "prompt_user_original": "a subject",
+            "selected_style_ids": [9, "10", -1],
+            "selected_style_names": ["Cinematic", "", "Painterly"],
         },
     )
 
@@ -392,6 +395,9 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
     assert request_snapshot["upscale_topaz_model_id"] == 12
     assert request_snapshot["category_ids"] == [2, 3]
     assert request_snapshot["chat_session_id"] == "session:abc"
+    assert request_snapshot["prompt_user_original"] == "a subject"
+    assert request_snapshot["selected_style_ids"] == [9, 10]
+    assert request_snapshot["selected_style_names"] == ["Cinematic", "Painterly"]
     assert request_snapshot["params_json"] == {"extra": True}
     assert request_snapshot["overrides"]["width"] is True
     assert request_snapshot["overrides"]["height"] is False
