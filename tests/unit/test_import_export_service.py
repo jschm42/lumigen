@@ -134,6 +134,7 @@ def test_import_result_to_dict() -> None:
 
 
 def _make_model(name="M", provider="openai", model="dall-e-3"):
+    """Create a mock ModelConfig-like namespace for use in service unit tests."""
     return SimpleNamespace(
         name=name,
         provider=provider,
@@ -144,10 +145,12 @@ def _make_model(name="M", provider="openai", model="dall-e-3"):
 
 
 def _make_style(name="Vintage", description="Old", prompt="grain"):
+    """Create a mock Style-like namespace for use in service unit tests."""
     return SimpleNamespace(name=name, description=description, prompt=prompt)
 
 
 def _make_profile(name="P", provider="openai", model="dall-e-3"):
+    """Create a mock Profile-like namespace for use in service unit tests."""
     return SimpleNamespace(
         name=name,
         provider=provider,

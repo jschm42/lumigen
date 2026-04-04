@@ -8,10 +8,11 @@ from types import SimpleNamespace
 
 
 class _FakeSession:
-    pass
+    """Stub for SQLAlchemy Session used to isolate route handlers from the database."""
 
 
 def _override_session(fake_session):
+    """Return a FastAPI dependency override that yields *fake_session*."""
     def _dependency():
         yield fake_session
 
@@ -132,12 +133,22 @@ def test_admin_export_denied_for_non_admin(anon_client, app_module) -> None:
 
 
 def _json_file(payload: dict) -> tuple[str, io.BytesIO, str]:
-    """Return a (filename, fileobj, content_type) tuple suitable for test uploads."""
+    """Return a (filename, fileobj, content_type) tuple for test file uploads.
+
+    The payload dict is serialised to UTF-8 JSON bytes and wrapped in a
+    ``BytesIO`` object so it can be passed directly to the ``files`` parameter
+    of ``TestClient.post``.
+    """
     return ("export.json", io.BytesIO(json.dumps(payload).encode()), "application/json")
 
 
 def _import_payload(entity_type: str = "models") -> dict:
-    """Build a minimal valid import payload for the given entity type."""
+    """Build a minimal valid import payload for the given *entity_type*.
+
+    Valid values for *entity_type*: ``"models"``, ``"profiles"``, ``"styles"``.
+    The returned dict always includes ``format_version`` and ``exported_at``
+    metadata, plus a single-element array for the requested entity type.
+    """
     base: dict = {"format_version": "1", "exported_at": "2026-01-01T00:00:00+00:00"}
     if entity_type == "models":
         base["models"] = [{"name": "TestModel", "provider": "openai", "model": "dall-e-3"}]

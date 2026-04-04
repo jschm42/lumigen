@@ -105,6 +105,14 @@
     initFalModelDialogs();
   });
 
+  /**
+   * Read the import form fields, POST the selected JSON file to /admin/import,
+   * and render a summary of the results.
+   *
+   * Reads from DOM elements: #import-file, #import-conflict, #import-dry-run,
+   * #import-result, #import-submit-btn.  The CSRF token is read from the
+   * <meta name="csrf-token"> tag inserted by the server.
+   */
   function adminImport() {
     var fileInput = document.getElementById("import-file");
     var conflictSelect = document.getElementById("import-conflict");
@@ -148,16 +156,35 @@
       });
   }
 
+  /**
+   * Show a loading indicator in *resultDiv* while the import request is in
+   * flight.
+   * @param {HTMLElement} resultDiv - Container element for the result display.
+   */
   function _showImportLoading(resultDiv) {
     resultDiv.className = "mt-2 rounded-2xl border border-slate-300/60 bg-white/90 px-4 py-3 text-sm text-slate-800 dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100";
     resultDiv.textContent = "Importing…";
   }
 
+  /**
+   * Render an error message inside *resultDiv*.
+   * @param {HTMLElement} resultDiv - Container element for the result display.
+   * @param {string} msg - Human-readable error text to show.
+   */
   function _showImportError(resultDiv, msg) {
     resultDiv.className = "mt-2 rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-100";
     resultDiv.textContent = msg;
   }
 
+  /**
+   * Render a structured import summary inside *resultDiv*.
+   *
+   * @param {HTMLElement} resultDiv - Container element for the result display.
+   * @param {object} data - Response body from POST /admin/import.
+   * @param {boolean} data.dry_run - Whether the response is a dry-run preview.
+   * @param {Array}   data.results - Array of per-entity-type result objects.
+   * @param {string}  [data.message] - Optional message when results is empty.
+   */
   function _showImportResults(resultDiv, data) {
     var isDryRun = data.dry_run;
     var results = data.results || [];
@@ -196,6 +223,12 @@
     resultDiv.innerHTML = html;
   }
 
+  /**
+   * Escape special HTML characters in *str* to prevent XSS when injecting
+   * server-supplied text into innerHTML.
+   * @param {string} str - Raw string to escape.
+   * @returns {string} HTML-escaped string.
+   */
   function _esc(str) {
     return String(str)
       .replace(/&/g, "&amp;")

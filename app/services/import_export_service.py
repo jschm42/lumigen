@@ -1,4 +1,46 @@
-"""Admin import/export service for Profiles, Models, and Styles."""
+"""Admin import/export service for Profiles, Models, and Styles.
+
+This module provides versioned JSON serialisation and deserialisation for the
+three core admin configuration entities: ``ModelConfig``, ``Profile``, and
+``Style``.
+
+Format versioning
+-----------------
+Every export payload includes a ``format_version`` string (currently ``"1"``)
+and an ``exported_at`` ISO-8601 timestamp.  The import functions reject
+payloads with unknown versions and return a clear error message.
+
+Conflict strategies
+-------------------
+``skip``
+    Leave existing records untouched; mark the imported record as *skipped*.
+``overwrite``
+    Update the existing record in place; mark it as *updated*.
+``rename``
+    Create the new record under a name like ``"Original (2)"``; mark it as
+    *created*.
+
+Dry-run mode
+------------
+Pass ``dry_run=True`` to any import function to preview changes without
+committing them.  Counts are still returned; no database writes occur.
+
+Typical usage
+-------------
+::
+
+    from app.services.import_export_service import export_all, import_styles
+
+    # Export
+    payload = export_all(session)
+
+    # Import (commit)
+    result = import_styles(session, payload["styles"], "skip")
+    print(result.created, result.skipped, result.failed)
+
+    # Import (dry-run preview)
+    result = import_styles(session, payload["styles"], "overwrite", dry_run=True)
+"""
 
 from __future__ import annotations
 
@@ -28,10 +70,20 @@ _MAX_STYLE_PROMPT = 1000
 
 @dataclass
 class RecordResult:
-    """Result for a single imported record."""
+    """Result for a single imported record.
+
+    Attributes
+    ----------
+    name:
+        The (possibly renamed) entity name that was processed.
+    outcome:
+        One of ``"created"``, ``"updated"``, ``"skipped"``, or ``"failed"``.
+    reason:
+        Human-readable explanation for *skipped* or *failed* outcomes.
+    """
 
     name: str
-    outcome: str  # "created", "updated", "skipped", "failed"
+    outcome: str
     reason: str = ""
 
 
@@ -83,7 +135,12 @@ class ImportResult:
 
 
 def _export_metadata() -> dict[str, str]:
-    """Return standard export metadata fields."""
+    """Return standard export metadata fields.
+
+    Returns a dict with ``format_version`` (used for forward/backward
+    compatibility checks during import) and ``exported_at`` (ISO-8601 UTC
+    timestamp for auditing).
+    """
     return {
         "format_version": CURRENT_FORMAT_VERSION,
         "exported_at": datetime.now(UTC).isoformat(),
@@ -219,7 +276,21 @@ def validate_import_payload(
 
 
 def _unique_name(base_name: str, existing_names: set[str], max_len: int) -> str:
-    """Return a unique name derived from *base_name* by appending a counter."""
+    """Return a unique name derived from *base_name* by appending a counter.
+
+    Iterates counters starting at 2 until a name is not in *existing_names*.
+    If appending the suffix would exceed *max_len*, the base name is truncated
+    to accommodate the suffix while keeping the total length within the limit.
+
+    Parameters
+    ----------
+    base_name:
+        The desired name that already exists in *existing_names*.
+    existing_names:
+        Set of names already taken.
+    max_len:
+        Maximum allowed character length for the returned name.
+    """
     candidate = base_name
     counter = 2
     while candidate in existing_names:
@@ -231,7 +302,12 @@ def _unique_name(base_name: str, existing_names: set[str], max_len: int) -> str:
 
 
 def _optional_int(val: Any) -> int | None:
-    """Coerce *val* to int or return None."""
+    """Coerce *val* to int or return ``None``.
+
+    Returns ``None`` when *val* is ``None``, or when it cannot be converted to
+    an integer (e.g. a non-numeric string).  ``TypeError`` and ``ValueError``
+    are silently swallowed.
+    """
     if val is None:
         return None
     try:
