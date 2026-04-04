@@ -3156,20 +3156,20 @@ async def admin_import(
     raw_bytes = await file.read()
     try:
         payload = json.loads(raw_bytes)
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        # Use a safe, user-facing description without exposing internal state.
-        safe_msg = (
-            f"Invalid JSON at line {exc.lineno}, column {exc.colno}."
-            if isinstance(exc, json.JSONDecodeError)
-            else "File contains invalid characters; ensure it is UTF-8 encoded."
+    except json.JSONDecodeError as exc:
+        return JSONResponse(
+            {"error": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."},
+            status_code=400,
         )
-        return JSONResponse({"error": safe_msg}, status_code=400)
+    except UnicodeDecodeError:
+        return JSONResponse(
+            {"error": "File contains invalid characters; ensure it is UTF-8 encoded."},
+            status_code=400,
+        )
 
-    try:
-        _version, profiles_list, models_list, styles_list = validate_import_payload(payload)
-    except ValueError as exc:
-        # Messages from validate_import_payload are explicitly crafted; expose only the text.
-        return JSONResponse({"error": str(exc)}, status_code=400)
+    validation_error, _version, profiles_list, models_list, styles_list = validate_import_payload(payload)
+    if validation_error is not None:
+        return JSONResponse({"error": validation_error}, status_code=400)
 
     results = []
     if models_list:

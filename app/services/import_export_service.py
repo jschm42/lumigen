@@ -237,23 +237,30 @@ def export_all(session: Session) -> dict[str, Any]:
 
 def validate_import_payload(
     payload: Any,
-) -> tuple[str, list[Any], list[Any], list[Any]]:
+) -> tuple[str | None, str, list[Any], list[Any], list[Any]]:
     """Validate the top-level structure of an import payload.
 
-    Returns ``(format_version, profiles, models, styles)`` on success.
-    Raises ``ValueError`` describing the first problem found.
+    Returns ``(error, format_version, profiles, models, styles)``.  When
+    *error* is not ``None`` the other values are empty/default and the caller
+    should return an error response without further processing.  This
+    return-value style avoids propagating ``ValueError`` through HTTP handlers,
+    which can inadvertently expose internal state in error responses.
     """
     if not isinstance(payload, dict):
-        raise ValueError("Import payload must be a JSON object.")
+        return "Import payload must be a JSON object.", "", [], [], []
 
     version = payload.get("format_version")
     if not isinstance(version, str) or not version.strip():
-        raise ValueError("Missing or invalid 'format_version' in import payload.")
+        return "Missing or invalid 'format_version' in import payload.", "", [], [], []
     version = version.strip()
     if version not in SUPPORTED_FORMAT_VERSIONS:
         supported = ", ".join(sorted(SUPPORTED_FORMAT_VERSIONS))
-        raise ValueError(
-            f"Unsupported format_version '{version}'. Supported: {supported}."
+        return (
+            f"Unsupported format_version '{version}'. Supported: {supported}.",
+            "",
+            [],
+            [],
+            [],
         )
 
     profiles: Any = payload.get("profiles", [])
@@ -261,13 +268,13 @@ def validate_import_payload(
     styles: Any = payload.get("styles", [])
 
     if not isinstance(profiles, list):
-        raise ValueError("'profiles' must be a JSON array.")
+        return "'profiles' must be a JSON array.", "", [], [], []
     if not isinstance(models, list):
-        raise ValueError("'models' must be a JSON array.")
+        return "'models' must be a JSON array.", "", [], [], []
     if not isinstance(styles, list):
-        raise ValueError("'styles' must be a JSON array.")
+        return "'styles' must be a JSON array.", "", [], [], []
 
-    return version, profiles, models, styles
+    return None, version, profiles, models, styles
 
 
 # ---------------------------------------------------------------------------
@@ -670,7 +677,7 @@ def import_profiles(
         aspect_ratio: str | None = raw.get("aspect_ratio") or None
         if isinstance(aspect_ratio, str):
             aspect_ratio = aspect_ratio.strip() or None
-        n_images = max(1, int(raw.get("n_images") or 1))
+        n_images = max(1, _optional_int(raw.get("n_images")) or 1)
         seed = _optional_int(raw.get("seed"))
         output_format = str(raw.get("output_format") or "png").strip().lower() or "png"
         upscale_provider: str | None = raw.get("upscale_provider") or None

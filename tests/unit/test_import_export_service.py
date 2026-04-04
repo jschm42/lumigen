@@ -30,7 +30,8 @@ from app.services.import_export_service import (
 
 
 def test_validate_payload_valid_minimal() -> None:
-    version, profiles, models, styles = validate_import_payload({"format_version": "1"})
+    error, version, profiles, models, styles = validate_import_payload({"format_version": "1"})
+    assert error is None
     assert version == "1"
     assert profiles == []
     assert models == []
@@ -38,33 +39,39 @@ def test_validate_payload_valid_minimal() -> None:
 
 
 def test_validate_payload_non_dict_raises() -> None:
-    with pytest.raises(ValueError, match="must be a JSON object"):
-        validate_import_payload([1, 2, 3])
+    error, *_ = validate_import_payload([1, 2, 3])
+    assert error is not None
+    assert "must be a JSON object" in error
 
 
 def test_validate_payload_missing_version_raises() -> None:
-    with pytest.raises(ValueError, match="format_version"):
-        validate_import_payload({"models": []})
+    error, *_ = validate_import_payload({"models": []})
+    assert error is not None
+    assert "format_version" in error
 
 
 def test_validate_payload_unsupported_version_raises() -> None:
-    with pytest.raises(ValueError, match="Unsupported format_version"):
-        validate_import_payload({"format_version": "99"})
+    error, *_ = validate_import_payload({"format_version": "99"})
+    assert error is not None
+    assert "Unsupported format_version" in error
 
 
 def test_validate_payload_profiles_not_list_raises() -> None:
-    with pytest.raises(ValueError, match="'profiles' must be a JSON array"):
-        validate_import_payload({"format_version": "1", "profiles": "not a list"})
+    error, *_ = validate_import_payload({"format_version": "1", "profiles": "not a list"})
+    assert error is not None
+    assert "'profiles' must be a JSON array" in error
 
 
 def test_validate_payload_models_not_list_raises() -> None:
-    with pytest.raises(ValueError, match="'models' must be a JSON array"):
-        validate_import_payload({"format_version": "1", "models": {"name": "oops"}})
+    error, *_ = validate_import_payload({"format_version": "1", "models": {"name": "oops"}})
+    assert error is not None
+    assert "'models' must be a JSON array" in error
 
 
 def test_validate_payload_styles_not_list_raises() -> None:
-    with pytest.raises(ValueError, match="'styles' must be a JSON array"):
-        validate_import_payload({"format_version": "1", "styles": 42})
+    error, *_ = validate_import_payload({"format_version": "1", "styles": 42})
+    assert error is not None
+    assert "'styles' must be a JSON array" in error
 
 
 # ---------------------------------------------------------------------------
