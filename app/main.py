@@ -45,6 +45,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
+from PIL import Image, ImageOps
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -84,13 +85,17 @@ MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
 MAX_FAL_MODEL_IDENTIFIER_LENGTH = 160
+MAX_STYLE_NAME_LENGTH = 30
+MAX_STYLE_DESCRIPTION_LENGTH = 120
+MAX_STYLE_PROMPT_LENGTH = 1000
+MAX_STYLE_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_UPLOAD_BYTES = (
     settings.max_upload_size_mb * 1024 * 1024
     if settings.max_upload_size_mb is not None
     else None
 )
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "users", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "styles", "users", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
@@ -168,6 +173,7 @@ def parse_proxy_trusted_hosts(raw: str) -> str | list[str]:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ensure_dir(settings.data_dir)
     ensure_dir(settings.default_base_dir)
+    ensure_dir(settings.data_dir / "styles")
     init_db()
     with SessionLocal() as session:
         crud.ensure_default_storage_template(
@@ -1003,6 +1009,42 @@ def normalize_category_name(value: str) -> str:
     return normalized
 
 
+def normalize_style_name(value: str) -> str:
+    """Normalize and validate a style name."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Style name is required")
+    if len(normalized) > MAX_STYLE_NAME_LENGTH:
+        raise ValueError(
+            f"Style name must be at most {MAX_STYLE_NAME_LENGTH} characters"
+        )
+    return normalized
+
+
+def normalize_style_description(value: str) -> str:
+    """Normalize and validate a style description."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Style description is required")
+    if len(normalized) > MAX_STYLE_DESCRIPTION_LENGTH:
+        raise ValueError(
+            f"Style description must be at most {MAX_STYLE_DESCRIPTION_LENGTH} characters"
+        )
+    return normalized
+
+
+def normalize_style_prompt(value: str) -> str:
+    """Normalize and validate a style prompt."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Style prompt is required")
+    if len(normalized) > MAX_STYLE_PROMPT_LENGTH:
+        raise ValueError(
+            f"Style prompt must be at most {MAX_STYLE_PROMPT_LENGTH} characters"
+        )
+    return normalized
+
+
 def normalize_profile_name(value: str) -> str:
     normalized = (value or "").strip()
     if not normalized:
@@ -1195,10 +1237,12 @@ def generate_page(
     last_profile_id = None
     last_thumb_size = "md"
     conversation_generations = []
+    styles: list[Any] = []
 
     if active_workspace_view == "chat":
         profiles = crud.list_profiles(session)
         dimension_presets = crud.list_dimension_presets(session)
+        styles = crud.list_styles(session)
         enhancement_config = crud.get_enhancement_config(session)
         enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
         upscale_ready = upscale_service.is_available()
@@ -1263,6 +1307,7 @@ def generate_page(
             "fal_upscale_models": fal_upscale_models,
             "topaz_upscale_models": fal_upscale_models,
             "fal_upscale_ready": fal_upscale_ready,
+            "styles": styles,
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
@@ -1348,6 +1393,7 @@ def generate_submit(
     upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
+    style_ids: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -1364,6 +1410,18 @@ def generate_submit(
         else:
             resolved_conversation = conversation_value
         overrides["chat_session_id"] = resolved_conversation
+
+        # Parse and inject selected style prompts
+        parsed_style_ids = [
+            int(sid.strip())
+            for sid in (style_ids or "").split(",")
+            if sid.strip().isdigit()
+        ]
+        if parsed_style_ids:
+            selected_styles = crud.get_styles_by_ids(session, parsed_style_ids)
+            style_prompt_parts = [s.prompt for s in selected_styles if s.prompt.strip()]
+            if style_prompt_parts:
+                prompt_user = prompt_user.rstrip() + "\n" + "\n".join(style_prompt_parts)
 
         encoded_images: list[dict[str, str]] = []
 
@@ -1955,6 +2013,7 @@ def admin_page(
     model_configs = crud.list_model_configs(session)
     dimension_presets = crud.list_dimension_presets(session)
     categories = crud.list_categories(session)
+    styles = crud.list_styles(session)
     users = crud.list_users(session)
     enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
@@ -2016,6 +2075,7 @@ def admin_page(
             "model_configs": model_configs,
             "dimension_presets": dimension_presets,
             "categories": categories,
+            "styles": styles,
             "enhancement_config": enhancement_config,
             "providers": provider_names,
             "provider_meta": provider_registry.provider_meta(),
@@ -2359,6 +2419,186 @@ def admin_delete_category(
 
     crud.delete_category(session, category)
     return admin_redirect("categories", message="Deleted")
+
+
+def _style_image_path(style_id: int) -> Path:
+    """Return the absolute path where a style's thumbnail image is stored."""
+    return (settings.data_dir / "styles" / f"{style_id}").with_suffix(".webp")
+
+
+@app.get("/admin/styles/{style_id}/image")
+def admin_style_image(
+    style_id: int,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """Serve the thumbnail image for a style."""
+    style = crud.get_style(session, style_id)
+    if not style or not style.image_path:
+        raise HTTPException(status_code=404, detail="Style image not found")
+    image_path = _style_image_path(style_id)
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Style image file missing")
+    return FileResponse(path=image_path, media_type="image/webp")
+
+
+@app.post("/admin/styles")
+def admin_create_style(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(...),
+    prompt: str = Form(...),
+    image: UploadFile = File(default=None),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Create a new style with optional thumbnail image."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    try:
+        name_value = normalize_style_name(name)
+        description_value = normalize_style_description(description)
+        prompt_value = normalize_style_prompt(prompt)
+
+        style = crud.create_style(
+            session,
+            name=name_value,
+            description=description_value,
+            prompt=prompt_value,
+            image_path=None,
+        )
+
+        # Handle optional image upload
+        if image and image.filename:
+            image_data = image.file.read()
+            if image_data:
+                content_type = (image.content_type or "").lower()
+                if not content_type.startswith("image/"):
+                    crud.delete_style(session, style)
+                    raise ValueError("Style image must be a valid image file.")
+                if len(image_data) > MAX_STYLE_IMAGE_BYTES:
+                    crud.delete_style(session, style)
+                    raise ValueError("Style image must be smaller than 5 MB.")
+                img_path = _style_image_path(style.id)
+                ensure_dir(img_path.parent)
+                try:
+                    with io.BytesIO(image_data) as buf:
+                        pil_img = Image.open(buf)
+                        pil_img = ImageOps.exif_transpose(pil_img)
+                        pil_img = pil_img.convert("RGB")
+                        thumb_size = min(pil_img.width, pil_img.height, 256)
+                        pil_img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+                        out_buf = io.BytesIO()
+                        pil_img.save(out_buf, format="WEBP", quality=85)
+                        img_path.write_bytes(out_buf.getvalue())
+                except Exception:
+                    raise ValueError("Failed to process the style image.")
+                crud.update_style(session, style, image_path=img_path.as_posix())
+
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect("styles", error=str(exc))
+
+    return admin_redirect("styles", message="Saved")
+
+
+@app.post("/admin/styles/{style_id}/update")
+def admin_update_style(
+    request: Request,
+    style_id: int,
+    name: str = Form(...),
+    description: str = Form(...),
+    prompt: str = Form(...),
+    image: UploadFile = File(default=None),
+    clear_image: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Update an existing style."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    style = crud.get_style(session, style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    try:
+        name_value = normalize_style_name(name)
+        description_value = normalize_style_description(description)
+        prompt_value = normalize_style_prompt(prompt)
+
+        new_image_path = style.image_path
+
+        if clear_image:
+            # Remove existing image file if present
+            if style.image_path:
+                old_img = _style_image_path(style_id)
+                if old_img.exists():
+                    old_img.unlink(missing_ok=True)
+            new_image_path = None
+        elif image and image.filename:
+            image_data = image.file.read()
+            if image_data:
+                content_type = (image.content_type or "").lower()
+                if not content_type.startswith("image/"):
+                    raise ValueError("Style image must be a valid image file.")
+                if len(image_data) > MAX_STYLE_IMAGE_BYTES:
+                    raise ValueError("Style image must be smaller than 5 MB.")
+                img_path = _style_image_path(style_id)
+                ensure_dir(img_path.parent)
+                try:
+                    with io.BytesIO(image_data) as buf:
+                        pil_img = Image.open(buf)
+                        pil_img = ImageOps.exif_transpose(pil_img)
+                        pil_img = pil_img.convert("RGB")
+                        thumb_size = min(pil_img.width, pil_img.height, 256)
+                        pil_img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+                        out_buf = io.BytesIO()
+                        pil_img.save(out_buf, format="WEBP", quality=85)
+                        img_path.write_bytes(out_buf.getvalue())
+                except Exception:
+                    raise ValueError("Failed to process the style image.")
+                new_image_path = img_path.as_posix()
+
+        crud.update_style(
+            session,
+            style,
+            name=name_value,
+            description=description_value,
+            prompt=prompt_value,
+            image_path=new_image_path,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect("styles", error=str(exc))
+
+    return admin_redirect("styles", message="Saved")
+
+
+@app.post("/admin/styles/{style_id}/delete")
+def admin_delete_style(
+    request: Request,
+    style_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Delete a style and its associated image if present."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    style = crud.get_style(session, style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    # Remove image file if present
+    if style.image_path:
+        img_path = _style_image_path(style_id)
+        if img_path.exists():
+            img_path.unlink(missing_ok=True)
+
+    crud.delete_style(session, style)
+    return admin_redirect("styles", message="Deleted")
 
 
 @app.post("/admin/model-configs")
