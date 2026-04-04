@@ -677,7 +677,7 @@ def import_profiles(
         aspect_ratio: str | None = raw.get("aspect_ratio") or None
         if isinstance(aspect_ratio, str):
             aspect_ratio = aspect_ratio.strip() or None
-        n_images = max(1, _optional_int(raw.get("n_images")) or 1)
+        n_images = _optional_int(raw.get("n_images")) or 1
         seed = _optional_int(raw.get("seed"))
         output_format = str(raw.get("output_format") or "png").strip().lower() or "png"
         upscale_provider: str | None = raw.get("upscale_provider") or None

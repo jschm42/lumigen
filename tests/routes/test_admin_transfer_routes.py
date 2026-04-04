@@ -121,10 +121,9 @@ def test_admin_export_invalid_type_falls_back_to_all(client, app_module, monkeyp
 
 
 def test_admin_export_denied_for_non_admin(anon_client, app_module) -> None:
-    """Export endpoint requires admin; unauthenticated users are redirected."""
+    """Export endpoint requires admin; unauthenticated users are redirected (303)."""
     response = anon_client.get("/admin/export?export_type=models", follow_redirects=False)
-    # Either redirect (303) or redirect chain landing on login page
-    assert response.status_code in {200, 303}
+    assert response.status_code == 303
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +284,11 @@ def test_admin_import_missing_format_version_returns_400(client, app_module) -> 
 
 
 def test_admin_import_denied_for_non_admin(anon_client, app_module) -> None:
-    """Import endpoint requires admin."""
+    """Import endpoint rejects unauthenticated requests with a redirect (303).
+
+    The auth middleware intercepts unauthenticated requests and redirects
+    them to the login page before the CSRF or admin checks run.
+    """
     payload = _import_payload("models")
     response = anon_client.post(
         "/admin/import",
@@ -293,4 +296,4 @@ def test_admin_import_denied_for_non_admin(anon_client, app_module) -> None:
         files={"file": _json_file(payload)},
         follow_redirects=False,
     )
-    assert response.status_code in {200, 303, 403}
+    assert response.status_code == 303
