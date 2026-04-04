@@ -12,10 +12,16 @@ import uuid
 import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 import uvicorn
 from fastapi import (
@@ -101,6 +107,23 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "21:9",
 }
 OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
+GOOGLE_ALLOWED_ASPECT_RATIOS = {
+    "1:1",
+    "1:4",
+    "1:8",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:1",
+    "4:3",
+    "4:5",
+    "5:4",
+    "8:1",
+    "9:16",
+    "16:9",
+    "21:9",
+}
+GOOGLE_ALLOWED_RESOLUTIONS = {"512", "1K", "2K", "4K"}
 FAL_ALLOWED_ASPECT_RATIOS = {
     "auto",
     "21:9",
@@ -547,6 +570,56 @@ def apply_fal_image_config(
 
     # Remove legacy key after migrating to explicit ratio/resolution.
     merged.pop("fal_image_size", None)
+    return merged
+
+
+def apply_google_image_config(
+    *,
+    params_json: dict[str, Any],
+    provider: str,
+    google_aspect_ratio: str,
+    google_resolution: str,
+    allow_clear: bool = True,
+) -> dict[str, Any]:
+    """Return params merged with validated Google ratio/resolution settings."""
+    merged = copy.deepcopy(params_json or {})
+    provider_value = (provider or "").strip().lower()
+    image_config_raw = merged.get("image_config")
+    image_config = (
+        copy.deepcopy(image_config_raw) if isinstance(image_config_raw, dict) else {}
+    )
+
+    if provider_value != "google":
+        image_config.pop("aspect_ratio", None)
+        image_config.pop("image_size", None)
+        if image_config:
+            merged["image_config"] = image_config
+        else:
+            merged.pop("image_config", None)
+        return merged
+
+    ratio_value = (google_aspect_ratio or "").strip()
+    resolution_value = (google_resolution or "").strip().upper()
+
+    if ratio_value and ratio_value not in GOOGLE_ALLOWED_ASPECT_RATIOS:
+        raise ValueError("Invalid Google aspect ratio selected")
+    if resolution_value and resolution_value not in GOOGLE_ALLOWED_RESOLUTIONS:
+        raise ValueError("Invalid Google resolution selected")
+
+    if ratio_value:
+        image_config["aspect_ratio"] = ratio_value
+    elif allow_clear:
+        image_config.pop("aspect_ratio", None)
+
+    if resolution_value:
+        image_config["image_size"] = resolution_value
+    elif allow_clear:
+        image_config.pop("image_size", None)
+
+    if image_config:
+        merged["image_config"] = image_config
+    else:
+        merged.pop("image_config", None)
     return merged
 
 
@@ -1197,6 +1270,62 @@ def generate_page(
     )
 
 
+@app.get("/workspace/profiles", response_class=HTMLResponse)
+def workspace_profiles_fragment(request: Request) -> HTMLResponse:
+    """Return the embedded profiles workspace fragment."""
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Profiles",
+            "workspace_src": "/profiles?embedded=1",
+            "fallback_href": "/profiles",
+        },
+    )
+
+
+@app.get("/workspace/gallery", response_class=HTMLResponse)
+def workspace_gallery_fragment(request: Request) -> HTMLResponse:
+    """Return the embedded gallery workspace fragment."""
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Gallery",
+            "workspace_src": "/gallery?embedded=1",
+            "fallback_href": "/gallery",
+        },
+    )
+
+
+@app.get("/workspace/admin", response_class=HTMLResponse)
+def workspace_admin_fragment(
+    request: Request,
+    section: str | None = Query(default="models"),
+) -> HTMLResponse:
+    """Return the embedded admin workspace fragment for the active section."""
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    section_value = normalize_admin_section(section)
+    embedded_src = f"/admin?{urlencode({'section': section_value, 'embedded': '1'})}"
+    fallback_href = f"/admin?{urlencode({'section': section_value})}"
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Admin",
+            "workspace_src": embedded_src,
+            "fallback_href": fallback_href,
+        },
+    )
+
+
 @app.post("/generate", response_class=HTMLResponse)
 def generate_submit(
     request: Request,
@@ -1213,6 +1342,8 @@ def generate_submit(
     fal_aspect_ratio: str = Form(default=""),
     fal_resolution: str = Form(default=""),
     fal_image_size: str = Form(default=""),
+    google_aspect_ratio: str = Form(default=""),
+    google_resolution: str = Form(default=""),
     upscale_model: str = Form(default="__profile__"),
     upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
@@ -1286,8 +1417,12 @@ def generate_submit(
             overrides["input_images"] = encoded_images
 
         provider_value = str(profile.provider or "").strip().lower()
+        if provider_value == "fal" and encoded_images:
+            raise ValueError(
+                "FAL provider does not support input images."
+            )
 
-        # Apply OpenRouter-specific, FAL-specific, or standard dimension overrides
+        # Apply OpenRouter-specific, FAL-specific, Google-specific, or standard dimension overrides
         if provider_value == "openrouter":
             # For OpenRouter: process aspect_ratio and image_size
             params_json_copy = dict(profile.params_json or {})
@@ -1310,6 +1445,17 @@ def generate_submit(
                 provider=provider_value,
                 fal_aspect_ratio=fal_aspect_ratio,
                 fal_resolution=fal_resolution,
+                allow_clear=False,
+            )
+            overrides["params_json"] = params_json_with_overrides
+        elif provider_value == "google":
+            # For Google: process explicit aspect ratio + resolution settings.
+            params_json_copy = dict(profile.params_json or {})
+            params_json_with_overrides = apply_google_image_config(
+                params_json=params_json_copy,
+                provider=provider_value,
+                google_aspect_ratio=google_aspect_ratio,
+                google_resolution=google_resolution,
                 allow_clear=False,
             )
             overrides["params_json"] = params_json_with_overrides
@@ -2775,13 +2921,17 @@ def create_profile(
                     params_value[key] = val
         else:
             # Handle generic parameters for all other providers
-            extra = parse_generic_params_json(extra_params)
+            # Remove previously stored extra params (all keys except reserved ones)
             reserved_keys = {
                 "fal_aspect_ratio",
                 "fal_resolution",
                 "fal_image_size",
                 "image_config",
             }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            extra = parse_generic_params_json(extra_params)
             for key, val in extra.items():
                 if key not in reserved_keys and val is not None:
                     params_value[key] = val
@@ -3415,6 +3565,30 @@ def delete_generation(
     return RedirectResponse(url="/gallery", status_code=303)
 
 
+def _create_generation_for_retry(
+    session: Session, source: Generation, profile_id: int | None
+) -> Generation:
+    """Create a new queued generation for a retry request.
+
+    If *profile_id* refers to an existing profile, the generation is built
+    from that profile using the original prompt and any chat session context
+    from *source*.  Otherwise falls back to cloning the source generation's
+    own snapshot data.
+    """
+    if profile_id is not None:
+        profile = crud.get_profile(session, profile_id)
+        if profile is not None:
+            request_snapshot = source.request_snapshot_json or {}
+            overrides: dict = {}
+            chat_session_id = request_snapshot.get("chat_session_id")
+            if chat_session_id:
+                overrides["chat_session_id"] = chat_session_id
+            return generation_service.create_generation_from_profile(
+                session, profile, source.prompt_user, overrides=overrides
+            )
+    return generation_service.create_generation_from_snapshot(session, source)
+
+
 @app.post("/generations/{generation_id}/rerun", response_class=HTMLResponse)
 def rerun_generation(
     request: Request,
@@ -3422,6 +3596,7 @@ def rerun_generation(
     background_tasks: BackgroundTasks,
     view: str = Query(default="default"),
     csrf_token: str = Form(...),
+    profile_id: int | None = Form(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     validate_csrf_or_raise(request, csrf_token)
@@ -3429,7 +3604,7 @@ def rerun_generation(
     if not source:
         raise HTTPException(status_code=404, detail="Generation not found")
 
-    generation = generation_service.create_generation_from_snapshot(session, source)
+    generation = _create_generation_for_retry(session, source, profile_id)
     generation_service.enqueue(background_tasks, generation.id)
 
     template_name = (

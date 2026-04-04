@@ -70,6 +70,11 @@ class FalAdapter(ProviderAdapter):
                 "FAL adapter requires FAL_API_KEY in .env or a custom API key."
             )
 
+        if request.input_images:
+            raise ProviderError(
+                "FAL provider does not support input images."
+            )
+
         queue_url = f"{self.QUEUE_URL}/{request.model}"
         headers = {
             "Authorization": f"Key {api_key}",
@@ -262,6 +267,16 @@ class FalAdapter(ProviderAdapter):
         payload: dict[str, Any] = {
             "prompt": request.prompt,
         }
+
+        # Preserve explicit dimensions for models that still expect `image_size`.
+        if request.width is not None and request.height is not None:
+            try:
+                payload["image_size"] = {
+                    "width": int(request.width),
+                    "height": int(request.height),
+                }
+            except (TypeError, ValueError):
+                pass
 
         fal_aspect_ratio = None
         fal_resolution = None

@@ -4,7 +4,13 @@ import argparse
 import json
 import random
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from pathlib import Path
 
 
