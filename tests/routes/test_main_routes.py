@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import zipfile
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -970,7 +973,7 @@ def test_download_session_returns_zip(client, app_module, monkeypatch, tmp_path)
 
     generation = SimpleNamespace(
         id=1,
-        created_at=__import__("datetime").datetime(2024, 3, 15, 10, 0),
+        created_at=datetime(2024, 3, 15, 10, 0),
         finished_at=None,
         prompt_user="a red cat",
         prompt_final=None,
@@ -998,9 +1001,6 @@ def test_download_session_returns_zip(client, app_module, monkeypatch, tmp_path)
     assert response.headers["content-type"] == "application/zip"
     assert "attachment" in response.headers["content-disposition"]
     assert ".zip" in response.headers["content-disposition"]
-
-    import io
-    import zipfile
 
     zf = zipfile.ZipFile(io.BytesIO(response.content))
     names = zf.namelist()
