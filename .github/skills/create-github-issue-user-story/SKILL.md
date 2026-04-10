@@ -1,5 +1,5 @@
 ---
-name: github-issue-user-story
+name: create-github-issue-user-story
 description: 'Create GitHub issue descriptions in markdown as user stories with acceptance criteria. Use for feature requests, UI/backend enhancements, and requirement-to-issue conversion with clear validation rules.'
 argument-hint: 'Paste rough requirements, notes, or a feature request to convert into a GitHub issue user story.'
 user-invocable: true
