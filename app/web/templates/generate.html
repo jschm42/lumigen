@@ -6,20 +6,20 @@
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-0 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/20" %}
 
-<div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] gap-4 overflow-hidden lg:grid-cols-[18rem_minmax(0,1fr)]">
-  <aside class="{{ panel_class }} flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-sky-200/35 via-white to-slate-100/90 ring-1 ring-sky-400/20 p-4 dark:from-sky-900/20 dark:via-slate-900/70 dark:to-slate-900/70 dark:ring-sky-300/20">
+<div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] gap-3 overflow-hidden grid-rows-[auto_1fr] lg:grid-rows-none lg:grid-cols-[18rem_minmax(0,1fr)]">
+  <aside class="{{ panel_class }} flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-sky-200/35 via-white to-slate-100/90 ring-1 ring-sky-400/20 p-2 lg:p-4 dark:from-sky-900/20 dark:via-slate-900/70 dark:to-slate-900/70 dark:ring-sky-300/20">
     <div class="shrink-0">
-      <a href="/" class="mb-3 flex items-center gap-3 rounded-2xl bg-white px-3 py-2 transition hover:bg-sky-50 dark:bg-white/10 dark:hover:bg-white/20">
-        <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-[82px] w-[82px] rounded-lg p-0 invert dark:invert-0">
+      <a href="/" class="mb-2 flex items-center gap-2 rounded-2xl bg-white px-2 py-1.5 transition hover:bg-sky-50 dark:bg-white/10 dark:hover:bg-white/20 lg:mb-3 lg:gap-3 lg:px-3 lg:py-2">
+        <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-9 w-9 shrink-0 rounded-lg p-0 invert dark:invert-0 lg:h-[82px] lg:w-[82px]">
         <span class="min-w-0">
-          <span class="block truncate text-lg font-semibold text-slate-900 dark:text-white">Lumigen</span>
-          <span class="block truncate text-xs text-slate-500 dark:text-slate-400">v{{ app_version }}</span>
+          <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white lg:text-lg">Lumigen</span>
+          <span class="hidden truncate text-xs text-slate-500 dark:text-slate-400 lg:block">v{{ app_version }}</span>
         </span>
       </a>
-      <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full">New Session</a>
+      <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full py-1.5 text-xs lg:py-2 lg:text-sm">New Session</a>
     </div>
 
-    <div class="subtle-scrollbar mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" id="session-list">
+    <div class="subtle-scrollbar mt-4 hidden min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 lg:block" id="session-list">
       <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white{% endif %}">
         All Sessions
       </a>
@@ -34,10 +34,28 @@
     </div>
 
     <nav class="mt-4 shrink-0 border-t border-slate-300/60 pt-3 dark:border-white/5">
-      <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="profiles" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}">Profiles</a>
-      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="gallery" class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}">Gallery</a>
+      <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="profiles" 
+         class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/profiles" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Profiles</a>
+      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="gallery" 
+         class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/gallery" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Gallery</a>
       {% if request.session.get('user_role') == 'admin' %}
-      <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" data-workspace-nav data-workspace-view="admin" class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}">Admin</a>
+      <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" 
+         data-workspace-nav 
+         data-workspace-view="admin" 
+         class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+         hx-get="/workspace/admin" 
+         hx-target="#workspace-content" 
+         hx-swap="innerHTML">Admin</a>
       {% endif %}
       <details class="relative mt-2" data-user-menu-container>
         <summary
@@ -69,17 +87,18 @@
             <span>Logout</span>
           </a>
         </div>
-      </details>
+        </details>
     </nav>
   </aside>
 
   <section class="{{ panel_class }} relative h-full min-h-0 overflow-hidden" data-chat-shell data-workspace-embedded="{{ '1' if workspace_view != 'chat' else '0' }}" data-last-thumb-size="{{ last_thumb_size }}">
     {% if workspace_view != "chat" %}
-      <iframe
-        title="workspace"
-        src="{% if workspace_view == 'profiles' %}/profiles?embedded=1{% elif workspace_view == 'gallery' %}/gallery?embedded=1{% elif workspace_view == 'admin' %}/admin?embedded=1{% endif %}"
-        class="h-full w-full border-0"
-      ></iframe>
+      <div id="workspace-content" 
+           hx-get="{% if workspace_view == 'profiles' %}/workspace/profiles{% elif workspace_view == 'gallery' %}/workspace/gallery{% elif workspace_view == 'admin' %}/workspace/admin{% endif %}" 
+           hx-trigger="load" 
+           class="h-full w-full">
+        <!-- Content will be loaded here via HTMX -->
+      </div>
     {% elif not profiles %}
       <div class="h-full p-5">
         <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -87,6 +106,7 @@
         </div>
       </div>
     {% else %}
+      <div id="workspace-content" class="relative h-full w-full">
       <div id="chat-history" class="subtle-scrollbar h-full space-y-5 overflow-y-auto px-4 sm:px-5">
         {% if error %}
           {% with error_message=error %}
@@ -112,7 +132,7 @@
         hx-target="#chat-history"
         hx-swap="beforeend"
         hx-encoding="multipart/form-data"
-        hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}var clearBtn=this.querySelector('[data-input-clear]');if(clearBtn){clearBtn.click();}}"
+        hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}}"
         method="post"
         enctype="multipart/form-data"
         class="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between"
@@ -137,6 +157,8 @@
                     data-fal-aspect-ratio="{{ profile.params_json.get('fal_aspect_ratio', '') if profile.params_json else '' }}"
                     data-fal-resolution="{{ profile.params_json.get('fal_resolution', '') if profile.params_json else '' }}"
                     data-fal-image-size="{{ profile.params_json.get('fal_image_size', '') if profile.params_json else '' }}"
+                    data-google-aspect-ratio="{{ profile.params_json.get('image_config', {}).get('aspect_ratio', '') if profile.params_json else '' }}"
+                    data-google-resolution="{{ profile.params_json.get('image_config', {}).get('image_size', '') if profile.params_json else '' }}"
                   >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
                 {% endfor %}
               </select>
@@ -175,17 +197,23 @@
               title="Enhance prompt"
             ><i class="bi bi-magic text-2xl" aria-hidden="true"></i></button>
             <input id="input_images" name="input_images" type="file" accept="image/*" multiple data-input-images class="sr-only">
+            <input type="hidden" name="style_ids" id="style_ids_input" value="{{ last_selected_style_ids }}">
 
             <div class="mb-1.5 min-h-[2.75rem] pr-16">
               <div class="subtle-scrollbar flex flex-nowrap gap-2 overflow-x-auto" data-input-preview aria-live="polite"></div>
             </div>
 
+            <div class="mb-1.5 min-h-0" id="selected-styles-row" aria-live="polite"></div>
+
             <div class="flex items-end gap-2 pt-1">
               <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300/80 bg-white text-xl font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20" data-advanced-toggle aria-expanded="false" aria-label="Additional options">+</button>
               <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300/80 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20" data-input-trigger aria-label="Select images" title="Select images"><i class="bi bi-paperclip text-xl" aria-hidden="true"></i></button>
+              {% if styles %}
+              <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300/80 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20" id="styles-picker-btn" aria-label="Select styles" title="Select styles"><i class="bi bi-stars text-xl" aria-hidden="true"></i></button>
+              {% endif %}
               <textarea id="prompt_user" name="prompt_user" rows="2" required class="{{ textarea_class }} min-h-[3rem] max-h-[18rem] flex-1 resize-y bg-slate-50 px-2 py-2 focus:ring-0 dark:bg-slate-950/25" placeholder="Describe your image..."></textarea>
               <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-300/80 bg-white text-sm font-semibold text-slate-600 transition hover:bg-rose-100 hover:text-rose-700 disabled:opacity-40 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-rose-500/20 dark:hover:text-rose-100" data-input-clear title="Remove images">x</button>
-              <button type="submit" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-300 text-slate-950 transition hover:bg-sky-200" title="Generate"><i class="bi bi-arrow-up text-xl" aria-hidden="true"></i></button>
+              <button type="submit" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-300 text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" data-generate-submit title="Generate"><i class="bi bi-arrow-up text-xl" aria-hidden="true"></i></button>
             </div>
 
             <div data-advanced-panel class="mt-2 hidden rounded-2xl bg-slate-100/80 p-2.5 space-y-1.5 dark:bg-slate-950/45">
@@ -279,6 +307,40 @@
                   </div>
                 </div>
 
+                <!-- Google-specific controls (hidden for non-Google providers) -->
+                <div data-google-controls class="contents hidden">
+                  <div>
+                    <label for="google_aspect_ratio" class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ratio</label>
+                    <select id="google_aspect_ratio" name="google_aspect_ratio" class="{{ input_class }}">
+                      <option value="">from profile</option>
+                      <option value="1:1">1:1</option>
+                      <option value="1:4">1:4</option>
+                      <option value="1:8">1:8</option>
+                      <option value="2:3">2:3</option>
+                      <option value="3:2">3:2</option>
+                      <option value="3:4">3:4</option>
+                      <option value="4:1">4:1</option>
+                      <option value="4:3">4:3</option>
+                      <option value="4:5">4:5</option>
+                      <option value="5:4">5:4</option>
+                      <option value="8:1">8:1</option>
+                      <option value="9:16">9:16</option>
+                      <option value="16:9">16:9</option>
+                      <option value="21:9">21:9</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="google_resolution" class="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Resolution</label>
+                    <select id="google_resolution" name="google_resolution" class="{{ input_class }}">
+                      <option value="">from profile</option>
+                      <option value="512">512</option>
+                      <option value="1K">1K</option>
+                      <option value="2K">2K</option>
+                      <option value="4K">4K</option>
+                    </select>
+                  </div>
+                </div>
+
                 <!-- Standard dimension inputs (both in one container, hidden for OpenRouter) -->
                 <div data-standard-dimensions class="contents">
                   <div>
@@ -364,6 +426,7 @@
           </div>
         </div>
       </form>
+      </div>
     {% endif %}
   </section>
 </div>
@@ -388,6 +451,40 @@
     <div id="asset-detail-dialog-content" class="px-2 pb-2 sm:px-3 sm:pb-3" data-asset-detail-dialog-content></div>
   </article>
 </dialog>
+
+{% if styles %}
+<dialog id="styles-picker-dialog" class="w-full max-w-2xl rounded-2xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
+  <article class="rounded-2xl p-5 sm:p-6">
+    <div class="mb-4 flex items-center justify-between gap-3">
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Select styles</h3>
+      <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300/80 bg-white text-sm font-semibold text-slate-700 transition hover:border-sky-400/40 hover:bg-sky-50 dark:border-white/20 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="Close" onclick="document.getElementById('styles-picker-dialog').close()">×</button>
+    </div>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3" id="styles-picker-grid">
+      {% for style in styles %}
+      <button
+        type="button"
+        class="styles-picker-item group flex flex-col items-center gap-2 rounded-xl border border-slate-300/70 bg-slate-50 p-3 text-left transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/10 dark:bg-white/5 dark:hover:border-sky-300/50 dark:hover:bg-sky-300/10"
+        data-style-id="{{ style.id }}"
+        data-style-name="{{ style.name | e }}"
+        aria-pressed="false"
+      >
+        {% if style.image_path %}
+          <img src="/admin/styles/{{ style.id }}/image" alt="{{ style.name }}" class="h-16 w-16 rounded-lg object-cover border border-slate-300/50 dark:border-white/10">
+        {% else %}
+          <div class="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300/60 bg-slate-100 dark:border-white/15 dark:bg-white/5">
+            <i class="bi bi-stars text-2xl text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
+          </div>
+        {% endif %}
+        <span class="w-full text-center text-xs font-semibold text-slate-700 dark:text-slate-200 leading-tight">{{ style.name }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    <div class="mt-4 flex justify-end">
+      <button type="button" class="inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" onclick="document.getElementById('styles-picker-dialog').close()">Done</button>
+    </div>
+  </article>
+</dialog>
+{% endif %}
 
 <dialog data-user-settings-dialog class="w-[min(92vw,28rem)] rounded-2xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
   <article class="rounded-2xl p-5">

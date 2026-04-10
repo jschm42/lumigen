@@ -1,0 +1,50 @@
+{% set panel_class = "p-5 sm:p-7" %}
+{% set input_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
+{% set text_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
+{% set label_class = "block text-sm font-semibold text-slate-700 dark:text-slate-200" %}
+{% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
+{% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10" %}
+{% set btn_danger = "inline-flex items-center justify-center rounded-xl border border-rose-300/60 bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-400 hover:bg-rose-200 dark:border-rose-300/40 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:border-rose-200 dark:hover:bg-rose-500/20" %}
+{% set nav_tab_base = "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold transition" %}
+{% set nav_tab_active = "bg-sky-300 text-slate-950" %}
+{% set nav_tab_inactive = "border border-slate-300/75 bg-white text-slate-700 hover:border-sky-400/60 hover:bg-sky-50 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:bg-white/10 dark:hover:text-white" %}
+
+<section class="{{ panel_class }} space-y-5" data-admin-page>
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Admin</h2>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Manage models, presets, categories, and enhancement configuration.</p>
+    </div>
+  </header>
+
+  {% if message %}
+    <div class="rounded-2xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100" role="status">{{ message }}</div>
+  {% endif %}
+
+  {% if error %}
+    <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <nav class="no-scrollbar flex gap-1 overflow-x-auto pb-1 pt-2" aria-label="Admin sections">
+    <a href="?section=models" class="{{ nav_tab_base }} {% if section == 'models' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Models</a>
+    <a href="?section=dimensions" class="{{ nav_tab_base }} {% if section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
+    <a href="?section=categories" class="{{ nav_tab_base }} {% if section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
+    <a href="?section=enhancements" class="{{ nav_tab_base }} {% if section == 'enhancements' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancements</a>
+    <a href="?section=upscale" class="{{ nav_tab_base }} {% if section == 'upscale' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Upscaling</a>
+    <a href="?section=secrets" class="{{ nav_tab_base }} {% if section == 'secrets' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Secrets</a>
+  </nav>
+
+  {% if section == "models" %}
+    {% include "fragments/admin_model_configs.html" %}
+  {% elif section == "dimensions" %}
+    {% include "fragments/admin_dimension_presets.html" %}
+  {% elif section == "categories" %}
+    {% include "fragments/admin_categories.html" %}
+  {% elif section == "enhancements" %}
+    {% include "fragments/admin_enhancement_prompts.html" %}
+  {% elif section == "upscale" %}
+    {% include "fragments/admin_upscale_models.html" %}
+  {% elif section == "secrets" %}
+    {% include "fragments/admin_secrets.html" %}
+  {% endif %}
+</section>

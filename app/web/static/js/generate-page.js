@@ -1,6 +1,12 @@
 (function () {
   var THEME_STORAGE_KEY = "lumigen_theme";
 
+  function getActiveConversationToken() {
+    var conversationInput = document.querySelector('[name="conversation"]');
+    if (!conversationInput) return "";
+    return String(conversationInput.value || "").trim();
+  }
+
   function getSavedThemeMode() {
     try {
       var saved = localStorage.getItem(THEME_STORAGE_KEY);
@@ -173,40 +179,10 @@
       });
     }
 
-    function setWorkspaceIframe(targetUrl) {
-      var iframe = workspaceShell.querySelector("iframe[data-workspace-iframe]");
-      if (!iframe) {
-        iframe = document.createElement("iframe");
-        iframe.setAttribute("data-workspace-iframe", "1");
-        iframe.setAttribute("title", "workspace");
-        iframe.className = "h-full w-full border-0";
-        workspaceShell.replaceChildren(iframe);
-      }
-      if (iframe.getAttribute("src") !== targetUrl) {
-        iframe.setAttribute("src", targetUrl);
-      }
-    }
+    // Removed iframe-related functions as we're now using HTMX for workspace navigation
 
-    function resolveIframeUrl(view) {
-      if (view === "profiles") return "/profiles?embedded=1";
-      if (view === "gallery") return "/gallery?embedded=1";
-      if (view === "admin") return "/admin?embedded=1";
-      return "";
-    }
-
-    function applyWorkspaceView(view, url, pushHistory) {
-      var iframeUrl = resolveIframeUrl(view);
-      if (!iframeUrl) return false;
-
-      setWorkspaceIframe(iframeUrl);
-      setActiveWorkspaceLink(view);
-
-      if (pushHistory && url) {
-        window.history.pushState({ workspace_view: view }, "", url);
-      }
-      return true;
-    }
-
+    // Workspace links now use HTMX attributes, so we don't need to handle clicks manually
+    // We still need to update the active link styling
     workspaceLinks.forEach(function (link) {
       link.addEventListener("click", function (event) {
         if (
@@ -220,22 +196,38 @@
           return;
         }
 
-        event.preventDefault();
-
+        // Update active link styling
         var view = link.getAttribute("data-workspace-view") || "";
-        var href = link.getAttribute("href") || "";
-        if (!view || !href) return;
-
-        var absoluteUrl = new URL(href, window.location.origin);
-        applyWorkspaceView(view, absoluteUrl.toString(), true);
+        if (view) {
+          setActiveWorkspaceLink(view);
+        }
       });
     });
 
+    // Handle browser back/forward navigation
     window.addEventListener("popstate", function () {
       var currentUrl = new URL(window.location.href);
       var view = (currentUrl.searchParams.get("workspace_view") || "chat").toLowerCase();
-      if (!applyWorkspaceView(view, "", false)) {
-        window.location.reload();
+      var targetUrl = "";
+      
+      // Update active link styling
+      setActiveWorkspaceLink(view);
+      
+      // Load content via HTMX if needed
+      if (view !== "chat") {
+        if (view === "profiles") targetUrl = "/workspace/profiles";
+        else if (view === "gallery") targetUrl = "/workspace/gallery";
+        else if (view === "admin") targetUrl = "/workspace/admin";
+        
+        if (targetUrl) {
+          // Trigger HTMX load
+          var workspaceContent = document.getElementById("workspace-content");
+          if (workspaceContent) {
+            workspaceContent.setAttribute("hx-get", targetUrl);
+            htmx.process(workspaceContent);
+            htmx.trigger(workspaceContent, "load");
+          }
+        }
       }
     });
   }
@@ -247,6 +239,7 @@
     setupWorkspaceNavigation();
     setupChatAutoScroll();
     scrollChatToBottom();
+    syncRetryProfileIds();
   });
 
   if (typeof window.addEventListener === "function") {
@@ -291,14 +284,13 @@
         if (currentThumbSize) {
           applyThumbSize(currentThumbSize);
         }
+        syncRetryProfileIds();
       }
     });
   }
 
   function saveSessionPreference(data) {
-    var conversationInput = document.querySelector('[name="conversation"]');
-    if (!conversationInput) return;
-    var chatSessionId = conversationInput.value.trim();
+    var chatSessionId = getActiveConversationToken();
     if (!chatSessionId || chatSessionId === "all" || chatSessionId === "new") return;
 
     var payload = { chat_session_id: chatSessionId };
@@ -308,7 +300,9 @@
     if (data.thumb_size !== undefined) {
       payload.last_thumb_size = data.thumb_size;
     }
-
+    if (data.selected_style_ids !== undefined) {
+      payload.selected_style_ids = data.selected_style_ids;
+    }
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
 
@@ -325,12 +319,28 @@
   }
 
   var profileSelect = document.querySelector("[data-generation-profile]");
+
+  function syncRetryProfileIds() {
+    /**
+     * Synchronize the currently selected profile ID into all retry form
+     * hidden inputs, so that clicking Retry re-runs with the active profile
+     * rather than the profile from the original failed request.
+     */
+    if (!profileSelect) return;
+    var profileId = profileSelect.value || "";
+    var inputs = document.querySelectorAll("[data-retry-profile-id]");
+    inputs.forEach(function (input) {
+      input.value = profileId;
+    });
+  }
+
   if (profileSelect) {
     profileSelect.addEventListener("change", function () {
       var profileId = parseInt(profileSelect.value, 10);
       if (!isNaN(profileId) && profileId > 0) {
         saveSessionPreference({ profile_id: profileId });
       }
+      syncRetryProfileIds();
     });
   }
 
@@ -374,5 +384,134 @@
   if (currentThumbSize) {
     applyThumbSize(currentThumbSize);
   }
+
+  // ---- Styles picker ----
+
+  function parseSelectedStyleIdsCsv(value) {
+    return String(value || "")
+      .split(",")
+      .map(function (item) {
+        return parseInt(item.trim(), 10);
+      })
+      .filter(function (item) {
+        return !isNaN(item) && item > 0;
+      });
+  }
+
+  var initialStyleIdsValue = "";
+  var initialStyleInput = document.getElementById("style_ids_input");
+  initialStyleIdsValue = initialStyleInput ? initialStyleInput.value : "";
+  var selectedStyleIds = parseSelectedStyleIdsCsv(initialStyleIdsValue);
+
+  function renderSelectedStyles(syncSessionPreference) {
+    var row = document.getElementById("selected-styles-row");
+    var hiddenInput = document.getElementById("style_ids_input");
+    if (!row) return;
+
+    if (hiddenInput) {
+      hiddenInput.value = selectedStyleIds.join(",");
+    }
+
+    if (syncSessionPreference !== false) {
+      saveSessionPreference({ selected_style_ids: selectedStyleIds.join(",") });
+    }
+
+    if (selectedStyleIds.length === 0) {
+      row.innerHTML = "";
+      return;
+    }
+
+    var chips = selectedStyleIds.map(function (id) {
+      var btn = document.querySelector(".styles-picker-item[data-style-id='" + id + "']");
+      var name = btn ? (btn.getAttribute("data-style-name") || String(id)) : String(id);
+      var imgEl = btn ? btn.querySelector("img") : null;
+      var imgSrc = imgEl ? imgEl.getAttribute("src") : "";
+
+      return (
+        '<span class="inline-flex items-center gap-1.5 rounded-xl border border-sky-300/60 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800 dark:border-sky-300/30 dark:bg-sky-300/10 dark:text-sky-100">' +
+        (imgSrc
+          ? '<img src="' + imgSrc + '" alt="" class="h-5 w-5 rounded object-cover">'
+          : "") +
+        '<span>' + escapeHtml(name) + "</span>" +
+        '<button type="button" class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full text-sky-600 hover:bg-sky-200 hover:text-sky-900 dark:text-sky-300 dark:hover:bg-sky-300/20" data-remove-style-id="' + id + '" aria-label="Remove style">×</button>' +
+        "</span>"
+      );
+    });
+
+    row.innerHTML =
+      '<div class="subtle-scrollbar flex flex-nowrap gap-1.5 overflow-x-auto pb-1 pt-0.5">' +
+      chips.join("") +
+      "</div>";
+
+    row.querySelectorAll("[data-remove-style-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var removeId = parseInt(btn.getAttribute("data-remove-style-id"), 10);
+        selectedStyleIds = selectedStyleIds.filter(function (id) { return id !== removeId; });
+        // Sync the picker button state
+        var pickerBtn = document.querySelector(".styles-picker-item[data-style-id='" + removeId + "']");
+        if (pickerBtn) {
+          pickerBtn.setAttribute("aria-pressed", "false");
+          pickerBtn.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+        }
+        renderSelectedStyles();
+      });
+    });
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement("div");
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+  }
+
+  function initStylesPicker() {
+    var pickerBtn = document.getElementById("styles-picker-btn");
+    var dialog = document.getElementById("styles-picker-dialog");
+    if (!pickerBtn || !dialog) return;
+
+    pickerBtn.addEventListener("click", function () {
+      dialog.showModal();
+    });
+
+    dialog.querySelectorAll(".styles-picker-item").forEach(function (item) {
+      var initialId = parseInt(item.getAttribute("data-style-id"), 10);
+      if (!isNaN(initialId) && selectedStyleIds.indexOf(initialId) !== -1) {
+        item.setAttribute("aria-pressed", "true");
+        item.classList.add("ring-2", "ring-sky-400", "border-sky-400");
+      }
+
+      item.addEventListener("click", function () {
+        var id = parseInt(item.getAttribute("data-style-id"), 10);
+        if (isNaN(id)) return;
+        var idx = selectedStyleIds.indexOf(id);
+        if (idx === -1) {
+          selectedStyleIds.push(id);
+          item.setAttribute("aria-pressed", "true");
+          item.classList.add("ring-2", "ring-sky-400", "border-sky-400");
+        } else {
+          selectedStyleIds.splice(idx, 1);
+          item.setAttribute("aria-pressed", "false");
+          item.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+        }
+        renderSelectedStyles();
+      });
+    });
+  }
+
+  // Clear selected styles when the input-clear button is clicked
+  var inputClearBtn = document.querySelector("[data-input-clear]");
+  if (inputClearBtn) {
+    inputClearBtn.addEventListener("click", function () {
+      selectedStyleIds = [];
+      document.querySelectorAll(".styles-picker-item").forEach(function (item) {
+        item.setAttribute("aria-pressed", "false");
+        item.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+      });
+      renderSelectedStyles();
+    });
+  }
+
+  initStylesPicker();
+  renderSelectedStyles(false);
 
 })();

@@ -127,6 +127,16 @@ Install linters if missing: `python -m pip install ruff djlint`
 - API key encryption requires `PROVIDER_CONFIG_KEY` (generate via `scripts/generate_provider_key.ps1` or `.sh`).
 - Run Alembic from repo root (`alembic.ini` uses `sqlite:///./data/app.db`).
 
+## Provider image request documentation
+
+For implementing or understanding image requests to various providers, refer to:
+
+- OpenRouter: https://openrouter.ai/docs/guides/overview/multimodal/image-generation
+- FAL.AI: https://fal.ai/models/fal-ai/nano-banana-2/api
+- BFL: https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint
+- OpenAI: https://developers.openai.com/api/docs/guides/image-generation
+- Google Gemini: https://ai.google.dev/gemini-api/docs/image-generation
+
 ## Root layout
 
 ```

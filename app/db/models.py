@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
@@ -235,8 +241,43 @@ class ChatSession(Base, TimestampMixin):
     last_thumb_size: Mapped[str] = mapped_column(
         String(10), default="md", nullable=False
     )
+    selected_style_ids: Mapped[str | None] = mapped_column(
+        String(1024), nullable=True
+    )
 
     last_profile: Mapped[Profile | None] = relationship()
+    input_images: Mapped[list[SessionInputImage]] = relationship(
+        back_populates="chat_session",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class SessionInputImage(Base, TimestampMixin):
+    """Session-scoped input image selection, either a temp upload or a linked asset."""
+
+    __tablename__ = "session_input_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chat_session_id: Mapped[str] = mapped_column(
+        ForeignKey("chat_sessions.chat_session_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    original_file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    thumbnail_file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    file_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    chat_session: Mapped[ChatSession] = relationship(back_populates="input_images")
+    asset: Mapped[Asset | None] = relationship()
 
 
 class Generation(Base):
@@ -280,6 +321,18 @@ class Generation(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+
+class Style(Base, TimestampMixin):
+    """Reusable prompt fragment that can be selected during image generation."""
+
+    __tablename__ = "styles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(String(120), nullable=False)
+    prompt: Mapped[str] = mapped_column(String(1000), nullable=False)
+    image_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
 
 class Asset(Base):

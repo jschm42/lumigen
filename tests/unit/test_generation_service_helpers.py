@@ -209,6 +209,46 @@ def test_normalize_image_for_output_converts_rgba_to_jpeg_and_raises_on_invalid_
         )
 
 
+def test_error_message_from_exception_returns_fallback_for_empty_exception() -> None:
+    service = _service_with_model_config(
+        SimpleNamespace(
+            get_model_config=lambda _id: None,
+            get_api_key=lambda _id: "x",
+            get_default_api_key=lambda _provider: "x",
+        )
+    )
+
+    error_message = service._error_message_from_exception(Exception())
+
+    assert error_message == "Exception: Unknown error"
+
+
+def test_build_failure_sidecar_payload_uses_non_empty_error_message() -> None:
+    service = _service_with_model_config(
+        SimpleNamespace(
+            get_model_config=lambda _id: None,
+            get_api_key=lambda _id: "x",
+            get_default_api_key=lambda _provider: "x",
+        )
+    )
+    generation = Generation(
+        id=25,
+        profile_name="Nano Banana 2",
+        prompt_user="p",
+        prompt_final="p",
+        provider="google",
+        model="gemini-3.1-flash-image-preview",
+        status="failed",
+        profile_snapshot_json={},
+        storage_template_snapshot_json={},
+        request_snapshot_json={"params_json": {"image_config": {"aspect_ratio": "2:3"}}},
+    )
+
+    payload = service._build_failure_sidecar_payload(generation, Exception())
+
+    assert payload["error"] == "Exception: Unknown error"
+
+
 def test_delete_asset_and_delete_generation_remove_files_and_commit(monkeypatch: pytest.MonkeyPatch) -> None:
     delete_calls: list[str] = []
     storage_service = SimpleNamespace(
@@ -337,6 +377,9 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
             "category_ids": [2, 2, "3", -1],
             "input_images": [{"name": "img"}],
             "chat_session_id": "session:abc",
+            "prompt_user_original": "a subject",
+            "selected_style_ids": [9, "10", -1],
+            "selected_style_names": ["Cinematic", "", "Painterly"],
         },
     )
 
@@ -352,6 +395,9 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
     assert request_snapshot["upscale_topaz_model_id"] == 12
     assert request_snapshot["category_ids"] == [2, 3]
     assert request_snapshot["chat_session_id"] == "session:abc"
+    assert request_snapshot["prompt_user_original"] == "a subject"
+    assert request_snapshot["selected_style_ids"] == [9, 10]
+    assert request_snapshot["selected_style_names"] == ["Cinematic", "Painterly"]
     assert request_snapshot["params_json"] == {"extra": True}
     assert request_snapshot["overrides"]["width"] is True
     assert request_snapshot["overrides"]["height"] is False

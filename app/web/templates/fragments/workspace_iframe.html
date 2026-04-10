@@ -1,0 +1,15 @@
+<section class="h-full w-full overflow-hidden rounded-2xl bg-white/40 dark:bg-slate-900/35" aria-label="{{ title }} workspace">
+  <iframe
+    src="{{ workspace_src }}"
+    title="{{ title }}"
+    loading="lazy"
+    class="h-full w-full border-0"
+    referrerpolicy="same-origin"
+  ></iframe>
+  <noscript>
+    <p class="p-4 text-sm text-slate-700 dark:text-slate-200">
+      JavaScript is required for embedded workspace navigation.
+      <a href="{{ fallback_href }}" class="font-semibold underline">Open {{ title }}</a>.
+    </p>
+  </noscript>
+</section>

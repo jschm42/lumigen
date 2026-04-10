@@ -3,7 +3,13 @@ from __future__ import annotations
 import base64
 import copy
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -148,8 +154,19 @@ class GenerationService:
 
         request_snapshot = {
             "prompt_user": prompt_user,
+            "prompt_user_original": str(
+                effective_overrides.get("prompt_user_original") or prompt_user
+            ),
             "prompt_final": prompt_final,
             "chat_session_id": chat_session_id or None,
+            "selected_style_ids": self._parse_int_list(
+                effective_overrides.get("selected_style_ids", [])
+            ),
+            "selected_style_names": [
+                str(name).strip()
+                for name in effective_overrides.get("selected_style_names", [])
+                if str(name).strip()
+            ],
             "width": width,
             "height": height,
             "n_images": max(1, n_images),
@@ -474,7 +491,7 @@ class GenerationService:
                         pass
 
                 generation.status = "cancelled"
-                generation.error = self._truncate_error(str(exc))
+                generation.error = self._error_message_from_exception(exc)
                 generation.failure_sidecar_path = None
                 generation.finished_at = datetime.now(UTC)
                 session.commit()
@@ -493,9 +510,10 @@ class GenerationService:
                 # Reload the storage snapshot after rollback to get base_dir
                 storage_snapshot = generation.storage_template_snapshot_json
                 failure_base_dir = self._base_dir_from_snapshot(storage_snapshot)
+                error_message = self._error_message_from_exception(exc)
 
                 generation.status = "failed"
-                generation.error = self._truncate_error(str(exc))
+                generation.error = error_message
                 generation.finished_at = datetime.now(UTC)
 
                 failure_payload = self._build_failure_sidecar_payload(generation, exc)
@@ -714,7 +732,7 @@ class GenerationService:
             "profile_name": generation.profile_name,
             "provider": generation.provider,
             "model": generation.model,
-            "error": self._truncate_error(str(exc)),
+            "error": self._error_message_from_exception(exc),
             "profile_snapshot_json": generation.profile_snapshot_json,
             "storage_template_snapshot_json": generation.storage_template_snapshot_json,
             "request_snapshot_json": generation.request_snapshot_json,
@@ -729,6 +747,19 @@ class GenerationService:
 
     def _truncate_error(self, value: str, max_len: int = 2048) -> str:
         return value[:max_len]
+
+    def _error_message_from_exception(self, exc: BaseException) -> str:
+        """Return a stable, non-empty error message for persisted job failures."""
+        text = str(exc).strip()
+        if text:
+            return self._truncate_error(text)
+
+        # Fallback for exceptions that stringify to an empty string.
+        exception_name = exc.__class__.__name__ or "Exception"
+        args_text = " ".join(str(value).strip() for value in getattr(exc, "args", ()) if str(value).strip())
+        if args_text:
+            return self._truncate_error(f"{exception_name}: {args_text}")
+        return self._truncate_error(f"{exception_name}: Unknown error")
 
     def _normalize_image_for_output(
         self,

@@ -2,18 +2,27 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import hmac
+import io
 import json
 import logging
 import os
 import secrets
 import uuid
+import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+
+# For Python < 3.12 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 import uvicorn
 from fastapi import (
@@ -37,6 +46,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
+from PIL import Image, ImageOps
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -54,6 +64,16 @@ from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
+from app.services.import_export_service import (
+    export_all,
+    export_models,
+    export_profiles,
+    export_styles,
+    import_models,
+    import_profiles,
+    import_styles,
+    validate_import_payload,
+)
 from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
@@ -76,13 +96,18 @@ MAX_CATEGORY_NAME_LENGTH = 30
 MAX_PROFILE_NAME_LENGTH = 50
 MAX_MODEL_CONFIG_NAME_LENGTH = 50
 MAX_FAL_MODEL_IDENTIFIER_LENGTH = 160
+MAX_STYLE_NAME_LENGTH = 30
+MAX_STYLE_DESCRIPTION_LENGTH = 120
+MAX_STYLE_PROMPT_LENGTH = 1000
+MAX_STYLE_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_UPLOAD_BYTES = (
     settings.max_upload_size_mb * 1024 * 1024
     if settings.max_upload_size_mb is not None
     else None
 )
+SESSION_INPUT_IMAGE_UPLOAD_SUBDIR = Path("temp") / "session-inputs"
 ADMIN_SECTIONS = {"models", "dimensions", "categories", "enhancement", "about"}
-ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "users", "about"}
+ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "apikeys", "upscaling", "styles", "users", "transfer", "about"}
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
@@ -99,6 +124,23 @@ OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "21:9",
 }
 OPENROUTER_ALLOWED_IMAGE_SIZES = {"1K", "2K", "4K"}
+GOOGLE_ALLOWED_ASPECT_RATIOS = {
+    "1:1",
+    "1:4",
+    "1:8",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:1",
+    "4:3",
+    "4:5",
+    "5:4",
+    "8:1",
+    "9:16",
+    "16:9",
+    "21:9",
+}
+GOOGLE_ALLOWED_RESOLUTIONS = {"512", "1K", "2K", "4K"}
 FAL_ALLOWED_ASPECT_RATIOS = {
     "auto",
     "21:9",
@@ -143,6 +185,7 @@ def parse_proxy_trusted_hosts(raw: str) -> str | list[str]:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ensure_dir(settings.data_dir)
     ensure_dir(settings.default_base_dir)
+    ensure_dir(settings.data_dir / "styles")
     init_db()
     with SessionLocal() as session:
         crud.ensure_default_storage_template(
@@ -548,6 +591,56 @@ def apply_fal_image_config(
     return merged
 
 
+def apply_google_image_config(
+    *,
+    params_json: dict[str, Any],
+    provider: str,
+    google_aspect_ratio: str,
+    google_resolution: str,
+    allow_clear: bool = True,
+) -> dict[str, Any]:
+    """Return params merged with validated Google ratio/resolution settings."""
+    merged = copy.deepcopy(params_json or {})
+    provider_value = (provider or "").strip().lower()
+    image_config_raw = merged.get("image_config")
+    image_config = (
+        copy.deepcopy(image_config_raw) if isinstance(image_config_raw, dict) else {}
+    )
+
+    if provider_value != "google":
+        image_config.pop("aspect_ratio", None)
+        image_config.pop("image_size", None)
+        if image_config:
+            merged["image_config"] = image_config
+        else:
+            merged.pop("image_config", None)
+        return merged
+
+    ratio_value = (google_aspect_ratio or "").strip()
+    resolution_value = (google_resolution or "").strip().upper()
+
+    if ratio_value and ratio_value not in GOOGLE_ALLOWED_ASPECT_RATIOS:
+        raise ValueError("Invalid Google aspect ratio selected")
+    if resolution_value and resolution_value not in GOOGLE_ALLOWED_RESOLUTIONS:
+        raise ValueError("Invalid Google resolution selected")
+
+    if ratio_value:
+        image_config["aspect_ratio"] = ratio_value
+    elif allow_clear:
+        image_config.pop("aspect_ratio", None)
+
+    if resolution_value:
+        image_config["image_size"] = resolution_value
+    elif allow_clear:
+        image_config.pop("image_size", None)
+
+    if image_config:
+        merged["image_config"] = image_config
+    else:
+        merged.pop("image_config", None)
+    return merged
+
+
 def normalize_thumb_size(value: str | None) -> str:
     candidate = (value or "md").strip().lower()
     if candidate in {"sm", "md", "lg"}:
@@ -928,6 +1021,42 @@ def normalize_category_name(value: str) -> str:
     return normalized
 
 
+def normalize_style_name(value: str) -> str:
+    """Normalize and validate a style name."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Style name is required")
+    if len(normalized) > MAX_STYLE_NAME_LENGTH:
+        raise ValueError(
+            f"Style name must be at most {MAX_STYLE_NAME_LENGTH} characters"
+        )
+    return normalized
+
+
+def normalize_style_description(value: str) -> str:
+    """Normalize and validate a style description."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Style description is required")
+    if len(normalized) > MAX_STYLE_DESCRIPTION_LENGTH:
+        raise ValueError(
+            f"Style description must be at most {MAX_STYLE_DESCRIPTION_LENGTH} characters"
+        )
+    return normalized
+
+
+def normalize_style_prompt(value: str) -> str:
+    """Normalize and validate a style prompt."""
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("Style prompt is required")
+    if len(normalized) > MAX_STYLE_PROMPT_LENGTH:
+        raise ValueError(
+            f"Style prompt must be at most {MAX_STYLE_PROMPT_LENGTH} characters"
+        )
+    return normalized
+
+
 def normalize_profile_name(value: str) -> str:
     normalized = (value or "").strip()
     if not normalized:
@@ -1119,11 +1248,14 @@ def generate_page(
     fal_upscale_ready = False
     last_profile_id = None
     last_thumb_size = "md"
+    last_selected_style_ids = ""
     conversation_generations = []
+    styles: list[Any] = []
 
     if active_workspace_view == "chat":
         profiles = crud.list_profiles(session)
         dimension_presets = crud.list_dimension_presets(session)
+        styles = crud.list_styles(session)
         enhancement_config = crud.get_enhancement_config(session)
         enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
         upscale_ready = upscale_service.is_available()
@@ -1138,6 +1270,7 @@ def generate_page(
             if chat_session_prefs:
                 last_profile_id = chat_session_prefs.last_profile_id
                 last_thumb_size = chat_session_prefs.last_thumb_size or "md"
+                last_selected_style_ids = chat_session_prefs.selected_style_ids or ""
 
         if active_conversation == "all":
             recent_generations = list(
@@ -1188,9 +1321,149 @@ def generate_page(
             "fal_upscale_models": fal_upscale_models,
             "topaz_upscale_models": fal_upscale_models,
             "fal_upscale_ready": fal_upscale_ready,
+            "styles": styles,
             "error": error or "",
             "last_profile_id": last_profile_id,
             "last_thumb_size": last_thumb_size,
+            "last_selected_style_ids": last_selected_style_ids,
+        },
+    )
+
+
+def _session_input_base_dir() -> Path:
+    """Return the managed base directory for temporary session input images."""
+    base_dir = (settings.data_dir / SESSION_INPUT_IMAGE_UPLOAD_SUBDIR).resolve()
+    ensure_dir(base_dir)
+    return base_dir
+
+
+def _session_input_subdir(chat_session_id: str) -> Path:
+    """Return a deterministic subdirectory path for one chat session's temp inputs."""
+    session_hash = hashlib.sha1(chat_session_id.encode("utf-8")).hexdigest()[:20]
+    return Path(session_hash)
+
+
+def _sanitize_mime_type(value: str | None) -> str:
+    """Return a normalized MIME type for image payload validation."""
+    mime = str(value or "").strip().lower()
+    return mime if mime.startswith("image/") else "image/webp"
+
+
+def _guess_extension(filename: str | None, mime_type: str) -> str:
+    """Guess a safe file extension from filename or MIME type."""
+    suffix = Path(str(filename or "")).suffix.lower().lstrip(".")
+    if suffix in {"png", "jpg", "jpeg", "webp", "gif"}:
+        return "jpg" if suffix == "jpeg" else suffix
+    if mime_type == "image/png":
+        return "png"
+    if mime_type == "image/jpeg":
+        return "jpg"
+    if mime_type == "image/gif":
+        return "gif"
+    return "webp"
+
+
+def _parse_style_ids_csv(value: str | None) -> list[int]:
+    """Parse a CSV string of style IDs into a de-duplicated positive-int list."""
+    parsed: list[int] = []
+    for raw in str(value or "").split(","):
+        token = raw.strip()
+        if not token or not token.isdigit():
+            continue
+        style_id = int(token)
+        if style_id <= 0 or style_id in parsed:
+            continue
+        parsed.append(style_id)
+    return parsed
+
+
+def _session_input_item_payload(row) -> dict[str, Any]:
+    """Build a normalized JSON payload for one persisted session input image."""
+    if row.source_type == "asset" and row.asset_id:
+        return {
+            "id": row.id,
+            "source_type": row.source_type,
+            "asset_id": row.asset_id,
+            "file_name": row.file_name,
+            "mime_type": row.mime_type,
+            "thumbnail_url": f"/assets/{row.asset_id}/thumb",
+        }
+    return {
+        "id": row.id,
+        "source_type": row.source_type,
+        "asset_id": None,
+        "file_name": row.file_name,
+        "mime_type": row.mime_type,
+        "thumbnail_url": f"/api/session-input-images/{row.id}/thumb",
+    }
+
+
+def _delete_temp_session_input_files(row) -> None:
+    """Delete temporary uploaded files for a session input image row if present."""
+    if row.source_type != "uploaded":
+        return
+    base_dir = _session_input_base_dir()
+    for relative_path in [row.thumbnail_file_path, row.original_file_path]:
+        if not relative_path:
+            continue
+        try:
+            storage_service.delete_relative_file(base_dir, relative_path)
+        except ValueError:
+            continue
+
+
+@app.get("/workspace/profiles", response_class=HTMLResponse)
+def workspace_profiles_fragment(request: Request) -> HTMLResponse:
+    """Return the embedded profiles workspace fragment."""
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Profiles",
+            "workspace_src": "/profiles?embedded=1",
+            "fallback_href": "/profiles",
+        },
+    )
+
+
+@app.get("/workspace/gallery", response_class=HTMLResponse)
+def workspace_gallery_fragment(request: Request) -> HTMLResponse:
+    """Return the embedded gallery workspace fragment."""
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Gallery",
+            "workspace_src": "/gallery?embedded=1",
+            "fallback_href": "/gallery",
+        },
+    )
+
+
+@app.get("/workspace/admin", response_class=HTMLResponse)
+def workspace_admin_fragment(
+    request: Request,
+    section: str | None = Query(default="models"),
+) -> HTMLResponse:
+    """Return the embedded admin workspace fragment for the active section."""
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    section_value = normalize_admin_section(section)
+    embedded_src = f"/admin?{urlencode({'section': section_value, 'embedded': '1'})}"
+    fallback_href = f"/admin?{urlencode({'section': section_value})}"
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/workspace_iframe.html",
+        {
+            "request": request,
+            "title": "Admin",
+            "workspace_src": embedded_src,
+            "fallback_href": fallback_href,
         },
     )
 
@@ -1211,10 +1484,13 @@ def generate_submit(
     fal_aspect_ratio: str = Form(default=""),
     fal_resolution: str = Form(default=""),
     fal_image_size: str = Form(default=""),
+    google_aspect_ratio: str = Form(default=""),
+    google_resolution: str = Form(default=""),
     upscale_model: str = Form(default="__profile__"),
     upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
+    style_ids: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -1231,10 +1507,87 @@ def generate_submit(
         else:
             resolved_conversation = conversation_value
         overrides["chat_session_id"] = resolved_conversation
+        crud.upsert_chat_session_preferences(
+            session,
+            chat_session_id=resolved_conversation,
+        )
+
+        prompt_user_original = prompt_user
+
+        # Parse and inject selected style prompts
+        chat_session_prefs = crud.get_chat_session(session, resolved_conversation)
+        parsed_style_ids = _parse_style_ids_csv(
+            chat_session_prefs.selected_style_ids if chat_session_prefs else ""
+        )
+        if not parsed_style_ids:
+            parsed_style_ids = _parse_style_ids_csv(style_ids)
+        selected_styles: list[Any] = []
+        style_prompt_parts: list[str] = []
+        if parsed_style_ids:
+            selected_styles = crud.get_styles_by_ids(session, parsed_style_ids)
+            style_prompt_parts = [s.prompt for s in selected_styles if s.prompt.strip()]
+            if style_prompt_parts:
+                prompt_user = prompt_user.rstrip() + "\n" + "\n".join(style_prompt_parts)
+
+        selected_style_ids_csv = ",".join(str(style.id) for style in selected_styles)
+        crud.upsert_chat_session_preferences(
+            session,
+            chat_session_id=resolved_conversation,
+            selected_style_ids=selected_style_ids_csv,
+        )
+
+        overrides["prompt_user_original"] = prompt_user_original
+        overrides["selected_style_ids"] = [style.id for style in selected_styles]
+        overrides["selected_style_names"] = [style.name for style in selected_styles]
 
         encoded_images: list[dict[str, str]] = []
 
-        # Handle input_image_asset_id (from asset detail page)
+        # Resolve DB-persisted session input images first.
+        session_input_images = crud.list_session_input_images(session, resolved_conversation)
+        for row in session_input_images:
+            if row.source_type == "asset" and row.asset_id:
+                asset = session.scalar(
+                    select(Asset)
+                    .options(selectinload(Asset.generation))
+                    .where(Asset.id == row.asset_id)
+                )
+                if not asset or not asset.generation:
+                    continue
+                absolute_path = generation_service.asset_absolute_path(asset, which="file")
+                if not absolute_path.exists():
+                    continue
+                with open(absolute_path, "rb") as f:
+                    image_data = f.read()
+                encoded_images.append(
+                    {
+                        "name": row.file_name or f"asset_{asset.id}",
+                        "mime": row.mime_type or asset.mime,
+                        "b64": base64.b64encode(image_data).decode("ascii"),
+                    }
+                )
+                continue
+
+            if row.source_type == "uploaded" and row.original_file_path:
+                try:
+                    absolute_path = storage_service.resolve_managed_path(
+                        _session_input_base_dir(),
+                        row.original_file_path,
+                    )
+                except ValueError:
+                    continue
+                if not absolute_path.exists():
+                    continue
+                with open(absolute_path, "rb") as f:
+                    image_data = f.read()
+                encoded_images.append(
+                    {
+                        "name": row.file_name or "input",
+                        "mime": _sanitize_mime_type(row.mime_type),
+                        "b64": base64.b64encode(image_data).decode("ascii"),
+                    }
+                )
+
+        # Backward compatibility: handle legacy form param input_image_asset_id.
         asset_id_value = parse_optional_int(input_image_asset_id)
         if asset_id_value is not None:
             asset = session.scalar(
@@ -1255,7 +1608,7 @@ def generate_submit(
                         }
                     )
 
-        # Handle uploaded input_images
+        # Backward compatibility: handle direct uploaded form input_images.
         if input_images:
             if len(input_images) + len(encoded_images) > MAX_INPUT_IMAGES:
                 raise ValueError(f"Upload up to {MAX_INPUT_IMAGES} input images.")
@@ -1284,8 +1637,12 @@ def generate_submit(
             overrides["input_images"] = encoded_images
 
         provider_value = str(profile.provider or "").strip().lower()
+        if provider_value == "fal" and encoded_images:
+            raise ValueError(
+                "FAL provider does not support input images."
+            )
 
-        # Apply OpenRouter-specific, FAL-specific, or standard dimension overrides
+        # Apply OpenRouter-specific, FAL-specific, Google-specific, or standard dimension overrides
         if provider_value == "openrouter":
             # For OpenRouter: process aspect_ratio and image_size
             params_json_copy = dict(profile.params_json or {})
@@ -1308,6 +1665,17 @@ def generate_submit(
                 provider=provider_value,
                 fal_aspect_ratio=fal_aspect_ratio,
                 fal_resolution=fal_resolution,
+                allow_clear=False,
+            )
+            overrides["params_json"] = params_json_with_overrides
+        elif provider_value == "google":
+            # For Google: process explicit aspect ratio + resolution settings.
+            params_json_copy = dict(profile.params_json or {})
+            params_json_with_overrides = apply_google_image_config(
+                params_json=params_json_copy,
+                provider=provider_value,
+                google_aspect_ratio=google_aspect_ratio,
+                google_resolution=google_resolution,
                 allow_clear=False,
             )
             overrides["params_json"] = params_json_with_overrides
@@ -1587,6 +1955,130 @@ def archive_chat_session(
     )
 
 
+def _build_session_markdown(
+    session_title: str,
+    token: str,
+    generations: list[Generation],
+    image_names: dict[int, list[str]],
+) -> str:
+    """Build a markdown summary for a session download archive.
+
+    Args:
+        session_title: Human-readable title for the session.
+        token: The session token (used as fallback identifier).
+        generations: Ordered list of Generation records for the session.
+        image_names: Mapping of generation ID to list of image filenames in the ZIP.
+
+    Returns:
+        A UTF-8 markdown string describing the session.
+    """
+    lines: list[str] = []
+    lines.append(f"# {session_title}\n")
+    if generations:
+        first_dt = generations[0].created_at
+        last_dt = generations[-1].finished_at or generations[-1].created_at
+        if first_dt:
+            lines.append(f"**Started:** {first_dt.strftime('%Y-%m-%d %H:%M UTC')}\n")
+        if last_dt and last_dt != first_dt:
+            lines.append(f"**Last activity:** {last_dt.strftime('%Y-%m-%d %H:%M UTC')}\n")
+    lines.append(f"**Session token:** `{token}`\n")
+    lines.append(f"**Generations:** {len(generations)}\n")
+    lines.append("\n---\n")
+
+    for idx, gen in enumerate(generations, start=1):
+        ts = gen.created_at.strftime("%Y-%m-%d %H:%M UTC") if gen.created_at else "unknown"
+        lines.append(f"\n## Generation {idx} — {ts}\n")
+        lines.append(f"**Prompt:** {gen.prompt_user or '_(none)_'}\n")
+        if gen.prompt_final and gen.prompt_final != gen.prompt_user:
+            lines.append(f"**Final prompt:** {gen.prompt_final}\n")
+        lines.append(f"**Model:** {gen.model or '_(unknown)_'}\n")
+        lines.append(f"**Provider:** {gen.provider or '_(unknown)_'}\n")
+        lines.append(f"**Status:** {gen.status or '_(unknown)_'}\n")
+        names = image_names.get(gen.id, [])
+        if names:
+            lines.append("\n**Images:**\n")
+            for name in names:
+                lines.append(f"- `{name}`\n")
+
+    return "".join(lines)
+
+
+@app.get("/sessions/download")
+def download_session(
+    request: Request,
+    session_token: str = Query(...),
+    session: Session = Depends(get_session),
+) -> Response:
+    """Download all images and a markdown summary for a session as a ZIP archive.
+
+    Args:
+        request: The incoming HTTP request.
+        session_token: Token identifying the chat session to download.
+        session: Database session dependency.
+
+    Returns:
+        A ZIP file response containing all session images and a markdown summary.
+    """
+    token = (session_token or "").strip()
+    if not token or token in {"all", "new"}:
+        raise HTTPException(status_code=400, detail="Invalid session token")
+
+    generations = list(
+        session.scalars(
+            select(Generation)
+            .options(selectinload(Generation.assets))
+            .order_by(Generation.created_at.asc(), Generation.id.asc())
+        ).all()
+    )
+    generations = [g for g in generations if generation_session_token(g) == token]
+
+    if not generations:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Determine the session title for the archive filename and markdown.
+    session_title = generation_session_title(generations[0]) if generations else ""
+    if not session_title:
+        session_title = str(generations[0].profile_name or "Session") if generations else "Session"
+    slug = slugify(session_title, max_length=48, fallback="session")
+    date_str = generations[0].created_at.strftime("%Y%m%d") if generations[0].created_at else "unknown"
+    zip_filename = f"session-{slug}-{date_str}.zip"
+
+    # Build the ZIP in memory.
+    buf = io.BytesIO()
+    image_names: dict[int, list[str]] = {}
+    global_index = 1
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for gen in generations:
+            gen_names: list[str] = []
+            for asset in gen.assets:
+                try:
+                    abs_path = generation_service.asset_absolute_path(asset, which="file")
+                except ValueError:
+                    logging.getLogger(__name__).warning(
+                        "Skipping asset %s for session download: path could not be resolved",
+                        getattr(asset, "id", "?"),
+                    )
+                    continue
+                if not abs_path.exists():
+                    continue
+                ext = Path(asset.file_path).suffix or ".png"
+                arc_name = f"images/{global_index:03d}{ext}"
+                zf.write(abs_path, arcname=arc_name)
+                gen_names.append(arc_name)
+                global_index += 1
+            image_names[gen.id] = gen_names
+
+        markdown_content = _build_session_markdown(session_title, token, generations, image_names)
+        zf.writestr("session.md", markdown_content.encode("utf-8"))
+
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )
+
+
 @app.get("/jobs/{generation_id}", response_class=HTMLResponse)
 def job_status(
     request: Request,
@@ -1680,13 +2172,25 @@ def admin_page(
     if denied:
         return denied
 
-    model_configs = crud.list_model_configs(session)
-    dimension_presets = crud.list_dimension_presets(session)
-    categories = crud.list_categories(session)
-    users = crud.list_users(session)
-    enhancement_config = crud.get_enhancement_config(session)
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
+
+    # Load only section-relevant data so unrelated admin sections do not require
+    # every DB query (important for lightweight/fake sessions in tests).
+    model_configs = crud.list_model_configs(session) if active_admin_section == "models" else []
+    dimension_presets = (
+        crud.list_dimension_presets(session)
+        if active_admin_section == "dimensions"
+        else []
+    )
+    categories = crud.list_categories(session) if active_admin_section == "categories" else []
+    styles = crud.list_styles(session) if active_admin_section == "styles" else []
+    users = crud.list_users(session) if active_admin_section == "users" else []
+    enhancement_config = (
+        crud.get_enhancement_config(session)
+        if active_admin_section == "enhancement"
+        else None
+    )
 
     # Build per-provider API key info for the "API Keys" admin section
     provider_names = provider_registry.provider_names()
@@ -1701,40 +2205,55 @@ def admin_page(
         if p in model_config_service.PROVIDER_API_KEY_ATTR
     ]
 
-    # Build upscaling info for the "Upscaling" admin section
-    fal_api_key_row = provider_api_key_rows.get("fal")
-    create_dialog_open = str(fal_model_create_open or "").strip().lower() in {
-        "1",
-        "true",
-        "on",
-        "yes",
-    }
-    try:
-        edit_dialog_model_id = parse_optional_int(fal_model_edit_id)
-    except ValueError:
-        edit_dialog_model_id = None
-    if edit_dialog_model_id is not None and edit_dialog_model_id <= 0:
-        edit_dialog_model_id = None
-    draft_enabled = str(fal_model_is_enabled or "").strip().lower() in {
-        "1",
-        "true",
-        "on",
-        "yes",
-    }
+    # Build upscaling info for the "Upscaling" admin section.
     upscaling_info = {
-        "local_available": upscale_service.is_available(),
-        "local_models": upscale_service.list_available_models(),
-        "fal_has_db_key": fal_api_key_row is not None,
+        "local_available": False,
+        "local_models": [],
+        "fal_has_db_key": False,
         "fal_has_env_key": bool(settings.fal_api_key),
-        "fal_models": crud.list_topaz_upscale_models(session, enabled_only=False),
-        "topaz_models": crud.list_topaz_upscale_models(session, enabled_only=False),
-        "fal_model_create_open": create_dialog_open,
-        "fal_model_edit_id": edit_dialog_model_id,
+        "fal_models": [],
+        "topaz_models": [],
+        "fal_model_create_open": False,
+        "fal_model_edit_id": None,
         "fal_model_draft_name": fal_model_name or "",
         "fal_model_draft_identifier": fal_model_identifier or "",
         "fal_model_draft_params_json": fal_model_params_json if fal_model_params_json is not None else "{}",
-        "fal_model_draft_enabled": draft_enabled,
+        "fal_model_draft_enabled": False,
     }
+    if active_admin_section == "upscaling":
+        fal_api_key_row = provider_api_key_rows.get("fal")
+        create_dialog_open = str(fal_model_create_open or "").strip().lower() in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
+        try:
+            edit_dialog_model_id = parse_optional_int(fal_model_edit_id)
+        except ValueError:
+            edit_dialog_model_id = None
+        if edit_dialog_model_id is not None and edit_dialog_model_id <= 0:
+            edit_dialog_model_id = None
+        draft_enabled = str(fal_model_is_enabled or "").strip().lower() in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
+        upscaling_info = {
+            "local_available": upscale_service.is_available(),
+            "local_models": upscale_service.list_available_models(),
+            "fal_has_db_key": fal_api_key_row is not None,
+            "fal_has_env_key": bool(settings.fal_api_key),
+            "fal_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+            "topaz_models": crud.list_topaz_upscale_models(session, enabled_only=False),
+            "fal_model_create_open": create_dialog_open,
+            "fal_model_edit_id": edit_dialog_model_id,
+            "fal_model_draft_name": fal_model_name or "",
+            "fal_model_draft_identifier": fal_model_identifier or "",
+            "fal_model_draft_params_json": fal_model_params_json if fal_model_params_json is not None else "{}",
+            "fal_model_draft_enabled": draft_enabled,
+        }
 
     return templates.TemplateResponse(
         request,
@@ -1744,6 +2263,7 @@ def admin_page(
             "model_configs": model_configs,
             "dimension_presets": dimension_presets,
             "categories": categories,
+            "styles": styles,
             "enhancement_config": enhancement_config,
             "providers": provider_names,
             "provider_meta": provider_registry.provider_meta(),
@@ -2089,6 +2609,186 @@ def admin_delete_category(
     return admin_redirect("categories", message="Deleted")
 
 
+def _style_image_path(style_id: int) -> Path:
+    """Return the absolute path where a style's thumbnail image is stored."""
+    return (settings.data_dir / "styles" / f"{style_id}").with_suffix(".webp")
+
+
+@app.get("/admin/styles/{style_id}/image")
+def admin_style_image(
+    style_id: int,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """Serve the thumbnail image for a style."""
+    style = crud.get_style(session, style_id)
+    if not style or not style.image_path:
+        raise HTTPException(status_code=404, detail="Style image not found")
+    image_path = _style_image_path(style_id)
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Style image file missing")
+    return FileResponse(path=image_path, media_type="image/webp")
+
+
+@app.post("/admin/styles")
+def admin_create_style(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(...),
+    prompt: str = Form(...),
+    image: UploadFile = File(default=None),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Create a new style with optional thumbnail image."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    try:
+        name_value = normalize_style_name(name)
+        description_value = normalize_style_description(description)
+        prompt_value = normalize_style_prompt(prompt)
+
+        style = crud.create_style(
+            session,
+            name=name_value,
+            description=description_value,
+            prompt=prompt_value,
+            image_path=None,
+        )
+
+        # Handle optional image upload
+        if image and image.filename:
+            image_data = image.file.read()
+            if image_data:
+                content_type = (image.content_type or "").lower()
+                if not content_type.startswith("image/"):
+                    crud.delete_style(session, style)
+                    raise ValueError("Style image must be a valid image file.")
+                if len(image_data) > MAX_STYLE_IMAGE_BYTES:
+                    crud.delete_style(session, style)
+                    raise ValueError("Style image must be smaller than 5 MB.")
+                img_path = _style_image_path(style.id)
+                ensure_dir(img_path.parent)
+                try:
+                    with io.BytesIO(image_data) as buf:
+                        pil_img = Image.open(buf)
+                        pil_img = ImageOps.exif_transpose(pil_img)
+                        pil_img = pil_img.convert("RGB")
+                        thumb_size = min(pil_img.width, pil_img.height, 256)
+                        pil_img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+                        out_buf = io.BytesIO()
+                        pil_img.save(out_buf, format="WEBP", quality=85)
+                        img_path.write_bytes(out_buf.getvalue())
+                except Exception:
+                    raise ValueError("Failed to process the style image.")
+                crud.update_style(session, style, image_path=img_path.as_posix())
+
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect("styles", error=str(exc))
+
+    return admin_redirect("styles", message="Saved")
+
+
+@app.post("/admin/styles/{style_id}/update")
+def admin_update_style(
+    request: Request,
+    style_id: int,
+    name: str = Form(...),
+    description: str = Form(...),
+    prompt: str = Form(...),
+    image: UploadFile = File(default=None),
+    clear_image: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Update an existing style."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    style = crud.get_style(session, style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    try:
+        name_value = normalize_style_name(name)
+        description_value = normalize_style_description(description)
+        prompt_value = normalize_style_prompt(prompt)
+
+        new_image_path = style.image_path
+
+        if clear_image:
+            # Remove existing image file if present
+            if style.image_path:
+                old_img = _style_image_path(style_id)
+                if old_img.exists():
+                    old_img.unlink(missing_ok=True)
+            new_image_path = None
+        elif image and image.filename:
+            image_data = image.file.read()
+            if image_data:
+                content_type = (image.content_type or "").lower()
+                if not content_type.startswith("image/"):
+                    raise ValueError("Style image must be a valid image file.")
+                if len(image_data) > MAX_STYLE_IMAGE_BYTES:
+                    raise ValueError("Style image must be smaller than 5 MB.")
+                img_path = _style_image_path(style_id)
+                ensure_dir(img_path.parent)
+                try:
+                    with io.BytesIO(image_data) as buf:
+                        pil_img = Image.open(buf)
+                        pil_img = ImageOps.exif_transpose(pil_img)
+                        pil_img = pil_img.convert("RGB")
+                        thumb_size = min(pil_img.width, pil_img.height, 256)
+                        pil_img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+                        out_buf = io.BytesIO()
+                        pil_img.save(out_buf, format="WEBP", quality=85)
+                        img_path.write_bytes(out_buf.getvalue())
+                except Exception:
+                    raise ValueError("Failed to process the style image.")
+                new_image_path = img_path.as_posix()
+
+        crud.update_style(
+            session,
+            style,
+            name=name_value,
+            description=description_value,
+            prompt=prompt_value,
+            image_path=new_image_path,
+        )
+    except (ValueError, IntegrityError) as exc:
+        return admin_redirect("styles", error=str(exc))
+
+    return admin_redirect("styles", message="Saved")
+
+
+@app.post("/admin/styles/{style_id}/delete")
+def admin_delete_style(
+    request: Request,
+    style_id: int,
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Delete a style and its associated image if present."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    style = crud.get_style(session, style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    # Remove image file if present
+    if style.image_path:
+        img_path = _style_image_path(style_id)
+        if img_path.exists():
+            img_path.unlink(missing_ok=True)
+
+    crud.delete_style(session, style)
+    return admin_redirect("styles", message="Deleted")
+
+
 @app.post("/admin/model-configs")
 def admin_create_model_config(
     request: Request,
@@ -2379,6 +3079,124 @@ def admin_reset_onboarding(
     return RedirectResponse(url="/login?message=Onboarding+reset", status_code=303)
 
 
+# ---------------------------------------------------------------------------
+# Admin import / export
+# ---------------------------------------------------------------------------
+
+_EXPORT_TYPE_PARAM = Query(default="all")
+
+
+@app.get("/admin/export")
+def admin_export(
+    request: Request,
+    export_type: str = _EXPORT_TYPE_PARAM,
+    session: Session = Depends(get_session),
+) -> Response:
+    """Download a JSON export of Profiles, Models, Styles, or all three combined.
+
+    The ``export_type`` query parameter controls what is exported:
+    ``profiles``, ``models``, ``styles``, or ``all`` (default).
+    """
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    valid_types = {"profiles", "models", "styles", "all"}
+    export_type = (export_type or "all").strip().lower()
+    if export_type not in valid_types:
+        export_type = "all"
+
+    if export_type == "profiles":
+        payload = export_profiles(session)
+        filename = "lumigen-profiles.json"
+    elif export_type == "models":
+        payload = export_models(session)
+        filename = "lumigen-models.json"
+    elif export_type == "styles":
+        payload = export_styles(session)
+        filename = "lumigen-styles.json"
+    else:
+        payload = export_all(session)
+        filename = "lumigen-export.json"
+
+    content = json.dumps(payload, indent=2, ensure_ascii=False)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/admin/import")
+async def admin_import(
+    request: Request,
+    file: UploadFile = File(...),
+    conflict_strategy: str = Form(default="skip"),
+    dry_run: bool = Form(default=False),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Import Profiles, Models, and/or Styles from a previously exported JSON file.
+
+    Accepts ``conflict_strategy`` of ``skip``, ``overwrite``, or ``rename``.
+    When ``dry_run`` is *true* no database changes are committed and a full
+    preview summary is returned.
+    """
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return JSONResponse({"error": "Admin access required."}, status_code=403)
+
+    if conflict_strategy not in {"skip", "overwrite", "rename"}:
+        return JSONResponse(
+            {"error": f"Invalid conflict_strategy '{conflict_strategy}'."},
+            status_code=400,
+        )
+
+    raw_bytes = await file.read()
+    try:
+        payload = json.loads(raw_bytes)
+    except json.JSONDecodeError as exc:
+        return JSONResponse(
+            {"error": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."},
+            status_code=400,
+        )
+    except UnicodeDecodeError:
+        return JSONResponse(
+            {"error": "File contains invalid characters; ensure it is UTF-8 encoded."},
+            status_code=400,
+        )
+
+    validation_error, _version, profiles_list, models_list, styles_list = validate_import_payload(payload)
+    if validation_error is not None:
+        return JSONResponse({"error": validation_error}, status_code=400)
+
+    results = []
+    if models_list:
+        results.append(
+            import_models(session, models_list, conflict_strategy, dry_run=dry_run).to_dict()
+        )
+    if profiles_list:
+        results.append(
+            import_profiles(session, profiles_list, conflict_strategy, dry_run=dry_run).to_dict()
+        )
+    if styles_list:
+        results.append(
+            import_styles(session, styles_list, conflict_strategy, dry_run=dry_run).to_dict()
+        )
+
+    if not results:
+        return JSONResponse(
+            {
+                "dry_run": dry_run,
+                "results": [],
+                "message": "No importable entities found in the uploaded file.",
+            }
+        )
+
+    return JSONResponse({"dry_run": dry_run, "results": results})
+
+
 @app.post("/api/enhance", response_class=JSONResponse)
 async def enhance_prompt(
     request: Request,
@@ -2430,6 +3248,7 @@ async def update_session_preferences(
 
     last_profile_id = payload.get("last_profile_id")
     last_thumb_size = payload.get("last_thumb_size")
+    selected_style_ids = payload.get("selected_style_ids")
 
     # Validate profile_id if provided
     if last_profile_id is not None:
@@ -2445,13 +3264,238 @@ async def update_session_preferences(
                 {"success": False, "error": "Invalid thumb size"}, status_code=400
             )
 
-    crud.upsert_chat_session_preferences(
-        session,
-        chat_session_id=chat_session_id,
-        last_profile_id=last_profile_id,
-        last_thumb_size=last_thumb_size,
-    )
+    selected_style_ids_csv: str | None = None
+    if selected_style_ids is not None:
+        if not isinstance(selected_style_ids, str):
+            return JSONResponse(
+                {"success": False, "error": "Invalid selected style IDs"}, status_code=400
+            )
+        selected_style_ids_csv = ",".join(
+            str(style_id) for style_id in _parse_style_ids_csv(selected_style_ids)
+        )
+
+    upsert_kwargs: dict[str, Any] = {
+        "chat_session_id": chat_session_id,
+        "last_profile_id": last_profile_id,
+        "last_thumb_size": last_thumb_size,
+    }
+    if selected_style_ids is not None:
+        upsert_kwargs["selected_style_ids"] = selected_style_ids_csv
+
+    crud.upsert_chat_session_preferences(session, **upsert_kwargs)
     return JSONResponse({"success": True, "error": None})
+
+
+@app.get("/api/session-input-images", response_class=JSONResponse)
+def list_session_input_images(
+    chat_session_id: str = Query(...),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Return DB-persisted session input images for one chat session."""
+    token = (chat_session_id or "").strip()
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID", "items": []}, status_code=400)
+
+    rows = crud.list_session_input_images(session, token)
+    return JSONResponse(
+        {
+            "success": True,
+            "error": None,
+            "items": [_session_input_item_payload(row) for row in rows],
+        }
+    )
+
+
+@app.post("/api/session-input-images/upload", response_class=JSONResponse)
+async def upload_session_input_image(
+    request: Request,
+    chat_session_id: str = Form(...),
+    input_image: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Persist one uploaded input image for a chat session and return preview metadata."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    token = (chat_session_id or "").strip()
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID"}, status_code=400)
+
+    existing = crud.list_session_input_images(session, token)
+    if len(existing) >= MAX_INPUT_IMAGES:
+        return JSONResponse(
+            {"success": False, "error": f"Upload up to {MAX_INPUT_IMAGES} input images."},
+            status_code=400,
+        )
+
+    content_type = _sanitize_mime_type(input_image.content_type)
+    if not content_type.startswith("image/"):
+        return JSONResponse({"success": False, "error": "Input images must be valid image files."}, status_code=400)
+
+    data = await input_image.read()
+    if not data:
+        return JSONResponse({"success": False, "error": "Uploaded image is empty."}, status_code=400)
+    if MAX_UPLOAD_BYTES is not None and len(data) > MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            {"success": False, "error": f"Upload exceeds the {settings.max_upload_size_mb} MB size limit."},
+            status_code=400,
+        )
+
+    crud.upsert_chat_session_preferences(session, chat_session_id=token)
+
+    session_subdir = _session_input_subdir(token)
+    file_stem = uuid.uuid4().hex
+    ext = _guess_extension(input_image.filename, content_type)
+    original_rel = (session_subdir / f"{file_stem}.{ext}").as_posix()
+    base_dir = _session_input_base_dir()
+    original_abs = storage_service.resolve_managed_path(base_dir, original_rel)
+    storage_service.write_bytes_atomic(original_abs, data)
+
+    thumbnail_rel = thumbnail_service.create_thumbnail(base_dir, original_rel)
+
+    row = crud.create_session_input_image(
+        session,
+        chat_session_id=token,
+        source_type="uploaded",
+        sort_index=len(existing),
+        asset_id=None,
+        original_file_path=original_rel,
+        thumbnail_file_path=thumbnail_rel.as_posix(),
+        file_name=input_image.filename or f"input.{ext}",
+        mime_type=content_type,
+    )
+
+    return JSONResponse({"success": True, "error": None, "item": _session_input_item_payload(row)})
+
+
+@app.post("/api/session-input-images/asset", response_class=JSONResponse)
+async def add_asset_as_session_input_image(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Persist an existing asset as a session input image reference."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    payload = await request.json()
+    token = str(payload.get("chat_session_id") or "").strip()
+    asset_id = payload.get("asset_id")
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID"}, status_code=400)
+    if not isinstance(asset_id, int) or asset_id <= 0:
+        return JSONResponse({"success": False, "error": "Invalid asset ID"}, status_code=400)
+
+    asset = crud.get_asset(session, asset_id, with_generation=True)
+    if not asset or not asset.generation:
+        return JSONResponse({"success": False, "error": "Asset not found"}, status_code=404)
+
+    existing = crud.list_session_input_images(session, token)
+    if len(existing) >= MAX_INPUT_IMAGES:
+        return JSONResponse(
+            {"success": False, "error": f"Upload up to {MAX_INPUT_IMAGES} input images."},
+            status_code=400,
+        )
+
+    already_exists = any(
+        row.source_type == "asset" and row.asset_id == asset_id for row in existing
+    )
+    if already_exists:
+        return JSONResponse({"success": True, "error": None, "item": None})
+
+    crud.upsert_chat_session_preferences(session, chat_session_id=token)
+    row = crud.create_session_input_image(
+        session,
+        chat_session_id=token,
+        source_type="asset",
+        sort_index=len(existing),
+        asset_id=asset.id,
+        original_file_path=None,
+        thumbnail_file_path=None,
+        file_name=f"asset_{asset.id}",
+        mime_type=asset.mime,
+    )
+    return JSONResponse({"success": True, "error": None, "item": _session_input_item_payload(row)})
+
+
+@app.post("/api/session-input-images/remove", response_class=JSONResponse)
+async def remove_session_input_image(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Remove one session input image and delete associated temp files if needed."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    payload = await request.json()
+    row_id = payload.get("session_input_image_id")
+    token = str(payload.get("chat_session_id") or "").strip()
+    if not isinstance(row_id, int) or row_id <= 0:
+        return JSONResponse({"success": False, "error": "Invalid input image ID"}, status_code=400)
+
+    row = crud.get_session_input_image(session, row_id)
+    if not row:
+        return JSONResponse({"success": True, "error": None})
+    if token and row.chat_session_id != token:
+        return JSONResponse({"success": False, "error": "Session mismatch"}, status_code=400)
+
+    _delete_temp_session_input_files(row)
+    crud.delete_session_input_image(session, row)
+    return JSONResponse({"success": True, "error": None})
+
+
+@app.post("/api/session-input-images/clear", response_class=JSONResponse)
+async def clear_session_input_images(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Clear all session input images and temp files for one chat session."""
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not is_csrf_valid(request, csrf_header):
+        return JSONResponse({"success": False, "error": "Invalid CSRF token"}, status_code=403)
+
+    payload = await request.json()
+    token = str(payload.get("chat_session_id") or "").strip()
+    if not token or token in {"new", "all"}:
+        return JSONResponse({"success": False, "error": "Invalid session ID"}, status_code=400)
+
+    rows = crud.list_session_input_images(session, token)
+    for row in rows:
+        _delete_temp_session_input_files(row)
+    crud.clear_session_input_images(session, token)
+    return JSONResponse({"success": True, "error": None})
+
+
+@app.get("/api/session-input-images/{session_input_image_id}/thumb")
+def session_input_image_thumb(
+    session_input_image_id: int,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """Serve thumbnail image for one persisted session input image."""
+    row = crud.get_session_input_image(session, session_input_image_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Session input image not found")
+
+    if row.source_type == "asset" and row.asset_id:
+        asset = crud.get_asset(session, row.asset_id, with_generation=True)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        thumb_path = generation_service.asset_absolute_path(asset, which="thumbnail")
+        if not thumb_path.exists():
+            raise HTTPException(status_code=404, detail="Thumbnail missing")
+        return FileResponse(path=thumb_path, media_type="image/webp")
+
+    if not row.thumbnail_file_path:
+        raise HTTPException(status_code=404, detail="Thumbnail missing")
+    thumb_path = storage_service.resolve_managed_path(
+        _session_input_base_dir(),
+        row.thumbnail_file_path,
+    )
+    if not thumb_path.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail missing")
+    return FileResponse(path=thumb_path, media_type="image/webp")
 
 
 @app.get("/api/sessions", response_class=JSONResponse)
@@ -2649,13 +3693,17 @@ def create_profile(
                     params_value[key] = val
         else:
             # Handle generic parameters for all other providers
-            extra = parse_generic_params_json(extra_params)
+            # Remove previously stored extra params (all keys except reserved ones)
             reserved_keys = {
                 "fal_aspect_ratio",
                 "fal_resolution",
                 "fal_image_size",
                 "image_config",
             }
+            for key in list(params_value.keys()):
+                if key not in reserved_keys:
+                    del params_value[key]
+            extra = parse_generic_params_json(extra_params)
             for key, val in extra.items():
                 if key not in reserved_keys and val is not None:
                     params_value[key] = val
@@ -2772,36 +3820,16 @@ def update_profile(
                 fal_aspect_ratio=fal_aspect_ratio,
                 fal_resolution=fal_resolution,
             )
-            # Remove previously stored extra params (all keys except reserved ones)
-            reserved_keys = {
-                "fal_aspect_ratio",
-                "fal_resolution",
-                "fal_image_size",
-                "image_config",
-            }
-            for key in list(params_value.keys()):
-                if key not in reserved_keys:
-                    del params_value[key]
             # Handle FAL-specific parameters (backward compatibility)
             extra = parse_fal_model_params_json(fal_extra_params)
             for key, val in extra.items():
-                if key not in reserved_keys and val is not None:
+                if val is not None:
                     params_value[key] = val
         else:
             # Handle generic parameters for all other providers
-            # Remove previously stored extra params (all keys except reserved ones)
-            reserved_keys = {
-                "fal_aspect_ratio",
-                "fal_resolution",
-                "fal_image_size",
-                "image_config",
-            }
-            for key in list(params_value.keys()):
-                if key not in reserved_keys:
-                    del params_value[key]
             extra = parse_generic_params_json(extra_params)
             for key, val in extra.items():
-                if key not in reserved_keys and val is not None:
+                if val is not None:
                     params_value[key] = val
         if (upscale_choice or "").strip():
             (
@@ -3289,6 +4317,30 @@ def delete_generation(
     return RedirectResponse(url="/gallery", status_code=303)
 
 
+def _create_generation_for_retry(
+    session: Session, source: Generation, profile_id: int | None
+) -> Generation:
+    """Create a new queued generation for a retry request.
+
+    If *profile_id* refers to an existing profile, the generation is built
+    from that profile using the original prompt and any chat session context
+    from *source*.  Otherwise falls back to cloning the source generation's
+    own snapshot data.
+    """
+    if profile_id is not None:
+        profile = crud.get_profile(session, profile_id)
+        if profile is not None:
+            request_snapshot = source.request_snapshot_json or {}
+            overrides: dict = {}
+            chat_session_id = request_snapshot.get("chat_session_id")
+            if chat_session_id:
+                overrides["chat_session_id"] = chat_session_id
+            return generation_service.create_generation_from_profile(
+                session, profile, source.prompt_user, overrides=overrides
+            )
+    return generation_service.create_generation_from_snapshot(session, source)
+
+
 @app.post("/generations/{generation_id}/rerun", response_class=HTMLResponse)
 def rerun_generation(
     request: Request,
@@ -3296,6 +4348,7 @@ def rerun_generation(
     background_tasks: BackgroundTasks,
     view: str = Query(default="default"),
     csrf_token: str = Form(...),
+    profile_id: int | None = Form(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     validate_csrf_or_raise(request, csrf_token)
@@ -3303,7 +4356,7 @@ def rerun_generation(
     if not source:
         raise HTTPException(status_code=404, detail="Generation not found")
 
-    generation = generation_service.create_generation_from_snapshot(session, source)
+    generation = _create_generation_for_retry(session, source, profile_id)
     generation_service.enqueue(background_tasks, generation.id)
 
     template_name = (

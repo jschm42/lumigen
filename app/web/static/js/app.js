@@ -137,6 +137,24 @@
     });
   }
 
+  function setupHtmxDebugLogging() {
+    if (typeof document.body.addEventListener !== 'function') return;
+    document.body.addEventListener('htmx:targetError', function (event) {
+      if (!event) return;
+      var detail = event.detail || {};
+      var issue = detail.target || detail.targetSpec || detail.elt || 'unknown target';
+      var sourceEl = detail.elt || event.target || null;
+      var requestPath = sourceEl && sourceEl.getAttribute ? sourceEl.getAttribute('hx-get') || sourceEl.getAttribute('hx-post') || sourceEl.getAttribute('hx-put') || sourceEl.getAttribute('hx-delete') || '' : '';
+
+      console.error('[htmx:targetError] Swap target not found.', {
+        issue: issue,
+        requestPath: requestPath,
+        sourceElement: sourceEl,
+        detail: detail
+      });
+    });
+  }
+
   function setupConfirmDialog() {
     var dialog = document.querySelector('[data-confirm-dialog]');
     if (!dialog) return;
@@ -345,6 +363,7 @@
   function setupGenerationForm(form) {
     var profileSelect = form.querySelector('[data-generation-profile]');
     if (!profileSelect) return;
+    var conversationInput = form.querySelector('[name="conversation"]');
 
     var widthInput = form.querySelector('[name="width"]');
     var heightInput = form.querySelector('[name="height"]');
@@ -355,32 +374,217 @@
     var inputPreview = form.querySelector('[data-input-preview]');
     var inputClear = form.querySelector('[data-input-clear]');
     var inputTrigger = form.querySelector('[data-input-trigger]');
-    var inputFileState = [];
-    var canUseDataTransfer = false;
-    try {
-      canUseDataTransfer = typeof DataTransfer !== 'undefined' && !!new DataTransfer();
-    } catch (_error) {
-      canUseDataTransfer = false;
-    }
+    var inputImageState = [];
     var enhanceBtn = form.querySelector('[data-enhance-prompt]');
     var promptInput = form.querySelector('[name="prompt_user"]');
     var advancedToggle = form.querySelector('[data-advanced-toggle]');
     var advancedPanel = form.querySelector('[data-advanced-panel]');
+    var submitBtn = form.querySelector('[data-generate-submit]');
+    var _generationLocked = false;
+    var PROFILE_SESSION_KEY_PREFIX = 'lumigen_selected_profile:';
+
+    function getConversationKey() {
+      if (!conversationInput) return '';
+      return String(conversationInput.value || '').trim();
+    }
+
+    function getProfileSessionStorageKey() {
+      var conversationKey = getConversationKey();
+      if (!conversationKey) return '';
+      return PROFILE_SESSION_KEY_PREFIX + conversationKey;
+    }
+
+    function hasPersistableConversation() {
+      var conversationKey = getConversationKey();
+      return !!conversationKey && conversationKey !== 'new' && conversationKey !== 'all';
+    }
+
+    function resetNativeInputElement() {
+      if (inputImages) {
+        inputImages.value = '';
+      }
+    }
+
+    async function fetchSessionInputImages() {
+      if (!hasPersistableConversation()) {
+        inputImageState = [];
+        renderInputPreviews();
+        return;
+      }
+      try {
+        var response = await fetch('/api/session-input-images?chat_session_id=' + encodeURIComponent(getConversationKey()));
+        if (!response.ok) {
+          throw new Error('Failed to load session input images.');
+        }
+        var payload = await response.json();
+        inputImageState = Array.isArray(payload.items) ? payload.items.slice(0, 5) : [];
+        renderInputPreviews();
+      } catch (_error) {
+        inputImageState = [];
+        renderInputPreviews();
+      }
+    }
+
+    async function uploadInputImageFile(file) {
+      if (!hasPersistableConversation()) return null;
+      var formData = new FormData();
+      formData.append('chat_session_id', getConversationKey());
+      formData.append('input_image', file);
+      var response = await fetch('/api/session-input-images/upload', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error('Upload failed.');
+      }
+      var payload = await response.json();
+      return payload && payload.item ? payload.item : null;
+    }
+
+    async function addAssetInputImage(assetId) {
+      if (!hasPersistableConversation()) return null;
+      var response = await fetch('/api/session-input-images/asset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          chat_session_id: getConversationKey(),
+          asset_id: Number(assetId),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to add asset input image.');
+      }
+      var payload = await response.json();
+      return payload && payload.item ? payload.item : null;
+    }
+
+    async function removeSessionInputImage(sessionInputImageId) {
+      if (!hasPersistableConversation()) return;
+      await fetch('/api/session-input-images/remove', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({
+          chat_session_id: getConversationKey(),
+          session_input_image_id: Number(sessionInputImageId),
+        }),
+      });
+    }
+
+    async function clearSessionInputImages() {
+      if (!hasPersistableConversation()) {
+        inputImageState = [];
+        renderInputPreviews();
+        return;
+      }
+      await fetch('/api/session-input-images/clear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify({ chat_session_id: getConversationKey() }),
+      });
+      inputImageState = [];
+      renderInputPreviews();
+    }
+
+    function saveSelectedProfileToSession() {
+      var storageKey = getProfileSessionStorageKey();
+      if (!storageKey) return;
+      var profileId = String(profileSelect.value || '').trim();
+      if (!profileId) return;
+      try {
+        sessionStorage.setItem(storageKey, profileId);
+      } catch (_error) {
+        // Ignore storage write failures in restricted browser modes.
+      }
+    }
+
+    function restoreSelectedProfileFromSession() {
+      var storageKey = getProfileSessionStorageKey();
+      if (!storageKey) return false;
+      var storedProfileId = '';
+      try {
+        storedProfileId = String(sessionStorage.getItem(storageKey) || '').trim();
+      } catch (_error) {
+        return false;
+      }
+      if (!storedProfileId || profileSelect.value === storedProfileId) {
+        return false;
+      }
+      var hasOption = Array.from(profileSelect.options).some(function (option) {
+        return option.value === storedProfileId;
+      });
+      if (!hasOption) return false;
+      profileSelect.value = storedProfileId;
+      return true;
+    }
+
+    function lockGenerationForm() {
+      /* Disable the submit button, show a loading spinner, and set the
+         textarea to readonly to prevent duplicate submissions while a
+         generation request is in flight. */
+      _generationLocked = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
+        var icon = submitBtn.querySelector('.bi');
+        if (icon) {
+          icon.classList.remove('bi-arrow-up');
+          icon.classList.add('bi-hourglass-split', 'animate-spin');
+        }
+      }
+      if (promptInput) {
+        promptInput.setAttribute('readonly', '');
+      }
+    }
+
+    function unlockGenerationForm() {
+      /* Re-enable the submit button, restore the arrow-up icon, and remove
+         readonly from the textarea after a generation request completes
+         (whether it succeeded or failed). */
+      _generationLocked = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.removeAttribute('aria-busy');
+        var icon = submitBtn.querySelector('.bi');
+        if (icon) {
+          icon.classList.remove('bi-hourglass-split', 'animate-spin');
+          icon.classList.add('bi-arrow-up');
+        }
+      }
+      if (promptInput) {
+        promptInput.removeAttribute('readonly');
+      }
+    }
 
     function syncProviderSpecificOptions(selected) {
       var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
       var isOpenRouter = provider === 'openrouter';
       var isFal = provider === 'fal';
-      var useCustomDimensions = !isOpenRouter && !isFal;
+      var isGoogle = provider === 'google';
+      var useCustomDimensions = !isOpenRouter && !isFal && !isGoogle;
       
       var dimensionControls = form.querySelector('[data-dimension-controls]');
       var standardDimensions = form.querySelector('[data-standard-dimensions]');
       var openrouterControls = form.querySelector('[data-openrouter-controls]');
       var falControls = form.querySelector('[data-fal-controls]');
+      var googleControls = form.querySelector('[data-google-controls]');
       var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
       var imageSizeInput = form.querySelector('[name="image_size"]');
       var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
       var falResolutionInput = form.querySelector('[name="fal_resolution"]');
+      var googleAspectRatioInput = form.querySelector('[name="google_aspect_ratio"]');
+      var googleResolutionInput = form.querySelector('[name="google_resolution"]');
       
       // Toggle visibility based on provider
       if (dimensionControls) {
@@ -394,6 +598,9 @@
       }
       if (falControls) {
         falControls.classList.toggle('hidden', !isFal);
+      }
+      if (googleControls) {
+        googleControls.classList.toggle('hidden', !isGoogle);
       }
       
       // Disable/enable and clear values based on provider
@@ -427,6 +634,15 @@
         falResolutionInput.disabled = !isFal;
         if (!isFal) falResolutionInput.value = '';
       }
+      if (googleAspectRatioInput) {
+        googleAspectRatioInput.disabled = !isGoogle;
+        if (!isGoogle) googleAspectRatioInput.value = '';
+      }
+      if (googleResolutionInput) {
+        googleResolutionInput.disabled = !isGoogle;
+        if (!isGoogle) googleResolutionInput.value = '';
+      }
+      updateGenerationFrame();
     }
 
     function legacyFalImageSizeToRatio(value) {
@@ -439,6 +655,99 @@
         landscape_16_9: '16:9'
       };
       return map[String(value || '').trim()] || '';
+    }
+
+    /**
+     * Parse a ratio string in "W:H" or "WxH" format.
+     * Returns [width, height] as numbers, or null if invalid.
+     */
+    function parseRatioString(str) {
+      if (!str || typeof str !== 'string') return null;
+      var parts;
+      if (str.indexOf(':') !== -1) {
+        parts = str.split(':');
+      } else if (str.indexOf('x') !== -1) {
+        parts = str.split('x');
+      } else {
+        return null;
+      }
+      if (parts.length !== 2) return null;
+      var w = parseFloat(parts[0]);
+      var h = parseFloat(parts[1]);
+      if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) return null;
+      return [w, h];
+    }
+
+    /**
+     * Derive the active aspect ratio [w, h] from whichever control set is
+     * currently visible (FAL, OpenRouter, or standard width/height).
+     * Falls back to [1, 1] when no explicit ratio is set.
+     */
+    function getActiveRatio() {
+      var selected = profileSelect.options[profileSelect.selectedIndex];
+      var provider = selected ? String(selected.dataset.provider || '').trim().toLowerCase() : '';
+      var isFal = provider === 'fal';
+      var isOpenRouter = provider === 'openrouter';
+      var isGoogle = provider === 'google';
+
+      if (isFal) {
+        var falAspectRatioInput = form.querySelector('[name="fal_aspect_ratio"]');
+        var falVal = falAspectRatioInput ? falAspectRatioInput.value.trim() : '';
+        if (falVal && falVal !== 'auto') {
+          return parseRatioString(falVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      if (isOpenRouter) {
+        var aspectRatioInput = form.querySelector('[name="aspect_ratio"]');
+        var orVal = aspectRatioInput ? aspectRatioInput.value.trim() : '';
+        if (orVal) {
+          return parseRatioString(orVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      if (isGoogle) {
+        var googleAspectRatioInput = form.querySelector('[name="google_aspect_ratio"]');
+        var gVal = googleAspectRatioInput ? googleAspectRatioInput.value.trim() : '';
+        if (gVal) {
+          return parseRatioString(gVal) || [1, 1];
+        }
+        return [1, 1];
+      }
+
+      var wVal = widthInput ? parseFloat(widthInput.value) : 0;
+      var hVal = heightInput ? parseFloat(heightInput.value) : 0;
+      if (wVal > 0 && hVal > 0) return [wVal, hVal];
+      return [1, 1];
+    }
+
+    /**
+     * Update the generation frame element to reflect the currently active
+     * aspect ratio.  The frame is constrained to a 112 px maximum in either
+     * dimension so extreme ratios (e.g. 21:9 or 1:8) stay within their
+     * container.
+     */
+    function updateGenerationFrame() {
+      var frame = form.querySelector('[data-generation-frame]');
+      if (!frame) return;
+      var MAX = 112;
+      var ratio = getActiveRatio();
+      var w = ratio[0];
+      var h = ratio[1];
+      if (w <= 0 || h <= 0) { w = 1; h = 1; }
+      var displayW, displayH;
+      if (w >= h) {
+        displayW = MAX;
+        displayH = Math.max(1, Math.round(MAX * h / w));
+      } else {
+        displayH = MAX;
+        displayW = Math.max(1, Math.round(MAX * w / h));
+      }
+      frame.style.width = displayW + 'px';
+      frame.style.height = displayH + 'px';
+      frame.style.aspectRatio = w + ' / ' + h;
     }
 
     function applyProfileDefaults() {
@@ -462,14 +771,40 @@
       if (falResolutionInput) {
         falResolutionInput.value = String(selected.dataset.falResolution || '').trim();
       }
+      var googleAspectRatioInput = form.querySelector('[name="google_aspect_ratio"]');
+      var googleResolutionInput = form.querySelector('[name="google_resolution"]');
+      if (googleAspectRatioInput) {
+        googleAspectRatioInput.value = String(selected.dataset.googleAspectRatio || '').trim();
+      }
+      if (googleResolutionInput) {
+        googleResolutionInput.value = String(selected.dataset.googleResolution || '').trim();
+      }
 
       syncProviderSpecificOptions(selected);
 
       syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+      saveSelectedProfileToSession();
     }
 
     profileSelect.addEventListener('change', applyProfileDefaults);
+
+    if (!profileSelect.dataset.restoreBound) {
+      profileSelect.dataset.restoreBound = '1';
+      var restoreProfileSelection = function () {
+        if (restoreSelectedProfileFromSession()) {
+          applyProfileDefaults();
+        }
+      };
+      window.addEventListener('focus', restoreProfileSelection);
+      window.addEventListener('pageshow', restoreProfileSelection);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+          restoreProfileSelection();
+        }
+      });
+    }
     
+    restoreSelectedProfileFromSession();
     // Call on initial page load to ensure correct visibility
     applyProfileDefaults();
 
@@ -482,77 +817,73 @@
         widthInput.value = parts[0].trim();
         heightInput.value = parts[1].trim();
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
 
       widthInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
       heightInput.addEventListener('input', function () {
         syncDimensionPreset(widthInput, heightInput, dimensionPreset);
+        updateGenerationFrame();
       });
     }
 
-    function syncInputFiles() {
-      if (!inputImages) return;
-      if (!canUseDataTransfer) {
-        return false;
-      }
-      try {
-        var dataTransfer = new DataTransfer();
-        inputFileState.forEach(function (file) {
-          dataTransfer.items.add(file);
-        });
-        inputImages.files = dataTransfer.files;
-        return true;
-      } catch (_error) {
-        canUseDataTransfer = false;
-        return false;
-      }
+    var aspectRatioSelect = form.querySelector('[name="aspect_ratio"]');
+    if (aspectRatioSelect) {
+      aspectRatioSelect.addEventListener('change', updateGenerationFrame);
+    }
+
+    var falAspectRatioSelect = form.querySelector('[name="fal_aspect_ratio"]');
+    if (falAspectRatioSelect) {
+      falAspectRatioSelect.addEventListener('change', updateGenerationFrame);
+    }
+
+    var googleAspectRatioSelect = form.querySelector('[name="google_aspect_ratio"]');
+    if (googleAspectRatioSelect) {
+      googleAspectRatioSelect.addEventListener('change', updateGenerationFrame);
     }
 
     function renderInputPreviews() {
-      if (!inputImages || !inputPreview) return;
+      if (!inputPreview) return;
       inputPreview.innerHTML = '';
 
-      var selectedCount = canUseDataTransfer
-        ? inputFileState.length
-        : Array.from(inputImages.files || []).length;
+      var selectedCount = inputImageState.length;
 
       if (selectedCount > 5) {
-        inputImages.setCustomValidity('Max 5 images allowed.');
-      } else {
+        if (inputImages) {
+          inputImages.setCustomValidity('Max 5 images allowed.');
+        }
+      } else if (inputImages) {
         inputImages.setCustomValidity('');
       }
 
       if (inputClear) {
-        inputClear.disabled = inputFileState.length === 0;
+        inputClear.disabled = inputImageState.length === 0;
       }
 
-      inputFileState.slice(0, 5).forEach(function (file, index) {
-        var objectUrl = URL.createObjectURL(file);
+      inputImageState.slice(0, 5).forEach(function (item) {
+        var thumbUrl = item && item.thumbnail_url ? String(item.thumbnail_url) : '';
+        if (!thumbUrl) return;
         var wrapper = document.createElement('div');
         wrapper.className = 'relative h-20 w-20 overflow-hidden rounded-xl border border-slate-300/55 bg-white/95 shadow-md shadow-slate-200/60 dark:border-white/15 dark:bg-slate-900/80 dark:shadow-slate-950/60';
         var img = document.createElement('img');
-        img.src = objectUrl;
-        img.alt = file.name || 'input image';
+        img.src = thumbUrl;
+        img.alt = item.file_name || 'input image';
         img.className = 'h-full w-full object-cover';
-        img.addEventListener('load', function () {
-          URL.revokeObjectURL(objectUrl);
-        });
         var removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300/85 bg-rose-500/90 text-[11px] font-bold text-slate-900 transition hover:border-rose-200 hover:bg-rose-500/80 dark:border-white/35 dark:bg-slate-900/90 dark:text-white dark:hover:border-rose-200 dark:hover:bg-rose-500/80';
         removeBtn.textContent = 'x';
-        if (!canUseDataTransfer) {
-          removeBtn.disabled = true;
-          removeBtn.title = 'Use clear button to remove images';
-          removeBtn.classList.add('opacity-40', 'cursor-not-allowed');
-        }
-        removeBtn.addEventListener('click', function () {
-          if (!canUseDataTransfer) return;
-          inputFileState.splice(index, 1);
-          syncInputFiles();
-          renderInputPreviews();
+        removeBtn.addEventListener('click', async function () {
+          if (!item.id) return;
+          try {
+            await removeSessionInputImage(item.id);
+            await fetchSessionInputImages();
+          } catch (_error) {
+            alert('Failed to remove input image.');
+          }
         });
         wrapper.appendChild(img);
         wrapper.appendChild(removeBtn);
@@ -560,91 +891,79 @@
       });
     }
 
-    function addSelectedFiles(fileList) {
-      var incoming = Array.from(fileList || []);
-      if (incoming.length === 0) return;
-
-      incoming.forEach(function (file) {
-        var isDuplicate = inputFileState.some(function (existing) {
-          return existing.name === file.name
-            && existing.size === file.size
-            && existing.lastModified === file.lastModified;
-        });
-        if (!isDuplicate) {
-          inputFileState.push(file);
-        }
-      });
-
-      if (inputFileState.length > 5) {
-        inputFileState = inputFileState.slice(0, 5);
-      }
-
-      syncInputFiles();
-      renderInputPreviews();
-    }
-
     if (inputImages) {
-      inputImages.addEventListener('change', function () {
-        if (!canUseDataTransfer) {
-          inputFileState = Array.from(inputImages.files || []).slice(0, 5);
-          renderInputPreviews();
+      inputImages.addEventListener('change', async function () {
+        var selectedFiles = Array.from(inputImages.files || []);
+        if (!selectedFiles.length) {
           return;
         }
-        var nativeSelectedFiles = Array.from(inputImages.files || []);
-        addSelectedFiles(nativeSelectedFiles);
 
-        if (canUseDataTransfer) {
-          // Keep files assigned to the input for submit.
-        } else {
-          inputFileState = nativeSelectedFiles.slice(0, 5);
-          renderInputPreviews();
+        if (!hasPersistableConversation()) {
+          resetNativeInputElement();
+          alert('Please select or create a chat session first.');
+          return;
+        }
+
+        var remaining = Math.max(0, 5 - inputImageState.length);
+        if (remaining <= 0) {
+          resetNativeInputElement();
+          alert('Upload up to 5 input images.');
+          return;
+        }
+
+        var filesToUpload = selectedFiles.slice(0, remaining);
+        try {
+          await Promise.all(filesToUpload.map(function (file) {
+            return uploadInputImageFile(file);
+          }));
+          await fetchSessionInputImages();
+        } catch (_error) {
+          alert('Failed to upload one or more input images.');
+        } finally {
+          resetNativeInputElement();
         }
       });
       renderInputPreviews();
+      fetchSessionInputImages();
     }
 
     if (inputTrigger && inputImages) {
       inputTrigger.addEventListener('click', function () {
-        if (canUseDataTransfer) {
-          inputImages.value = '';
-        }
+        resetNativeInputElement();
         inputImages.click();
       });
     }
 
     if (inputClear) {
-      inputClear.addEventListener('click', function () {
-        inputFileState = [];
-        if (canUseDataTransfer) {
-          syncInputFiles();
-        } else if (inputImages) {
-          inputImages.value = '';
+      inputClear.addEventListener('click', async function () {
+        try {
+          await clearSessionInputImages();
+        } catch (_error) {
+          alert('Failed to clear input images.');
+        } finally {
+          resetNativeInputElement();
+          await fetchSessionInputImages();
         }
-        renderInputPreviews();
+      });
+    }
+
+    if (conversationInput) {
+      conversationInput.addEventListener('change', function () {
+        fetchSessionInputImages();
       });
     }
 
     async function addImageFromAsset(assetId) {
-      if (inputFileState.length >= 5) return;
+      if (inputImageState.length >= 5) return;
+      if (!hasPersistableConversation()) {
+        alert('Please select or create a chat session first.');
+        return;
+      }
       try {
-        var response = await fetch('/assets/' + encodeURIComponent(assetId) + '/file');
-        if (!response.ok) return;
-        var blob = await response.blob();
-        var mime = blob.type || 'image/webp';
-        var mimeToExt = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
-        var ext = mimeToExt[mime] || 'webp';
-        var filename = 'asset_' + assetId + '.' + ext;
-        var isDuplicate = inputFileState.some(function (f) { return f.name === filename; });
-        if (isDuplicate) return;
-        var file = new File([blob], filename, { type: mime });
-        inputFileState.push(file);
-        if (inputFileState.length > 5) {
-          inputFileState = inputFileState.slice(0, 5);
-        }
-        syncInputFiles();
-        renderInputPreviews();
+        await addAssetInputImage(assetId);
+        await fetchSessionInputImages();
       } catch (_error) {
-        // Silently ignore fetch errors
+        alert('Failed to add asset as input image.');
       }
     }
 
@@ -668,6 +987,10 @@
         if (event.key !== 'Enter') return;
         if (event.shiftKey) return;
         if (event.isComposing || event.keyCode === 229) return;
+        if (_generationLocked) {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         if (typeof form.requestSubmit === 'function') {
           form.requestSubmit();
@@ -720,6 +1043,19 @@
         }
       });
     }
+
+    form.addEventListener('submit', function (event) {
+      if (_generationLocked) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      lockGenerationForm();
+    });
+
+    form.addEventListener('htmx:afterRequest', function () {
+      unlockGenerationForm();
+    });
 
     applyProfileDefaults();
   }
@@ -1294,6 +1630,41 @@ function setupGalleryRatings() {
   }
 
   // ==========================================================================
+  // Chat: Re-Generate from prompt bubble
+  // ==========================================================================
+
+  /**
+   * Set up the Re-Generate hover button on user prompt bubbles.
+   *
+   * Uses event delegation so buttons injected via HTMX are handled automatically.
+   * On click, fills the generation form textarea with the prompt text and
+   * submits the form to start a new generation with the current profile.
+   */
+  function setupChatRegenerate() {
+    document.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-regenerate-prompt]');
+      if (!btn) return;
+      var promptText = btn.getAttribute('data-regenerate-prompt');
+      if (promptText === null) return;
+
+      var form = document.querySelector('[data-generation-form]');
+      if (!form) return;
+
+      var promptInput = form.querySelector('[name="prompt_user"]');
+      if (!promptInput) return;
+
+      promptInput.value = promptText;
+      promptInput.focus();
+
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    });
+  }
+
+  // ==========================================================================
   // User Menu Popup
   // ==========================================================================
 
@@ -1382,12 +1753,14 @@ function setupGalleryRatings() {
     initTheme();
     ensurePostFormCsrfTokens();
     setupHtmxCsrf();
+    setupHtmxDebugLogging();
     setupConfirmDialog();
     setupSeedButtons();
     setupModelSelects();
     setupGenerationForms();
     setupProfileForms();
     setupChatAddToInput();
+    setupChatRegenerate();
     setupUserMenu();
     setupGalleryFilters();
     setupGallerySelection();

@@ -133,6 +133,14 @@ Recommended pre-PR validation order:
 - To add a new e2e test: create `tests/e2e/<feature>.spec.js`, import `{ test, expect }` from `@playwright/test`, and use the `storageState` from the `chromium` project (configured automatically).
 - Browser installation: run `npx playwright install --with-deps chromium` once after `npm ci`.
 
+## Provider Image Request Documentation
+For implementing or understanding image requests to various providers, refer to the following documentation:
+- OpenRouter: https://openrouter.ai/docs/guides/overview/multimodal/image-generation
+- FAL.AI: https://fal.ai/models/fal-ai/nano-banana-2/api
+- BFL: https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint
+- OpenAI: https://developers.openai.com/api/docs/guides/image-generation
+- Google Gemini: https://ai.google.dev/gemini-api/docs/image-generation
+
 ## When to search
 Only search if one of these is true:
 - A command/path in this file no longer exists.

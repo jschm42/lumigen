@@ -15,7 +15,9 @@ from app.db.models import (
     ModelConfig,
     Profile,
     ProviderApiKey,
+    SessionInputImage,
     StorageTemplate,
+    Style,
     TopazUpscaleModel,
     User,
 )
@@ -477,6 +479,7 @@ def upsert_chat_session_preferences(
     chat_session_id: str,
     last_profile_id: int | None = None,
     last_thumb_size: str | None = None,
+    selected_style_ids: str | None = None,
 ) -> ChatSession:
     """Persist UI preferences for a chat session, creating the row if it does not yet exist."""
     existing = get_chat_session(session, chat_session_id)
@@ -485,17 +488,113 @@ def upsert_chat_session_preferences(
             existing.last_profile_id = last_profile_id
         if last_thumb_size is not None:
             existing.last_thumb_size = last_thumb_size
+        if selected_style_ids is not None:
+            existing.selected_style_ids = selected_style_ids
         session.add(existing)
         session.commit()
-        session.refresh(existing)
+        if hasattr(session, "refresh"):
+            session.refresh(existing)
         return existing
 
     row = ChatSession(
         chat_session_id=chat_session_id,
         last_profile_id=last_profile_id,
         last_thumb_size=last_thumb_size or "md",
+        selected_style_ids=selected_style_ids,
     )
+    session.add(row)
+    session.commit()
+    if hasattr(session, "refresh"):
+        session.refresh(row)
+    return row
+
+
+def list_styles(session: Session) -> list[Style]:
+    """Return all styles ordered by name."""
+    stmt = select(Style).order_by(Style.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def get_style(session: Session, style_id: int) -> Style | None:
+    """Return a style by primary key, or ``None`` if not found."""
+    stmt = select(Style).where(Style.id == style_id)
+    return session.scalar(stmt)
+
+
+def get_styles_by_ids(session: Session, style_ids: list[int]) -> list[Style]:
+    """Return the styles whose IDs are in *style_ids*, ordered by name."""
+    if not style_ids:
+        return []
+    stmt = select(Style).where(Style.id.in_(style_ids)).order_by(Style.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def create_style(session: Session, **fields) -> Style:
+    """Create a new style from the given field values and return it."""
+    row = Style(**fields)
     session.add(row)
     session.commit()
     session.refresh(row)
     return row
+
+
+def update_style(session: Session, style: Style, **fields) -> Style:
+    """Update the given style's fields and return the refreshed instance."""
+    for key, value in fields.items():
+        setattr(style, key, value)
+    session.add(style)
+    session.commit()
+    session.refresh(style)
+    return style
+
+
+def delete_style(session: Session, style: Style) -> None:
+    """Delete the given style from the database."""
+    session.delete(style)
+    session.commit()
+
+
+def list_session_input_images(
+    session: Session, chat_session_id: str
+) -> list[SessionInputImage]:
+    """Return session-scoped input images ordered by sort index and creation order."""
+    stmt = (
+        select(SessionInputImage)
+        .where(SessionInputImage.chat_session_id == chat_session_id)
+        .order_by(SessionInputImage.sort_index.asc(), SessionInputImage.id.asc())
+    )
+    return list(session.scalars(stmt).all())
+
+
+def create_session_input_image(session: Session, **fields) -> SessionInputImage:
+    """Create a session input image row and return the refreshed instance."""
+    row = SessionInputImage(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def get_session_input_image(
+    session: Session, session_input_image_id: int
+) -> SessionInputImage | None:
+    """Return a session input image by primary key, or ``None`` if not found."""
+    stmt = select(SessionInputImage).where(SessionInputImage.id == session_input_image_id)
+    return session.scalar(stmt)
+
+
+def delete_session_input_image(session: Session, row: SessionInputImage) -> None:
+    """Delete a single session input image row."""
+    session.delete(row)
+    session.commit()
+
+
+def clear_session_input_images(session: Session, chat_session_id: str) -> list[SessionInputImage]:
+    """Delete and return all session input image rows for the given chat session."""
+    rows = list_session_input_images(session, chat_session_id)
+    if not rows:
+        return []
+    for row in rows:
+        session.delete(row)
+    session.commit()
+    return rows
