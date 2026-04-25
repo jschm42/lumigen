@@ -44,8 +44,12 @@ Typical usage
 
 from __future__ import annotations
 
+import io
+import shutil
+import zipfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from json import JSONDecodeError, dumps, loads
 from pathlib import Path
 from typing import Any
 
@@ -228,6 +232,43 @@ def export_all(session: Session) -> dict[str, Any]:
         "profiles": profiles_payload["profiles"],
         "styles": styles_payload["styles"],
     }
+
+
+def export_styles_zip(session: Session, styles_dir: Path) -> bytes:
+    """Export all Styles including their thumbnail images as a Zip archive.
+
+    The archive contains:
+    - styles.json: Metadata for all styles.
+    - images/: Directory containing the .webp thumbnails.
+    """
+    styles = crud.list_styles(session)
+    metadata = _export_metadata()
+    styles_list = []
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for s in styles:
+            style_data = {
+                "name": s.name,
+                "description": s.description,
+                "prompt": s.prompt,
+            }
+
+            if s.image_path:
+                # The image_path in DB is just a flag/path, but we know the naming convention
+                image_name = f"{s.id}.webp"
+                image_path = styles_dir / image_name
+                if image_path.exists():
+                    zip_path = f"images/{image_name}"
+                    zip_file.write(image_path, zip_path)
+                    style_data["image_filename"] = image_name
+
+            styles_list.append(style_data)
+
+        metadata["styles"] = styles_list
+        zip_file.writestr("styles.json", dumps(metadata, indent=2))
+
+    return buffer.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -757,3 +798,102 @@ def import_profiles(
         existing_by_name[name] = object()  # placeholder so rename logic works in dry_run
 
     return result
+
+
+def import_styles_zip(
+    session: Session,
+    zip_file_bytes: bytes,
+    styles_dir: Path,
+    conflict_strategy: str,
+    *,
+    dry_run: bool = False,
+) -> ImportResult:
+    """Import Style records and their thumbnails from a Zip archive.
+
+    Parameters
+    ----------
+    session:
+        Active SQLAlchemy session.
+    zip_file_bytes:
+        The bytes of the uploaded Zip archive.
+    styles_dir:
+        Local directory where style thumbnails are stored.
+    conflict_strategy:
+        One of ``"skip"``, ``"overwrite"``, or ``"rename"``.
+    dry_run:
+        When *True* no database or filesystem changes are committed.
+    """
+    try:
+        buffer = io.BytesIO(zip_file_bytes)
+        with zipfile.ZipFile(buffer, "r") as zip_file:
+            # 1. Read metadata
+            if "styles.json" not in zip_file.namelist():
+                result = ImportResult(entity_type="styles")
+                result.records.append(
+                    RecordResult(name="?", outcome="failed", reason="Zip missing styles.json")
+                )
+                return result
+
+            try:
+                payload = loads(zip_file.read("styles.json").decode("utf-8"))
+            except (JSONDecodeError, UnicodeDecodeError) as exc:
+                result = ImportResult(entity_type="styles")
+                result.records.append(
+                    RecordResult(name="?", outcome="failed", reason=f"Invalid styles.json: {exc}")
+                )
+                return result
+
+            error, _, _, _, styles_records = validate_import_payload(payload)
+            if error:
+                result = ImportResult(entity_type="styles")
+                result.records.append(RecordResult(name="?", outcome="failed", reason=error))
+                return result
+
+            # 2. Import textual metadata
+            import_result = import_styles(
+                session, styles_records, conflict_strategy, dry_run=dry_run
+            )
+
+            if dry_run:
+                return import_result
+
+            # 3. Handle images for successfully imported records
+            for raw, record in zip(styles_records, import_result.records):
+                if record.outcome not in {"created", "updated"}:
+                    continue
+
+                # Find the original record data to see if it had an image
+                if not isinstance(raw, dict):
+                    continue
+
+                image_filename = raw.get("image_filename")
+                if not image_filename:
+                    continue
+
+                # Find the imported style in DB to get its new/existing ID
+                # record.name contains the final name used (which might be different if renamed)
+                style = crud.get_style_by_name(session, record.name)
+                if not style:
+                    continue
+
+                zip_image_path = f"images/{image_filename}"
+                if zip_image_path in zip_file.namelist():
+                    image_data = zip_file.read(zip_image_path)
+                    target_path = (styles_dir / f"{style.id}").with_suffix(".webp")
+                    styles_dir.mkdir(parents=True, exist_ok=True)
+                    target_path.write_bytes(image_data)
+
+                    # Update image_path flag in DB if not already set
+                    if not style.image_path:
+                        crud.update_style(session, style, image_path=target_path.as_posix())
+
+            return import_result
+
+    except zipfile.BadZipFile:
+        result = ImportResult(entity_type="styles")
+        result.records.append(RecordResult(name="?", outcome="failed", reason="Invalid Zip file"))
+        return result
+    except Exception as exc:
+        result = ImportResult(entity_type="styles")
+        result.records.append(RecordResult(name="?", outcome="failed", reason=f"Import error: {exc}"))
+        return result

@@ -69,9 +69,11 @@ from app.services.import_export_service import (
     export_models,
     export_profiles,
     export_styles,
+    export_styles_zip,
     import_models,
     import_profiles,
     import_styles,
+    import_styles_zip,
     validate_import_payload,
 )
 from app.services.model_config_service import ModelConfigService
@@ -2818,6 +2820,56 @@ def admin_export_styles(
     )
 
 
+@app.get("/admin/styles/export-zip")
+def admin_export_styles_zip(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> Response:
+    """Export all styles including thumbnails as a Zip archive."""
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    styles_dir = settings.data_dir / "styles"
+    zip_content = export_styles_zip(session, styles_dir)
+
+    filename = f"lumigen-styles-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.zip"
+    return Response(
+        content=zip_content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/admin/styles/import-zip")
+def admin_import_styles_zip(
+    request: Request,
+    file: UploadFile = File(...),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Import styles and thumbnails from a Zip archive."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    try:
+        content = file.file.read()
+        styles_dir = settings.data_dir / "styles"
+        import_result = import_styles_zip(
+            session, content, styles_dir, conflict_strategy="overwrite"
+        )
+
+        message = (
+            f"Imported {import_result.created} new styles and "
+            f"updated {import_result.updated} existing styles from Zip."
+        )
+        return admin_redirect("styles", message=message)
+    except Exception as exc:
+        return admin_redirect("styles", error=f"Failed to import Zip: {exc}")
+
+
 @app.post("/admin/styles/import")
 def admin_import_styles(
     request: Request,
@@ -3261,7 +3313,7 @@ def admin_export(
     if denied:
         return denied
 
-    valid_types = {"profiles", "models", "styles", "all"}
+    valid_types = {"profiles", "models", "styles", "styles_zip", "all"}
     export_type = (export_type or "all").strip().lower()
     if export_type not in valid_types:
         export_type = "all"
@@ -3269,22 +3321,48 @@ def admin_export(
     if export_type == "profiles":
         payload = export_profiles(session)
         filename = "lumigen-profiles.json"
+        content = json.dumps(payload, indent=2, ensure_ascii=False)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     elif export_type == "models":
         payload = export_models(session)
         filename = "lumigen-models.json"
+        content = json.dumps(payload, indent=2, ensure_ascii=False)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     elif export_type == "styles":
         payload = export_styles(session)
         filename = "lumigen-styles.json"
+        content = json.dumps(payload, indent=2, ensure_ascii=False)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    elif export_type == "styles_zip":
+        styles_dir = settings.data_dir / "styles"
+        zip_content = export_styles_zip(session, styles_dir)
+        filename = f"lumigen-styles-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.zip"
+        return Response(
+            content=zip_content,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     else:
         payload = export_all(session)
         filename = "lumigen-export.json"
-
-    content = json.dumps(payload, indent=2, ensure_ascii=False)
-    return Response(
-        content=content,
-        media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+        content = json.dumps(payload, indent=2, ensure_ascii=False)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
 
 @app.post("/admin/import")
