@@ -16,12 +16,13 @@ from typing import Any
 
 from fastapi import BackgroundTasks
 from PIL import Image, ImageOps
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import crud
 from app.db.engine import SessionLocal
-from app.db.models import Asset, Generation, Profile
+from app.db.models import Asset, Generation, ModelConfig, Profile, Style
 from app.providers.base import (
     ProviderError,
     ProviderGenerationRequest,
@@ -211,6 +212,57 @@ class GenerationService:
             storage_template_snapshot_json=storage_snapshot,
             request_snapshot_json=request_snapshot,
             failure_sidecar_path=None,
+        )
+        return crud.create_generation(session, generation)
+
+    def create_generation_for_style(
+        self,
+        session: Session,
+        style: Style,
+        model_config: ModelConfig,
+        prompt: str,
+    ) -> Generation:
+        """Create a generation job specifically for a style thumbnail."""
+        from app.db.models import StorageTemplate
+        storage_template = session.scalar(select(StorageTemplate).limit(1))
+        if not storage_template:
+             from app.config import settings
+             storage_template = crud.ensure_default_storage_template(
+                 session, settings.data_dir / "generations", "{idx}_{prompt}.{ext}"
+             )
+
+        request_snapshot = {
+            "prompt_user": prompt,
+            "prompt_final": prompt,
+            "width": 1024,
+            "height": 1024,
+            "n_images": 1,
+            "seed": None,
+            "output_format": "webp",
+            "provider": model_config.provider,
+            "model": model_config.model,
+            "model_config_id": model_config.id,
+            "params_json": {},
+            "is_style_generation": True,
+            "style_id": style.id,
+        }
+
+        generation = Generation(
+            profile_id=None,
+            profile_name=f"Style: {style.name}",
+            prompt_user=prompt,
+            prompt_final=prompt,
+            provider=model_config.provider,
+            model=model_config.model,
+            status="queued",
+            profile_snapshot_json={},
+            storage_template_snapshot_json={
+                "id": storage_template.id,
+                "name": storage_template.name,
+                "base_dir": Path(storage_template.base_dir).resolve().as_posix(),
+                "template": storage_template.template,
+            },
+            request_snapshot_json=request_snapshot,
         )
         return crud.create_generation(session, generation)
 
@@ -431,6 +483,19 @@ class GenerationService:
                     )
                     self.storage_service.write_bytes_atomic(abs_path, image_data)
                     created_files.append(rel_path.as_posix())
+
+                    # If this is a style generation, copy to style path
+                    if idx == 1 and generation.request_snapshot_json.get("is_style_generation"):
+                        style_id = generation.request_snapshot_json.get("style_id")
+                        if style_id:
+                            style = crud.get_style(session, style_id)
+                            if style:
+                                style_dir = self.settings.data_dir / "styles"
+                                ensure_dir(style_dir)
+                                style_image_path = style_dir / f"{style_id}.webp"
+                                # We can reuse image_data directly or write from file
+                                self.storage_service.write_bytes_atomic(style_image_path, image_data)
+                                crud.update_style(session, style, image_path=f"styles/{style_id}.webp")
 
                     thumb_rel = self.thumbnail_service.create_thumbnail(
                         base_dir, rel_path

@@ -2177,7 +2177,11 @@ def admin_page(
 
     # Load only section-relevant data so unrelated admin sections do not require
     # every DB query (important for lightweight/fake sessions in tests).
-    model_configs = crud.list_model_configs(session) if active_admin_section == "models" else []
+    model_configs = (
+        crud.list_model_configs(session)
+        if active_admin_section in {"models", "styles"}
+        else []
+    )
     dimension_presets = (
         crud.list_dimension_presets(session)
         if active_admin_section == "dimensions"
@@ -2787,6 +2791,162 @@ def admin_delete_style(
 
     crud.delete_style(session, style)
     return admin_redirect("styles", message="Deleted")
+
+
+@app.get("/admin/styles/export")
+def admin_export_styles(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Export all styles as a JSON file."""
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+    styles = crud.list_styles(session)
+    export_data = [
+        {
+            "name": s.name,
+            "description": s.description,
+            "prompt": s.prompt,
+        }
+        for s in styles
+    ]
+    filename = f"lumigen-styles-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.json"
+    return JSONResponse(
+        content=export_data,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.post("/admin/styles/import")
+def admin_import_styles(
+    request: Request,
+    file: UploadFile = File(...),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Import styles from a JSON file."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    try:
+        content = file.file.read()
+        data = json.loads(content)
+        if not isinstance(data, list):
+            raise ValueError("Import data must be a JSON list of styles")
+
+        count_updated = 0
+        count_created = 0
+
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip()
+            if not name:
+                continue
+
+            description = str(item.get("description", "")).strip()
+            prompt = str(item.get("prompt", "")).strip()
+
+            name_val = normalize_style_name(name)
+            desc_val = normalize_style_description(description)
+            prompt_val = normalize_style_prompt(prompt)
+
+            existing = crud.get_style_by_name(session, name_val)
+            if existing:
+                crud.update_style(
+                    session,
+                    existing,
+                    description=desc_val,
+                    prompt=prompt_val,
+                )
+                count_updated += 1
+            else:
+                crud.create_style(
+                    session,
+                    name=name_val,
+                    description=desc_val,
+                    prompt=prompt_val,
+                )
+                count_created += 1
+
+        message = f"Imported {count_created} new styles and updated {count_updated} existing styles."
+        return admin_redirect("styles", message=message)
+    except (ValueError, json.JSONDecodeError) as exc:
+        return admin_redirect("styles", error=f"Failed to import styles: {exc}")
+
+
+@app.post("/admin/styles/{style_id}/generate-image")
+def admin_generate_style_image(
+    request: Request,
+    style_id: int,
+    background_tasks: BackgroundTasks,
+    model_config_id: int = Form(...),
+    prompt: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Trigger a generation job for a style thumbnail."""
+    validate_csrf_or_raise(request, csrf_token)
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    style = crud.get_style(session, style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    model_config = crud.get_model_config(session, model_config_id)
+    if not model_config:
+        raise HTTPException(status_code=404, detail="Model configuration not found")
+
+    generation = generation_service.create_generation_for_style(
+        session, style, model_config, (prompt or style.prompt).strip()
+    )
+    generation_service.enqueue(background_tasks, generation.id)
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/admin_style_generation_status.html",
+        {
+            "request": request,
+            "generation": generation,
+            "style": style,
+            "model_configs": crud.list_model_configs(session),
+        },
+    )
+
+
+@app.get("/admin/styles/generation-status/{generation_id}")
+def admin_style_generation_status(
+    request: Request,
+    generation_id: int,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Check status of a style generation job."""
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return denied
+
+    generation = crud.get_generation(session, generation_id)
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+
+    style_id = generation.request_snapshot_json.get("style_id")
+    style = crud.get_style(session, style_id) if style_id else None
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/admin_style_generation_status.html",
+        {
+            "request": request,
+            "generation": generation,
+            "style": style,
+            "model_configs": crud.list_model_configs(session),
+        },
+    )
 
 
 @app.post("/admin/model-configs")

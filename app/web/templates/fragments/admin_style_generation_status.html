@@ -1,0 +1,55 @@
+<div id="style-generation-status-{{ generation.id }}"
+     {% if generation.status in ['queued', 'running'] %}
+     hx-get="/admin/styles/generation-status/{{ generation.id }}"
+     hx-trigger="every 2s"
+     hx-swap="outerHTML"
+     {% endif %}
+     class="space-y-4">
+
+  <div class="flex items-center gap-3">
+    {% if generation.status == 'queued' %}
+      <div class="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-sky-500"></div>
+      <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Queued...</span>
+    {% elif generation.status == 'running' %}
+      <div class="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-sky-500"></div>
+      <span class="text-sm font-medium text-sky-600 dark:text-sky-400">Generating image...</span>
+    {% elif generation.status == 'succeeded' %}
+      <div class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <span class="text-sm font-medium text-emerald-600 dark:text-emerald-400">Success!</span>
+    {% elif generation.status == 'failed' %}
+      <div class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
+        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+      </div>
+      <span class="text-sm font-medium text-rose-600 dark:text-rose-400">Failed</span>
+    {% elif generation.status == 'cancelled' %}
+      <span class="text-sm font-medium text-slate-500">Cancelled</span>
+    {% endif %}
+  </div>
+
+  {% if generation.status == 'succeeded' and style %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/5">
+      <p class="text-xs text-emerald-700 dark:text-emerald-300 mb-2">Thumbnail updated:</p>
+      <img src="/admin/styles/{{ style.id }}/image?t={{ generation.finished_at.timestamp() }}"
+           alt="New thumbnail"
+           class="h-32 w-32 rounded-lg object-cover shadow-sm border border-white/20">
+      <p class="mt-3 text-xs text-slate-500">You can close this dialog now. Refresh the Styles list to see the update in the table.</p>
+    </div>
+  {% elif generation.status == 'failed' %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50/50 p-3 dark:border-rose-500/20 dark:bg-rose-500/5">
+      <p class="text-xs text-rose-700 dark:text-rose-300 font-semibold mb-1">Error:</p>
+      <p class="text-xs text-rose-600 dark:text-rose-400">{{ generation.error or 'Unknown error' }}</p>
+    </div>
+  {% endif %}
+
+  {% if generation.status in ['succeeded', 'failed', 'cancelled'] %}
+    <div class="flex justify-end">
+      <button type="button"
+              class="inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10"
+              onclick="this.closest('dialog').close(); window.location.reload();">
+        Close & Refresh
+      </button>
+    </div>
+  {% endif %}
+</div>

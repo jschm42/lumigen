@@ -521,6 +521,12 @@ def get_style(session: Session, style_id: int) -> Style | None:
     return session.scalar(stmt)
 
 
+def get_style_by_name(session: Session, name: str) -> Style | None:
+    """Return a style by name, or ``None`` if not found."""
+    stmt = select(Style).where(Style.name == name)
+    return session.scalar(stmt)
+
+
 def get_styles_by_ids(session: Session, style_ids: list[int]) -> list[Style]:
     """Return the styles whose IDs are in *style_ids*, ordered by name."""
     if not style_ids:

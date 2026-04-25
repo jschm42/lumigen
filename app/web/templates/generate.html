@@ -469,7 +469,7 @@
         aria-pressed="false"
       >
         {% if style.image_path %}
-          <img src="/admin/styles/{{ style.id }}/image" alt="{{ style.name }}" class="h-16 w-16 rounded-lg object-cover border border-slate-300/50 dark:border-white/10">
+          <img src="/admin/styles/{{ style.id }}/image?t={{ style.updated_at.timestamp() }}" alt="{{ style.name }}" class="h-16 w-16 rounded-lg object-cover border border-slate-300/50 dark:border-white/10">
         {% else %}
           <div class="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300/60 bg-slate-100 dark:border-white/15 dark:bg-white/5">
             <i class="bi bi-stars text-2xl text-slate-400 dark:text-slate-500" aria-hidden="true"></i>
