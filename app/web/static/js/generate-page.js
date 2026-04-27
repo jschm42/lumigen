@@ -550,6 +550,88 @@
     });
   }
 
+  // ---- Prompt Enhancement ----
+
+  window.closeEnhancementPreview = function() {
+    var dialog = document.getElementById('enhancement-preview-dialog');
+    if (dialog) dialog.close();
+  };
+
+  window.applyEnhancedPrompt = function() {
+    var resultArea = document.getElementById('enhanced-prompt-result');
+    var promptInput = document.getElementById('prompt_user');
+    if (resultArea && promptInput) {
+      promptInput.value = resultArea.value;
+      // Trigger auto-resize if any
+      promptInput.dispatchEvent(new Event('input'));
+    }
+    window.closeEnhancementPreview();
+  };
+
+  var enhanceBtn = document.querySelector('[data-enhance-prompt]');
+  if (enhanceBtn) {
+    enhanceBtn.addEventListener('click', function() {
+      var promptInput = document.getElementById('prompt_user');
+      var profileSelect = document.getElementById('profile_id');
+      var dialog = document.getElementById('enhancement-preview-dialog');
+      var content = document.getElementById('enhancement-preview-content');
+
+      if (!promptInput || !promptInput.value.trim()) {
+        alert("Please enter a prompt first.");
+        return;
+      }
+      if (!dialog || !content) return;
+
+      // Show loader
+      content.innerHTML = 
+        '<div class="flex flex-col items-center justify-center py-12">' +
+            '<div class="h-8 w-8 animate-spin rounded-full border-4 border-sky-300 border-t-transparent"></div>' +
+            '<p class="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">Enhancing prompt...</p>' +
+        '</div>';
+      
+      dialog.showModal();
+
+      var profileId = profileSelect ? profileSelect.value : null;
+
+      if (!profileId || profileId === "" || profileId === "null") {
+        alert("Please select a profile first to enhance the prompt for that specific model.");
+        dialog.close();
+        return;
+      }
+      
+      var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
+
+      var formData = new FormData();
+      formData.append('prompt', promptInput.value);
+      formData.append('profile_id', profileId);
+
+      fetch('/api/enhance-prompt', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken
+        },
+        body: formData
+      })
+      .then(function(response) {
+        if (!response.ok) return response.text().then(function(text) { throw new Error(text || 'Failed to enhance prompt'); });
+        return response.text();
+      })
+      .then(function(html) {
+        content.innerHTML = html;
+        if (window.htmx) htmx.process(content);
+      })
+      .catch(function(err) {
+        content.innerHTML = 
+          '<div class="p-6 text-center">' +
+            '<h4 class="text-lg font-semibold text-rose-500 mb-2">Enhancement Failed</h4>' +
+            '<p class="text-sm text-slate-600 dark:text-slate-400 mb-6">' + escapeHtml(err.message) + '</p>' +
+            '<button type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-0 dark:bg-white/10 dark:text-slate-100" onclick="closeEnhancementPreview()">Close</button>' +
+          '</div>';
+      });
+    });
+  }
+
   initStylesPicker();
   renderSelectedStyles(false);
 

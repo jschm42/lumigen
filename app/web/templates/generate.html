@@ -452,6 +452,16 @@
   </article>
 </dialog>
 
+<dialog id="enhancement-preview-dialog" class="w-[min(92vw,40rem)] rounded-3xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-950/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
+  <div id="enhancement-preview-content" class="p-5 sm:p-7">
+    <!-- Content loaded via HTMX -->
+    <div class="flex flex-col items-center justify-center py-12">
+        <div class="h-8 w-8 animate-spin rounded-full border-4 border-sky-300 border-t-transparent"></div>
+        <p class="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">Enhancing prompt...</p>
+    </div>
+  </div>
+</dialog>
+
 {% if styles %}
 <dialog id="styles-picker-dialog" class="w-full max-w-2xl rounded-2xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
   <article class="rounded-2xl p-5 sm:p-6">

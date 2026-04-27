@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import secrets
+import difflib
 import uuid
 import zipfile
 from collections.abc import AsyncIterator
@@ -1820,6 +1821,93 @@ def generate_submit(
         status_code=303,
     )
 
+def _generate_text_diff(old_text: str, new_text: str) -> str:
+    """Generate a simple HTML diff between two strings."""
+    # Split into words to get a more granular diff than line-by-line
+    old_words = old_text.split()
+    new_words = new_text.split()
+    
+    matcher = difflib.SequenceMatcher(None, old_words, new_words)
+    output = []
+    
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            output.append(" ".join(old_words[i1:i2]))
+        elif tag == 'insert':
+            output.append(f'<span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-0.5 rounded">{" ".join(new_words[j1:j2])}</span>')
+        elif tag == 'delete':
+            output.append(f'<span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-0.5 rounded line-through">{" ".join(old_words[i1:i2])}</span>')
+        elif tag == 'replace':
+            output.append(f'<span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-0.5 rounded line-through">{" ".join(old_words[i1:i2])}</span>')
+            output.append(f'<span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-0.5 rounded">{" ".join(new_words[j1:j2])}</span>')
+            
+    return " ".join(output)
+
+
+@app.post("/api/enhance-prompt", response_class=HTMLResponse)
+async def api_enhance_prompt(
+    request: Request,
+    prompt: str = Form(...),
+    profile_id: str = Form(default=""),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Enhance the user prompt using the configured LLM and return a preview fragment."""
+    if not profile_id or profile_id == "null":
+        return HTMLResponse(
+            content='<div class="p-4 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50">Please select a profile first.</div>',
+            status_code=200
+        )
+
+    try:
+        p_id = int(profile_id)
+    except ValueError:
+        return HTMLResponse(
+            content='<div class="p-4 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">Invalid profile ID.</div>',
+            status_code=200
+        )
+
+    profile = crud.get_profile(session, p_id)
+    if not profile:
+        return HTMLResponse(
+            content='<div class="p-4 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">Profile not found.</div>',
+            status_code=200
+        )
+
+    target_model = profile.model
+    target_provider = profile.provider
+    model_specific_prompt = profile.model_config.enhancement_prompt if profile.model_config else None
+
+    try:
+        result = await enhancement_service.enhance(
+            prompt=prompt,
+            model_specific_prompt=model_specific_prompt,
+            target_model=target_model,
+            target_provider=target_provider
+        )
+        enhanced_prompt = result.get("enhanced_prompt", prompt)
+        explanation = result.get("explanation", "Improved descriptive details.")
+        
+        diff_html = _generate_text_diff(prompt, enhanced_prompt)
+        
+        return templates.TemplateResponse(
+            request,
+            "fragments/enhancement_preview.html",
+            {
+                "request": request,
+                "original_prompt": prompt,
+                "enhanced_prompt": enhanced_prompt,
+                "explanation": explanation,
+                "diff_html": diff_html,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Prompt enhancement failed: {e}")
+        return HTMLResponse(
+            content=f'<div class="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg border border-red-100 dark:border-red-900/30">Enhancement failed: {str(e)}</div>',
+            status_code=200 # Return 200 so HTMX doesn't just error out silently if we want to show the message
+        )
+
+
 
 @app.post("/sessions/rename")
 def rename_chat_session(
@@ -3141,6 +3229,7 @@ def admin_update_enhancement(
     model: str = Form(...),
     api_key: str = Form(default=""),
     clear_api_key: bool = Form(default=False),
+    default_enhancement_prompt: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -3148,10 +3237,14 @@ def admin_update_enhancement(
     denied = require_admin_or_redirect(request)
     if denied:
         return denied
+    print(f"DEBUG: admin_update_enhancement called")
+    print(f"DEBUG: provider={provider}")
+    print(f"DEBUG: model={model}")
+    print(f"DEBUG: default_enhancement_prompt='{default_enhancement_prompt}'")
+    
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
         raise HTTPException(status_code=404, detail="Unsupported provider")
-
     try:
         existing = crud.get_enhancement_config(session)
         api_key_encrypted = existing.api_key_encrypted if existing else None
@@ -3162,11 +3255,13 @@ def admin_update_enhancement(
             if api_key_value:
                 api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
 
+        print(f"DEBUG: calling upsert_enhancement_config with prompt='{default_enhancement_prompt.strip() or None}'")
         crud.upsert_enhancement_config(
             session,
             provider=provider,
             model=model.strip(),
             api_key_encrypted=api_key_encrypted,
+            default_enhancement_prompt=default_enhancement_prompt.strip() or None,
         )
     except (ValueError, IntegrityError) as exc:
         return admin_redirect("enhancement", error=str(exc))
