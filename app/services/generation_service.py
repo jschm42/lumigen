@@ -538,6 +538,12 @@ class GenerationService:
                     )
 
                 self._raise_if_cancelled(session, generation_id)
+
+                # Final check: refresh and ensure not cancelled before committing success
+                session.refresh(generation)
+                if generation.status == "cancelled":
+                    raise GenerationCancelledError("Canceled by user during finalization.")
+
                 generation.status = "succeeded"
                 generation.error = None
                 generation.failure_sidecar_path = None
@@ -563,7 +569,7 @@ class GenerationService:
             except Exception as exc:
                 session.rollback()
                 generation = crud.get_generation(session, generation_id)
-                if not generation:
+                if not generation or generation.status == "cancelled":
                     return
 
                 for rel in reversed(created_files):

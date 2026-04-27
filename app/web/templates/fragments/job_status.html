@@ -36,6 +36,7 @@
             hx-target="closest .job-box"
             hx-swap="morph:outerHTML"
             class="inline-flex">
+        {{ csrf_input }}
         <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10">Cancel</button>
       </form>
     {% elif generation.status in ['failed', 'cancelled'] %}
@@ -45,6 +46,7 @@
             hx-target="closest .job-box"
             hx-swap="morph:outerHTML"
             class="inline-flex">
+        {{ csrf_input }}
         <input type="hidden" name="profile_id" value="" data-retry-profile-id>
         <button type="submit" class="inline-flex items-center gap-1.5 justify-center rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Retry</button>
       </form>
