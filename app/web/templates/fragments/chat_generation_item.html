@@ -21,7 +21,8 @@
 {% set ratio_value = '' %}
 
 {% if provider_value == 'openrouter' %}
-  {% set ratio_value = (params_json.get('aspect_ratio') or '')|string|trim %}
+  {# OpenRouter stores aspect_ratio inside image_config #}
+  {% set ratio_value = (image_config.get('aspect_ratio') or params_json.get('aspect_ratio') or '')|string|trim %}
 {% elif provider_value == 'fal' %}
   {% set ratio_value = (params_json.get('fal_aspect_ratio') or '')|string|trim %}
   {% if ratio_value == 'auto' %}
@@ -29,6 +30,9 @@
   {% endif %}
 {% elif provider_value == 'google' %}
   {% set ratio_value = (image_config.get('aspect_ratio') or '')|string|trim %}
+{% else %}
+  {# Generic fallback for other providers #}
+  {% set ratio_value = (image_config.get('aspect_ratio') or params_json.get('aspect_ratio') or snapshot.get('aspect_ratio') or '')|string|trim %}
 {% endif %}
 
 {% set panel_aspect_ratio = '1 / 1' %}
@@ -43,6 +47,15 @@
   {% endif %}
 {% elif ratio_value and '/' in ratio_value %}
   {% set ratio_parts = ratio_value.split('/') %}
+  {% if ratio_parts|length == 2 %}
+    {% set ratio_w = ratio_parts[0]|float %}
+    {% set ratio_h = ratio_parts[1]|float %}
+    {% if ratio_w > 0 and ratio_h > 0 %}
+      {% set panel_aspect_ratio = (ratio_w|string) ~ ' / ' ~ (ratio_h|string) %}
+    {% endif %}
+  {% endif %}
+{% elif ratio_value and 'x' in ratio_value %}
+  {% set ratio_parts = ratio_value.split('x') %}
   {% if ratio_parts|length == 2 %}
     {% set ratio_w = ratio_parts[0]|float %}
     {% set ratio_h = ratio_parts[1]|float %}
