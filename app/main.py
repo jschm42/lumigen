@@ -1416,32 +1416,54 @@ def _delete_temp_session_input_files(row) -> None:
 
 
 @app.get("/workspace/profiles", response_class=HTMLResponse)
-def workspace_profiles_fragment(request: Request) -> HTMLResponse:
+def workspace_profiles_fragment(
+    request: Request,
+    create: bool = Query(default=False),
+    edit_id: int | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
     """Return the embedded profiles workspace fragment."""
-    return templates.TemplateResponse(
-        request,
-        "fragments/workspace_iframe.html",
-        {
-            "request": request,
-            "title": "Profiles",
-            "workspace_src": "/profiles?embedded=1",
-            "fallback_href": "/profiles",
-        },
+    return profiles_page(
+        request, create=create, edit_id=edit_id, error=error, session=session
     )
 
 
 @app.get("/workspace/gallery", response_class=HTMLResponse)
-def workspace_gallery_fragment(request: Request) -> HTMLResponse:
+def workspace_gallery_fragment(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    profile_name: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    category_ids: list[int] = Query(default=[]),
+    min_rating: str | None = Query(default=None),
+    unrated: bool = Query(default=False),
+    time_preset: str | None = Query(default="today"),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    thumb_size: str | None = Query(default="md"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
     """Return the embedded gallery workspace fragment."""
-    return templates.TemplateResponse(
+    return gallery_page(
         request,
-        "fragments/workspace_iframe.html",
-        {
-            "request": request,
-            "title": "Gallery",
-            "workspace_src": "/gallery?embedded=1",
-            "fallback_href": "/gallery",
-        },
+        page=page,
+        profile_name=profile_name,
+        provider=provider,
+        q=q,
+        category_ids=category_ids,
+        min_rating=min_rating,
+        unrated=unrated,
+        time_preset=time_preset,
+        date_from=date_from,
+        date_to=date_to,
+        thumb_size=thumb_size,
+        message=message,
+        error=error,
+        session=session,
     )
 
 
@@ -1449,25 +1471,17 @@ def workspace_gallery_fragment(request: Request) -> HTMLResponse:
 def workspace_admin_fragment(
     request: Request,
     section: str | None = Query(default="models"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
 ) -> HTMLResponse:
     """Return the embedded admin workspace fragment for the active section."""
-    denied = require_admin_or_redirect(request)
-    if denied:
-        return denied
-
-    section_value = normalize_admin_section(section)
-    embedded_src = f"/admin?{urlencode({'section': section_value, 'embedded': '1'})}"
-    fallback_href = f"/admin?{urlencode({'section': section_value})}"
-
-    return templates.TemplateResponse(
+    return admin_page(
         request,
-        "fragments/workspace_iframe.html",
-        {
-            "request": request,
-            "title": "Admin",
-            "workspace_src": embedded_src,
-            "fallback_href": fallback_href,
-        },
+        section=section,
+        message=message,
+        error=error,
+        session=session,
     )
 
 
@@ -2349,6 +2363,11 @@ def admin_page(
             "fal_model_draft_enabled": draft_enabled,
         }
 
+    is_htmx_req = is_htmx(request)
+    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
+    layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
+
     return templates.TemplateResponse(
         request,
         "admin.html",
@@ -2370,6 +2389,7 @@ def admin_page(
             "onboarding_reset_enabled": settings.auth_allow_onboarding_reset,
             "provider_api_key_info": provider_api_key_info,
             "upscaling_info": upscaling_info,
+            "layout_template": layout,
         },
     )
 
@@ -3920,6 +3940,11 @@ def profiles_page(
         open_edit_id = edit_id
     fal_key = model_config_service.get_default_api_key("fal")
 
+    is_htmx_req = is_htmx(request)
+    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
+    layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
+
     return templates.TemplateResponse(
         request,
         "profiles.html",
@@ -3940,6 +3965,7 @@ def profiles_page(
             "error": error,
             "open_create_dialog": create,
             "open_edit_id": open_edit_id,
+            "layout_template": layout,
         },
     )
 
@@ -4362,6 +4388,10 @@ def gallery_page(
 
     parsed_date_from = filters["parsed_date_from"]
     parsed_date_to = filters["parsed_date_to"]
+    is_htmx_req = is_htmx(request)
+    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
+    layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
 
     return templates.TemplateResponse(
         request,
@@ -4385,6 +4415,7 @@ def gallery_page(
             "message": message or "",
             "error": error or "",
             "hide_header": True,
+            "layout_template": layout,
         },
     )
 
