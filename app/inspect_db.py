@@ -7,12 +7,13 @@ if not db_path.exists():
 else:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(enhancement_configs)")
-    columns = cursor.fetchall()
-    for col in columns:
-        print(col)
-    
-    cursor.execute("SELECT * FROM enhancement_configs")
-    rows = cursor.fetchall()
-    print(f"Rows: {rows}")
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = cursor.fetchall()
+    for table_name_tuple in tables:
+        table_name = table_name_tuple[0]
+        print(f"\nTable: {table_name}")
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = cursor.fetchall()
+        for col in columns:
+            print(f"  {col}")
     conn.close()
