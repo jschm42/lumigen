@@ -959,7 +959,7 @@ def list_generations_for_session_token(
     db: Session, session_token: str
 ) -> list[Generation]:
     token = (session_token or "").strip()
-    if not token or token in {"all", "new"}:
+    if not token or token == "new":
         return []
     candidates = list(
         db.scalars(
@@ -1222,13 +1222,13 @@ def generate_page(
 
     active_conversation = (conversation or "").strip()
     if active_conversation:
-        if active_conversation not in {"all", "new"} and active_conversation not in all_session_tokens:
+        if active_conversation != "new" and active_conversation not in all_session_tokens:
             active_conversation = ""
     if not active_conversation:
         active_conversation = all_sessions[0]["token"] if all_sessions else "new"
 
     effective_session_offset = session_offset
-    if active_conversation not in {"", "all", "new"}:
+    if active_conversation not in {"", "new"}:
         active_index = next(
             (idx for idx, item in enumerate(all_sessions) if item["token"] == active_conversation),
             -1,
@@ -1268,31 +1268,14 @@ def generate_page(
         )
         fal_upscale_ready = bool(model_config_service.get_default_api_key("fal"))
 
-        if active_conversation not in {"all", "new"}:
+        if active_conversation != "new":
             chat_session_prefs = crud.get_chat_session(session, active_conversation)
             if chat_session_prefs:
                 last_profile_id = chat_session_prefs.last_profile_id
                 last_thumb_size = chat_session_prefs.last_thumb_size or "md"
                 last_selected_style_ids = chat_session_prefs.selected_style_ids or ""
 
-        if active_conversation == "all":
-            recent_generations = list(
-                session.scalars(
-                    select(Generation)
-                    .options(selectinload(Generation.assets))
-                    .order_by(Generation.created_at.desc(), Generation.id.desc())
-                    .limit(250)
-                ).all()
-            )
-            recent_generations.reverse()
-            conversation_generations = [
-                generation
-                for generation in recent_generations
-                if not generation_chat_hidden(generation)
-                and not generation_session_archived(generation)
-                and not generation_chat_deleted(generation)
-            ]
-        elif active_conversation == "new":
+        if active_conversation == "new":
             conversation_generations = []
         else:
             conversation_generations = [
@@ -1519,7 +1502,7 @@ def generate_submit(
     try:
         overrides: dict[str, Any] = {}
         conversation_value = (conversation or "").strip()
-        if not conversation_value or conversation_value in {"new", "all"}:
+        if not conversation_value or conversation_value == "new":
             resolved_conversation = build_chat_session_token()
         else:
             resolved_conversation = conversation_value

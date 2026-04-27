@@ -20,9 +20,6 @@
     </div>
 
     <div class="subtle-scrollbar mt-4 hidden min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 lg:block" id="session-list">
-      <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white{% endif %}">
-        All Sessions
-      </a>
       {% set session_prev_category = '' %}
       {% set session_next_offset = session_offset + (session_items | length) %}
       {% set session_next_prev_category = session_items[-1].time_category if session_items else '' %}
@@ -40,14 +37,16 @@
          class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
          hx-get="/workspace/profiles" 
          hx-target="#workspace-content" 
-         hx-swap="innerHTML">Profiles</a>
-      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" 
+         hx-swap="innerHTML"
+         hx-push-url="true">Profiles</a>
+      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}&thumb_size={{ last_thumb_size }}" 
          data-workspace-nav 
          data-workspace-view="gallery" 
          class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
-         hx-get="/workspace/gallery" 
+         hx-get="/workspace/gallery?thumb_size={{ last_thumb_size }}" 
          hx-target="#workspace-content" 
-         hx-swap="innerHTML">Gallery</a>
+         hx-swap="innerHTML"
+         hx-push-url="true">Gallery</a>
       {% if request.session.get('user_role') == 'admin' %}
       <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" 
          data-workspace-nav 
@@ -55,7 +54,8 @@
          class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
          hx-get="/workspace/admin" 
          hx-target="#workspace-content" 
-         hx-swap="innerHTML">Admin</a>
+         hx-swap="innerHTML"
+         hx-push-url="true">Admin</a>
       {% endif %}
       <details class="relative mt-2" data-user-menu-container>
         <summary
