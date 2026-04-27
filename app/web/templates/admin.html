@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends layout_template if layout_template is defined else "layout.html" %}
 {% block content %}
 {% set panel_class = "p-5 sm:p-7" %}
 {% set input_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
@@ -10,9 +10,10 @@
 {% set nav_tab_base = "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold transition" %}
 {% set nav_tab_active = "bg-sky-300 text-slate-950" %}
 {% set nav_tab_inactive = "border border-slate-300/75 bg-white text-slate-700 hover:border-sky-400/60 hover:bg-sky-50 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:bg-white/10 dark:hover:text-white" %}
-{% set embedded_suffix = "&embedded=1" if request.query_params.get("embedded") == "1" else "" %}
+{% set is_embedded = request.query_params.get("embedded") == "1" or request.headers.get("HX-Request") == "true" %}
+{% set htmx_attr = 'hx-boost="true" hx-target="#workspace-content" hx-push-url="true"' if is_embedded else "" %}
 
-<section class="{{ panel_class }} space-y-5" data-admin-page>
+<section class="{{ panel_class }} space-y-5" data-admin-page {{ htmx_attr | safe }}>
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Admin</h2>
@@ -35,16 +36,16 @@
   {% endif %}
 
   <nav class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-300/70 bg-white/80 p-2 dark:border-white/10 dark:bg-slate-950/35" aria-label="Admin sections">
-    <a href="/admin?section=models{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'models' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Models</a>
-    <a href="/admin?section=dimensions{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
-    <a href="/admin?section=categories{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
-    <a href="/admin?section=styles{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'styles' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Styles</a>
-    <a href="/admin?section=enhancement{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'enhancement' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancement LLM</a>
-    <a href="/admin?section=upscaling{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'upscaling' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Upscaling</a>
-    <a href="/admin?section=apikeys{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'apikeys' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">API Keys</a>
-    <a href="/admin?section=users{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'users' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Users</a>
-    <a href="/admin?section=transfer{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'transfer' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Transfer</a>
-    <a href="/admin?section=about{{ embedded_suffix }}" class="{{ nav_tab_base }} {% if active_admin_section == 'about' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">About</a>
+    <a href="/admin?section=models&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'models' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Models</a>
+    <a href="/admin?section=dimensions&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'dimensions' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Dimensions</a>
+    <a href="/admin?section=categories&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'categories' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Categories</a>
+    <a href="/admin?section=styles&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'styles' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Styles</a>
+    <a href="/admin?section=enhancement&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'enhancement' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Enhancement LLM</a>
+    <a href="/admin?section=upscaling&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'upscaling' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Upscaling</a>
+    <a href="/admin?section=apikeys&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'apikeys' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">API Keys</a>
+    <a href="/admin?section=users&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'users' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Users</a>
+    <a href="/admin?section=transfer&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'transfer' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">Transfer</a>
+    <a href="/admin?section=about&embedded=1" class="{{ nav_tab_base }} {% if active_admin_section == 'about' %}{{ nav_tab_active }}{% else %}{{ nav_tab_inactive }}{% endif %}">About</a>
   </nav>
 
   {% if active_admin_section == "models" %}
@@ -63,6 +64,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-model-config-dialog').close()">&times;</button>
         </header>
         <form action="/admin/model-configs" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="new-model-name" class="{{ label_class }}">Name</label>
             <input id="new-model-name" type="text" name="name" maxlength="50" required class="{{ input_class }}">
@@ -131,6 +133,7 @@
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-model-config-{{ config.id }}').showModal()">Edit</button>
                 <form action="/admin/model-configs/{{ config.id }}/delete" method="post" data-confirm-message="Delete this model config?" class="inline-flex">
+                  <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -156,6 +159,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-model-config-{{ config.id }}').close()">&times;</button>
         </header>
         <form action="/admin/model-configs/{{ config.id }}/update" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="edit-model-name-{{ config.id }}" class="{{ label_class }}">Name</label>
             <input id="edit-model-name-{{ config.id }}" type="text" name="name" value="{{ config.name }}" maxlength="50" required class="{{ input_class }}">
@@ -223,6 +227,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-dimension-preset-dialog').close()">&times;</button>
         </header>
         <form action="/admin/dimension-presets" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="new-dimension-name" class="{{ label_class }}">Name</label>
             <input id="new-dimension-name" type="text" name="name" required class="{{ input_class }}">
@@ -266,6 +271,7 @@
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').showModal()">Edit</button>
                 <form action="/admin/dimension-presets/{{ preset.id }}/delete" method="post" data-confirm-message="Delete this dimension preset?" class="inline-flex">
+                  <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -291,6 +297,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-dimension-preset-{{ preset.id }}').close()">&times;</button>
         </header>
         <form action="/admin/dimension-presets/{{ preset.id }}/update" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="edit-dimension-name-{{ preset.id }}" class="{{ label_class }}">Name</label>
             <input id="edit-dimension-name-{{ preset.id }}" type="text" name="name" value="{{ preset.name }}" required class="{{ input_class }}">
@@ -330,6 +337,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-category-dialog').close()">&times;</button>
         </header>
         <form action="/admin/categories" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="new-category-name" class="{{ label_class }}">Name</label>
             <input id="new-category-name" type="text" name="name" required maxlength="30" placeholder="Max 30 chars" class="{{ input_class }}">
@@ -357,6 +365,7 @@
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-category-{{ category.id }}').showModal()">Edit</button>
                 <form action="/admin/categories/{{ category.id }}/delete" method="post" data-confirm-message="Delete this category?" class="inline-flex">
+                  <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -382,6 +391,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-category-{{ category.id }}').close()">&times;</button>
         </header>
         <form action="/admin/categories/{{ category.id }}/update" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="edit-category-name-{{ category.id }}" class="{{ label_class }}">Name</label>
             <input id="edit-category-name-{{ category.id }}" type="text" name="name" value="{{ category.name }}" required maxlength="30" class="{{ input_class }}">
@@ -460,6 +470,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-style-dialog').close()">&times;</button>
         </header>
         <form action="/admin/styles" method="post" enctype="multipart/form-data" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="new-style-name" class="{{ label_class }}">Name</label>
             <input id="new-style-name" type="text" name="name" required maxlength="30" placeholder="Max 30 chars" class="{{ input_class }}">
@@ -509,6 +520,7 @@
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-style-{{ style.id }}').showModal()">Edit</button>
                 <form action="/admin/styles/{{ style.id }}/delete" method="post" data-confirm-message="Delete this style?" class="inline-flex">
+                  <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -534,6 +546,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-style-{{ style.id }}').close()">&times;</button>
         </header>
         <form action="/admin/styles/{{ style.id }}/update" method="post" enctype="multipart/form-data" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="edit-style-name-{{ style.id }}" class="{{ label_class }}">Name</label>
             <input id="edit-style-name-{{ style.id }}" type="text" name="name" value="{{ style.name }}" required maxlength="30" class="{{ input_class }}">
@@ -693,6 +706,7 @@
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Configuration for prompt enhancement.</p>
     </header>
     <form action="/admin/enhancement" method="post" class="space-y-4 rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
+      <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
       <div>
         <label for="enhancement-provider" class="{{ label_class }}">Provider</label>
         <select id="enhancement-provider" name="provider" required class="{{ input_class }}">
@@ -716,6 +730,12 @@
         <input type="checkbox" name="clear_api_key">
         Clear stored key
       </label>
+
+      <div>
+        <label for="enhancement-default-prompt" class="{{ label_class }}">Default enhancement prompt</label>
+        <textarea id="enhancement-default-prompt" name="default_enhancement_prompt" rows="10" class="{{ text_class }}" placeholder="You are an expert at improving image generation prompts...">{{ enhancement_config.default_enhancement_prompt if enhancement_config and enhancement_config.default_enhancement_prompt else '' }}</textarea>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">This prompt is used as a global default if no model-specific prompt is set.</p>
+      </div>
 
       <div class="flex justify-end">
         <button type="submit" class="{{ btn_primary }}">Save</button>
@@ -820,6 +840,7 @@
                       Edit
                     </button>
                     <form action="/admin/fal-models/{{ topaz_model.id }}/delete" method="post" data-confirm-message="Delete this FAL model?" class="inline-flex">
+                      <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
                       <button class="{{ btn_danger }}" type="submit">Delete</button>
                     </form>
                   </div>
@@ -845,6 +866,7 @@
               <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-fal-model-dialog').close()">&times;</button>
             </header>
             <form action="/admin/fal-models" method="post" class="space-y-4">
+              <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
               <div>
                 <label for="new-fal-name" class="{{ label_class }}">Display name</label>
                 <input id="new-fal-name" type="text" name="name" maxlength="50" required value="{{ upscaling_info.fal_model_draft_name }}" class="{{ input_class }}" placeholder="Topaz Standard">
@@ -892,6 +914,7 @@
               method="post"
               class="space-y-4"
             >
+              <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
               <div>
                 <label for="edit-fal-name" class="{{ label_class }}">Display name</label>
                 <input
@@ -947,6 +970,7 @@
         {% for info in provider_api_key_info %}
         <div class="rounded-2xl border border-slate-300/70 bg-slate-100/85 p-4 dark:border-white/10 dark:bg-slate-950/35">
           <form action="/admin/provider-api-keys/{{ info.provider }}/update" method="post" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
             <div class="flex items-center gap-3">
               <span class="text-sm font-semibold text-slate-800 capitalize dark:text-slate-100">{{ info.provider }}</span>
               {% if info.has_db_key %}
@@ -991,6 +1015,7 @@
         {% if onboarding_reset_enabled %}
         <span class="text-xs text-rose-300">Dev only: removes all users and reopens onboarding.</span>
         <form action="/admin/dev/reset-onboarding" method="post" data-confirm-message="Reset onboarding and remove all users?" class="inline-flex">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <button type="submit" class="{{ btn_danger }}">Reset onboarding (dev)</button>
         </form>
         {% endif %}
@@ -1008,6 +1033,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('create-user-dialog').close()">&times;</button>
         </header>
         <form action="/admin/users" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="new-user-name" class="{{ label_class }}">Username</label>
             <input id="new-user-name" type="text" name="username" minlength="3" required class="{{ input_class }}">
@@ -1050,6 +1076,7 @@
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="{{ btn_secondary }}" onclick="document.getElementById('edit-user-{{ user.id }}').showModal()">Edit</button>
                 <form action="/admin/users/{{ user.id }}/delete" method="post" data-confirm-message="Delete this user?" class="inline-flex">
+                  <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
                   <button class="{{ btn_danger }}" type="submit">Delete</button>
                 </form>
               </div>
@@ -1075,6 +1102,7 @@
           <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300/80 bg-white text-lg text-slate-700 transition hover:border-sky-400/60 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:text-white" aria-label="Close" onclick="document.getElementById('edit-user-{{ user.id }}').close()">&times;</button>
         </header>
         <form action="/admin/users/{{ user.id }}/update" method="post" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ ensure_csrf_token(request) }}">
           <div>
             <label for="edit-user-role-{{ user.id }}" class="{{ label_class }}">Role</label>
             <select id="edit-user-role-{{ user.id }}" name="role" class="{{ input_class }}">

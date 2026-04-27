@@ -291,6 +291,16 @@
 
   function saveSessionPreference(data) {
     var chatSessionId = getActiveConversationToken();
+    
+    // Always store in localStorage for global persistence/fallback
+    if (data.profile_id !== undefined) {
+      localStorage.setItem("lumigen_last_profile_id", data.profile_id);
+    }
+    if (data.thumb_size !== undefined) {
+      localStorage.setItem("lumigen_thumb_size", data.thumb_size);
+    }
+
+    // Save to server only for established sessions
     if (!chatSessionId || chatSessionId === "all" || chatSessionId === "new") return;
 
     var payload = { chat_session_id: chatSessionId };
@@ -335,6 +345,21 @@
   }
 
   if (profileSelect) {
+    // Restore profile from localStorage if not set by server
+    var chatSessionId = getActiveConversationToken();
+    if (chatSessionId === "new" || !profileSelect.value) {
+      var localProfileId = localStorage.getItem("lumigen_last_profile_id");
+      if (localProfileId) {
+        // Only set if the option exists
+        var exists = Array.from(profileSelect.options).some(function(opt) { return opt.value === localProfileId; });
+        if (exists) {
+          profileSelect.value = localProfileId;
+          // Trigger change to update UI dependencies (dimension panels etc)
+          profileSelect.dispatchEvent(new Event("change"));
+        }
+      }
+    }
+
     profileSelect.addEventListener("change", function () {
       var profileId = parseInt(profileSelect.value, 10);
       if (!isNaN(profileId) && profileId > 0) {
@@ -350,6 +375,11 @@
   if (chatShell) {
     currentThumbSize = chatShell.dataset && chatShell.dataset.lastThumbSize ? chatShell.dataset.lastThumbSize : "";
   }
+  
+  // Fallback to localStorage if server didn't provide a size
+  if (!currentThumbSize || currentThumbSize === "undefined") {
+    currentThumbSize = localStorage.getItem("lumigen_thumb_size") || "md";
+  }
 
   function applyThumbSize(size) {
     var chatHistory = document.getElementById("chat-history");
@@ -361,11 +391,11 @@
     thumbSizeButtons.forEach(function (btn) {
       var btnSize = btn.getAttribute("data-thumb-size-btn");
       if (btnSize === size) {
-        btn.classList.remove("border-white/10", "bg-white/10", "text-slate-300");
-        btn.classList.add("border-sky-300/60", "bg-sky-300/20", "text-sky-100");
+        btn.classList.remove("border-slate-300/80", "bg-white", "text-slate-700", "dark:border-white/10", "dark:bg-white/10", "dark:text-slate-300");
+        btn.classList.add("border-sky-300/60", "bg-sky-300/30", "text-sky-900", "dark:bg-sky-300/20", "dark:text-sky-100");
       } else {
-        btn.classList.remove("border-sky-300/60", "bg-sky-300/20", "text-sky-100");
-        btn.classList.add("border-white/10", "bg-white/10", "text-slate-300");
+        btn.classList.remove("border-sky-300/60", "bg-sky-300/30", "text-sky-900", "dark:bg-sky-300/20", "dark:text-sky-100");
+        btn.classList.add("border-slate-300/80", "bg-white", "text-slate-700", "dark:border-white/10", "dark:bg-white/10", "dark:text-slate-300");
       }
     });
   }
@@ -384,6 +414,15 @@
   if (currentThumbSize) {
     applyThumbSize(currentThumbSize);
   }
+
+  // Re-apply on HTMX swaps (important if chat-history is swapped)
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'chat-history' || evt.detail.target.querySelector('#chat-history')) {
+      if (currentThumbSize) {
+        applyThumbSize(currentThumbSize);
+      }
+    }
+  });
 
   // ---- Styles picker ----
 
@@ -508,6 +547,88 @@
         item.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
       });
       renderSelectedStyles();
+    });
+  }
+
+  // ---- Prompt Enhancement ----
+
+  window.closeEnhancementPreview = function() {
+    var dialog = document.getElementById('enhancement-preview-dialog');
+    if (dialog) dialog.close();
+  };
+
+  window.applyEnhancedPrompt = function() {
+    var resultArea = document.getElementById('enhanced-prompt-result');
+    var promptInput = document.getElementById('prompt_user');
+    if (resultArea && promptInput) {
+      promptInput.value = resultArea.value;
+      // Trigger auto-resize if any
+      promptInput.dispatchEvent(new Event('input'));
+    }
+    window.closeEnhancementPreview();
+  };
+
+  var enhanceBtn = document.querySelector('[data-enhance-prompt]');
+  if (enhanceBtn) {
+    enhanceBtn.addEventListener('click', function() {
+      var promptInput = document.getElementById('prompt_user');
+      var profileSelect = document.getElementById('profile_id');
+      var dialog = document.getElementById('enhancement-preview-dialog');
+      var content = document.getElementById('enhancement-preview-content');
+
+      if (!promptInput || !promptInput.value.trim()) {
+        alert("Please enter a prompt first.");
+        return;
+      }
+      if (!dialog || !content) return;
+
+      // Show loader
+      content.innerHTML = 
+        '<div class="flex flex-col items-center justify-center py-12">' +
+            '<div class="h-8 w-8 animate-spin rounded-full border-4 border-sky-300 border-t-transparent"></div>' +
+            '<p class="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">Enhancing prompt...</p>' +
+        '</div>';
+      
+      dialog.showModal();
+
+      var profileId = profileSelect ? profileSelect.value : null;
+
+      if (!profileId || profileId === "" || profileId === "null") {
+        alert("Please select a profile first to enhance the prompt for that specific model.");
+        dialog.close();
+        return;
+      }
+      
+      var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
+
+      var formData = new FormData();
+      formData.append('prompt', promptInput.value);
+      formData.append('profile_id', profileId);
+
+      fetch('/api/enhance-prompt', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken
+        },
+        body: formData
+      })
+      .then(function(response) {
+        if (!response.ok) return response.text().then(function(text) { throw new Error(text || 'Failed to enhance prompt'); });
+        return response.text();
+      })
+      .then(function(html) {
+        content.innerHTML = html;
+        if (window.htmx) htmx.process(content);
+      })
+      .catch(function(err) {
+        content.innerHTML = 
+          '<div class="p-6 text-center">' +
+            '<h4 class="text-lg font-semibold text-rose-500 mb-2">Enhancement Failed</h4>' +
+            '<p class="text-sm text-slate-600 dark:text-slate-400 mb-6">' + escapeHtml(err.message) + '</p>' +
+            '<button type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-0 dark:bg-white/10 dark:text-slate-100" onclick="closeEnhancementPreview()">Close</button>' +
+          '</div>';
+      });
     });
   }
 

@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import secrets
+import difflib
 import uuid
 import zipfile
 from collections.abc import AsyncIterator
@@ -958,7 +959,7 @@ def list_generations_for_session_token(
     db: Session, session_token: str
 ) -> list[Generation]:
     token = (session_token or "").strip()
-    if not token or token in {"all", "new"}:
+    if not token or token == "new":
         return []
     candidates = list(
         db.scalars(
@@ -1221,13 +1222,13 @@ def generate_page(
 
     active_conversation = (conversation or "").strip()
     if active_conversation:
-        if active_conversation not in {"all", "new"} and active_conversation not in all_session_tokens:
+        if active_conversation != "new" and active_conversation not in all_session_tokens:
             active_conversation = ""
     if not active_conversation:
         active_conversation = all_sessions[0]["token"] if all_sessions else "new"
 
     effective_session_offset = session_offset
-    if active_conversation not in {"", "all", "new"}:
+    if active_conversation not in {"", "new"}:
         active_index = next(
             (idx for idx, item in enumerate(all_sessions) if item["token"] == active_conversation),
             -1,
@@ -1267,31 +1268,14 @@ def generate_page(
         )
         fal_upscale_ready = bool(model_config_service.get_default_api_key("fal"))
 
-        if active_conversation not in {"all", "new"}:
+        if active_conversation != "new":
             chat_session_prefs = crud.get_chat_session(session, active_conversation)
             if chat_session_prefs:
                 last_profile_id = chat_session_prefs.last_profile_id
                 last_thumb_size = chat_session_prefs.last_thumb_size or "md"
                 last_selected_style_ids = chat_session_prefs.selected_style_ids or ""
 
-        if active_conversation == "all":
-            recent_generations = list(
-                session.scalars(
-                    select(Generation)
-                    .options(selectinload(Generation.assets))
-                    .order_by(Generation.created_at.desc(), Generation.id.desc())
-                    .limit(250)
-                ).all()
-            )
-            recent_generations.reverse()
-            conversation_generations = [
-                generation
-                for generation in recent_generations
-                if not generation_chat_hidden(generation)
-                and not generation_session_archived(generation)
-                and not generation_chat_deleted(generation)
-            ]
-        elif active_conversation == "new":
+        if active_conversation == "new":
             conversation_generations = []
         else:
             conversation_generations = [
@@ -1415,32 +1399,54 @@ def _delete_temp_session_input_files(row) -> None:
 
 
 @app.get("/workspace/profiles", response_class=HTMLResponse)
-def workspace_profiles_fragment(request: Request) -> HTMLResponse:
+def workspace_profiles_fragment(
+    request: Request,
+    create: bool = Query(default=False),
+    edit_id: int | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
     """Return the embedded profiles workspace fragment."""
-    return templates.TemplateResponse(
-        request,
-        "fragments/workspace_iframe.html",
-        {
-            "request": request,
-            "title": "Profiles",
-            "workspace_src": "/profiles?embedded=1",
-            "fallback_href": "/profiles",
-        },
+    return profiles_page(
+        request, create=create, edit_id=edit_id, error=error, session=session
     )
 
 
 @app.get("/workspace/gallery", response_class=HTMLResponse)
-def workspace_gallery_fragment(request: Request) -> HTMLResponse:
+def workspace_gallery_fragment(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    profile_name: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    category_ids: list[int] = Query(default=[]),
+    min_rating: str | None = Query(default=None),
+    unrated: bool = Query(default=False),
+    time_preset: str | None = Query(default="today"),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    thumb_size: str | None = Query(default="md"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
     """Return the embedded gallery workspace fragment."""
-    return templates.TemplateResponse(
+    return gallery_page(
         request,
-        "fragments/workspace_iframe.html",
-        {
-            "request": request,
-            "title": "Gallery",
-            "workspace_src": "/gallery?embedded=1",
-            "fallback_href": "/gallery",
-        },
+        page=page,
+        profile_name=profile_name,
+        provider=provider,
+        q=q,
+        category_ids=category_ids,
+        min_rating=min_rating,
+        unrated=unrated,
+        time_preset=time_preset,
+        date_from=date_from,
+        date_to=date_to,
+        thumb_size=thumb_size,
+        message=message,
+        error=error,
+        session=session,
     )
 
 
@@ -1448,25 +1454,17 @@ def workspace_gallery_fragment(request: Request) -> HTMLResponse:
 def workspace_admin_fragment(
     request: Request,
     section: str | None = Query(default="models"),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    session: Session = Depends(get_session),
 ) -> HTMLResponse:
     """Return the embedded admin workspace fragment for the active section."""
-    denied = require_admin_or_redirect(request)
-    if denied:
-        return denied
-
-    section_value = normalize_admin_section(section)
-    embedded_src = f"/admin?{urlencode({'section': section_value, 'embedded': '1'})}"
-    fallback_href = f"/admin?{urlencode({'section': section_value})}"
-
-    return templates.TemplateResponse(
+    return admin_page(
         request,
-        "fragments/workspace_iframe.html",
-        {
-            "request": request,
-            "title": "Admin",
-            "workspace_src": embedded_src,
-            "fallback_href": fallback_href,
-        },
+        section=section,
+        message=message,
+        error=error,
+        session=session,
     )
 
 
@@ -1504,7 +1502,7 @@ def generate_submit(
     try:
         overrides: dict[str, Any] = {}
         conversation_value = (conversation or "").strip()
-        if not conversation_value or conversation_value in {"new", "all"}:
+        if not conversation_value or conversation_value == "new":
             resolved_conversation = build_chat_session_token()
         else:
             resolved_conversation = conversation_value
@@ -1819,6 +1817,93 @@ def generate_submit(
         url=f"/?{urlencode({'workspace_view': 'chat', 'conversation': resolved_conversation})}",
         status_code=303,
     )
+
+def _generate_text_diff(old_text: str, new_text: str) -> str:
+    """Generate a simple HTML diff between two strings."""
+    # Split into words to get a more granular diff than line-by-line
+    old_words = old_text.split()
+    new_words = new_text.split()
+    
+    matcher = difflib.SequenceMatcher(None, old_words, new_words)
+    output = []
+    
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            output.append(" ".join(old_words[i1:i2]))
+        elif tag == 'insert':
+            output.append(f'<span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-0.5 rounded">{" ".join(new_words[j1:j2])}</span>')
+        elif tag == 'delete':
+            output.append(f'<span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-0.5 rounded line-through">{" ".join(old_words[i1:i2])}</span>')
+        elif tag == 'replace':
+            output.append(f'<span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-0.5 rounded line-through">{" ".join(old_words[i1:i2])}</span>')
+            output.append(f'<span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-0.5 rounded">{" ".join(new_words[j1:j2])}</span>')
+            
+    return " ".join(output)
+
+
+@app.post("/api/enhance-prompt", response_class=HTMLResponse)
+async def api_enhance_prompt(
+    request: Request,
+    prompt: str = Form(...),
+    profile_id: str = Form(default=""),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Enhance the user prompt using the configured LLM and return a preview fragment."""
+    if not profile_id or profile_id == "null":
+        return HTMLResponse(
+            content='<div class="p-4 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50">Please select a profile first.</div>',
+            status_code=200
+        )
+
+    try:
+        p_id = int(profile_id)
+    except ValueError:
+        return HTMLResponse(
+            content='<div class="p-4 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">Invalid profile ID.</div>',
+            status_code=200
+        )
+
+    profile = crud.get_profile(session, p_id)
+    if not profile:
+        return HTMLResponse(
+            content='<div class="p-4 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">Profile not found.</div>',
+            status_code=200
+        )
+
+    target_model = profile.model
+    target_provider = profile.provider
+    model_specific_prompt = profile.model_config.enhancement_prompt if profile.model_config else None
+
+    try:
+        result = await enhancement_service.enhance(
+            prompt=prompt,
+            model_specific_prompt=model_specific_prompt,
+            target_model=target_model,
+            target_provider=target_provider
+        )
+        enhanced_prompt = result.get("enhanced_prompt", prompt)
+        explanation = result.get("explanation", "Improved descriptive details.")
+        
+        diff_html = _generate_text_diff(prompt, enhanced_prompt)
+        
+        return templates.TemplateResponse(
+            request,
+            "fragments/enhancement_preview.html",
+            {
+                "request": request,
+                "original_prompt": prompt,
+                "enhanced_prompt": enhanced_prompt,
+                "explanation": explanation,
+                "diff_html": diff_html,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Prompt enhancement failed: {e}")
+        return HTMLResponse(
+            content=f'<div class="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg border border-red-100 dark:border-red-900/30">Enhancement failed: {str(e)}</div>',
+            status_code=200 # Return 200 so HTMX doesn't just error out silently if we want to show the message
+        )
+
 
 
 @app.post("/sessions/rename")
@@ -2261,6 +2346,11 @@ def admin_page(
             "fal_model_draft_enabled": draft_enabled,
         }
 
+    is_htmx_req = is_htmx(request)
+    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
+    layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
+
     return templates.TemplateResponse(
         request,
         "admin.html",
@@ -2282,6 +2372,7 @@ def admin_page(
             "onboarding_reset_enabled": settings.auth_allow_onboarding_reset,
             "provider_api_key_info": provider_api_key_info,
             "upscaling_info": upscaling_info,
+            "layout_template": layout,
         },
     )
 
@@ -3141,6 +3232,7 @@ def admin_update_enhancement(
     model: str = Form(...),
     api_key: str = Form(default=""),
     clear_api_key: bool = Form(default=False),
+    default_enhancement_prompt: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -3148,10 +3240,14 @@ def admin_update_enhancement(
     denied = require_admin_or_redirect(request)
     if denied:
         return denied
+    print(f"DEBUG: admin_update_enhancement called")
+    print(f"DEBUG: provider={provider}")
+    print(f"DEBUG: model={model}")
+    print(f"DEBUG: default_enhancement_prompt='{default_enhancement_prompt}'")
+    
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
         raise HTTPException(status_code=404, detail="Unsupported provider")
-
     try:
         existing = crud.get_enhancement_config(session)
         api_key_encrypted = existing.api_key_encrypted if existing else None
@@ -3162,11 +3258,13 @@ def admin_update_enhancement(
             if api_key_value:
                 api_key_encrypted = model_config_service.encrypt_api_key(api_key_value)
 
+        print(f"DEBUG: calling upsert_enhancement_config with prompt='{default_enhancement_prompt.strip() or None}'")
         crud.upsert_enhancement_config(
             session,
             provider=provider,
             model=model.strip(),
             api_key_encrypted=api_key_encrypted,
+            default_enhancement_prompt=default_enhancement_prompt.strip() or None,
         )
     except (ValueError, IntegrityError) as exc:
         return admin_redirect("enhancement", error=str(exc))
@@ -3825,6 +3923,11 @@ def profiles_page(
         open_edit_id = edit_id
     fal_key = model_config_service.get_default_api_key("fal")
 
+    is_htmx_req = is_htmx(request)
+    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
+    layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
+
     return templates.TemplateResponse(
         request,
         "profiles.html",
@@ -3845,6 +3948,7 @@ def profiles_page(
             "error": error,
             "open_create_dialog": create,
             "open_edit_id": open_edit_id,
+            "layout_template": layout,
         },
     )
 
@@ -4267,6 +4371,10 @@ def gallery_page(
 
     parsed_date_from = filters["parsed_date_from"]
     parsed_date_to = filters["parsed_date_to"]
+    is_htmx_req = is_htmx(request)
+    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
+    layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
 
     return templates.TemplateResponse(
         request,
@@ -4290,6 +4398,7 @@ def gallery_page(
             "message": message or "",
             "error": error or "",
             "hide_header": True,
+            "layout_template": layout,
         },
     )
 

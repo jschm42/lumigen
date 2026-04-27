@@ -370,6 +370,7 @@ def upsert_enhancement_config(
     provider: str,
     model: str,
     api_key_encrypted: str | None,
+    default_enhancement_prompt: str | None = None,
 ) -> EnhancementConfig:
     """Insert or update the singleton enhancement configuration and return it."""
     existing = get_enhancement_config(session)
@@ -377,6 +378,7 @@ def upsert_enhancement_config(
         existing.provider = provider
         existing.model = model
         existing.api_key_encrypted = api_key_encrypted
+        existing.default_enhancement_prompt = default_enhancement_prompt
         session.add(existing)
         session.commit()
         session.refresh(existing)
@@ -386,6 +388,7 @@ def upsert_enhancement_config(
         provider=provider,
         model=model,
         api_key_encrypted=api_key_encrypted,
+        default_enhancement_prompt=default_enhancement_prompt,
     )
     session.add(row)
     session.commit()

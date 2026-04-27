@@ -1,10 +1,12 @@
-{% extends "layout.html" %}
+{% extends layout_template if layout_template is defined else "layout.html" %}
 {% block content %}
 {% set panel_class = "p-5 sm:p-7" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/75 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10" %}
+{% set is_embedded = request.query_params.get("embedded") == "1" or request.headers.get("HX-Request") == "true" %}
+{% set htmx_attr = 'hx-boost="true" hx-target="#workspace-content" hx-push-url="true"' if is_embedded else "" %}
 
-<section class="{{ panel_class }}" data-profiles-page data-open-create="{{ '1' if open_create_dialog else '0' }}" data-open-edit-id="{{ open_edit_id if open_edit_id else '' }}">
+<section class="{{ panel_class }}" data-profiles-page data-open-create="{{ '1' if open_create_dialog else '0' }}" data-open-edit-id="{{ open_edit_id if open_edit_id else '' }}" {{ htmx_attr | safe }}>
   <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
     <div>
       <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Profiles</h2>

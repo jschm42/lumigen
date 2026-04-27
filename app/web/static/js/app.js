@@ -1007,6 +1007,11 @@
         var promptValue = promptInput.value.trim();
         if (!promptValue) return;
 
+        if (!modelConfigId) {
+          alert('Dieses Profil hat keine Model-Konfiguration zugeordnet. Bitte wähle ein anderes Profil oder ordne im Admin-Bereich eine ModelConfig zu.');
+          return;
+        }
+
         enhanceBtn.disabled = true;
         enhanceBtn.setAttribute('aria-busy', 'true');
         var enhanceIcon = enhanceBtn.querySelector('.bi');
@@ -1023,7 +1028,7 @@
             },
             body: JSON.stringify({
               prompt: promptValue,
-              model_config_id: modelConfigId ? Number(modelConfigId) : null
+              model_config_id: Number(modelConfigId)
             })
           });
           var payload = await response.json();
