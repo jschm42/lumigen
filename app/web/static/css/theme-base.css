@@ -148,18 +148,26 @@ pre {
 
 /* Chat thumbnail sizes */
 #chat-history.thumb-size-sm .image-container img {
-  max-height: min(40vh, 24rem) !important;
-  max-width: min(100%, 36rem) !important;
+  max-height: min(28vh, 16rem) !important;
+  max-width: min(100%, 24rem) !important;
 }
 
 #chat-history.thumb-size-md .image-container img {
-  max-height: min(68vh, 48rem) !important;
-  max-width: min(100%, 70rem) !important;
+  max-height: min(55vh, 36rem) !important;
+  max-width: min(100%, 55rem) !important;
+}
+
+#chat-history.thumb-size-lg .image-container {
+  width: auto;
+  max-width: 100%;
 }
 
 #chat-history.thumb-size-lg .image-container img {
-  max-height: min(85vh, 68rem) !important;
-  max-width: min(100%, 90rem) !important;
+  max-height: 92vh !important;
+  width: 100% !important;
+  max-width: 95rem !important;
+  height: auto !important;
+  display: block;
 }
 
 /* Generation pending shimmer animation */

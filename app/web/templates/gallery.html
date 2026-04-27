@@ -96,25 +96,25 @@
       <div class="flex items-center justify-end gap-1 rounded-md border border-slate-300/70 bg-slate-100/90 px-1 py-1 dark:border-slate-700/30 dark:bg-slate-900/45">
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=sm"
-          class="{{ size_btn }} {% if thumb_size == 'sm' %}border-sky-400/60 bg-sky-100 text-sky-900 dark:border-sky-300/70 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:border-sky-400/50 hover:text-slate-900 dark:border-slate-700/35 dark:bg-white/5 dark:text-slate-300 dark:hover:border-sky-300/50 dark:hover:text-white{% endif %}"
-          title="Small thumbnails"
+          class="{{ size_btn }} text-xs font-bold {% if thumb_size == 'sm' %}border-sky-400/60 bg-sky-100 text-sky-900 dark:border-sky-300/70 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:border-sky-400/50 hover:text-slate-900 dark:border-slate-700/35 dark:bg-white/5 dark:text-slate-300 dark:hover:border-sky-300/50 dark:hover:text-white{% endif %}"
+          title="Small thumbnails (S)"
           aria-label="Small thumbnails"
           data-gallery-thumb-size="sm"
-        ><i class="bi bi-grid-3x2-gap text-[18px]" aria-hidden="true"></i></a>
+        >S</a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=md"
-          class="{{ size_btn }} {% if thumb_size == 'md' %}border-sky-400/60 bg-sky-100 text-sky-900 dark:border-sky-300/70 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:border-sky-400/50 hover:text-slate-900 dark:border-slate-700/35 dark:bg-white/5 dark:text-slate-300 dark:hover:border-sky-300/50 dark:hover:text-white{% endif %}"
-          title="Medium thumbnails"
+          class="{{ size_btn }} text-xs font-bold {% if thumb_size == 'md' %}border-sky-400/60 bg-sky-100 text-sky-900 dark:border-sky-300/70 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:border-sky-400/50 hover:text-slate-900 dark:border-slate-700/35 dark:bg-white/5 dark:text-slate-300 dark:hover:border-sky-300/50 dark:hover:text-white{% endif %}"
+          title="Medium thumbnails (M)"
           aria-label="Medium thumbnails"
           data-gallery-thumb-size="md"
-        ><i class="bi bi-grid-3x3-gap text-[18px]" aria-hidden="true"></i></a>
+        >M</a>
         <a
           href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=lg"
-          class="{{ size_btn }} {% if thumb_size == 'lg' %}border-sky-400/60 bg-sky-100 text-sky-900 dark:border-sky-300/70 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:border-sky-400/50 hover:text-slate-900 dark:border-slate-700/35 dark:bg-white/5 dark:text-slate-300 dark:hover:border-sky-300/50 dark:hover:text-white{% endif %}"
-          title="Large thumbnails"
+          class="{{ size_btn }} text-xs font-bold {% if thumb_size == 'lg' %}border-sky-400/60 bg-sky-100 text-sky-900 dark:border-sky-300/70 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:border-sky-400/50 hover:text-slate-900 dark:border-slate-700/35 dark:bg-white/5 dark:text-slate-300 dark:hover:border-sky-300/50 dark:hover:text-white{% endif %}"
+          title="Large thumbnails (L)"
           aria-label="Large thumbnails"
           data-gallery-thumb-size="lg"
-        ><i class="bi bi-square text-[18px]" aria-hidden="true"></i></a>
+        >L</a>
       </div>
     </div>
   </form>

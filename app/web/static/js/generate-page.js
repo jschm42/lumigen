@@ -291,6 +291,16 @@
 
   function saveSessionPreference(data) {
     var chatSessionId = getActiveConversationToken();
+    
+    // Always store in localStorage for global persistence/fallback
+    if (data.profile_id !== undefined) {
+      localStorage.setItem("lumigen_last_profile_id", data.profile_id);
+    }
+    if (data.thumb_size !== undefined) {
+      localStorage.setItem("lumigen_thumb_size", data.thumb_size);
+    }
+
+    // Save to server only for established sessions
     if (!chatSessionId || chatSessionId === "all" || chatSessionId === "new") return;
 
     var payload = { chat_session_id: chatSessionId };
@@ -335,6 +345,21 @@
   }
 
   if (profileSelect) {
+    // Restore profile from localStorage if not set by server
+    var chatSessionId = getActiveConversationToken();
+    if (chatSessionId === "new" || !profileSelect.value) {
+      var localProfileId = localStorage.getItem("lumigen_last_profile_id");
+      if (localProfileId) {
+        // Only set if the option exists
+        var exists = Array.from(profileSelect.options).some(function(opt) { return opt.value === localProfileId; });
+        if (exists) {
+          profileSelect.value = localProfileId;
+          // Trigger change to update UI dependencies (dimension panels etc)
+          profileSelect.dispatchEvent(new Event("change"));
+        }
+      }
+    }
+
     profileSelect.addEventListener("change", function () {
       var profileId = parseInt(profileSelect.value, 10);
       if (!isNaN(profileId) && profileId > 0) {
@@ -350,6 +375,11 @@
   if (chatShell) {
     currentThumbSize = chatShell.dataset && chatShell.dataset.lastThumbSize ? chatShell.dataset.lastThumbSize : "";
   }
+  
+  // Fallback to localStorage if server didn't provide a size
+  if (!currentThumbSize || currentThumbSize === "undefined") {
+    currentThumbSize = localStorage.getItem("lumigen_thumb_size") || "md";
+  }
 
   function applyThumbSize(size) {
     var chatHistory = document.getElementById("chat-history");
@@ -361,11 +391,11 @@
     thumbSizeButtons.forEach(function (btn) {
       var btnSize = btn.getAttribute("data-thumb-size-btn");
       if (btnSize === size) {
-        btn.classList.remove("border-white/10", "bg-white/10", "text-slate-300");
-        btn.classList.add("border-sky-300/60", "bg-sky-300/20", "text-sky-100");
+        btn.classList.remove("border-slate-300/80", "bg-white", "text-slate-700", "dark:border-white/10", "dark:bg-white/10", "dark:text-slate-300");
+        btn.classList.add("border-sky-300/60", "bg-sky-300/30", "text-sky-900", "dark:bg-sky-300/20", "dark:text-sky-100");
       } else {
-        btn.classList.remove("border-sky-300/60", "bg-sky-300/20", "text-sky-100");
-        btn.classList.add("border-white/10", "bg-white/10", "text-slate-300");
+        btn.classList.remove("border-sky-300/60", "bg-sky-300/30", "text-sky-900", "dark:bg-sky-300/20", "dark:text-sky-100");
+        btn.classList.add("border-slate-300/80", "bg-white", "text-slate-700", "dark:border-white/10", "dark:bg-white/10", "dark:text-slate-300");
       }
     });
   }
@@ -384,6 +414,15 @@
   if (currentThumbSize) {
     applyThumbSize(currentThumbSize);
   }
+
+  // Re-apply on HTMX swaps (important if chat-history is swapped)
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'chat-history' || evt.detail.target.querySelector('#chat-history')) {
+      if (currentThumbSize) {
+        applyThumbSize(currentThumbSize);
+      }
+    }
+  });
 
   // ---- Styles picker ----
 

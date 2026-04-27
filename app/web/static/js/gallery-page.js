@@ -38,7 +38,7 @@
 })();
 
 (function () {
-  var STORAGE_KEY = "lumigen_gallery_thumb_size";
+  var STORAGE_KEY = "lumigen_thumb_size";
   var form = document.querySelector('form[action="/gallery"]');
   if (!form) return;
 
