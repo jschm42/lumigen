@@ -1510,6 +1510,8 @@ def generate_submit(
         crud.upsert_chat_session_preferences(
             session,
             chat_session_id=resolved_conversation,
+            last_profile_id=profile_id,
+            selected_style_ids=style_ids,
         )
 
         prompt_user_original = prompt_user
@@ -4705,6 +4707,16 @@ def rerun_generation(
 
     generation = _create_generation_for_retry(session, source, profile_id)
     generation_service.enqueue(background_tasks, generation.id)
+
+    # Update session preferences if we have a chat session
+    request_snapshot = source.request_snapshot_json or {}
+    chat_session_id = request_snapshot.get("chat_session_id")
+    if chat_session_id:
+        crud.upsert_chat_session_preferences(
+            session,
+            chat_session_id=chat_session_id,
+            last_profile_id=profile_id,
+        )
 
     template_name = (
         "fragments/chat_generation_item.html"

@@ -296,6 +296,9 @@
     if (data.profile_id !== undefined) {
       localStorage.setItem("lumigen_last_profile_id", data.profile_id);
     }
+    if (data.selected_style_ids !== undefined) {
+      localStorage.setItem("lumigen_last_selected_style_ids", data.selected_style_ids);
+    }
     if (data.thumb_size !== undefined) {
       localStorage.setItem("lumigen_thumb_size", data.thumb_size);
     }
@@ -347,7 +350,8 @@
   if (profileSelect) {
     // Restore profile from localStorage if not set by server
     var chatSessionId = getActiveConversationToken();
-    if (chatSessionId === "new" || !profileSelect.value) {
+    var serverSelected = profileSelect.querySelector('option[selected]');
+    if (chatSessionId === "new" || !serverSelected) {
       var localProfileId = localStorage.getItem("lumigen_last_profile_id");
       if (localProfileId) {
         // Only set if the option exists
@@ -439,7 +443,14 @@
 
   var initialStyleIdsValue = "";
   var initialStyleInput = document.getElementById("style_ids_input");
-  initialStyleIdsValue = initialStyleInput ? initialStyleInput.value : "";
+  if (initialStyleInput) {
+    initialStyleIdsValue = initialStyleInput.value;
+    var chatSessionId = getActiveConversationToken();
+    // If server didn't provide styles (value empty or "None") and it's a new session, try localStorage
+    if ((!initialStyleIdsValue || initialStyleIdsValue === "None") && (chatSessionId === "new" || chatSessionId === "")) {
+      initialStyleIdsValue = localStorage.getItem("lumigen_last_selected_style_ids") || "";
+    }
+  }
   var selectedStyleIds = parseSelectedStyleIdsCsv(initialStyleIdsValue);
 
   function renderSelectedStyles(syncSessionPreference) {
