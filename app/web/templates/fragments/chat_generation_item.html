@@ -68,8 +68,16 @@
   {% set height_value = snapshot.get('height')|int %}
   {% if width_value > 0 and height_value > 0 %}
     {% set panel_aspect_ratio = (width_value|string) ~ ' / ' ~ (height_value|string) %}
+    {% set ratio_w = width_value %}
+    {% set ratio_h = height_value %}
   {% endif %}
 {% endif %}
+
+{% set svg_w = ratio_w if ratio_w is defined else (width_value if width_value is defined and width_value > 0 else 1) %}
+{% set svg_h = ratio_h if ratio_h is defined else (height_value if height_value is defined and height_value > 0 else 1) %}
+{% set svg_scale = 384 / svg_w if svg_w > svg_h else 384 / svg_h %}
+{% set target_w = (svg_w * svg_scale)|int %}
+{% set target_h = (svg_h * svg_scale)|int %}
 
 <div id="chat-generation-{{ generation.id }}"
      class="chat-generation space-y-3"
@@ -187,13 +195,12 @@
       {% elif generation.status == 'succeeded' %}
         <p class="text-sm text-slate-600 dark:text-slate-400">Job completed, but no assets were generated.</p>
       {% elif generation.status in ['queued', 'running'] %}
-        <div class="w-full max-w-[30rem]">
-          <div class="relative w-full overflow-hidden rounded-xl border border-slate-300/75 bg-slate-100/80 dark:border-white/10 dark:bg-slate-900/60" style="aspect-ratio: {{ panel_aspect_ratio }};">
-            <div class="absolute inset-0 flex items-center justify-center px-4 py-6">
-              <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-                <i class="bi bi-arrow-repeat animate-spin"></i>
-                <span class="text-sm font-medium">{{ running_status_text }}</span>
-              </div>
+        <div class="image-container group relative inline-block max-w-full self-start overflow-hidden rounded-xl border border-slate-300/75 bg-slate-100/90 dark:border-white/10 dark:bg-slate-900/80">
+          <svg xmlns="http://www.w3.org/2000/svg" width="{{ target_w }}" height="{{ target_h }}" viewBox="0 0 {{ target_w }} {{ target_h }}" class="placeholder-svg block h-auto w-auto opacity-0" aria-hidden="true"></svg>
+          <div class="absolute inset-0 flex items-center justify-center px-4 py-6 generation-shimmer">
+            <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+              <i class="bi bi-arrow-repeat animate-spin"></i>
+              <span class="text-sm font-medium">{{ running_status_text }}</span>
             </div>
           </div>
         </div>
