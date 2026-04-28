@@ -16,16 +16,13 @@ Tired of juggling multiple image generation platforms?
 Lumigen gives you a single, clean workspace to generate, 
 compare, and organize AI images — across all major providers.
 
-- 🔀 **One app, many providers**: FAL, OpenAI, OpenRouter, 
-  Google, BFL — switch in seconds
-- 🏡 **Your data, your machine**: images and history stay 
-  under `./data`, always
-- ⚡ **Fast creative loop**: generate, tweak, rerun, 
-  and compare without leaving the app
-- 🗂️ **Stay organized**: profiles, categories, and a 
-  full gallery workflow built in
-- 🔍 **Full history**: every image is reproducible, 
-  metadata and all
+- 🔀 **One app, many providers**: FAL, OpenAI, OpenRouter, Google, BFL — switch in seconds
+- 🏡 **Your data, your machine**: images and history stay under `./data`, always
+- ⚡ **Fast creative loop**: generate, tweak, rerun, and compare without leaving the app
+- 📤 **Data portability**: Import/export profiles, models, and styles via JSON
+- 📦 **Complete archiving**: Export full sessions as ZIP with prompts and metadata
+- 🗂️ **Stay organized**: profiles, categories, and a full gallery workflow built in
+- 🔍 **Full history**: every image is reproducible, metadata and all
 - 🚀 **Optional upscaling**: Real-ESRGAN support built in
 
 ## Getting started
