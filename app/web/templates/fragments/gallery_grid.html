@@ -9,7 +9,8 @@
   <div
     class="col-span-full flex items-center justify-center py-6 text-sm text-slate-400 dark:text-slate-500"
     hx-get="/gallery/items?page={{ page_data.page + 1 }}&{{ gallery_query }}&thumb_size={{ thumb_size | urlencode }}"
-    hx-trigger="intersect once"
+    hx-trigger="revealed"
+    hx-target="this"
     hx-swap="outerHTML"
     data-gallery-sentinel
   >
