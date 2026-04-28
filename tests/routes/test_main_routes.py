@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import zipfile
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -961,3 +964,68 @@ def test_generate_submit_rejects_input_images_for_fal_provider(
     assert response.status_code == 303
     assert "FAL+provider+does+not+support+input+images" in response.headers["location"]
     assert fake_generation_service.create_called is False
+
+
+def test_download_session_returns_zip(client, app_module, monkeypatch, tmp_path) -> None:
+    fake_session = _FakeSession()
+    image_file = tmp_path / "test.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    generation = SimpleNamespace(
+        id=1,
+        created_at=datetime(2024, 3, 15, 10, 0),
+        finished_at=None,
+        prompt_user="a red cat",
+        prompt_final=None,
+        model="test-model",
+        provider="test-provider",
+        status="success",
+        profile_name="Test Profile",
+        request_snapshot_json={"chat_session_id": "session:abc", "chat_session_title": "My Session"},
+        assets=[
+            SimpleNamespace(id=10, file_path="images/test.png", mime="image/png"),
+        ],
+    )
+    fake_session._scalars_result = [generation]
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(fake_session)
+    monkeypatch.setattr(
+        app_module.generation_service,
+        "asset_absolute_path",
+        lambda _asset, which="file": image_file,
+    )
+
+    response = client.get("/sessions/download?session_token=session%3Aabc")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert "attachment" in response.headers["content-disposition"]
+    assert ".zip" in response.headers["content-disposition"]
+
+    zf = zipfile.ZipFile(io.BytesIO(response.content))
+    names = zf.namelist()
+    assert "session.md" in names
+    assert any(n.startswith("images/") for n in names)
+    md_content = zf.read("session.md").decode()
+    assert "My Session" in md_content
+    assert "a red cat" in md_content
+
+
+def test_download_session_rejects_invalid_token(client, app_module) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(fake_session)
+
+    for token in ("", "new", "all"):
+        url = f"/sessions/download?session_token={token}"
+        response = client.get(url)
+        assert response.status_code == 400, f"Expected 400 for token={token!r}"
+
+
+def test_download_session_returns_404_for_unknown_token(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    fake_session._scalars_result = []
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(fake_session)
+
+    response = client.get("/sessions/download?session_token=session%3Aunknown")
+
+    assert response.status_code == 404

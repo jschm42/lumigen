@@ -198,3 +198,76 @@ def test_parse_proxy_trusted_hosts(app_module) -> None:
         "127.0.0.1",
         "10.0.0.1",
     ]
+
+
+def test_build_session_markdown_basic(app_module) -> None:
+    gen = SimpleNamespace(
+        id=1,
+        created_at=datetime(2024, 3, 15, 10, 0),
+        finished_at=datetime(2024, 3, 15, 10, 5),
+        prompt_user="a red cat",
+        prompt_final=None,
+        model="test-model",
+        provider="test-provider",
+        status="success",
+        assets=[],
+    )
+    image_names = {1: ["images/001.png", "images/002.png"]}
+
+    md = app_module._build_session_markdown("My Session", "session:abc", [gen], image_names)
+
+    assert "# My Session" in md
+    assert "2024-03-15 10:00 UTC" in md
+    assert "2024-03-15 10:05 UTC" in md
+    assert "`session:abc`" in md
+    assert "**Generations:** 1" in md
+    assert "a red cat" in md
+    assert "test-model" in md
+    assert "test-provider" in md
+    assert "`images/001.png`" in md
+    assert "`images/002.png`" in md
+
+
+def test_build_session_markdown_includes_final_prompt_when_different(app_module) -> None:
+    gen = SimpleNamespace(
+        id=1,
+        created_at=datetime(2024, 3, 15, 10, 0),
+        finished_at=None,
+        prompt_user="a cat",
+        prompt_final="a fluffy cat, high quality",
+        model="m",
+        provider="p",
+        status="success",
+        assets=[],
+    )
+
+    md = app_module._build_session_markdown("Title", "session:x", [gen], {})
+
+    assert "**Prompt:** a cat" in md
+    assert "**Final prompt:** a fluffy cat, high quality" in md
+
+
+def test_build_session_markdown_omits_final_prompt_when_same_as_prompt(app_module) -> None:
+    gen = SimpleNamespace(
+        id=1,
+        created_at=datetime(2024, 3, 15, 10, 0),
+        finished_at=None,
+        prompt_user="a cat",
+        prompt_final="a cat",
+        model="m",
+        provider="p",
+        status="success",
+        assets=[],
+    )
+
+    md = app_module._build_session_markdown("Title", "session:x", [gen], {})
+
+    assert md.count("a cat") == 1
+
+
+def test_build_session_markdown_no_generations(app_module) -> None:
+    md = app_module._build_session_markdown("Empty", "session:empty", [], {})
+
+    assert "# Empty" in md
+    assert "`session:empty`" in md
+    assert "**Generations:** 0" in md
