@@ -11,7 +11,7 @@
 {% set nav_tab_active = "bg-sky-300 text-slate-950" %}
 {% set nav_tab_inactive = "border border-slate-300/75 bg-white text-slate-700 hover:border-sky-400/60 hover:bg-sky-50 hover:text-slate-900 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-sky-300/60 dark:hover:bg-white/10 dark:hover:text-white" %}
 {% set is_embedded = request.query_params.get("embedded") == "1" or request.headers.get("HX-Request") == "true" %}
-{% set htmx_attr = 'hx-boost="true" hx-target="#workspace-content" hx-push-url="true"' if is_embedded else "" %}
+{% set htmx_attr = 'hx-boost="true" hx-target="#workspace-content" hx-push-url="false"' if is_embedded else "" %}
 
 <section class="{{ panel_class }} space-y-5" data-admin-page {{ htmx_attr | safe }}>
   <header class="flex flex-wrap items-start justify-between gap-4">
