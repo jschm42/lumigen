@@ -36,7 +36,10 @@ class GoogleAdapter(ProviderAdapter):
         url = f"{self._base_url(settings)}/models"
         headers = {"Content-Type": "application/json"}
         params = {"key": settings.google_api_key}
-        timeout = httpx.Timeout(30.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.llm_models_timeout_seconds,
+            connect=settings.llm_models_connect_timeout_seconds,
+        )
         self._log_request("GET", url, headers)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -82,7 +85,10 @@ class GoogleAdapter(ProviderAdapter):
         payload = self._build_payload(request, use_predict=use_predict)
         self._log_request("POST", url, headers, payload)
 
-        timeout = httpx.Timeout(240.0, connect=15.0)
+        timeout = httpx.Timeout(
+            settings.provider_google_generate_timeout_seconds,
+            connect=settings.provider_google_generate_connect_timeout_seconds,
+        )
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url, headers=headers, params=params, json=payload)

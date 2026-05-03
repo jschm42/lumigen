@@ -30,3 +30,19 @@ def test_max_upload_size_mb_can_be_set() -> None:
     settings = Settings(_env_file=None, max_upload_size_mb=10)
 
     assert settings.max_upload_size_mb == 10
+
+
+def test_llm_timeout_settings_have_safe_defaults_without_env_file() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_models_timeout_seconds == 30.0
+    assert settings.llm_models_connect_timeout_seconds == 10.0
+    assert settings.llm_generate_timeout_seconds == 60.0
+    assert settings.llm_generate_connect_timeout_seconds == 10.0
+    assert settings.llm_enhancement_timeout_seconds == 60.0
+    assert settings.llm_enhancement_connect_timeout_seconds == 10.0
+    assert settings.provider_openrouter_generate_timeout_seconds == 120.0
+    assert settings.provider_google_generate_timeout_seconds == 240.0
+    assert settings.provider_google_generate_connect_timeout_seconds == 15.0
+    assert settings.provider_bfl_download_timeout_seconds == 60.0
+    assert settings.provider_bfl_download_connect_timeout_seconds == 30.0
