@@ -38,7 +38,7 @@
 })();
 
 (function () {
-  var STORAGE_KEY = "lumigen_gallery_thumb_size";
+  var STORAGE_KEY = "lumigen_thumb_size";
   var form = document.querySelector('form[action="/gallery"]');
   if (!form) return;
 
@@ -49,9 +49,14 @@
     try {
       var savedSize = localStorage.getItem(STORAGE_KEY);
       if (savedSize && ["sm", "md", "lg"].indexOf(savedSize) !== -1) {
-        var separator = window.location.search ? "&" : "?";
-        window.location.href = window.location.pathname + window.location.search + separator + "thumb_size=" + savedSize;
-        return;
+        var view = urlParams.get("workspace_view");
+        var isGalleryView = view === "gallery" || window.location.pathname === "/gallery";
+        
+        if (isGalleryView) {
+          var separator = window.location.search ? "&" : "?";
+          window.location.href = window.location.pathname + window.location.search + separator + "thumb_size=" + savedSize;
+          return;
+        }
       }
     } catch (_e) { /* ignore */ }
   } else {

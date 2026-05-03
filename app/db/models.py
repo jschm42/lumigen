@@ -172,6 +172,7 @@ class EnhancementConfig(Base, TimestampMixin):
     api_key_encrypted: Mapped[str | None] = mapped_column(
         String(4096), nullable=True
     )
+    default_enhancement_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ProviderApiKey(Base, TimestampMixin):

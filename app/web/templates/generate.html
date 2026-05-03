@@ -20,9 +20,6 @@
     </div>
 
     <div class="subtle-scrollbar mt-4 hidden min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 lg:block" id="session-list">
-      <a href="/?conversation=all&workspace_view=chat" class="block rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == 'all' and workspace_view == 'chat' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 hover:text-slate-900 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20 dark:hover:text-white{% endif %}">
-        All Sessions
-      </a>
       {% set session_prev_category = '' %}
       {% set session_next_offset = session_offset + (session_items | length) %}
       {% set session_next_prev_category = session_items[-1].time_category if session_items else '' %}
@@ -40,14 +37,16 @@
          class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'profiles' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
          hx-get="/workspace/profiles" 
          hx-target="#workspace-content" 
-         hx-swap="innerHTML">Profiles</a>
-      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}" 
+         hx-swap="innerHTML"
+         hx-push-url="true">Profiles</a>
+      <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}&thumb_size={{ last_thumb_size }}" 
          data-workspace-nav 
          data-workspace-view="gallery" 
          class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'gallery' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
-         hx-get="/workspace/gallery" 
+         hx-get="/workspace/gallery?thumb_size={{ last_thumb_size }}" 
          hx-target="#workspace-content" 
-         hx-swap="innerHTML">Gallery</a>
+         hx-swap="innerHTML"
+         hx-push-url="true">Gallery</a>
       {% if request.session.get('user_role') == 'admin' %}
       <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" 
          data-workspace-nav 
@@ -55,7 +54,8 @@
          class="block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'admin' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
          hx-get="/workspace/admin" 
          hx-target="#workspace-content" 
-         hx-swap="innerHTML">Admin</a>
+         hx-swap="innerHTML"
+         hx-push-url="true">Admin</a>
       {% endif %}
       <details class="relative mt-2" data-user-menu-container>
         <summary
@@ -167,21 +167,21 @@
               <button
                 type="button"
                 data-thumb-size-btn="sm"
-                title="Small preview"
-                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border transition {% if last_thumb_size == 'sm' %}border-sky-300/60 bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20{% endif %}"
-              ><i class="bi bi-view-list text-base" aria-hidden="true"></i></button>
+                title="Small preview (S)"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-bold transition {% if last_thumb_size == 'sm' %}border-sky-300/60 bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20{% endif %}"
+              >S</button>
               <button
                 type="button"
                 data-thumb-size-btn="md"
-                title="Medium preview"
-                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border transition {% if last_thumb_size == 'md' %}border-sky-300/60 bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20{% endif %}"
-              ><i class="bi bi-grid-3x2-gap text-base" aria-hidden="true"></i></button>
+                title="Medium preview (M)"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-bold transition {% if last_thumb_size == 'md' %}border-sky-300/60 bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20{% endif %}"
+              >M</button>
               <button
                 type="button"
                 data-thumb-size-btn="lg"
-                title="Large preview"
-                class="inline-flex h-10 w-10 items-center justify-center rounded-xl border transition {% if last_thumb_size == 'lg' %}border-sky-300/60 bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20{% endif %}"
-              ><i class="bi bi-image text-base" aria-hidden="true"></i></button>
+                title="Large preview (L)"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-bold transition {% if last_thumb_size == 'lg' %}border-sky-300/60 bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}border-slate-300/80 bg-white text-slate-700 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20{% endif %}"
+              >L</button>
             </div>
           </div>
         </div>
@@ -450,6 +450,16 @@
     </div>
     <div id="asset-detail-dialog-content" class="px-2 pb-2 sm:px-3 sm:pb-3" data-asset-detail-dialog-content></div>
   </article>
+</dialog>
+
+<dialog id="enhancement-preview-dialog" class="w-[min(92vw,40rem)] rounded-3xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-950/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
+  <div id="enhancement-preview-content" class="p-5 sm:p-7">
+    <!-- Content loaded via HTMX -->
+    <div class="flex flex-col items-center justify-center py-12">
+        <div class="h-8 w-8 animate-spin rounded-full border-4 border-sky-300 border-t-transparent"></div>
+        <p class="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">Enhancing prompt...</p>
+    </div>
+  </div>
 </dialog>
 
 {% if styles %}
