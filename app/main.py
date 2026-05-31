@@ -1629,8 +1629,36 @@ def workspace_profiles_fragment(
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     """Return the embedded profiles workspace fragment."""
-    return profiles_page(
-        request, create=create, edit_id=edit_id, error=error, session=session
+    profiles = crud.list_profiles(session)
+    model_configs = crud.list_model_configs(session)
+    categories = crud.list_categories(session)
+    open_edit_id: int | None = None
+    if edit_id is not None and crud.get_profile(session, edit_id):
+        open_edit_id = edit_id
+    fal_key = model_config_service.get_default_api_key("fal")
+
+    return templates.TemplateResponse(
+        request,
+        "profiles.html",
+        {
+            "request": request,
+            "profiles": profiles,
+            "model_configs": model_configs,
+            "categories": categories,
+            "upscale_ready": upscale_service.is_available(),
+            "upscale_models": upscale_service.list_available_models(),
+            "fal_upscale_models": crud.list_topaz_upscale_models(
+                session, enabled_only=False
+            ),
+            "topaz_upscale_models": crud.list_topaz_upscale_models(
+                session, enabled_only=False
+            ),
+            "fal_upscale_ready": bool(fal_key),
+            "error": error,
+            "open_create_dialog": create,
+            "open_edit_id": open_edit_id,
+            "layout_template": "fragments/base_fragment.html",
+        },
     )
 
 

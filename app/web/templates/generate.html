@@ -37,7 +37,7 @@
          hx-get="/workspace/profiles" 
          hx-target="#workspace-content" 
          hx-swap="innerHTML"
-         hx-push-url="true">Profiles</a>
+        hx-push-url="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}">Profiles</a>
       <a href="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}&thumb_size={{ last_thumb_size }}{% if workspace_gallery_asset_id %}&asset_id={{ workspace_gallery_asset_id }}{% endif %}" 
          data-workspace-nav 
          data-workspace-view="gallery" 
@@ -45,7 +45,7 @@
         hx-get="/workspace/gallery?thumb_size={{ last_thumb_size }}{% if workspace_gallery_asset_id %}&asset_id={{ workspace_gallery_asset_id }}{% endif %}" 
          hx-target="#workspace-content" 
          hx-swap="innerHTML"
-         hx-push-url="true">Gallery</a>
+        hx-push-url="/?workspace_view=gallery&conversation={{ active_conversation | urlencode }}&thumb_size={{ last_thumb_size }}{% if workspace_gallery_asset_id %}&asset_id={{ workspace_gallery_asset_id }}{% endif %}">Gallery</a>
       {% if request.session.get('user_role') == 'admin' %}
       <a href="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}" 
          data-workspace-nav 
@@ -54,7 +54,7 @@
          hx-get="/workspace/admin" 
          hx-target="#workspace-content" 
          hx-swap="innerHTML"
-         hx-push-url="true">Admin</a>
+        hx-push-url="/?workspace_view=admin&conversation={{ active_conversation | urlencode }}">Admin</a>
       {% endif %}
       <details class="relative mt-auto pt-2" data-user-menu-container>
         <summary

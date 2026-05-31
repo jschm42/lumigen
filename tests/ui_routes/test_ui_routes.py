@@ -328,7 +328,8 @@ def test_generate_page_gallery_workspace_renders_htmx_content(client, app_module
 
     assert response.status_code == 200
     assert 'id="workspace-content"' in body
-    assert 'hx-get="/workspace/gallery"' in body
+    assert '/workspace/gallery?thumb_size=' in body
+    assert 'hx-push-url="/?workspace_view=gallery&conversation=' in body
 
 
 def test_generate_page_gallery_workspace_carries_asset_id_into_fragment_loader(client, app_module, monkeypatch) -> None:
@@ -425,6 +426,8 @@ def test_workspace_profiles_fragment_renders_embedded_iframe(client) -> None:
 
     assert response.status_code == 200
     assert '<iframe' not in response.text
+    assert 'New Artbook' not in response.text
+    assert 'data-workspace-nav' not in response.text
 
 
 def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
