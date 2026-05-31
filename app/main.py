@@ -365,6 +365,16 @@ def is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request", "").lower() == "true"
 
 
+def is_embedded_request(request: Request, *, include_htmx: bool = False) -> bool:
+    """Return whether the current request should be treated as embedded UI."""
+    embedded_param = request.query_params.get("embedded") == "1"
+    fetch_dest = (request.headers.get("sec-fetch-dest") or "").lower()
+    iframe_request = fetch_dest == "iframe"
+    if include_htmx and is_htmx(request):
+        return True
+    return embedded_param and iframe_request
+
+
 @app.middleware("http")
 async def auth_guard_middleware(request: Request, call_next):
     path = request.url.path
@@ -1403,6 +1413,7 @@ def generate_page(
     error: str | None = Query(default=None),
     conversation: str | None = Query(default=None),
     workspace_view: str | None = Query(default="chat"),
+    asset_id: int | None = Query(default=None),
     artbook_filter: str = Query(default="all"),
     artbook_name_query: str = Query(default=""),
     session_offset: int = Query(default=0, ge=0),
@@ -1507,6 +1518,7 @@ def generate_page(
             "session_offset": effective_session_offset,
             "active_conversation": active_conversation,
             "workspace_view": active_workspace_view,
+            "workspace_gallery_asset_id": asset_id,
             "artbook_filter": active_artbook_filter,
             "artbook_name_query": active_artbook_name_query,
             "hide_footer": True,
@@ -1626,6 +1638,7 @@ def workspace_profiles_fragment(
 def workspace_gallery_fragment(
     request: Request,
     page: int = Query(default=1, ge=1),
+    asset_id: int | None = Query(default=None),
     profile_name: str | None = Query(default=None),
     provider: str | None = Query(default=None),
     q: str | None = Query(default=None),
@@ -1647,6 +1660,7 @@ def workspace_gallery_fragment(
         profile_name=profile_name,
         provider=provider,
         q=q,
+        asset_id=asset_id,
         category_ids=category_ids,
         min_rating=min_rating,
         unrated=unrated,
@@ -2726,7 +2740,6 @@ def admin_page(
         }
 
     is_htmx_req = is_htmx(request)
-    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
     layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
 
 
@@ -4315,7 +4328,6 @@ def profiles_page(
     fal_key = model_config_service.get_default_api_key("fal")
 
     is_htmx_req = is_htmx(request)
-    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
     layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
 
 
@@ -4716,10 +4728,48 @@ def _parse_gallery_filters(
     }
 
 
+def _build_asset_detail_template_context(
+    request: Request,
+    session: Session,
+    asset: Asset,
+    *,
+    return_to: str,
+    compact_dialog: bool,
+) -> dict[str, Any]:
+    """Build a complete template context for rendering asset detail content."""
+    profiles = crud.list_profiles(session)
+    session_token = generation_session_token(asset.generation) if asset.generation else ""
+    return {
+        "request": request,
+        "asset": asset,
+        "profiles": profiles,
+        "session_token": session_token,
+        "return_to": return_to,
+        "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
+        "profile_snapshot_pretty": (
+            dumps_json(asset.generation.profile_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "storage_snapshot_pretty": (
+            dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "request_snapshot_pretty": (
+            dumps_json(asset.generation.request_snapshot_json, pretty=True)
+            if asset.generation
+            else "{}"
+        ),
+        "compact_dialog": compact_dialog,
+    }
+
+
 @app.get("/gallery", response_class=HTMLResponse)
 def gallery_page(
     request: Request,
     page: int = Query(default=1, ge=1),
+    asset_id: int | None = Query(default=None),
     profile_name: str | None = Query(default=None),
     provider: str | None = Query(default=None),
     q: str | None = Query(default=None),
@@ -4763,8 +4813,37 @@ def gallery_page(
     parsed_date_from = filters["parsed_date_from"]
     parsed_date_to = filters["parsed_date_to"]
     is_htmx_req = is_htmx(request)
-    is_embedded = request.query_params.get("embedded") == "1" or is_htmx_req
     layout = "fragments/base_fragment.html" if is_htmx_req else "layout.html"
+
+    workspace_query = urlencode(filters["filter_params"], doseq=True)
+    workspace_return_to = (
+        f"/workspace/gallery?{workspace_query}&thumb_size={filters['thumb_size_value']}"
+        if workspace_query
+        else f"/workspace/gallery?thumb_size={filters['thumb_size_value']}"
+    )
+
+    page_return_to = (
+        f"/gallery?{workspace_query}&thumb_size={filters['thumb_size_value']}"
+        if workspace_query
+        else f"/gallery?thumb_size={filters['thumb_size_value']}"
+    )
+
+    asset_detail_context: dict[str, Any] | None = None
+    if asset_id is not None:
+        selected_asset = session.scalar(
+            select(Asset)
+            .options(selectinload(Asset.generation), selectinload(Asset.categories))
+            .where(Asset.id == asset_id)
+        )
+        if not selected_asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        asset_detail_context = _build_asset_detail_template_context(
+            request,
+            session,
+            selected_asset,
+            return_to=workspace_return_to if request.url.path.startswith("/workspace/") or is_htmx_req else page_return_to,
+            compact_dialog=False,
+        )
 
 
     return templates.TemplateResponse(
@@ -4785,10 +4864,13 @@ def gallery_page(
             "thumb_size": filters["thumb_size_value"],
             "gallery_query": filters["gallery_query"],
             "return_to": filters["return_to"],
+            "workspace_return_to": workspace_return_to,
             "filter_options": options,
             "message": message or "",
             "error": error or "",
-            "hide_header": True,
+            "hide_header": False,
+            "selected_asset": asset_detail_context["asset"] if asset_detail_context else None,
+            "asset_detail_context": asset_detail_context,
             "layout_template": layout,
         },
     )
@@ -4970,6 +5052,7 @@ def bulk_delete_assets(
 def asset_detail(
     request: Request,
     asset_id: int,
+    return_to: str | None = Query(default="/gallery"),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     htmx_request = is_htmx(request)
@@ -4983,12 +5066,14 @@ def asset_detail(
 
     profiles = crud.list_profiles(session)
     session_token = generation_session_token(asset.generation) if asset.generation else ""
+    resolved_return_to = safe_gallery_return_to(return_to)
 
     context = {
         "request": request,
         "asset": asset,
         "profiles": profiles,
         "session_token": session_token,
+        "return_to": resolved_return_to,
         "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
         "profile_snapshot_pretty": (
             dumps_json(asset.generation.profile_snapshot_json, pretty=True)
@@ -5019,6 +5104,7 @@ def asset_detail(
 def delete_asset(
     request: Request,
     asset_id: int,
+    return_to: str = Form(default="/gallery"),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ):
@@ -5032,7 +5118,7 @@ def delete_asset(
             "fragments/flash.html",
             {"request": request, "message": "Asset deleted"},
         )
-    return RedirectResponse(url="/gallery", status_code=303)
+    return RedirectResponse(url=safe_gallery_return_to(return_to), status_code=303)
 
 
 @app.post("/generations/{generation_id}/delete")

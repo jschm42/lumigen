@@ -202,6 +202,12 @@
       });
     }
 
+    function syncActiveWorkspaceLinkFromUrl() {
+      var currentUrl = new URL(window.location.href);
+      var view = (currentUrl.searchParams.get("workspace_view") || "chat").toLowerCase();
+      setActiveWorkspaceLink(view);
+    }
+
     // Removed iframe-related functions as we're now using HTMX for workspace navigation
 
     // Workspace links now use HTMX attributes, so we don't need to handle clicks manually
@@ -227,6 +233,8 @@
       });
     });
 
+    syncActiveWorkspaceLinkFromUrl();
+
     // Handle browser back/forward navigation
     window.addEventListener("popstate", function () {
       var currentUrl = new URL(window.location.href);
@@ -239,7 +247,17 @@
       // Load content via HTMX if needed
       if (view !== "chat") {
         if (view === "profiles") targetUrl = "/workspace/profiles";
-        else if (view === "gallery") targetUrl = "/workspace/gallery";
+        else if (view === "gallery") {
+          targetUrl = "/workspace/gallery";
+          var galleryParams = [];
+          var assetId = currentUrl.searchParams.get("asset_id");
+          var thumbSize = currentUrl.searchParams.get("thumb_size");
+          if (thumbSize) galleryParams.push("thumb_size=" + encodeURIComponent(thumbSize));
+          if (assetId) galleryParams.push("asset_id=" + encodeURIComponent(assetId));
+          if (galleryParams.length) {
+            targetUrl += "?" + galleryParams.join("&");
+          }
+        }
         else if (view === "admin") targetUrl = "/workspace/admin";
         
         if (targetUrl) {
@@ -252,6 +270,10 @@
           }
         }
       }
+    });
+
+    document.body.addEventListener("htmx:afterSettle", function () {
+      syncActiveWorkspaceLinkFromUrl();
     });
   }
 

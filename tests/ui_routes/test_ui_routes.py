@@ -154,6 +154,8 @@ def test_generate_page_shows_only_artbooks_until_one_is_selected(client, app_mod
     assert 'name="artbook_name_query"' in body
     assert 'placeholder="Name contains..."' in body
     assert "Optional filters" not in body
+    assert 'data-workspace-view="chat"' in body
+    assert 'bg-sky-300/30 text-sky-900' in body
     assert 'data-generation-form' not in body
     assert 'id="chat-history"' not in body
     assert "Session" in body
@@ -329,6 +331,29 @@ def test_generate_page_gallery_workspace_renders_htmx_content(client, app_module
     assert 'hx-get="/workspace/gallery"' in body
 
 
+def test_generate_page_gallery_workspace_carries_asset_id_into_fragment_loader(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module.crud, "list_profiles", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
+    )
+
+    response = client.get("/?workspace_view=gallery&asset_id=12&conversation=new")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'hx-get="/workspace/gallery?thumb_size=md&asset_id=12"' in body
+
+
 def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_module, monkeypatch) -> None:
     class _NoScalarsSession(_FakeSession):
         def scalars(self, _query):
@@ -391,16 +416,15 @@ def test_workspace_gallery_fragment_renders_embedded_iframe(client) -> None:
     response = client.get("/workspace/gallery")
 
     assert response.status_code == 200
-    assert 'src="/gallery?embedded=1"' in response.text
-    assert '<iframe' in response.text
+    assert '<iframe' not in response.text
+    assert 'id="gallery-grid"' in response.text or 'No assets found for current filters.' in response.text
 
 
 def test_workspace_profiles_fragment_renders_embedded_iframe(client) -> None:
     response = client.get("/workspace/profiles")
 
     assert response.status_code == 200
-    assert 'src="/profiles?embedded=1"' in response.text
-    assert '<iframe' in response.text
+    assert '<iframe' not in response.text
 
 
 def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
@@ -647,14 +671,67 @@ def test_gallery_page_renders_star_controls_and_rating_filters(client, app_modul
     assert 'data-rating-form' in body
     assert 'data-rating-star' in body
     assert 'data-current-rating="4"' in body
-    assert 'data-asset-detail-url="/assets/12"' in body
-    assert 'data-asset-detail-dialog' in body
-    assert 'id="asset-detail-dialog-content"' in body
-    assert 'data-asset-detail-close' in body
-    assert '>X</button>' in body
-    assert 'hx-target="#asset-detail-dialog-content"' in body
-    assert 'data-asset-detail-trigger' in body
+    assert 'data-asset-detail-url="/gallery?asset_id=12' in body
+    assert 'data-gallery-card-click' in body
+    assert 'data-asset-detail-dialog' not in body
+    assert 'id="asset-detail-dialog-content"' not in body
+    assert 'data-asset-detail-trigger' not in body
     assert 'Profile Hidden | provider-hidden' not in body
+
+
+def test_gallery_page_asset_detail_renders_inline_workspace_content(client, app_module, monkeypatch) -> None:
+    asset = SimpleNamespace(
+        id=12,
+        generation=SimpleNamespace(
+            id=5,
+            profile_id=1,
+            status="succeeded",
+            provider="stub",
+            model="stub-v1",
+            prompt_final="prompt",
+            prompt_user="forest scene",
+            failure_sidecar_path=None,
+            profile_snapshot_json={},
+            storage_template_snapshot_json={},
+            request_snapshot_json={"prompt_user_original": "forest scene"},
+        ),
+        categories=[],
+        width=1024,
+        height=1024,
+        mime="image/png",
+        file_path="images/x.png",
+        thumbnail_path=".thumbs/x.webp",
+        sidecar_path="images/x.png.json",
+        meta_json={},
+    )
+    fake_session = _FakeSession(scalar_value=asset)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **_kwargs: SimpleNamespace(items=[asset], page=1, pages=1, total=1),
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=[], providers=[], categories=[]),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [SimpleNamespace(id=1, name="Default")],
+    )
+
+    response = client.get("/workspace/gallery?asset_id=12&thumb_size=md", headers={"HX-Request": "true"})
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'Back to gallery' in body
+    assert 'href="/workspace/gallery?time_preset=today' in body
+    assert 'data-gallery-card-click' not in body
+    assert 'id="gallery-grid"' not in body
 
 
 def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(client, app_module, monkeypatch) -> None:
@@ -704,6 +781,7 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert 'max-h-[75vh]' in body
     assert 'href="/assets/44/file"' in body
     assert 'Original size' in body
+    assert 'Back to gallery' in body
     assert 'User prompt' in body
     assert 'forest scene' in body
     assert 'Vintage' in body

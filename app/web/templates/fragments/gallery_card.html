@@ -1,4 +1,11 @@
-<article class="group relative overflow-hidden rounded-xl bg-white/95 p-2.5 shadow-md shadow-slate-300/50 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300 dark:bg-slate-900/50 dark:shadow-slate-950/45" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}" data-asset-detail-url="/assets/{{ asset.id }}">
+{% set workspace_shell = request.url.path.startswith('/workspace/') %}
+{% set detail_href = '/?workspace_view=gallery&asset_id=' ~ asset.id if workspace_shell else '/gallery?asset_id=' ~ asset.id %}
+{% if gallery_query %}
+  {% set detail_href = detail_href ~ '&' ~ gallery_query %}
+{% endif %}
+{% set detail_href = detail_href ~ '&thumb_size=' ~ (thumb_size | urlencode) %}
+
+<article class="group relative overflow-hidden rounded-xl bg-white/95 p-2.5 shadow-md shadow-slate-300/50 ring-2 ring-transparent transition data-[selected=true]:ring-sky-300 dark:bg-slate-900/50 dark:shadow-slate-950/45" data-gallery-card data-gallery-select data-asset-id="{{ asset.id }}" data-asset-detail-url="{{ detail_href }}">
   <div class="relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-slate-100/90 dark:bg-slate-900/75" data-gallery-card-click>
     <img src="/assets/{{ asset.id }}/thumb" alt="thumb {{ asset.id }}" class="h-full w-full object-contain">
 
@@ -8,9 +15,6 @@
       <div class="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-2 bg-gradient-to-t from-slate-300/95 via-slate-300/65 to-transparent p-3 pt-12 dark:from-slate-950/90 dark:via-slate-950/50">
         <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300/85 bg-white/90 text-slate-700 transition hover:border-sky-400 hover:bg-sky-100 hover:text-sky-800 dark:border-white/30 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/20 dark:hover:text-sky-100">
           <i class="bi bi-download text-xl" aria-hidden="true"></i>
-        </a>
-        <a href="/assets/{{ asset.id }}" hx-get="/assets/{{ asset.id }}" hx-target="#asset-detail-dialog-content" hx-swap="innerHTML" aria-label="View details" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300/85 bg-white/90 text-slate-700 transition hover:border-sky-400 hover:bg-sky-100 hover:text-sky-800 dark:border-white/30 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/20 dark:hover:text-sky-100" data-asset-detail-trigger>
-          <i class="bi bi-info-circle text-xl" aria-hidden="true"></i>
         </a>
         <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" data-confirm-message="Delete this asset?">
           <input type="hidden" name="return_to" value="{{ return_to }}">
