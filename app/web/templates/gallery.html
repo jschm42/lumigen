@@ -95,7 +95,7 @@
         </label>
         <button type="submit" class="{{ btn_primary }}">Filter</button>
         <a href="/gallery" class="{{ btn_secondary }}" data-gallery-reset>Reset</a>
-        <div class="flex flex-wrap items-center gap-1">
+        <div class="ml-auto flex flex-wrap items-center gap-1">
           <a
             href="/gallery?page=1{% if gallery_query %}&{{ gallery_query }}{% endif %}&thumb_size=sm"
             class="{{ size_btn }} shrink-0 text-xs font-bold {% if thumb_size == 'sm' %}bg-sky-100 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 hover:text-slate-900 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white{% endif %}"

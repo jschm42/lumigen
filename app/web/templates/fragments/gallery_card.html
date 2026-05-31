@@ -30,7 +30,7 @@
     <form
       method="post"
       action="/assets/{{ asset.id }}/rating"
-      class="flex items-center gap-0 {% if asset.rating is none %}opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100{% endif %}"
+      class="flex items-center gap-0"
       aria-label="Set rating for asset {{ asset.id }}"
       data-rating-form
       data-current-rating="{{ asset.rating if asset.rating is not none else 0 }}"

@@ -1598,9 +1598,6 @@ function setupGalleryRatings() {
         currentRating = nextRating;
         form.setAttribute('data-current-rating', String(currentRating));
         paintStars(currentRating);
-        if (currentRating > 0) {
-          form.classList.remove('opacity-0', 'transition-opacity', 'duration-150', 'group-hover:opacity-100', 'focus-within:opacity-100');
-        }
 
         try {
           var formData = new FormData(form);
@@ -1621,9 +1618,6 @@ function setupGalleryRatings() {
           form.setAttribute('data-current-rating', String(currentRating));
           ratingInput.value = String(currentRating);
           paintStars(currentRating);
-          if (currentRating === 0 && form.getAttribute('data-rating-restored') !== '1') {
-            form.classList.add('opacity-0', 'transition-opacity', 'duration-150', 'group-hover:opacity-100', 'focus-within:opacity-100');
-          }
         }
       });
     });

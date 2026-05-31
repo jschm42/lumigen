@@ -106,9 +106,9 @@
       </div>
     {% else %}
       <div id="workspace-content" class="h-full min-h-0 w-full p-2 sm:p-3">
-      <div class="grid gap-3 {% if active_conversation == 'new' %}h-auto items-start{% else %}h-full min-h-0{% endif %}">
+      <div class="grid h-full min-h-0 gap-3">
         {% if active_conversation == 'new' %}
-        <aside class="self-start rounded-2xl border border-slate-300/70 bg-gradient-to-b from-slate-100/90 to-white/95 p-2 ring-1 ring-slate-200/70 dark:border-white/10 dark:from-slate-900/75 dark:to-slate-900/55 dark:ring-white/5">
+        <aside class="flex h-full min-h-0 flex-col rounded-2xl border border-slate-300/70 bg-gradient-to-b from-slate-100/90 to-white/95 p-2 ring-1 ring-slate-200/70 dark:border-white/10 dark:from-slate-900/75 dark:to-slate-900/55 dark:ring-white/5">
           <div class="mb-2">
             <p class="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Artbook</p>
             {% if active_conversation == 'new' %}
@@ -135,7 +135,7 @@
             </form>
           </div>
 
-          <div class="subtle-scrollbar min-h-0 overflow-y-auto pr-1 {% if active_conversation == 'new' %}grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 content-start{% else %}space-y-2{% endif %}" id="session-list" style="max-height: calc(100dvh - 18rem);">
+          <div class="subtle-scrollbar min-h-0 flex-1 overflow-y-auto pr-1 {% if active_conversation == 'new' %}grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 content-start auto-rows-max{% else %}space-y-2{% endif %}" id="session-list">
             {% set session_prev_category = '' %}
             {% set session_next_offset = session_offset + (session_items | length) %}
             {% set session_next_prev_category = session_items[-1].time_category if session_items else '' %}
