@@ -11,6 +11,7 @@
 {% endif %}
 
 {% set snapshot = generation.request_snapshot_json or {} %}
+{% set generation_session_token = (snapshot.get('chat_session_id') or '')|string|trim %}
 {% set prompt_user_original = (snapshot.get('prompt_user_original') or generation.prompt_user) %}
 {% set selected_style_names = snapshot.get('selected_style_names') if snapshot.get('selected_style_names') is sequence and snapshot.get('selected_style_names') is not string else [] %}
 {% set upscaling_active = snapshot.get('upscaling_active') %}
@@ -189,6 +190,23 @@
                 class="absolute bottom-3 left-3 flex h-10 w-10 items-center justify-center rounded-full border border-slate-300/80 bg-white/95 text-slate-700 opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-sky-100 group-hover:opacity-100 dark:border-white/20 dark:bg-slate-900/90 dark:text-white dark:hover:bg-sky-500/80">
                 <i class="bi bi-image" aria-hidden="true"></i>
               </button>
+              {% if generation_session_token %}
+                <form method="post" action="/sessions/cover" class="absolute left-3 top-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  {{ csrf_input }}
+                  <input type="hidden" name="session_token" value="{{ generation_session_token }}">
+                  <input type="hidden" name="asset_id" value="{{ asset.id }}">
+                  <input type="hidden" name="active_conversation" value="{{ generation_session_token }}">
+                  <input type="hidden" name="workspace_view" value="chat">
+                  <input type="hidden" name="artbook_filter" value="{{ artbook_filter | default('latest') }}">
+                  <button
+                    type="submit"
+                    title="Set as Artbook cover"
+                    class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300/80 bg-white/95 text-slate-700 shadow-lg backdrop-blur-sm transition hover:bg-amber-100 dark:border-white/20 dark:bg-slate-900/90 dark:text-white dark:hover:bg-amber-400/30"
+                  >
+                    <i class="bi bi-bookmark-star" aria-hidden="true"></i>
+                  </button>
+                </form>
+              {% endif %}
             </div>
           {% endfor %}
         </div>

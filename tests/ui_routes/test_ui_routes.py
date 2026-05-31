@@ -60,7 +60,7 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: (
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": (
             [
                 {
                     "token": "session:abc",
@@ -69,6 +69,9 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
                     "age": "",
                     "time_category": "today",
                     "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
                 }
             ],
             False,
@@ -90,6 +93,70 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     assert 'data-user-theme-select' in body
     assert '<option value="system">System</option>' in body
     assert 'id="style_ids_input" value=""' in body
+    assert 'id="rename-artbook-dialog"' in body
+    assert 'data-artbook-rename-input' in body
+
+
+def test_generate_page_shows_only_artbooks_until_one_is_selected(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [
+            SimpleNamespace(
+                id=1,
+                name="Default",
+                provider="stub",
+                model="stub-v1",
+                model_config_id=1,
+                width=512,
+                height=512,
+                n_images=1,
+                seed=None,
+            )
+        ],
+    )
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": (
+            [
+                {
+                    "token": "session:abc",
+                    "label": "Session",
+                    "subtitle": "",
+                    "age": "",
+                    "time_category": "today",
+                    "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
+                }
+            ],
+            False,
+        ),
+    )
+
+    response = client.get("/?workspace_view=chat")
+    body = response.text
+
+    assert response.status_code == 200
+    assert "Select an Artbook tile to load content." in body
+    assert 'data-artbook-filters-form' in body
+    assert 'data-artbook-filters-clear' in body
+    assert 'name="artbook_name_query"' in body
+    assert 'placeholder="Name contains..."' in body
+    assert "Optional filters" not in body
+    assert 'data-generation-form' not in body
+    assert 'id="chat-history"' not in body
+    assert "Session" in body
 
 
 def test_generate_page_keeps_selected_older_session_visible(client, app_module, monkeypatch) -> None:
@@ -137,7 +204,7 @@ def test_generate_page_keeps_selected_older_session_visible(client, app_module, 
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=None: (all_sessions, False),
+        lambda _session, offset=0, limit=10, max_days=None, artbook_filter="all", artbook_name_query="": (all_sessions, False),
     )
     monkeypatch.setattr(
         app_module,
@@ -149,8 +216,8 @@ def test_generate_page_keeps_selected_older_session_visible(client, app_module, 
     body = response.text
 
     assert response.status_code == 200
-    assert "Session 022" in body
-    assert "bg-sky-100 text-sky-900" in body
+    assert "Back to Artbooks" in body
+    assert "Select an Artbook tile to load content." not in body
 
 
 def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, app_module) -> None:
@@ -251,7 +318,7 @@ def test_generate_page_gallery_workspace_renders_htmx_content(client, app_module
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: ([], False),
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
     )
 
     response = client.get("/?workspace_view=gallery&conversation=new")
@@ -295,7 +362,7 @@ def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_mod
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: (
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": (
             [
                 {
                     "token": "session:abc",
@@ -305,6 +372,9 @@ def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_mod
                     "time_category": "today",
                     "time_category_label": "Today",
                     "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
                 }
             ],
             False,
@@ -696,7 +766,7 @@ def test_generate_page_renders_user_menu_popup(client, app_module, monkeypatch) 
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: ([], False),
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
     )
 
     response = client.get("/")

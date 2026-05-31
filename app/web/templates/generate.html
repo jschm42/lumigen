@@ -5,32 +5,29 @@
 {% set textarea_class = "w-full rounded-2xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-0 dark:bg-slate-950/75 dark:text-slate-100" %}
 {% set btn_primary = "inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50" %}
 {% set btn_secondary = "inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-0 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/20" %}
-
-<div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] gap-3 overflow-hidden grid-rows-[auto_1fr] lg:grid-rows-none lg:grid-cols-[18rem_minmax(0,1fr)]">
+<div class="grid h-[calc(100dvh-1.5rem)] min-h-[32rem] overflow-hidden gap-3 grid-rows-[auto_1fr] lg:grid-rows-none lg:grid-cols-[15rem_minmax(0,1fr)]">
   <aside class="{{ panel_class }} flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-sky-200/35 via-white to-slate-100/90 ring-1 ring-sky-400/20 p-2 lg:p-4 dark:from-sky-900/20 dark:via-slate-900/70 dark:to-slate-900/70 dark:ring-sky-300/20">
     <div class="shrink-0">
       <a href="/" class="mb-2 flex items-center gap-2 rounded-2xl bg-white px-2 py-1.5 transition hover:bg-sky-50 dark:bg-white/10 dark:hover:bg-white/20 lg:mb-3 lg:gap-3 lg:px-3 lg:py-2">
-        <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-9 w-9 shrink-0 rounded-lg p-0 invert dark:invert-0 lg:h-[82px] lg:w-[82px]">
+        <img src="{{ static_url('app-logo.svg') }}" alt="" class="h-9 w-9 shrink-0 rounded-lg p-0 invert dark:invert-0 lg:h-[68px] lg:w-[68px]">
         <span class="min-w-0">
           <span class="block truncate text-sm font-semibold text-slate-900 dark:text-white lg:text-lg">Lumigen</span>
           <span class="hidden truncate text-xs text-slate-500 dark:text-slate-400 lg:block">v{{ app_version }}</span>
         </span>
       </a>
-      <a href="/?conversation=new&workspace_view=chat" class="{{ btn_primary }} w-full py-1.5 text-xs lg:py-2 lg:text-sm">New Session</a>
-    </div>
-
-    <div class="subtle-scrollbar mt-4 hidden min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 lg:block" id="session-list">
-      {% set session_prev_category = '' %}
-      {% set session_next_offset = session_offset + (session_items | length) %}
-      {% set session_next_prev_category = session_items[-1].time_category if session_items else '' %}
-      {% include 'fragments/session_items_chunk.html' %}
-      
-      {% if not session_items %}
-        <p class="rounded-xl bg-white px-3 py-2 text-sm text-slate-600 dark:bg-white/10 dark:text-slate-400">No sessions yet.</p>
-      {% endif %}
+      <form action="/sessions/new" method="post">
+        {{ csrf_input }}
+        <input type="hidden" name="workspace_view" value="chat">
+        <input type="hidden" name="artbook_filter" value="{{ artbook_filter }}">
+        <input type="hidden" name="artbook_name_query" value="{{ artbook_name_query }}">
+        <button type="submit" class="{{ btn_primary }} w-full py-1.5 text-xs lg:py-2 lg:text-sm">New Artbook</button>
+      </form>
     </div>
 
     <nav class="mt-4 shrink-0 border-t border-slate-300/60 pt-3 dark:border-white/5">
+      <a href="/?workspace_view=chat&conversation=new&artbook_filter={{ artbook_filter | urlencode }}&artbook_name_query={{ artbook_name_query | urlencode }}"
+        class="mb-2 block rounded-xl px-3 py-2 text-sm font-semibold transition {% if workspace_view == 'chat' and active_conversation == 'new' %}bg-sky-300/30 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-sky-50 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20{% endif %}"
+      >Artbooks</a>
       <a href="/?workspace_view=profiles&conversation={{ active_conversation | urlencode }}" 
          data-workspace-nav 
          data-workspace-view="profiles" 
@@ -106,41 +103,91 @@
         </div>
       </div>
     {% else %}
-      <div id="workspace-content" class="relative h-full w-full">
-      <div id="chat-history" class="subtle-scrollbar h-full space-y-5 overflow-y-auto px-4 sm:px-5">
-        {% if error %}
-          {% with error_message=error %}
-            {% include "fragments/chat_error_item.html" %}
-          {% endwith %}
-        {% endif %}
-
-        {% if conversation_generations %}
-          {% for generation in conversation_generations %}
-            {% set assets = generation.assets | sort(attribute='id') %}
-            {% include "fragments/chat_generation_item.html" %}
-          {% endfor %}
-        {% else %}
-          <div class="rounded-2xl border border-dashed border-slate-300/70 bg-slate-100/80 px-5 py-8 text-center text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
-            Start a new session with a prompt in the input field below.
+      <div id="workspace-content" class="h-full min-h-0 w-full p-2 sm:p-3">
+      <div class="grid gap-3 {% if active_conversation == 'new' %}h-auto items-start{% else %}h-full min-h-0{% endif %}">
+        {% if active_conversation == 'new' %}
+        <aside class="self-start rounded-2xl border border-slate-300/70 bg-gradient-to-b from-slate-100/90 to-white/95 p-2 ring-1 ring-slate-200/70 dark:border-white/10 dark:from-slate-900/75 dark:to-slate-900/55 dark:ring-white/5">
+          <div class="mb-2">
+            <p class="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Artbook</p>
+            {% if active_conversation == 'new' %}
+              <p class="mb-1 px-1 text-xs text-slate-500 dark:text-slate-400">Select an Artbook tile to load content.</p>
+            {% endif %}
+            <form method="get" action="/" class="mt-1 flex flex-nowrap items-end gap-2 overflow-x-auto" data-artbook-filters-form>
+              <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+              <input type="hidden" name="conversation" value="{{ active_conversation }}">
+              <select name="artbook_filter" class="{{ input_class }} w-auto min-w-[11rem] shrink-0 text-xs" aria-label="Filter artbooks">
+                <option value="all" {% if artbook_filter == 'all' %}selected{% endif %}>All artbooks</option>
+                <option value="week" {% if artbook_filter == 'week' %}selected{% endif %}>Updated this week</option>
+                <option value="today" {% if artbook_filter == 'today' %}selected{% endif %}>Updated today</option>
+              </select>
+              <input
+                type="text"
+                name="artbook_name_query"
+                value="{{ artbook_name_query }}"
+                placeholder="Name contains..."
+                class="{{ input_class }} min-w-[11rem] flex-1 text-xs"
+                aria-label="Search artbooks by name"
+              >
+              <a href="/?workspace_view={{ workspace_view | urlencode }}&conversation={{ active_conversation | urlencode }}&artbook_filter=all" data-artbook-filters-clear class="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-300/80 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10">Clear</a>
+              <button type="submit" class="inline-flex shrink-0 items-center justify-center rounded-lg bg-sky-300 px-2.5 py-1 text-xs font-semibold text-slate-950 transition hover:bg-sky-200">Apply</button>
+            </form>
           </div>
-        {% endif %}
-      </div>
 
-      <form
-        action="/generate"
-        hx-post="/generate"
-        hx-target="#chat-history"
-        hx-swap="beforeend"
-        hx-encoding="multipart/form-data"
-        hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}}"
-        method="post"
-        enctype="multipart/form-data"
-        class="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between"
-        data-generation-form
-      >
-        <input type="hidden" name="conversation" value="{{ active_conversation }}">
+          <div class="subtle-scrollbar min-h-0 overflow-y-auto pr-1 {% if active_conversation == 'new' %}grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 content-start{% else %}space-y-2{% endif %}" id="session-list" style="max-height: calc(100dvh - 18rem);">
+            {% set session_prev_category = '' %}
+            {% set session_next_offset = session_offset + (session_items | length) %}
+            {% set session_next_prev_category = session_items[-1].time_category if session_items else '' %}
+            {% include 'fragments/session_items_chunk.html' %}
+            
+            {% if not session_items %}
+              <p class="rounded-xl bg-white px-3 py-2 text-sm text-slate-600 dark:bg-white/10 dark:text-slate-400">No artbooks for this filter.</p>
+            {% endif %}
+          </div>
+        </aside>
+        {% endif %}
+
+        {% if active_conversation != 'new' %}
+        <div class="relative min-h-0 overflow-hidden rounded-2xl border border-slate-300/75 bg-white/75 dark:border-white/10 dark:bg-slate-950/45">
+          <div id="chat-history" class="subtle-scrollbar h-full space-y-5 overflow-y-auto px-4 sm:px-5">
+            {% if error %}
+              {% with error_message=error %}
+                {% include "fragments/chat_error_item.html" %}
+              {% endwith %}
+            {% endif %}
+
+            {% if conversation_generations %}
+              {% for generation in conversation_generations %}
+                {% set assets = generation.assets | sort(attribute='id') %}
+                {% include "fragments/chat_generation_item.html" %}
+              {% endfor %}
+            {% else %}
+              <div class="rounded-2xl border border-dashed border-slate-300/70 bg-slate-100/80 px-5 py-8 text-center text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                Start a new session with a prompt in the input field below.
+              </div>
+            {% endif %}
+          </div>
+
+          <form
+            action="/generate"
+            hx-post="/generate"
+            hx-target="#chat-history"
+            hx-swap="beforeend"
+            hx-encoding="multipart/form-data"
+            hx-on::after-request="if(event.detail.successful){var prompt=this.querySelector('[name=prompt_user]');if(prompt){prompt.value='';prompt.focus();}}"
+            method="post"
+            enctype="multipart/form-data"
+            class="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between"
+            data-generation-form
+          >
+            <input type="hidden" name="conversation" value="{{ active_conversation }}">
 
         <div class="pointer-events-auto bg-transparent px-4 py-3 sm:px-5" data-chat-top-panel>
+          <div class="mb-2">
+            <a href="/?workspace_view=chat&conversation=new&artbook_filter={{ artbook_filter | urlencode }}&artbook_name_query={{ artbook_name_query | urlencode }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300/75 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-white/10">
+              <i class="bi bi-arrow-left" aria-hidden="true"></i>
+              <span>Back to Artbooks</span>
+            </a>
+          </div>
           <div class="flex flex-wrap items-end gap-2">
             <div class="w-full max-w-md">
               <select id="profile_id" name="profile_id" data-generation-profile required aria-label="Profile selection" class="{{ input_class }}">
@@ -425,18 +472,51 @@
             </datalist>
           </div>
         </div>
-      </form>
+          </form>
+        </div>
+        {% endif %}
+      </div>
       </div>
     {% endif %}
   </section>
 </div>
 
-<form id="rename-session-form" action="/sessions/rename" method="post" class="hidden">
-  <input type="hidden" name="session_token" value="">
-  <input type="hidden" name="title" value="">
-  <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
-  <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
-</form>
+<dialog id="rename-artbook-dialog" class="w-[min(92vw,30rem)] rounded-2xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
+  <article class="rounded-2xl p-5">
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="text-base font-semibold text-slate-900 dark:text-white">Rename Artbook</h3>
+      <button
+        type="button"
+        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300/80 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/15 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+        data-artbook-rename-close
+        aria-label="Close rename dialog"
+      >
+        <i class="bi bi-x text-base" aria-hidden="true"></i>
+      </button>
+    </div>
+    <form id="rename-session-form" action="/sessions/rename" method="post" class="mt-4 space-y-3">
+      <input type="hidden" name="session_token" value="">
+      <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+      <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+      <input type="hidden" name="artbook_filter" value="{{ artbook_filter }}">
+      <input type="hidden" name="artbook_name_query" value="{{ artbook_name_query }}">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" for="rename-artbook-title">Title</label>
+      <input
+        id="rename-artbook-title"
+        type="text"
+        name="title"
+        required
+        maxlength="120"
+        data-artbook-rename-input
+        class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100"
+      >
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button type="button" data-artbook-rename-close class="inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10">Cancel</button>
+        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-sky-300 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-200">Save</button>
+      </div>
+    </form>
+  </article>
+</dialog>
 
 <dialog id="asset-detail-dialog" class="w-full max-w-5xl rounded-2xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-950/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55" data-asset-detail-dialog>
   <article class="relative max-h-[90vh] overflow-hidden rounded-2xl">

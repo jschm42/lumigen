@@ -180,6 +180,11 @@ def test_format_session_helpers(app_module) -> None:
     assert app_module.get_session_time_category(now - timedelta(days=500)) == "older"
 
 
+def test_default_artbook_title_uses_bracketed_date(app_module) -> None:
+    value = app_module.default_artbook_title(datetime(2026, 5, 31, 12, 0, 0))
+    assert value == "Artbook [31.05.2026]"
+
+
 def test_normalize_time_preset_supports_extended_values(app_module) -> None:
     assert app_module.normalize_time_preset("today") == "today"
     assert app_module.normalize_time_preset("last_60_days") == "last_60_days"

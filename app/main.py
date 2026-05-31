@@ -57,7 +57,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
-from app.db.models import Asset, Generation, User
+from app.db.models import Asset, ChatSession, Generation, User
 from app.providers.base import ProviderError
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
@@ -839,6 +839,74 @@ def get_session_time_category_label(value: str) -> str:
 
 SESSION_MAX_DAYS: int | None = None
 SESSION_PAGE_SIZE = 10
+ARTBOOK_FILTER_MODES = {"all", "week", "today"}
+
+
+def normalize_artbook_filter(value: str | None) -> str:
+    """Return a supported Artbook filter mode."""
+    mode = (value or "all").strip().lower()
+    if mode in ARTBOOK_FILTER_MODES:
+        return mode
+    return "all"
+
+
+def normalize_artbook_name_query(value: str | None) -> str:
+    """Return a normalized name-like search query for Artbooks."""
+    return str(value or "").strip()
+
+
+def generation_session_cover_asset_id(generation: Generation) -> int | None:
+    """Return the custom Artbook cover asset ID from a generation snapshot."""
+    snapshot = generation.request_snapshot_json or {}
+    raw_value = snapshot.get("chat_cover_asset_id")
+    if isinstance(raw_value, int) and raw_value > 0:
+        return raw_value
+    if isinstance(raw_value, str):
+        token = raw_value.strip()
+        if token.isdigit():
+            parsed = int(token)
+            if parsed > 0:
+                return parsed
+    return None
+
+
+def artbook_filter_label(value: str) -> str:
+    """Return a human-readable label for the active Artbook filter."""
+    labels = {
+        "all": "All artbooks",
+        "week": "Updated this week",
+        "today": "Updated today",
+    }
+    return labels.get(value, "All artbooks")
+
+
+def default_artbook_title(created_at: datetime | None) -> str:
+    """Return the default title for an empty Artbook based on its creation date."""
+    if not created_at or created_at == datetime.min:
+        return "Artbook"
+    return f"Artbook [{created_at.strftime('%d.%m.%Y')}]"
+
+
+def resolve_artbook_title_for_token(session: Session, session_token: str) -> str:
+    """Resolve a stable title for an Artbook token.
+
+    Prefers an explicitly saved chat session title from existing generations,
+    otherwise derives the default title from the chat session creation date.
+    """
+    token = (session_token or "").strip()
+    if not token or token == "new":
+        return "Artbook"
+
+    generations = list_generations_for_session_token(session, token)
+    for generation in reversed(generations):
+        existing_title = generation_session_title(generation)
+        if existing_title:
+            return existing_title
+
+    chat_session = crud.get_chat_session(session, token)
+    if chat_session:
+        return default_artbook_title(chat_session.created_at)
+    return default_artbook_title(datetime.now())
 
 
 def build_session_items(
@@ -846,6 +914,8 @@ def build_session_items(
     offset: int = 0,
     limit: int = SESSION_PAGE_SIZE,
     max_days: int | None = SESSION_MAX_DAYS,
+    artbook_filter: str = "all",
+    artbook_name_query: str = "",
 ) -> tuple[list[dict[str, Any]], bool]:
     """
     Build session items with pagination and time categorization.
@@ -884,6 +954,9 @@ def build_session_items(
                 "started_at": created_at,
                 "latest_created_at": created_at,
                 "latest_status": generation.status,
+                "asset_ids": set(),
+                "default_cover_asset_id": None,
+                "custom_cover_asset_id": None,
             }
             session_index[token] = item
         if created_at >= item["latest_created_at"]:
@@ -892,10 +965,104 @@ def build_session_items(
             item["latest_status"] = generation.status
             if custom_title:
                 item["custom_title"] = custom_title
+        generation_asset_ids = {
+            int(asset.id)
+            for asset in generation.assets
+            if getattr(asset, "id", None) is not None
+        }
+        item["asset_ids"].update(generation_asset_ids)
 
-    # Get all unique sessions sorted by latest_created_at
+    # Include empty ChatSession rows (Artbooks without generations yet).
+    all_chat_sessions = list(
+        session.scalars(
+            select(ChatSession).order_by(
+                ChatSession.updated_at.desc(),
+                ChatSession.id.desc(),
+            )
+        ).all()
+    )
+    for chat_session in all_chat_sessions:
+        token = str(chat_session.chat_session_id or "").strip()
+        if not token or token in hidden_tokens or token in session_index:
+            continue
+        created_at = chat_session.created_at or datetime.min
+        latest_at = chat_session.updated_at or created_at
+        if max_days is not None:
+            now = datetime.now(UTC)
+            cutoff_date = now - timedelta(days=max_days)
+            if latest_at < cutoff_date:
+                continue
+
+        session_index[token] = {
+            "token": token,
+            "profile_label": default_artbook_title(created_at),
+            "custom_title": "",
+            "latest_generation_id": 0,
+            "started_at": created_at,
+            "latest_created_at": latest_at,
+            "latest_status": "",
+            "asset_ids": set(),
+            "default_cover_asset_id": None,
+            "custom_cover_asset_id": None,
+        }
+
+    # Determine default and custom Artbook cover IDs.
+    for generation in reversed(all_generations):
+        token = generation_session_token(generation)
+        if token in hidden_tokens:
+            continue
+        item = session_index.get(token)
+        if not item:
+            continue
+
+        # First generated image becomes the default Artbook cover.
+        if item.get("default_cover_asset_id") is None:
+            generation_assets = sorted(
+                generation.assets,
+                key=lambda asset: (getattr(asset, "id", 0) or 0),
+            )
+            if generation_assets and getattr(generation_assets[0], "id", None) is not None:
+                item["default_cover_asset_id"] = int(generation_assets[0].id)
+
+        custom_cover_id = generation_session_cover_asset_id(generation)
+        if custom_cover_id:
+            item["custom_cover_asset_id"] = custom_cover_id
+
+    normalized_filter = normalize_artbook_filter(artbook_filter)
+    normalized_name_query = normalize_artbook_name_query(artbook_name_query).lower()
+
+    # Build and filter unique sessions.
+    all_sessions = list(session_index.values())
+    if normalized_filter == "today":
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        all_sessions = [
+            item
+            for item in all_sessions
+            if (item.get("latest_created_at") or datetime.min) >= today_start
+        ]
+    elif normalized_filter == "week":
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
+        all_sessions = [
+            item
+            for item in all_sessions
+            if (item.get("latest_created_at") or datetime.min) >= week_start
+        ]
+
+    if normalized_name_query:
+        query_parts = [part for part in normalized_name_query.split() if part]
+        if query_parts:
+            filtered_sessions: list[dict[str, Any]] = []
+            for item in all_sessions:
+                label = str(item.get("custom_title") or item.get("profile_label") or "Session").lower()
+                if all(part in label for part in query_parts):
+                    filtered_sessions.append(item)
+            all_sessions = filtered_sessions
+
     all_sessions = sorted(
-        session_index.values(),
+        all_sessions,
         key=lambda item: (
             item.get("latest_created_at") or datetime.min,
             item.get("latest_generation_id") or 0,
@@ -918,6 +1085,22 @@ def build_session_items(
         latest_label = format_session_timestamp(latest_at)
         base_label = str(item.get("profile_label") or "Session")
         custom_title = str(item.get("custom_title") or "").strip()
+        available_asset_ids = set(item.get("asset_ids") or set())
+        custom_cover_asset_id = item.get("custom_cover_asset_id")
+        default_cover_asset_id = item.get("default_cover_asset_id")
+        cover_asset_id: int | None = None
+        if (
+            isinstance(custom_cover_asset_id, int)
+            and custom_cover_asset_id > 0
+            and custom_cover_asset_id in available_asset_ids
+        ):
+            cover_asset_id = custom_cover_asset_id
+        elif (
+            isinstance(default_cover_asset_id, int)
+            and default_cover_asset_id > 0
+            and default_cover_asset_id in available_asset_ids
+        ):
+            cover_asset_id = default_cover_asset_id
 
         session_items.append({
             "token": item["token"],
@@ -927,6 +1110,9 @@ def build_session_items(
             "time_category": get_session_time_category(latest_at),
             "time_category_label": get_session_time_category_label(get_session_time_category(latest_at)),
             "latest_created_at": latest_at,
+            "cover_asset_id": cover_asset_id,
+            "cover_thumb_url": f"/assets/{cover_asset_id}/thumb" if cover_asset_id else "",
+            "active_filter_label": artbook_filter_label(normalized_filter),
         })
 
     return session_items, has_more
@@ -956,14 +1142,20 @@ def generation_chat_deleted(generation: Generation) -> bool:
 
 
 def list_generations_for_session_token(
-    db: Session, session_token: str
+    db: Session,
+    session_token: str,
+    *,
+    with_assets: bool = False,
 ) -> list[Generation]:
     token = (session_token or "").strip()
     if not token or token == "new":
         return []
+    query = select(Generation)
+    if with_assets:
+        query = query.options(selectinload(Generation.assets))
     candidates = list(
         db.scalars(
-            select(Generation).order_by(Generation.created_at.asc(), Generation.id.asc())
+            query.order_by(Generation.created_at.asc(), Generation.id.asc())
         ).all()
     )
     return [item for item in candidates if generation_session_token(item) == token]
@@ -974,6 +1166,7 @@ def generate_workspace_redirect(
     conversation: str,
     workspace_view: str = "chat",
     error: str | None = None,
+    extra_params: dict[str, str | int | bool | None] | None = None,
 ) -> RedirectResponse:
     view = (workspace_view or "chat").strip().lower()
     if view not in {"chat", "profiles", "gallery", "admin"}:
@@ -981,6 +1174,14 @@ def generate_workspace_redirect(
     params: dict[str, str] = {"workspace_view": view, "conversation": conversation}
     if error:
         params["error"] = error
+    if extra_params:
+        for key, value in extra_params.items():
+            if value is None:
+                continue
+            string_value = str(value)
+            if string_value == "":
+                continue
+            params[key] = string_value
     return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
@@ -1202,6 +1403,8 @@ def generate_page(
     error: str | None = Query(default=None),
     conversation: str | None = Query(default=None),
     workspace_view: str | None = Query(default="chat"),
+    artbook_filter: str = Query(default="all"),
+    artbook_name_query: str = Query(default=""),
     session_offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -1211,12 +1414,17 @@ def generate_page(
     if active_workspace_view == "admin" and not current_user_is_admin(request):
         active_workspace_view = "chat"
 
+    active_artbook_filter = normalize_artbook_filter(artbook_filter)
+    active_artbook_name_query = normalize_artbook_name_query(artbook_name_query)
+
     # Build full session list once; we derive the rendered page slice from it.
     all_sessions, _ = build_session_items(
         session,
         offset=0,
         limit=100000,
         max_days=SESSION_MAX_DAYS,
+        artbook_filter=active_artbook_filter,
+        artbook_name_query=active_artbook_name_query,
     )
     all_session_tokens = {item["token"] for item in all_sessions}
 
@@ -1225,7 +1433,7 @@ def generate_page(
         if active_conversation != "new" and active_conversation not in all_session_tokens:
             active_conversation = ""
     if not active_conversation:
-        active_conversation = all_sessions[0]["token"] if all_sessions else "new"
+        active_conversation = "new"
 
     effective_session_offset = session_offset
     if active_conversation not in {"", "new"}:
@@ -1299,6 +1507,8 @@ def generate_page(
             "session_offset": effective_session_offset,
             "active_conversation": active_conversation,
             "workspace_view": active_workspace_view,
+            "artbook_filter": active_artbook_filter,
+            "artbook_name_query": active_artbook_name_query,
             "hide_footer": True,
             "hide_header": True,
             "enhancement_ready": enhancement_ready,
@@ -1512,6 +1722,10 @@ def generate_submit(
             chat_session_id=resolved_conversation,
             last_profile_id=profile_id,
             selected_style_ids=style_ids,
+        )
+        overrides["chat_session_title"] = resolve_artbook_title_for_token(
+            session,
+            resolved_conversation,
         )
 
         prompt_user_original = prompt_user
@@ -1915,6 +2129,8 @@ def rename_chat_session(
     title: str = Form(...),
     active_conversation: str = Form(default=""),
     workspace_view: str = Form(default="chat"),
+    artbook_filter: str = Form(default="all"),
+    artbook_name_query: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -1925,6 +2141,10 @@ def rename_chat_session(
             conversation=active_conversation or "new",
             workspace_view=workspace_view,
             error="Invalid session token",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     new_title = (title or "").strip()
@@ -1933,14 +2153,23 @@ def rename_chat_session(
             conversation=active_conversation or token,
             workspace_view=workspace_view,
             error="Session title must not be empty",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     generations = list_generations_for_session_token(session, token)
-    if not generations:
+    chat_session_row = crud.get_chat_session(session, token)
+    if not generations and not chat_session_row:
         return generate_workspace_redirect(
             conversation=active_conversation or "new",
             workspace_view=workspace_view,
             error="Session not found",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     for generation in generations:
@@ -1954,6 +2183,122 @@ def rename_chat_session(
     return generate_workspace_redirect(
         conversation=target_conversation,
         workspace_view=workspace_view,
+        extra_params={
+            "artbook_filter": normalize_artbook_filter(artbook_filter),
+            "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+        },
+    )
+
+
+@app.post("/sessions/new")
+def create_empty_artbook(
+    request: Request,
+    workspace_view: str = Form(default="chat"),
+    artbook_filter: str = Form(default="all"),
+    artbook_name_query: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Create a new empty Artbook and navigate to its chat workspace."""
+    validate_csrf_or_raise(request, csrf_token)
+
+    token = ""
+    for _ in range(10):
+        candidate = build_chat_session_token()
+        if not crud.get_chat_session(session, candidate):
+            token = candidate
+            break
+    if not token:
+        raise HTTPException(status_code=500, detail="Could not create a unique Artbook token")
+
+    crud.upsert_chat_session_preferences(session, chat_session_id=token)
+
+    return generate_workspace_redirect(
+        conversation=token,
+        workspace_view=workspace_view,
+        extra_params={
+            "artbook_filter": normalize_artbook_filter(artbook_filter),
+            "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+        },
+    )
+
+
+@app.post("/sessions/cover")
+def set_chat_session_cover_image(
+    request: Request,
+    session_token: str = Form(...),
+    asset_id: int = Form(...),
+    active_conversation: str = Form(default=""),
+    workspace_view: str = Form(default="chat"),
+    artbook_filter: str = Form(default="all"),
+    artbook_name_query: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Set the selected asset as the Artbook cover image for a session."""
+    validate_csrf_or_raise(request, csrf_token)
+    token = (session_token or "").strip()
+    normalized_filter = normalize_artbook_filter(artbook_filter)
+    normalized_name_query = normalize_artbook_name_query(artbook_name_query)
+    if not token or token in {"all", "new"}:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Invalid session token",
+            extra_params={
+                "artbook_filter": normalized_filter,
+                "artbook_name_query": normalized_name_query,
+            },
+        )
+
+    generations = list_generations_for_session_token(
+        session,
+        token,
+        with_assets=True,
+    )
+    if not generations:
+        return generate_workspace_redirect(
+            conversation=active_conversation or "new",
+            workspace_view=workspace_view,
+            error="Session not found",
+            extra_params={
+                "artbook_filter": normalized_filter,
+                "artbook_name_query": normalized_name_query,
+            },
+        )
+
+    session_asset_ids = {
+        int(asset.id)
+        for generation in generations
+        for asset in generation.assets
+        if getattr(asset, "id", None) is not None
+    }
+    if asset_id not in session_asset_ids:
+        return generate_workspace_redirect(
+            conversation=active_conversation or token,
+            workspace_view=workspace_view,
+            error="Image does not belong to this session",
+            extra_params={
+                "artbook_filter": normalized_filter,
+                "artbook_name_query": normalized_name_query,
+            },
+        )
+
+    for generation in generations:
+        snapshot = dict(generation.request_snapshot_json or {})
+        snapshot["chat_cover_asset_id"] = int(asset_id)
+        generation.request_snapshot_json = snapshot
+        session.add(generation)
+    session.commit()
+
+    target_conversation = (active_conversation or "").strip() or token
+    return generate_workspace_redirect(
+        conversation=target_conversation,
+        workspace_view=workspace_view,
+        extra_params={
+            "artbook_filter": normalized_filter,
+            "artbook_name_query": normalized_name_query,
+        },
     )
 
 
@@ -1963,6 +2308,8 @@ def delete_chat_session(
     session_token: str = Form(...),
     active_conversation: str = Form(default=""),
     workspace_view: str = Form(default="chat"),
+    artbook_filter: str = Form(default="all"),
+    artbook_name_query: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -1973,14 +2320,23 @@ def delete_chat_session(
             conversation=active_conversation or "new",
             workspace_view=workspace_view,
             error="Invalid session token",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     generations = list_generations_for_session_token(session, token)
-    if not generations:
+    chat_session_row = crud.get_chat_session(session, token)
+    if not generations and not chat_session_row:
         return generate_workspace_redirect(
             conversation=active_conversation or "new",
             workspace_view=workspace_view,
             error="Session not found",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     for generation in generations:
@@ -1992,6 +2348,9 @@ def delete_chat_session(
         snapshot.pop("chat_session_title", None)
         generation.request_snapshot_json = snapshot
         session.add(generation)
+
+    if chat_session_row is not None:
+        session.delete(chat_session_row)
     session.commit()
 
     requested_active = (active_conversation or "").strip()
@@ -1999,6 +2358,10 @@ def delete_chat_session(
     return generate_workspace_redirect(
         conversation=next_conversation,
         workspace_view=workspace_view,
+        extra_params={
+            "artbook_filter": normalize_artbook_filter(artbook_filter),
+            "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+        },
     )
 
 
@@ -2008,6 +2371,8 @@ def archive_chat_session(
     session_token: str = Form(...),
     active_conversation: str = Form(default=""),
     workspace_view: str = Form(default="chat"),
+    artbook_filter: str = Form(default="all"),
+    artbook_name_query: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
@@ -2018,6 +2383,10 @@ def archive_chat_session(
             conversation=active_conversation or "new",
             workspace_view=workspace_view,
             error="Invalid session token",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     generations = list_generations_for_session_token(session, token)
@@ -2026,6 +2395,10 @@ def archive_chat_session(
             conversation=active_conversation or "new",
             workspace_view=workspace_view,
             error="Session not found",
+            extra_params={
+                "artbook_filter": normalize_artbook_filter(artbook_filter),
+                "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+            },
         )
 
     for generation in generations:
@@ -2041,6 +2414,10 @@ def archive_chat_session(
     return generate_workspace_redirect(
         conversation=next_conversation,
         workspace_view=workspace_view,
+        extra_params={
+            "artbook_filter": normalize_artbook_filter(artbook_filter),
+            "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+        },
     )
 
 
@@ -3840,6 +4217,8 @@ def session_input_image_thumb(
 def list_sessions(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=SESSION_PAGE_SIZE, ge=1, le=50),
+    artbook_filter: str = Query(default="all"),
+    artbook_name_query: str = Query(default=""),
     session: Session = Depends(get_session),
 ) -> JSONResponse:
     """API endpoint to fetch paginated sessions with time categories."""
@@ -3848,6 +4227,8 @@ def list_sessions(
         offset=offset,
         limit=limit,
         max_days=SESSION_MAX_DAYS,
+        artbook_filter=normalize_artbook_filter(artbook_filter),
+        artbook_name_query=normalize_artbook_name_query(artbook_name_query),
     )
     return JSONResponse({
         "sessions": session_items,
@@ -3865,13 +4246,19 @@ def list_sessions_fragment(
     prev_category: str = Query(default=""),
     active_conversation: str = Query(default="new"),
     workspace_view: str = Query(default="chat"),
+    artbook_filter: str = Query(default="all"),
+    artbook_name_query: str = Query(default=""),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    active_artbook_filter = normalize_artbook_filter(artbook_filter)
+    active_artbook_name_query = normalize_artbook_name_query(artbook_name_query)
     session_items, session_has_more = build_session_items(
         session,
         offset=offset,
         limit=limit,
         max_days=SESSION_MAX_DAYS,
+        artbook_filter=active_artbook_filter,
+        artbook_name_query=active_artbook_name_query,
     )
     next_offset = offset + len(session_items)
     next_prev_category = prev_category
@@ -3894,6 +4281,8 @@ def list_sessions_fragment(
             "session_next_prev_category": next_prev_category,
             "active_conversation": active_conversation,
             "workspace_view": safe_workspace_view,
+            "artbook_filter": active_artbook_filter,
+            "artbook_name_query": active_artbook_name_query,
         },
     )
 

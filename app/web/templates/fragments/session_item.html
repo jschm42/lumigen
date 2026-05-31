@@ -1,16 +1,31 @@
-<div class="relative rounded-xl px-3 py-1.5 text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}bg-sky-100 text-sky-900 dark:bg-sky-300/20 dark:text-sky-100{% else %}bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20 dark:hover:text-white{% endif %}" title="{{ item.label }} - {{ item.subtitle }}">
-  <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat" class="flex items-center justify-between pr-8">
-    <span class="truncate font-semibold">{{ item.label }}</span>
-    <span class="ml-2 shrink-0 text-xs text-slate-500 dark:text-slate-300">{{ item.age if item.age else " " }}</span>
+<div class="relative rounded-2xl border text-sm transition {% if active_conversation == item.token and workspace_view == 'chat' %}border-sky-400/60 bg-sky-100/80 text-sky-900 ring-2 ring-sky-300/40 dark:border-sky-300/50 dark:bg-sky-300/15 dark:text-sky-100{% else %}border-slate-300/70 bg-white/95 text-slate-700 hover:border-sky-300/60 hover:bg-sky-50 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20 dark:hover:text-white{% endif %}" title="{{ item.label }} - {{ item.subtitle }}">
+  <a href="/?conversation={{ item.token | urlencode }}&workspace_view=chat&artbook_filter={{ artbook_filter | urlencode }}&artbook_name_query={{ artbook_name_query | urlencode }}" class="block overflow-hidden rounded-2xl">
+    <div class="aspect-[4/3] overflow-hidden bg-slate-200/75 dark:bg-slate-900/70">
+      {% if item.cover_thumb_url %}
+        <img src="{{ item.cover_thumb_url }}" alt="Artbook cover" loading="lazy" class="h-full w-full object-cover transition duration-300 hover:scale-[1.02]">
+      {% else %}
+        <div class="flex h-full w-full items-center justify-center text-slate-500 dark:text-slate-400">
+          <i class="bi bi-journal-richtext text-2xl" aria-hidden="true"></i>
+        </div>
+      {% endif %}
+    </div>
+    <div class="space-y-1.5 px-3 py-2.5">
+      <p class="truncate text-sm font-semibold">{{ item.label }}</p>
+      <p class="truncate text-xs text-slate-500 dark:text-slate-300">{{ item.subtitle or "No updates yet" }}</p>
+      <div class="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <span class="truncate">{{ item.active_filter_label }}</span>
+        <span class="shrink-0">{{ item.age if item.age else "--" }}</span>
+      </div>
+    </div>
   </a>
   <button
     type="button"
-    class="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300/70 bg-white text-slate-600 transition hover:border-slate-400/80 hover:text-slate-900 dark:border-white/10 dark:bg-slate-950/55 dark:text-slate-200 dark:hover:border-white/25 dark:hover:text-white"
+    class="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-300/70 bg-white/95 text-slate-600 transition hover:border-slate-400/80 hover:text-slate-900 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:border-white/25 dark:hover:text-white"
     aria-haspopup="menu"
-    aria-label="Session actions"
+    aria-label="Artbook actions"
     data-session-menu-toggle
   ><i class="bi bi-three-dots text-base" aria-hidden="true"></i></button>
-  <div class="absolute right-1 top-9 z-40 hidden w-44 rounded-xl border border-slate-300/70 bg-white/95 p-1 shadow-xl shadow-slate-300/55 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95 dark:shadow-slate-950/60" role="menu" data-session-menu>
+  <div class="absolute right-2 top-11 z-40 hidden w-44 rounded-xl border border-slate-300/70 bg-white/95 p-1 shadow-xl shadow-slate-300/55 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/95 dark:shadow-slate-950/60" role="menu" data-session-menu>
     <button
       type="button"
       class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10"
@@ -18,23 +33,27 @@
       data-session-token="{{ item.token }}"
       data-session-title="{{ item.label }}"
       role="menuitem"
-    >Rename</button>
+    >Rename Artbook</button>
     <a
       href="/sessions/download?session_token={{ item.token | urlencode }}"
       download
       class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10"
       role="menuitem"
     >Download</a>
-    <form action="/sessions/archive" method="post" data-confirm-message="Archive session? It will be hidden but not deleted.">
+    <form action="/sessions/archive" method="post" data-confirm-message="Archive artbook? It will be hidden but not deleted.">
       <input type="hidden" name="session_token" value="{{ item.token }}">
       <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
       <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+      <input type="hidden" name="artbook_filter" value="{{ artbook_filter }}">
+      <input type="hidden" name="artbook_name_query" value="{{ artbook_name_query }}">
       <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10" role="menuitem">Archive</button>
     </form>
-    <form action="/sessions/delete" method="post" data-confirm-message="Delete session and chat history? Images in the gallery will be kept.">
+    <form action="/sessions/delete" method="post" data-confirm-message="Delete artbook and chat history? Images in the gallery will be kept.">
       <input type="hidden" name="session_token" value="{{ item.token }}">
       <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
       <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+      <input type="hidden" name="artbook_filter" value="{{ artbook_filter }}">
+      <input type="hidden" name="artbook_name_query" value="{{ artbook_name_query }}">
       <button type="submit" class="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-200 transition hover:bg-rose-500/20" role="menuitem">Delete</button>
     </form>
   </div>
