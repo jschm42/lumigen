@@ -9,6 +9,7 @@ from app.providers.base import ProviderError
 class _FakeSession:
     def __init__(self) -> None:
         self.added = []
+        self.deleted = []
         self.commits = 0
         self._scalar_value = None
         self._scalars_result = []
@@ -18,6 +19,9 @@ class _FakeSession:
 
     def commit(self) -> None:
         self.commits += 1
+
+    def delete(self, item) -> None:  # type: ignore[no-untyped-def]
+        self.deleted.append(item)
 
     def scalar(self, _query):  # type: ignore[no-untyped-def]
         return self._scalar_value
@@ -109,6 +113,38 @@ def test_session_preferences_success_calls_crud(client, app_module, monkeypatch)
     }
 
 
+def test_new_artbook_creates_empty_session_and_redirects(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    called: dict[str, object] = {}
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module, "build_chat_session_token", lambda: "session:new123")
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+
+    def fake_upsert(_session, chat_session_id, **_kwargs):  # type: ignore[no-untyped-def]
+        called["chat_session_id"] = chat_session_id
+        return SimpleNamespace(chat_session_id=chat_session_id)
+
+    monkeypatch.setattr(app_module.crud, "upsert_chat_session_preferences", fake_upsert)
+
+    response = client.post(
+        "/sessions/new",
+        data={
+            "workspace_view": "chat",
+            "artbook_filter": "today",
+            "artbook_name_query": "fox",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Anew123&artbook_filter=today&artbook_name_query=fox"
+    assert called["chat_session_id"] == "session:new123"
+
+
 def test_rename_session_updates_generations_and_redirects(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
     generation_one = SimpleNamespace(request_snapshot_json={"foo": "bar"})
@@ -135,7 +171,7 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc"
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc&artbook_filter=all"
     assert generation_one.request_snapshot_json["chat_session_title"] == "My Session"
     assert generation_two.request_snapshot_json["chat_session_title"] == "My Session"
     assert fake_session.commits == 1
@@ -166,13 +202,14 @@ def test_archive_session_marks_generations_as_archived(client, app_module, monke
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?workspace_view=chat&conversation=new"
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new&artbook_filter=all"
     assert generation.request_snapshot_json["chat_archived"] is True
     assert fake_session.commits == 1
 
 
 def test_delete_session_marks_chat_history_deleted_without_removing_assets(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
+    chat_session_row = SimpleNamespace(chat_session_id="session:abc")
     generation = SimpleNamespace(
         request_snapshot_json={
             "chat_session_id": "session:abc",
@@ -189,6 +226,7 @@ def test_delete_session_marks_chat_history_deleted_without_removing_assets(clien
         "list_generations_for_session_token",
         lambda _session, _token: [generation],
     )
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row)
 
     response = client.post(
         "/sessions/delete",
@@ -201,7 +239,7 @@ def test_delete_session_marks_chat_history_deleted_without_removing_assets(clien
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?workspace_view=chat&conversation=new"
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new&artbook_filter=all"
     snapshot = generation.request_snapshot_json
     assert snapshot["chat_hidden"] is True
     assert snapshot["chat_deleted"] is True
@@ -209,6 +247,103 @@ def test_delete_session_marks_chat_history_deleted_without_removing_assets(clien
     assert "chat_session_id" not in snapshot
     assert "chat_session_title" not in snapshot
     assert fake_session.commits == 1
+    assert chat_session_row in fake_session.deleted
+
+
+def test_delete_session_removes_empty_artbook_row(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    chat_session_row = SimpleNamespace(chat_session_id="session:empty")
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [],
+    )
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row)
+
+    response = client.post(
+        "/sessions/delete",
+        data={
+            "session_token": "session:empty",
+            "active_conversation": "session:empty",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new&artbook_filter=all"
+    assert chat_session_row in fake_session.deleted
+    assert fake_session.commits == 1
+
+
+def test_set_session_cover_updates_snapshot_and_redirects(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    generation = SimpleNamespace(
+        request_snapshot_json={"chat_session_id": "session:abc"},
+        assets=[SimpleNamespace(id=11), SimpleNamespace(id=22)],
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token, with_assets=False: [generation],
+    )
+
+    response = client.post(
+        "/sessions/cover",
+        data={
+            "session_token": "session:abc",
+            "asset_id": "22",
+            "active_conversation": "session:abc",
+            "workspace_view": "chat",
+            "artbook_filter": "today",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc&artbook_filter=today"
+    assert generation.request_snapshot_json["chat_cover_asset_id"] == 22
+    assert fake_session.commits == 1
+
+
+def test_set_session_cover_rejects_asset_outside_session(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    generation = SimpleNamespace(
+        request_snapshot_json={"chat_session_id": "session:abc"},
+        assets=[SimpleNamespace(id=11)],
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token, with_assets=False: [generation],
+    )
+
+    response = client.post(
+        "/sessions/cover",
+        data={
+            "session_token": "session:abc",
+            "asset_id": "99",
+            "active_conversation": "session:abc",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "error=Image+does+not+belong+to+this+session" in response.headers["location"]
+    assert fake_session.commits == 0
 
 
 def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monkeypatch) -> None:
@@ -219,7 +354,7 @@ def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monk
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=None: (
+        lambda _session, offset=0, limit=10, max_days=None, artbook_filter="all", artbook_name_query="": (
             [
                 {
                     "token": "session:one",
@@ -229,6 +364,9 @@ def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monk
                     "time_category": "last7days",
                     "time_category_label": "Last 7 days",
                     "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
                 }
             ],
             True,
@@ -242,7 +380,7 @@ def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monk
 
     assert response.status_code == 200
     assert "Session One" in body
-    assert "Loading more sessions..." in body
+    assert "Loading more artbooks..." in body
     assert "hx-get=\"/sessions/list-fragment?offset=1" in body
 
 

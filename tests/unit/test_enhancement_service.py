@@ -79,10 +79,13 @@ def test_get_config_decrypts_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_enhance_openai_builds_expected_request(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict] = []
+    captured_timeout: httpx.Timeout | None = None
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-            _ = args, kwargs
+            _ = args
+            nonlocal captured_timeout
+            captured_timeout = kwargs.get("timeout")
 
         async def __aenter__(self):
             return self
@@ -108,7 +111,11 @@ async def test_enhance_openai_builds_expected_request(monkeypatch: pytest.Monkey
         return "openai-secret"
 
     service = EnhancementService(
-        Settings(openai_base_url="https://openai.test/v1"),
+        Settings(
+            openai_base_url="https://openai.test/v1",
+            llm_enhancement_timeout_seconds=77,
+            llm_enhancement_connect_timeout_seconds=6,
+        ),
         SimpleNamespace(decrypt_api_key=decrypt),
     )
     monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
@@ -130,6 +137,9 @@ async def test_enhance_openai_builds_expected_request(monkeypatch: pytest.Monkey
     assert call["json"]["temperature"] == 0.7
     assert call["json"]["messages"][0] == {"role": "system", "content": "system instruction"}
     assert call["json"]["messages"][1] == {"role": "user", "content": "short prompt"}
+    assert isinstance(captured_timeout, httpx.Timeout)
+    assert captured_timeout.connect == pytest.approx(6)
+    assert captured_timeout.read == pytest.approx(77)
 
 
 @pytest.mark.asyncio

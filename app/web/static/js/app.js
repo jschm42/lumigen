@@ -1438,7 +1438,7 @@
 function setupGallerySelection() {
   var panel = document.querySelector('[data-gallery-selection-panel]');
   var bulkForm = document.getElementById('bulk-action-form');
-  if (!panel || !bulkForm) return;
+  var selectionEnabled = Boolean(panel && bulkForm);
 
   var countLabel = document.querySelector('[data-gallery-selection-count]');
   var actionButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
@@ -1448,6 +1448,7 @@ function setupGallerySelection() {
   var hiddenInputs = {};
 
   function createOrUpdateHiddenInput(assetId, checked) {
+    if (!bulkForm) return;
     var inputName = 'asset_ids';
     if (checked) {
       if (!hiddenInputs[assetId]) {
@@ -1467,6 +1468,7 @@ function setupGallerySelection() {
   }
 
   function updateState() {
+    if (!panel) return;
     var selected = Object.keys(hiddenInputs).length;
 
     if (countLabel) {
@@ -1494,6 +1496,17 @@ function setupGallerySelection() {
     var card = clickArea.closest('[data-gallery-card]');
     if (!card) return;
 
+    var detailUrl = card.dataset.assetDetailUrl;
+    if (!e.ctrlKey && !e.metaKey) {
+      if (!detailUrl) return;
+      window.location.href = detailUrl;
+      return;
+    }
+
+    if (!selectionEnabled) {
+      return;
+    }
+
     var assetId = card.dataset.assetId;
     var isSelected = card.dataset.selected === 'true';
     card.dataset.selected = (!isSelected).toString();
@@ -1513,20 +1526,13 @@ function setupGallerySelection() {
     var card = clickArea.closest('[data-gallery-card]');
     if (!card) return;
 
-    var detailTrigger = card.querySelector('[data-asset-detail-trigger]');
-    if (detailTrigger) {
-      // Reuse the existing HTMX-backed trigger so the standard asset dialog opens.
-      detailTrigger.click();
-      return;
-    }
-
     var detailUrl = card.dataset.assetDetailUrl;
     if (!detailUrl) return;
     window.location.href = detailUrl;
   });
 
   // Deselect all button clears selection and hides the panel
-  if (deselectAllBtn && deselectAllBtn.dataset.bound !== '1') {
+  if (selectionEnabled && deselectAllBtn && deselectAllBtn.dataset.bound !== '1') {
     deselectAllBtn.dataset.bound = '1';
     deselectAllBtn.addEventListener('click', function () {
       document.querySelectorAll('[data-gallery-card][data-selected="true"]').forEach(function (card) {
@@ -1537,7 +1543,9 @@ function setupGallerySelection() {
     });
   }
 
-  updateState();
+  if (selectionEnabled) {
+    updateState();
+  }
 }
 
 function setupGalleryRatings() {

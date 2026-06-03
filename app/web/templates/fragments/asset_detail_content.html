@@ -7,6 +7,14 @@
 {% set request_snapshot = asset.generation.request_snapshot_json if asset.generation.request_snapshot_json is mapping else {} %}
 {% set prompt_user_original = request_snapshot.get('prompt_user_original') or asset.generation.prompt_user %}
 {% set selected_style_names = request_snapshot.get('selected_style_names') if request_snapshot.get('selected_style_names') is sequence and request_snapshot.get('selected_style_names') is not string else [] %}
+{% set back_href = return_to if return_to else '/gallery' %}
+
+<div class="mb-3">
+  <a href="{{ back_href }}" class="{{ btn_secondary }}">
+    <i class="bi bi-arrow-left" style="font-size: 18px;"></i>
+    Back to gallery
+  </a>
+</div>
 
 <div class="{{ 'mb-3' if compact_dialog else 'mb-5' }} flex justify-center {{ '' if compact_dialog else 'rounded-2xl border border-slate-300/70 bg-slate-100/70 p-2 dark:border-white/10 dark:bg-slate-950/70' }}">
   <img class="max-h-[75vh] w-auto max-w-full rounded-xl" src="/assets/{{ asset.id }}/file" alt="asset {{ asset.id }}" id="asset-image-{{ asset.id }}">
@@ -76,6 +84,7 @@
 
     <div class="ml-auto flex flex-wrap items-center gap-2">
       <form method="post" action="/assets/{{ asset.id }}/delete" data-confirm-message="Delete this asset?" class="inline-flex">
+        <input type="hidden" name="return_to" value="{{ back_href }}">
         <button class="{{ btn_danger }}" type="submit">
           <i class="bi bi-trash" style="font-size: 18px;"></i>
           Delete asset

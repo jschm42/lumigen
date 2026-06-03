@@ -39,7 +39,10 @@ class BFLAdapter(ProviderAdapter):
 
         url = f"{self.BASE_URL}/models"
         headers = {"x-key": api_key}
-        timeout = httpx.Timeout(30.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.llm_models_timeout_seconds,
+            connect=settings.llm_models_connect_timeout_seconds,
+        )
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(url, headers=headers)
@@ -87,7 +90,10 @@ class BFLAdapter(ProviderAdapter):
         payload = self._build_payload(request)
         self._log_request("POST", submit_url, headers, payload)
 
-        timeout = httpx.Timeout(60.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.llm_generate_timeout_seconds,
+            connect=settings.llm_generate_connect_timeout_seconds,
+        )
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(submit_url, headers=headers, json=payload)
 
@@ -123,7 +129,7 @@ class BFLAdapter(ProviderAdapter):
 
             # Poll for the result
             images = await self._poll_for_result(
-                client, polling_url, request_id, request
+                client, polling_url, request_id, request, settings
             )
 
         return ProviderGenerationResult(
@@ -142,6 +148,7 @@ class BFLAdapter(ProviderAdapter):
         polling_url: str,
         request_id: str,
         request: ProviderGenerationRequest,
+        settings: Settings,
     ) -> list[ProviderImage]:
         """Poll the BFL API for the generation result."""
         headers = {"accept": "application/json"}
@@ -173,7 +180,7 @@ class BFLAdapter(ProviderAdapter):
 
             if status == "ready":
                 # Extract the image
-                return self._extract_images_from_result(result, request)
+                return self._extract_images_from_result(result, request, settings)
 
             elif status == "failed":
                 error_msg = result.get("error", "Unknown error")
@@ -198,7 +205,10 @@ class BFLAdapter(ProviderAdapter):
         )
 
     def _extract_images_from_result(
-        self, result: dict[str, Any], request: ProviderGenerationRequest
+        self,
+        result: dict[str, Any],
+        request: ProviderGenerationRequest,
+        settings: Settings,
     ) -> list[ProviderImage]:
         """Extract images from the BFL result."""
         images: list[ProviderImage] = []
@@ -241,7 +251,10 @@ class BFLAdapter(ProviderAdapter):
             if sample.startswith("http://") or sample.startswith("https://"):
                 # It's a URL - fetch the image
                 try:
-                    timeout = httpx.Timeout(60.0, connect=30.0)
+                    timeout = httpx.Timeout(
+                        settings.provider_bfl_download_timeout_seconds,
+                        connect=settings.provider_bfl_download_connect_timeout_seconds,
+                    )
                     with httpx.Client(timeout=timeout) as client:
                         response = client.get(sample)
                         response.raise_for_status()

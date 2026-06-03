@@ -17,8 +17,8 @@
   <script src="https://unpkg.com/idiomorph@0.3.0/dist/idiomorph-ext.min.js" defer></script>
   <script src="{{ static_url('js/app.js') }}" defer></script>
 </head>
-<body class="flex min-h-screen flex-col bg-gradient-to-b from-slate-100 to-sky-50 font-sans text-slate-900 antialiased dark:from-slate-950 dark:to-slate-900 dark:text-slate-100" data-embedded="{{ '1' if request.query_params.get('embedded') == '1' else '0' }}">
-  {% set embedded = request.query_params.get('embedded') == '1' %}
+<body class="flex min-h-screen flex-col bg-gradient-to-b from-slate-100 to-sky-50 font-sans text-slate-900 antialiased dark:from-slate-950 dark:to-slate-900 dark:text-slate-100" data-embedded="{{ '1' if request.headers.get('sec-fetch-dest') == 'iframe' else '0' }}">
+  {% set embedded = request.headers.get('sec-fetch-dest') == 'iframe' %}
   {% set show_top_navigation = false %}
   {% if not embedded %}
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">

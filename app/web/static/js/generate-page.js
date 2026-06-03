@@ -1,5 +1,6 @@
 (function () {
   var THEME_STORAGE_KEY = "lumigen_theme";
+  var ARTBOOK_FILTERS_STORAGE_KEY = "lumigen_artbook_filters";
 
   function getActiveConversationToken() {
     var conversationInput = document.querySelector('[name="conversation"]');
@@ -88,8 +89,22 @@
 
   function setupSessionMenus() {
     var renameForm = document.getElementById("rename-session-form");
+    var renameDialog = document.getElementById("rename-artbook-dialog");
     var renameTokenInput = renameForm ? renameForm.querySelector("[name='session_token']") : null;
-    var renameTitleInput = renameForm ? renameForm.querySelector("[name='title']") : null;
+    var renameTitleInput = renameForm ? renameForm.querySelector("[data-artbook-rename-input]") : null;
+    var renameCloseButtons = document.querySelectorAll("[data-artbook-rename-close]");
+
+    function closeRenameDialog() {
+      if (renameDialog && typeof renameDialog.close === "function" && renameDialog.open) {
+        renameDialog.close();
+      }
+    }
+
+    renameCloseButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        closeRenameDialog();
+      });
+    });
 
     function closeAllMenus() {
       document.querySelectorAll("[data-session-menu]").forEach(function (menu) {
@@ -126,13 +141,21 @@
         event.stopPropagation();
         var token = renameButton.getAttribute("data-session-token") || "";
         var currentTitle = renameButton.getAttribute("data-session-title") || "";
-        var nextTitle = window.prompt("Rename session", currentTitle);
-        if (nextTitle === null) return;
-        var trimmed = nextTitle.trim();
-        if (!trimmed || !renameForm || !renameTokenInput || !renameTitleInput) return;
+        if (!renameForm || !renameTokenInput || !renameTitleInput) return;
         renameTokenInput.value = token;
-        renameTitleInput.value = trimmed;
-        renameForm.submit();
+        renameTitleInput.value = currentTitle;
+        closeAllMenus();
+
+        if (renameDialog && typeof renameDialog.showModal === "function") {
+          renameDialog.showModal();
+          setTimeout(function () {
+            renameTitleInput.focus();
+            renameTitleInput.select();
+          }, 0);
+        } else {
+          renameTitleInput.focus();
+          renameTitleInput.select();
+        }
         return;
       }
 
@@ -179,6 +202,12 @@
       });
     }
 
+    function syncActiveWorkspaceLinkFromUrl() {
+      var currentUrl = new URL(window.location.href);
+      var view = (currentUrl.searchParams.get("workspace_view") || "chat").toLowerCase();
+      setActiveWorkspaceLink(view);
+    }
+
     // Removed iframe-related functions as we're now using HTMX for workspace navigation
 
     // Workspace links now use HTMX attributes, so we don't need to handle clicks manually
@@ -204,6 +233,8 @@
       });
     });
 
+    syncActiveWorkspaceLinkFromUrl();
+
     // Handle browser back/forward navigation
     window.addEventListener("popstate", function () {
       var currentUrl = new URL(window.location.href);
@@ -216,7 +247,17 @@
       // Load content via HTMX if needed
       if (view !== "chat") {
         if (view === "profiles") targetUrl = "/workspace/profiles";
-        else if (view === "gallery") targetUrl = "/workspace/gallery";
+        else if (view === "gallery") {
+          targetUrl = "/workspace/gallery";
+          var galleryParams = [];
+          var assetId = currentUrl.searchParams.get("asset_id");
+          var thumbSize = currentUrl.searchParams.get("thumb_size");
+          if (thumbSize) galleryParams.push("thumb_size=" + encodeURIComponent(thumbSize));
+          if (assetId) galleryParams.push("asset_id=" + encodeURIComponent(assetId));
+          if (galleryParams.length) {
+            targetUrl += "?" + galleryParams.join("&");
+          }
+        }
         else if (view === "admin") targetUrl = "/workspace/admin";
         
         if (targetUrl) {
@@ -230,6 +271,78 @@
         }
       }
     });
+
+    document.body.addEventListener("htmx:afterSettle", function () {
+      syncActiveWorkspaceLinkFromUrl();
+    });
+  }
+
+  function setupArtbookFiltersSessionStorage() {
+    var form = document.querySelector("[data-artbook-filters-form]");
+    if (!(form instanceof HTMLFormElement)) return;
+
+    var filterInput = form.querySelector("[name='artbook_filter']");
+    var nameInput = form.querySelector("[name='artbook_name_query']");
+    if (!(filterInput instanceof HTMLSelectElement) || !(nameInput instanceof HTMLInputElement)) {
+      return;
+    }
+
+    function readStoredFilters() {
+      try {
+        var raw = sessionStorage.getItem(ARTBOOK_FILTERS_STORAGE_KEY);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        return parsed;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function writeStoredFilters() {
+      try {
+        sessionStorage.setItem(
+          ARTBOOK_FILTERS_STORAGE_KEY,
+          JSON.stringify({
+            artbook_filter: String(filterInput.value || "all"),
+            artbook_name_query: String(nameInput.value || ""),
+          })
+        );
+      } catch (_error) {
+        // Ignore sessionStorage errors.
+      }
+    }
+
+    var url = new URL(window.location.href);
+    var hasFilterInUrl = url.searchParams.has("artbook_filter");
+    var hasNameInUrl = url.searchParams.has("artbook_name_query");
+    var stored = readStoredFilters();
+
+    if (stored) {
+      if (!hasFilterInUrl && typeof stored.artbook_filter === "string" && stored.artbook_filter) {
+        filterInput.value = stored.artbook_filter;
+      }
+      if (!hasNameInUrl && typeof stored.artbook_name_query === "string") {
+        nameInput.value = stored.artbook_name_query;
+      }
+    }
+
+    writeStoredFilters();
+
+    filterInput.addEventListener("change", writeStoredFilters);
+    nameInput.addEventListener("input", writeStoredFilters);
+    form.addEventListener("submit", writeStoredFilters);
+
+    var clearLink = form.querySelector("[data-artbook-filters-clear]");
+    if (clearLink instanceof HTMLAnchorElement) {
+      clearLink.addEventListener("click", function () {
+        try {
+          sessionStorage.removeItem(ARTBOOK_FILTERS_STORAGE_KEY);
+        } catch (_error) {
+          // Ignore sessionStorage errors.
+        }
+      });
+    }
   }
 
   window.addEventListener("DOMContentLoaded", function () {
@@ -237,6 +350,7 @@
     setupOverlayObservers();
     setupSessionMenus();
     setupWorkspaceNavigation();
+    setupArtbookFiltersSessionStorage();
     setupChatAutoScroll();
     scrollChatToBottom();
     syncRetryProfileIds();

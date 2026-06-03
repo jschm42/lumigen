@@ -73,6 +73,19 @@ class Settings(BaseSettings):
     provider_fal_max_concurrent: int = 1
     provider_fal_min_interval_ms: int = 500
 
+    llm_models_timeout_seconds: float = 30.0
+    llm_models_connect_timeout_seconds: float = 10.0
+    llm_generate_timeout_seconds: float = 60.0
+    llm_generate_connect_timeout_seconds: float = 10.0
+    llm_enhancement_timeout_seconds: float = 60.0
+    llm_enhancement_connect_timeout_seconds: float = 10.0
+
+    provider_openrouter_generate_timeout_seconds: float = 120.0
+    provider_google_generate_timeout_seconds: float = 240.0
+    provider_google_generate_connect_timeout_seconds: float = 15.0
+    provider_bfl_download_timeout_seconds: float = 60.0
+    provider_bfl_download_connect_timeout_seconds: float = 30.0
+
     provider_config_key: str | None = None
 
     session_secret_key: str = "dev-insecure-session-key-change-me"

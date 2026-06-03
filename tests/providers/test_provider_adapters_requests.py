@@ -122,10 +122,13 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     calls: list[dict] = []
     image_bytes = _png_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    captured_timeout: httpx.Timeout | None = None
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-            _ = args, kwargs
+            _ = args
+            nonlocal captured_timeout
+            captured_timeout = kwargs.get("timeout")
 
         async def __aenter__(self):
             return self
@@ -145,7 +148,12 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", FakeAsyncClient)
 
     adapter = OpenAIAdapter()
-    settings = Settings(openai_api_key="openai-key", openai_base_url="https://api.openai.test/v1")
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+        llm_generate_timeout_seconds=91,
+        llm_generate_connect_timeout_seconds=7,
+    )
     request = ProviderGenerationRequest(
         prompt="A mountain",
         width=640,
@@ -170,6 +178,9 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     assert call["json"]["size"] == "640x480"
     assert call["json"]["output_format"] == "png"
     assert call["json"]["quality"] == "high"
+    assert isinstance(captured_timeout, httpx.Timeout)
+    assert captured_timeout.connect == pytest.approx(7)
+    assert captured_timeout.read == pytest.approx(91)
     assert len(result.images) == 1
     assert result.images[0].width == 640
     assert result.images[0].height == 480

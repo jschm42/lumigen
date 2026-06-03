@@ -134,7 +134,10 @@ class EnhancementService:
         else:
             raise ValueError(f"Enhancement provider '{provider}' is not supported yet")
 
-        timeout = httpx.Timeout(60.0, connect=10.0)
+        timeout = httpx.Timeout(
+            self._settings.llm_enhancement_timeout_seconds,
+            connect=self._settings.llm_enhancement_connect_timeout_seconds,
+        )
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 response = await client.post(url, headers=headers, json=payload)

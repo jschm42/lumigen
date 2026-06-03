@@ -33,7 +33,10 @@ class OpenAIAdapter(ProviderAdapter):
 
         url = settings.openai_base_url.rstrip("/") + "/models"
         headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
-        timeout = httpx.Timeout(30.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.llm_models_timeout_seconds,
+            connect=settings.llm_models_connect_timeout_seconds,
+        )
         self._log_request("GET", url, headers)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -71,7 +74,10 @@ class OpenAIAdapter(ProviderAdapter):
         payload = self._build_payload(request, output_format)
         self._log_request("POST", url, headers, payload)
 
-        timeout = httpx.Timeout(60.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.llm_generate_timeout_seconds,
+            connect=settings.llm_generate_connect_timeout_seconds,
+        )
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, headers=headers, json=payload)
 

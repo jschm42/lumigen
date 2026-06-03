@@ -60,7 +60,7 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: (
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": (
             [
                 {
                     "token": "session:abc",
@@ -69,6 +69,9 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
                     "age": "",
                     "time_category": "today",
                     "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
                 }
             ],
             False,
@@ -90,6 +93,72 @@ def test_generate_page_renders_chat_shell_and_htmx_form(client, app_module, monk
     assert 'data-user-theme-select' in body
     assert '<option value="system">System</option>' in body
     assert 'id="style_ids_input" value=""' in body
+    assert 'id="rename-artbook-dialog"' in body
+    assert 'data-artbook-rename-input' in body
+
+
+def test_generate_page_shows_only_artbooks_until_one_is_selected(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [
+            SimpleNamespace(
+                id=1,
+                name="Default",
+                provider="stub",
+                model="stub-v1",
+                model_config_id=1,
+                width=512,
+                height=512,
+                n_images=1,
+                seed=None,
+            )
+        ],
+    )
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": (
+            [
+                {
+                    "token": "session:abc",
+                    "label": "Session",
+                    "subtitle": "",
+                    "age": "",
+                    "time_category": "today",
+                    "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
+                }
+            ],
+            False,
+        ),
+    )
+
+    response = client.get("/?workspace_view=chat")
+    body = response.text
+
+    assert response.status_code == 200
+    assert "Select an Artbook tile to load content." in body
+    assert 'data-artbook-filters-form' in body
+    assert 'data-artbook-filters-clear' in body
+    assert 'name="artbook_name_query"' in body
+    assert 'placeholder="Name contains..."' in body
+    assert "Optional filters" not in body
+    assert 'data-workspace-view="chat"' in body
+    assert 'bg-sky-300/30 text-sky-900' in body
+    assert 'data-generation-form' not in body
+    assert 'id="chat-history"' not in body
+    assert "Session" in body
 
 
 def test_generate_page_keeps_selected_older_session_visible(client, app_module, monkeypatch) -> None:
@@ -137,7 +206,7 @@ def test_generate_page_keeps_selected_older_session_visible(client, app_module, 
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=None: (all_sessions, False),
+        lambda _session, offset=0, limit=10, max_days=None, artbook_filter="all", artbook_name_query="": (all_sessions, False),
     )
     monkeypatch.setattr(
         app_module,
@@ -149,8 +218,8 @@ def test_generate_page_keeps_selected_older_session_visible(client, app_module, 
     body = response.text
 
     assert response.status_code == 200
-    assert "Session 022" in body
-    assert "bg-sky-100 text-sky-900" in body
+    assert "Back to Artbooks" in body
+    assert "Select an Artbook tile to load content." not in body
 
 
 def test_job_status_chat_fragment_renders_input_thumbnails_above_prompt(client, app_module) -> None:
@@ -251,7 +320,7 @@ def test_generate_page_gallery_workspace_renders_htmx_content(client, app_module
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: ([], False),
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
     )
 
     response = client.get("/?workspace_view=gallery&conversation=new")
@@ -259,7 +328,31 @@ def test_generate_page_gallery_workspace_renders_htmx_content(client, app_module
 
     assert response.status_code == 200
     assert 'id="workspace-content"' in body
-    assert 'hx-get="/workspace/gallery"' in body
+    assert '/workspace/gallery?thumb_size=' in body
+    assert 'hx-push-url="/?workspace_view=gallery&conversation=' in body
+
+
+def test_generate_page_gallery_workspace_carries_asset_id_into_fragment_loader(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module.crud, "list_profiles", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
+    )
+
+    response = client.get("/?workspace_view=gallery&asset_id=12&conversation=new")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'hx-get="/workspace/gallery?thumb_size=md&asset_id=12"' in body
 
 
 def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_module, monkeypatch) -> None:
@@ -295,7 +388,7 @@ def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_mod
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: (
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": (
             [
                 {
                     "token": "session:abc",
@@ -305,6 +398,9 @@ def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_mod
                     "time_category": "today",
                     "time_category_label": "Today",
                     "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
                 }
             ],
             False,
@@ -321,16 +417,17 @@ def test_workspace_gallery_fragment_renders_embedded_iframe(client) -> None:
     response = client.get("/workspace/gallery")
 
     assert response.status_code == 200
-    assert 'src="/gallery?embedded=1"' in response.text
-    assert '<iframe' in response.text
+    assert '<iframe' not in response.text
+    assert 'id="gallery-grid"' in response.text or 'No assets found for current filters.' in response.text
 
 
 def test_workspace_profiles_fragment_renders_embedded_iframe(client) -> None:
     response = client.get("/workspace/profiles")
 
     assert response.status_code == 200
-    assert 'src="/profiles?embedded=1"' in response.text
-    assert '<iframe' in response.text
+    assert '<iframe' not in response.text
+    assert 'New Artbook' not in response.text
+    assert 'data-workspace-nav' not in response.text
 
 
 def test_gallery_page_renders_filters_and_empty_state(client, app_module, monkeypatch) -> None:
@@ -577,14 +674,67 @@ def test_gallery_page_renders_star_controls_and_rating_filters(client, app_modul
     assert 'data-rating-form' in body
     assert 'data-rating-star' in body
     assert 'data-current-rating="4"' in body
-    assert 'data-asset-detail-url="/assets/12"' in body
-    assert 'data-asset-detail-dialog' in body
-    assert 'id="asset-detail-dialog-content"' in body
-    assert 'data-asset-detail-close' in body
-    assert '>X</button>' in body
-    assert 'hx-target="#asset-detail-dialog-content"' in body
-    assert 'data-asset-detail-trigger' in body
+    assert 'data-asset-detail-url="/gallery?asset_id=12' in body
+    assert 'data-gallery-card-click' in body
+    assert 'data-asset-detail-dialog' not in body
+    assert 'id="asset-detail-dialog-content"' not in body
+    assert 'data-asset-detail-trigger' not in body
     assert 'Profile Hidden | provider-hidden' not in body
+
+
+def test_gallery_page_asset_detail_renders_inline_workspace_content(client, app_module, monkeypatch) -> None:
+    asset = SimpleNamespace(
+        id=12,
+        generation=SimpleNamespace(
+            id=5,
+            profile_id=1,
+            status="succeeded",
+            provider="stub",
+            model="stub-v1",
+            prompt_final="prompt",
+            prompt_user="forest scene",
+            failure_sidecar_path=None,
+            profile_snapshot_json={},
+            storage_template_snapshot_json={},
+            request_snapshot_json={"prompt_user_original": "forest scene"},
+        ),
+        categories=[],
+        width=1024,
+        height=1024,
+        mime="image/png",
+        file_path="images/x.png",
+        thumbnail_path=".thumbs/x.webp",
+        sidecar_path="images/x.png.json",
+        meta_json={},
+    )
+    fake_session = _FakeSession(scalar_value=asset)
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_assets",
+        lambda _session, **_kwargs: SimpleNamespace(items=[asset], page=1, pages=1, total=1),
+    )
+    monkeypatch.setattr(
+        app_module.gallery_service,
+        "list_filter_options",
+        lambda _session: SimpleNamespace(profile_names=[], providers=[], categories=[]),
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [SimpleNamespace(id=1, name="Default")],
+    )
+
+    response = client.get("/workspace/gallery?asset_id=12&thumb_size=md", headers={"HX-Request": "true"})
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'Back to gallery' in body
+    assert 'href="/workspace/gallery?time_preset=today' in body
+    assert 'data-gallery-card-click' not in body
+    assert 'id="gallery-grid"' not in body
 
 
 def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(client, app_module, monkeypatch) -> None:
@@ -634,6 +784,7 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert 'max-h-[75vh]' in body
     assert 'href="/assets/44/file"' in body
     assert 'Original size' in body
+    assert 'Back to gallery' in body
     assert 'User prompt' in body
     assert 'forest scene' in body
     assert 'Vintage' in body
@@ -696,7 +847,7 @@ def test_generate_page_renders_user_menu_popup(client, app_module, monkeypatch) 
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=30: ([], False),
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
     )
 
     response = client.get("/")
