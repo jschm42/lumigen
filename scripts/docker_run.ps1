@@ -102,8 +102,8 @@ $RunArgs = @(
   "-p", "${PortValue}:$PortValue",
   "-e", "HOST=$HostValue",
   "-e", "PORT=$PortValue",
-  "-e", "SSL_CERT_FILE=$SslCertArg",
-  "-e", "SSL_KEY_FILE=$SslKeyArg"
+  "-e", "LUMIGEN_SSL_CERT_FILE=$SslCertArg",
+  "-e", "LUMIGEN_SSL_KEY_FILE=$SslKeyArg"
 )
 
 if ($EnvFileArgs.Count -gt 0) {
