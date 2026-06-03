@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SSL_DIR="$ROOT_DIR/ssl"
 CERT_FILE="$SSL_DIR/lumigen.crt"
 KEY_FILE="$SSL_DIR/lumigen.key"
@@ -9,7 +9,7 @@ DAYS=3650
 
 mkdir -p "$SSL_DIR"
 
-if [[ -f "$CERT_FILE" || -f "$KEY_FILE" ]]; then
+if [ -f "$CERT_FILE" ] || [ -f "$KEY_FILE" ]; then
   echo "WARNING: SSL certificate or key already exists in $SSL_DIR"
   echo "  Cert: $CERT_FILE"
   echo "  Key:  $KEY_FILE"
@@ -19,7 +19,7 @@ if [[ -f "$CERT_FILE" || -f "$KEY_FILE" ]]; then
   exit 1
 fi
 
-if ! command -v openssl &>/dev/null; then
+if ! command -v openssl >/dev/null 2>&1; then
   echo "ERROR: openssl is not installed. Install it first:"
   echo "  Ubuntu/Debian: sudo apt install openssl"
   echo "  macOS:         brew install openssl"
