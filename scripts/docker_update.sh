@@ -57,8 +57,8 @@ docker run -d --name "$CONTAINER_NAME" \
   -p "$PORT:$PORT" \
   -e HOST="$HOST" \
   -e PORT="$PORT" \
-  -e SSL_CERT_FILE="${SSL_CERT_FILE:-}" \
-  -e SSL_KEY_FILE="${SSL_KEY_FILE:-}" \
+  -e SSL_CERT_FILE="/etc/ssl/certs/lumigen.crt" \
+  -e SSL_KEY_FILE="/etc/ssl/private/lumigen.key" \
   "${DOCKER_ENV_FILE_ARGS[@]}" \
   "${DOCKER_ENV_ARGS[@]}" \
   "${SSL_MOUNT_ARGS[@]}" \
