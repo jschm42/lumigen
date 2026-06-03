@@ -4824,4 +4824,13 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8010"))
     reload_enabled = os.getenv("UVICORN_RELOAD", "1") in {"1", "true", "True"}
-    uvicorn.run("app.main:app", host=host, port=port, reload=reload_enabled)
+    ssl_certfile = os.getenv("SSL_CERT_FILE") or None
+    ssl_keyfile = os.getenv("SSL_KEY_FILE") or None
+    uvicorn.run(
+        "app.main:app",
+        host=host,
+        port=port,
+        reload=reload_enabled,
+        ssl_certfile=ssl_certfile,
+        ssl_keyfile=ssl_keyfile,
+    )
