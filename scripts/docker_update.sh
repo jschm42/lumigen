@@ -60,6 +60,8 @@ docker run -d --name "$CONTAINER_NAME" \
   -p "$PORT:$PORT" \
   -e HOST="$HOST" \
   -e PORT="$PORT" \
+  -e SSL_CERT_FILE="" \
+  -e SSL_KEY_FILE="" \
   "${SSL_ENV_ARGS[@]}" \
   "${DOCKER_ENV_FILE_ARGS[@]}" \
   "${DOCKER_ENV_ARGS[@]}" \

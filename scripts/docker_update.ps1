@@ -101,7 +101,9 @@ $RunArgs = @(
   "run", "-d", "--name", $Container,
   "-p", "${PortValue}:$PortValue",
   "-e", "HOST=$HostValue",
-  "-e", "PORT=$PortValue"
+  "-e", "PORT=$PortValue",
+  "-e", "SSL_CERT_FILE=",
+  "-e", "SSL_KEY_FILE="
 )
 
 if ($SslCertArg -ne "") {
