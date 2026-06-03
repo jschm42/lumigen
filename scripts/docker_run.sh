@@ -46,19 +46,21 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 SSL_MOUNT_ARGS=()
+SSL_ENV_ARGS=()
 SSL_CERT_FILE="${SSL_CERT_FILE:-}"
 SSL_KEY_FILE="${SSL_KEY_FILE:-}"
 if [[ -n "$SSL_CERT_FILE" && -n "$SSL_KEY_FILE" ]]; then
   SSL_MOUNT_ARGS+=("-v" "$SSL_CERT_FILE:/etc/ssl/certs/lumigen.crt:ro")
   SSL_MOUNT_ARGS+=("-v" "$SSL_KEY_FILE:/etc/ssl/private/lumigen.key:ro")
+  SSL_ENV_ARGS+=("-e" "LUMIGEN_SSL_CERT_FILE=/etc/ssl/certs/lumigen.crt")
+  SSL_ENV_ARGS+=("-e" "LUMIGEN_SSL_KEY_FILE=/etc/ssl/private/lumigen.key")
 fi
 
 docker run -d --name "$CONTAINER_NAME" \
   -p "$PORT:$PORT" \
   -e HOST="$HOST" \
   -e PORT="$PORT" \
-  -e LUMIGEN_SSL_CERT_FILE="/etc/ssl/certs/lumigen.crt" \
-  -e LUMIGEN_SSL_KEY_FILE="/etc/ssl/private/lumigen.key" \
+  "${SSL_ENV_ARGS[@]}" \
   "${DOCKER_ENV_FILE_ARGS[@]}" \
   "${DOCKER_ENV_ARGS[@]}" \
   "${SSL_MOUNT_ARGS[@]}" \

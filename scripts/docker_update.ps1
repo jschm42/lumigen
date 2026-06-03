@@ -101,10 +101,15 @@ $RunArgs = @(
   "run", "-d", "--name", $Container,
   "-p", "${PortValue}:$PortValue",
   "-e", "HOST=$HostValue",
-  "-e", "PORT=$PortValue",
-  "-e", "LUMIGEN_SSL_CERT_FILE=$SslCertArg",
-  "-e", "LUMIGEN_SSL_KEY_FILE=$SslKeyArg"
+  "-e", "PORT=$PortValue"
 )
+
+if ($SslCertArg -ne "") {
+  $RunArgs += "-e"
+  $RunArgs += "LUMIGEN_SSL_CERT_FILE=$SslCertArg"
+  $RunArgs += "-e"
+  $RunArgs += "LUMIGEN_SSL_KEY_FILE=$SslKeyArg"
+}
 
 if ($EnvFileArgs.Count -gt 0) {
   $RunArgs += $EnvFileArgs
