@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # Docker runtime overrides (override .env values)
+      HOST: "0.0.0.0"
+      PORT: "7003"
+      PROXY_HEADERS_ENABLED: "true"
+      PROXY_HEADERS_TRUSTED_HOSTS: "*"
+      # nginx handles TLS termination — cookies are HTTPS-only.
+      SESSION_HTTPS_ONLY: "true"
+    env_file:
+      - .env
+    volumes:
+      - app_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7003/generate')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - lumigen
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lumigen
+
+volumes:
+  app_data:
+
+networks:
+  lumigen:
+    driver: bridge
