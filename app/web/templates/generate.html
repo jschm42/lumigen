@@ -95,7 +95,7 @@
        <div id="workspace-content" 
          hx-get="{% if workspace_view == 'profiles' %}/workspace/profiles{% elif workspace_view == 'gallery' %}/workspace/gallery?thumb_size={{ last_thumb_size }}{% if workspace_gallery_asset_id %}&asset_id={{ workspace_gallery_asset_id }}{% endif %}{% elif workspace_view == 'admin' %}/workspace/admin{% endif %}" 
            hx-trigger="load" 
-           class="h-full w-full">
+           class="h-full w-full overflow-y-auto">
         <!-- Content will be loaded here via HTMX -->
       </div>
     {% elif not profiles %}
