@@ -236,4 +236,315 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
+
+  /**
+   * Find the model-config dialog that owns the given *prefix* and return its
+   * provider select, model input, and API-key input elements.
+   *
+   * @param {string} prefix - DOM id prefix used by the macro (e.g. "new" or
+   *   "edit-3").
+   * @returns {{
+   *   provider: HTMLSelectElement|null,
+   *   modelInput: HTMLInputElement|null,
+   *   apiKeyInput: HTMLInputElement|null,
+   *   useCustomKey: HTMLInputElement|null,
+   * }} Resolved DOM references (any may be null if not found).
+   */
+  function _resolveModelDialogElements(prefix) {
+    var dialogId = prefix === "new"
+      ? "create-model-config-dialog"
+      : "edit-model-config-" + prefix.replace(/^edit-/, "");
+    var dialog = document.getElementById(dialogId);
+    if (!dialog) {
+      return { provider: null, modelInput: null, apiKeyInput: null, useCustomKey: null };
+    }
+    var provider = dialog.querySelector('select[name="provider"]');
+    var modelInput = dialog.querySelector('[data-model-input]');
+    var apiKeyInput = dialog.querySelector('[data-api-key-input]');
+    var useCustomKey = null;
+    if (prefix === "new") {
+      useCustomKey = document.getElementById("new-use-custom-api-key");
+    } else {
+      useCustomKey = document.getElementById(
+        "edit-" + prefix.replace(/^edit-/, "") + "-use-custom-api-key"
+      );
+    }
+    return { provider: provider, modelInput: modelInput, apiKeyInput: apiKeyInput, useCustomKey: useCustomKey };
+  }
+
+  /**
+   * Build the absolute API URL for a provider endpoint on the admin page.
+   * @param {string} provider - Provider name (e.g. "openai").
+   * @param {string} suffix - Endpoint suffix (e.g. "/models").
+   * @param {string} [query] - Optional raw query string (no leading "?").
+   * @returns {string} Fully qualified URL.
+   */
+  function _providerEndpoint(provider, suffix, query) {
+    var url = "/api/providers/" + encodeURIComponent(provider) + suffix;
+    if (query) url += "?" + query;
+    return url;
+  }
+
+  /**
+   * Show a status message inside the model-discovery block of a dialog.
+   * @param {string} prefix - DOM id prefix.
+   * @param {string} message - Message text.
+   * @param {"info"|"success"|"error"} kind - Style variant.
+   */
+  function _showDiscoveryStatus(prefix, message, kind) {
+    var box = document.getElementById(prefix + "-model-discovery-status");
+    if (!box) return;
+    box.classList.remove(
+      "hidden",
+      "border-slate-300/60",
+      "bg-white/90",
+      "text-slate-800",
+      "border-emerald-300/40",
+      "bg-emerald-500/10",
+      "text-emerald-100",
+      "border-rose-300/40",
+      "bg-rose-500/10",
+      "text-rose-100"
+    );
+    if (kind === "success") {
+      box.classList.add("border-emerald-300/40", "bg-emerald-500/10", "text-emerald-100");
+    } else if (kind === "error") {
+      box.classList.add("border-rose-300/40", "bg-rose-500/10", "text-rose-100");
+    } else {
+      box.classList.add("border-slate-300/60", "bg-white/90", "text-slate-800");
+    }
+    box.textContent = message;
+  }
+
+  /**
+   * Fetch the list of available models for the currently selected provider in
+   * the dialog identified by *prefix*, then populate the suggestions
+   * datalist so the user can pick (or type a custom string).
+   *
+   * Resolution of the API key (highest priority first):
+   *   1. Inline input in the dialog (only when "use custom API key" is on).
+   *   2. Globally stored DB / .env key (sent implicitly — the server reads it).
+   *
+   * @param {string} prefix - DOM id prefix for the model dialog.
+   */
+  function discoverProviderModels(prefix) {
+    var refs = _resolveModelDialogElements(prefix);
+    if (!refs.provider) {
+      _showDiscoveryStatus(prefix, "Provider select not found.", "error");
+      return;
+    }
+    var provider = refs.provider.value;
+    if (!provider) {
+      _showDiscoveryStatus(prefix, "Select a provider first.", "error");
+      return;
+    }
+    var inlineKey = "";
+    if (refs.useCustomKey && refs.useCustomKey.checked && refs.apiKeyInput) {
+      inlineKey = (refs.apiKeyInput.value || "").trim();
+    }
+    var query = inlineKey
+      ? "api_key=" + encodeURIComponent(inlineKey)
+      : "";
+    var button = document.querySelector(
+      '[data-model-discovery][data-prefix="' + prefix + '"] [data-discover-button]'
+    );
+    var label = document.querySelector(
+      '[data-model-discovery][data-prefix="' + prefix + '"] [data-discover-label]'
+    );
+    if (button) button.disabled = true;
+    if (label) label.textContent = "Discovering…";
+    _showDiscoveryStatus(prefix, "Fetching models for " + provider + "…", "info");
+
+    fetch(_providerEndpoint(provider, "/models", query), {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+    })
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          return { status: resp.status, data: data };
+        });
+      })
+      .then(function (obj) {
+        if (button) button.disabled = false;
+        if (label) label.textContent = "Discover models";
+        if (obj.status !== 200) {
+          _showDiscoveryStatus(
+            prefix,
+            (obj.data && obj.data.error) || "Discovery failed.",
+            "error"
+          );
+          return;
+        }
+        var data = obj.data || {};
+        if (data.error) {
+          _showDiscoveryStatus(prefix, data.error, "error");
+          return;
+        }
+        var models = Array.isArray(data.models) ? data.models : [];
+        var list = document.getElementById(prefix + "-model-suggestions-list");
+        if (list) {
+          list.innerHTML = "";
+          models.forEach(function (modelId) {
+            var opt = document.createElement("option");
+            opt.value = modelId;
+            list.appendChild(opt);
+          });
+        }
+        if (models.length === 0) {
+          _showDiscoveryStatus(
+            prefix,
+            "Provider returned no models. You can still enter a custom model string above.",
+            "info"
+          );
+        } else {
+          _showDiscoveryStatus(
+            prefix,
+            "Found " + models.length + " model" + (models.length === 1 ? "" : "s") + ". Pick one or type a custom string above.",
+            "success"
+          );
+        }
+      })
+      .catch(function (err) {
+        if (button) button.disabled = false;
+        if (label) label.textContent = "Discover models";
+        _showDiscoveryStatus(prefix, "Request failed: " + err.message, "error");
+      });
+  }
+
+  /**
+   * Run a small generation request against the currently selected provider
+   * to verify connectivity. The result is rendered as a data-URL image (or
+   * an error message) inside the dialog's test-result container.
+   *
+   * @param {string} prefix - DOM id prefix for the model dialog.
+   */
+  function testProviderConnection(prefix) {
+    var refs = _resolveModelDialogElements(prefix);
+    if (!refs.provider || !refs.modelInput) {
+      _showTestResult(prefix, "Provider or model input not found.", null, "error");
+      return;
+    }
+    var provider = refs.provider.value;
+    var model = (refs.modelInput.value || "").trim();
+    if (!provider) {
+      _showTestResult(prefix, "Select a provider first.", null, "error");
+      return;
+    }
+    if (!model) {
+      _showTestResult(prefix, "Enter a model string first (or discover models).", null, "error");
+      return;
+    }
+    var inlineKey = "";
+    if (refs.useCustomKey && refs.useCustomKey.checked && refs.apiKeyInput) {
+      inlineKey = (refs.apiKeyInput.value || "").trim();
+    }
+    var button = document.querySelector(
+      '[data-model-discovery][data-prefix="' + prefix + '"] [data-test-button]'
+    );
+    var label = document.querySelector(
+      '[data-model-discovery][data-prefix="' + prefix + '"] [data-test-label]'
+    );
+    if (button) button.disabled = true;
+    if (label) label.textContent = "Testing…";
+    _showTestResult(prefix, "Sending test request to " + provider + "…", null, "info");
+
+    fetch(_providerEndpoint(provider, "/test"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ model: model, api_key: inlineKey }),
+    })
+      .then(function (resp) {
+        return resp.json().then(function (data) {
+          return { status: resp.status, data: data };
+        });
+      })
+      .then(function (obj) {
+        if (button) button.disabled = false;
+        if (label) label.textContent = "Test connection";
+        var data = obj.data || {};
+        if (data.error) {
+          _showTestResult(prefix, data.error, null, "error");
+          return;
+        }
+        if (data.image && data.image.data_url) {
+          _showTestResult(
+            prefix,
+            "Test image received (" + data.image.width + "x" + data.image.height + ", " + data.image.mime + ").",
+            data.image,
+            "success"
+          );
+        } else {
+          _showTestResult(prefix, "Test returned no image.", null, "error");
+        }
+      })
+      .catch(function (err) {
+        if (button) button.disabled = false;
+        if (label) label.textContent = "Test connection";
+        _showTestResult(prefix, "Request failed: " + err.message, null, "error");
+      });
+  }
+
+  /**
+   * Render the test-result container of a model dialog.
+   * @param {string} prefix - DOM id prefix.
+   * @param {string} message - Status text.
+   * @param {object|null} image - Image payload from the server (or null).
+   * @param {"info"|"success"|"error"} kind - Style variant.
+   */
+  function _showTestResult(prefix, message, image, kind) {
+    var box = document.getElementById(prefix + "-model-test-result");
+    if (!box) return;
+    box.classList.remove(
+      "hidden",
+      "border-slate-300/60",
+      "bg-white/90",
+      "text-slate-800",
+      "border-emerald-300/40",
+      "bg-emerald-500/10",
+      "text-emerald-100",
+      "border-rose-300/40",
+      "bg-rose-500/10",
+      "text-rose-100"
+    );
+    if (kind === "success") {
+      box.classList.add("border-emerald-300/40", "bg-emerald-500/10", "text-emerald-100");
+    } else if (kind === "error") {
+      box.classList.add("border-rose-300/40", "bg-rose-500/10", "text-rose-100");
+    } else {
+      box.classList.add("border-slate-300/60", "bg-white/90", "text-slate-800");
+    }
+    var preview = box.querySelector("[data-test-preview]");
+    box.textContent = message;
+    if (preview && preview.parentNode) preview.parentNode.removeChild(preview);
+    if (image && image.data_url && kind === "success") {
+      var newPreview = document.createElement("div");
+      newPreview.setAttribute("data-test-preview", "");
+      newPreview.className = "mt-2";
+      var imgEl = document.createElement("img");
+      imgEl.src = image.data_url;
+      imgEl.alt = "Test image";
+      imgEl.className =
+        "max-h-40 rounded-lg border border-emerald-300/40 bg-white/90 dark:bg-slate-950/40";
+      newPreview.appendChild(imgEl);
+      box.appendChild(newPreview);
+    }
+  }
+
+  /**
+   * When the user picks a model from the suggestions datalist, copy the
+   * value into the "Model" input so it actually gets submitted.
+   * @param {string} prefix - DOM id prefix.
+   */
+  function copyDiscoveredModelToInput(prefix) {
+    var refs = _resolveModelDialogElements(prefix);
+    var suggestions = document.getElementById(prefix + "-model-suggestions");
+    if (!refs.modelInput || !suggestions) return;
+    if (suggestions.value) {
+      refs.modelInput.value = suggestions.value;
+    }
+  }
+
+  window.discoverProviderModels = discoverProviderModels;
+  window.testProviderConnection = testProviderConnection;
+  window.copyDiscoveredModelToInput = copyDiscoveredModelToInput;
 })();

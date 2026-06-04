@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     provider_fal_max_concurrent: int = 1
     provider_fal_min_interval_ms: int = 500
 
+    provider_minimax_max_concurrent: int = 1
+    provider_minimax_min_interval_ms: int = 800
+
     llm_models_timeout_seconds: float = 30.0
     llm_models_connect_timeout_seconds: float = 10.0
     llm_generate_timeout_seconds: float = 60.0
@@ -110,6 +113,8 @@ class Settings(BaseSettings):
     google_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     bfl_api_key: str | None = None
     fal_api_key: str | None = None
+    minimax_api_key: str | None = None
+    minimax_base_url: str = "https://api.minimax.io"
 
     @property
     def database_url(self) -> str:

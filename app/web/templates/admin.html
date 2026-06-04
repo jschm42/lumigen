@@ -1,4 +1,5 @@
 {% extends layout_template if layout_template is defined else "layout.html" %}
+{% import "fragments/model_config_discovery_macro.html" as model_discovery %}
 {% block content %}
 {% set panel_class = "p-5 sm:p-7" %}
 {% set input_class = "mt-2 w-full rounded-xl border border-slate-300/75 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300/35 dark:border-white/15 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-sky-300" %}
@@ -83,8 +84,10 @@
 
           <div>
             <label for="new-model-id" class="{{ label_class }}">Model</label>
-            <input id="new-model-id" type="text" name="model" required class="{{ input_class }}">
+            <input id="new-model-id" type="text" name="model" required class="{{ input_class }}" data-model-input>
           </div>
+
+          {{ model_discovery.render_model_discovery("new", label_class, input_class, btn_secondary, btn_primary) }}
 
           <div>
             <label for="new-model-enhancement" class="{{ label_class }}">Enhancement prompt (optional)</label>
@@ -101,7 +104,7 @@
 
           <div id="new-api-key-field" class="hidden">
             <label for="new-model-key" class="{{ label_class }}">API key</label>
-            <input id="new-model-key" type="password" name="api_key" placeholder="optional" class="{{ input_class }}">
+            <input id="new-model-key" type="password" name="api_key" placeholder="optional" class="{{ input_class }}" data-api-key-input>
           </div>
 
           <div class="flex justify-end">
@@ -178,8 +181,10 @@
 
           <div>
             <label for="edit-model-id-{{ config.id }}" class="{{ label_class }}">Model</label>
-            <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required class="{{ input_class }}">
+            <input id="edit-model-id-{{ config.id }}" type="text" name="model" value="{{ config.model }}" required class="{{ input_class }}" data-model-input>
           </div>
+
+          {{ model_discovery.render_model_discovery("edit-" ~ config.id, label_class, input_class, btn_secondary, btn_primary) }}
 
           <div>
             <label for="edit-model-enhancement-{{ config.id }}" class="{{ label_class }}">Enhancement prompt (optional)</label>
@@ -196,7 +201,7 @@
 
           <div id="edit-{{ config.id }}-api-key-field" {% if not config.use_custom_api_key %}class="hidden"{% endif %}>
             <label for="edit-model-key-{{ config.id }}" class="{{ label_class }}">API key</label>
-            <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" value="{{ '••••••••' if config.api_key_encrypted else '' }}" placeholder="leave blank to keep" class="{{ input_class }}">
+            <input id="edit-model-key-{{ config.id }}" type="password" name="api_key" value="{{ '••••••••' if config.api_key_encrypted else '' }}" placeholder="leave blank to keep" class="{{ input_class }}" data-api-key-input>
           </div>
 
           <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">

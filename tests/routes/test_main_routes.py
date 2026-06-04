@@ -38,7 +38,8 @@ def _override_session(fake_session: _FakeSession):
 
 
 def test_provider_models_success(client, app_module, monkeypatch) -> None:
-    async def fake_list_models(provider: str) -> list[str]:
+    async def fake_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        _ = api_key
         assert provider == "stub"
         return ["model-b", "model-a"]
 
@@ -54,8 +55,8 @@ def test_provider_models_success(client, app_module, monkeypatch) -> None:
 
 
 def test_provider_models_error_returns_payload(client, app_module, monkeypatch) -> None:
-    async def failing_list_models(provider: str) -> list[str]:
-        _ = provider
+    async def failing_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        _ = provider, api_key
         raise ProviderError("provider unavailable")
 
     monkeypatch.setattr(

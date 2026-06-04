@@ -2654,12 +2654,120 @@ def job_cancel(
 
 
 @app.get("/api/providers/{provider}/models", response_class=JSONResponse)
-async def provider_models(provider: str) -> JSONResponse:
+async def provider_models(
+    provider: str,
+    api_key: str | None = Query(default=None),
+) -> JSONResponse:
+    """Return the list of model IDs available from *provider*.
+
+    The optional ``api_key`` query parameter lets the admin UI pass an inline
+    key from the model-config dialog. When omitted, the registry falls back to
+    the centrally stored or ``.env``-configured key for the provider.
+    """
     try:
-        models = await provider_registry.list_models(provider.strip())
-        return JSONResponse({"provider": provider, "models": models, "error": None})
+        models = await provider_registry.list_models(
+            provider.strip(),
+            api_key=((api_key or "").strip() or None),
+        )
+        return JSONResponse(
+            {"provider": provider, "models": models, "error": None}
+        )
     except ProviderError as exc:
-        return JSONResponse({"provider": provider, "models": [], "error": str(exc)})
+        return JSONResponse(
+            {"provider": provider, "models": [], "error": str(exc)}
+        )
+
+
+@app.post("/api/providers/{provider}/test", response_class=JSONResponse)
+async def provider_test(
+    request: Request,
+    provider: str,
+) -> JSONResponse:
+    """Run a tiny generation request to verify *provider* connectivity.
+
+    Admin-only. The request body is JSON of the form ``{"model": "...",
+    "api_key": "..."}``. ``api_key`` is optional — when omitted, the registry
+    falls back to the centrally stored or ``.env``-configured key.
+    """
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return JSONResponse(
+            {"provider": provider, "error": "Admin access required.", "image": None},
+            status_code=403,
+        )
+
+    provider_name = provider.strip()
+    if provider_name not in provider_registry.provider_names():
+        return JSONResponse(
+            {"provider": provider_name, "error": "Unsupported provider.", "image": None},
+            status_code=404,
+        )
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    model = str(payload.get("model") or "").strip()
+    if not model:
+        return JSONResponse(
+            {
+                "provider": provider_name,
+                "error": "Model is required.",
+                "image": None,
+            },
+            status_code=422,
+        )
+
+    inline_key_raw = payload.get("api_key")
+    inline_key: str | None = None
+    if isinstance(inline_key_raw, str):
+        inline_key = inline_key_raw.strip() or None
+
+    try:
+        result = await provider_registry.test_connection(
+            provider_name, model=model, api_key=inline_key
+        )
+    except ProviderError as exc:
+        return JSONResponse(
+            {"provider": provider_name, "error": str(exc), "image": None}
+        )
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(
+            {
+                "provider": provider_name,
+                "error": f"Test failed: {exc.__class__.__name__}: {exc}",
+                "image": None,
+            }
+        )
+
+    if not result.images:
+        return JSONResponse(
+            {
+                "provider": provider_name,
+                "error": "Provider returned no image data.",
+                "image": None,
+            }
+        )
+
+    image = result.images[0]
+    data_url = (
+        f"data:{image.mime};base64,"
+        + base64.b64encode(image.data).decode("ascii")
+    )
+    return JSONResponse(
+        {
+            "provider": provider_name,
+            "error": None,
+            "image": {
+                "data_url": data_url,
+                "mime": image.mime,
+                "width": image.width,
+                "height": image.height,
+                "model": model,
+            },
+        }
+    )
 
 
 @app.get("/admin", response_class=HTMLResponse)

@@ -17,6 +17,7 @@ from app.providers.base import (
 from app.providers.bfl_adapter import BFLAdapter
 from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
+from app.providers.minimax_adapter import MiniMaxAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
 from app.providers.stub_adapter import StubAdapter
@@ -95,6 +96,7 @@ class ProviderRegistry:
         self.register(GoogleAdapter())
         self.register(BFLAdapter())
         self.register(FalAdapter())
+        self.register(MiniMaxAdapter())
 
     def register(self, adapter: ProviderAdapter) -> None:
         """Register *adapter* under its ``name`` attribute, replacing any existing entry."""
@@ -161,12 +163,44 @@ class ProviderRegistry:
         executor = self._executor_for(provider)
         return await executor.run(lambda: adapter.generate(request, settings))
 
-    async def list_models(self, provider: str) -> list[str]:
-        """Return sorted, deduplicated model IDs available from *provider*."""
+    async def list_models(self, provider: str, api_key: str | None = None) -> list[str]:
+        """Return sorted, deduplicated model IDs available from *provider*.
+
+        When ``api_key`` is provided it overrides the default key for the
+        provider (used by the admin model-discovery dialog).
+        """
         adapter = self.get(provider)
-        models = await adapter.list_models(self._settings_for_provider(provider, None))
+        models = await adapter.list_models(
+            self._settings_for_provider(provider, api_key)
+        )
         normalized = [str(item).strip() for item in models if str(item).strip()]
         return sorted(set(normalized))
+
+    async def test_connection(
+        self,
+        provider: str,
+        model: str,
+        api_key: str | None = None,
+    ) -> ProviderGenerationResult:
+        """Run a tiny generation request to verify the provider connection.
+
+        Produces a single 256x256 PNG used purely for the admin test button.
+        Uses the supplied ``api_key`` (inline) when provided; otherwise the
+        registry falls back to the provider's default key resolution.
+        """
+        adapter = self.get(provider)
+        request = ProviderGenerationRequest(
+            prompt="a small red square on a white background",
+            width=256,
+            height=256,
+            n_images=1,
+            seed=0,
+            output_format="png",
+            model=model,
+            api_key=api_key,
+        )
+        settings = self._settings_for_provider(provider, api_key)
+        return await adapter.generate(request, settings)
 
     def _settings_for_provider(self, provider: str, api_key: str | None) -> Settings:
         if not api_key:
@@ -183,6 +217,8 @@ class ProviderRegistry:
             update["bfl_api_key"] = api_key
         elif provider == "fal":
             update["fal_api_key"] = api_key
+        elif provider == "minimax":
+            update["minimax_api_key"] = api_key
         else:
             return self._settings
 
