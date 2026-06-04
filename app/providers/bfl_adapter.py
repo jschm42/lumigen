@@ -33,42 +33,11 @@ class BFLAdapter(ProviderAdapter):
     _logger = logging.getLogger(__name__)
 
     async def list_models(self, settings: Settings) -> list[str]:
-        api_key = settings.bfl_api_key
-        if not api_key:
-            raise ProviderConfigError("BFL adapter requires BFL_API_KEY in .env.")
-
-        url = f"{self.BASE_URL}/models"
-        headers = {"x-key": api_key}
-        timeout = httpx.Timeout(
-            settings.llm_models_timeout_seconds,
-            connect=settings.llm_models_connect_timeout_seconds,
-        )
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(url, headers=headers)
-
-        if response.status_code >= 400:
-            message = self._extract_error_message(response)
-            raise ProviderError(
-                f"BFL models request failed ({response.status_code}): {message}"
-            )
-
-        try:
-            body = response.json()
-        except Exception as exc:
-            raise ProviderError(
-                "BFL returned a non-JSON models response."
-            ) from exc
-
-        models: list[str] = []
-        data = body.get("data") or body.get("models") or []
-        if isinstance(data, list):
-            for item in data:
-                if isinstance(item, dict):
-                    model_id = item.get("id") or item.get("name")
-                    if isinstance(model_id, str) and model_id.strip():
-                        models.append(model_id.strip())
-        return models
+        """BFL does not have a public model listing endpoint.
+        
+        Users must enter model names manually. This method returns an empty list.
+        """
+        return []
 
     async def generate(
         self, request: ProviderGenerationRequest, settings: Settings

@@ -123,9 +123,10 @@ def test_post_provider_test_returns_data_url(
     assert captured["api_key"] == "my-key"
 
 
-def test_post_provider_test_without_api_key(
+def test_post_provider_test_without_api_key_uses_db_stored_key(
     client, app_module, monkeypatch
 ) -> None:
+    """When no inline API key is provided, the endpoint should use the centrally stored DB key."""
     captured: dict = {}
 
     async def fake_test_connection(provider, model, api_key=None):  # type: ignore[no-untyped-def]
@@ -143,8 +144,15 @@ def test_post_provider_test_without_api_key(
             ]
         )
 
+    # Mock model_config_service.get_default_api_key to return a known key
+    def mock_get_default_api_key(provider):
+        return "db-stored-api-key-for-testing"
+
     monkeypatch.setattr(
         app_module.provider_registry, "test_connection", fake_test_connection
+    )
+    monkeypatch.setattr(
+        app_module.model_config_service, "get_default_api_key", mock_get_default_api_key
     )
 
     response = client.post(
@@ -152,7 +160,8 @@ def test_post_provider_test_without_api_key(
         json={"model": "gpt-image-1"},
     )
     assert response.status_code == 200
-    assert captured["api_key"] is None
+    # Now the endpoint correctly uses the DB-stored key when no inline key is provided
+    assert captured["api_key"] == "db-stored-api-key-for-testing"
 
 
 def test_post_provider_test_missing_model_returns_422(

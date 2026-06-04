@@ -2655,6 +2655,7 @@ def job_cancel(
 
 @app.get("/api/providers/{provider}/models", response_class=JSONResponse)
 async def provider_models(
+    request: Request,
     provider: str,
     api_key: str | None = Query(default=None),
 ) -> JSONResponse:
@@ -2664,10 +2665,15 @@ async def provider_models(
     key from the model-config dialog. When omitted, the registry falls back to
     the centrally stored or ``.env``-configured key for the provider.
     """
+    # Resolve API key: inline takes priority, otherwise use centrally stored DB key
+    inline_key = ((api_key or "").strip() or None)
+    if not inline_key:
+        inline_key = model_config_service.get_default_api_key(provider.strip())
+    
     try:
         models = await provider_registry.list_models(
             provider.strip(),
-            api_key=((api_key or "").strip() or None),
+            api_key=inline_key,
         )
         return JSONResponse(
             {"provider": provider, "models": models, "error": None}
@@ -2723,6 +2729,10 @@ async def provider_test(
     inline_key: str | None = None
     if isinstance(inline_key_raw, str):
         inline_key = inline_key_raw.strip() or None
+
+    # If no inline key provided, try to get the centrally stored API key from DB
+    if not inline_key:
+        inline_key = model_config_service.get_default_api_key(provider_name)
 
     try:
         result = await provider_registry.test_connection(

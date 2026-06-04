@@ -90,7 +90,6 @@ class ProviderRegistry:
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        self.register(StubAdapter())
         self.register(OpenAIAdapter())
         self.register(OpenRouterAdapter())
         self.register(GoogleAdapter())
@@ -184,15 +183,15 @@ class ProviderRegistry:
     ) -> ProviderGenerationResult:
         """Run a tiny generation request to verify the provider connection.
 
-        Produces a single 256x256 PNG used purely for the admin test button.
+        Produces a single 1024x1024 PNG used purely for the admin test button.
         Uses the supplied ``api_key`` (inline) when provided; otherwise the
         registry falls back to the provider's default key resolution.
         """
         adapter = self.get(provider)
         request = ProviderGenerationRequest(
-            prompt="a small red square on a white background",
-            width=256,
-            height=256,
+            prompt="a dog in the meadow",
+            width=1024,
+            height=1024,
             n_images=1,
             seed=0,
             output_format="png",
