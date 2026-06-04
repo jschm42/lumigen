@@ -4451,10 +4451,10 @@ def new_profile_page(
     _request: Request,
     error: str | None = Query(default=None),
 ) -> HTMLResponse:
-    params: dict[str, str] = {"create": "1"}
+    params: dict[str, str] = {"workspace_view": "profiles", "create": "1"}
     if error:
         params["error"] = error
-    return RedirectResponse(url=f"/profiles?{urlencode(params)}", status_code=303)
+    return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
 @app.get("/profiles", response_class=HTMLResponse)
@@ -4508,10 +4508,10 @@ def edit_profile_page(
     profile_id: int,
     error: str | None = Query(default=None),
 ) -> HTMLResponse:
-    params: dict[str, str] = {"edit_id": str(profile_id)}
+    params: dict[str, str] = {"workspace_view": "profiles", "edit_id": str(profile_id)}
     if error:
         params["error"] = error
-    return RedirectResponse(url=f"/profiles?{urlencode(params)}", status_code=303)
+    return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
 @app.post("/profiles")
@@ -4639,8 +4639,8 @@ def create_profile(
             storage_template_id=resolve_default_storage_template_id(session),
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/profiles?create=1&error={str(exc)}", status_code=303)
-    return RedirectResponse(url="/profiles", status_code=303)
+        return RedirectResponse(url=f"/?workspace_view=profiles&create=1&error={str(exc)}", status_code=303)
+    return RedirectResponse(url="/?workspace_view=profiles", status_code=303)
 
 
 @app.post("/profiles/{profile_id}/update")
@@ -4764,10 +4764,10 @@ def update_profile(
         )
     except (ValueError, IntegrityError) as exc:
         return RedirectResponse(
-            url=f"/profiles?edit_id={profile_id}&error={str(exc)}", status_code=303
+            url=f"/?workspace_view=profiles&edit_id={profile_id}&error={str(exc)}", status_code=303
         )
 
-    return RedirectResponse(url="/profiles", status_code=303)
+    return RedirectResponse(url="/?workspace_view=profiles", status_code=303)
 
 
 @app.post("/profiles/{profile_id}/delete")
@@ -4785,10 +4785,10 @@ def delete_profile(
         crud.delete_profile(session, profile)
     except IntegrityError:
         return RedirectResponse(
-            url="/profiles?error=Profile cannot be deleted while generations still reference it",
+            url="/?workspace_view=profiles&error=Profile cannot be deleted while generations still reference it",
             status_code=303,
         )
-    return RedirectResponse(url="/profiles", status_code=303)
+    return RedirectResponse(url="/?workspace_view=profiles", status_code=303)
 
 
 def _parse_gallery_filters(

@@ -14,7 +14,7 @@
 {% set is_embedded = request.query_params.get("embedded") == "1" or request.headers.get("HX-Request") == "true" %}
 {% set htmx_attr = 'hx-boost="true" hx-target="#workspace-content" hx-push-url="false"' if is_embedded else "" %}
 
-<section class="{{ panel_class }} space-y-5" data-admin-page {{ htmx_attr | safe }}>
+<section class="{{ panel_class }} space-y-5 overflow-y-auto max-h-full" data-admin-page {{ htmx_attr | safe }}>
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Admin</h2>
