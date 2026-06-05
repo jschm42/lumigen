@@ -1,0 +1,76 @@
+{# ---------------------------------------------------------------------
+   Provider discovery + test connection fragment.
+   Renders the "Discover models" button, the model suggestions datalist,
+   and a "Test connection" button + result preview.
+
+   Parameters:
+     prefix:   unique DOM id prefix (e.g. "new" or "edit-3") to namespace
+               the inputs and result containers.
+     label_class / input_class / text_class: shared style classes.
+     btn_secondary / btn_primary: shared button classes.
+#}
+{% macro render_model_discovery(prefix, label_class, input_class, btn_secondary, btn_primary) -%}
+  <div
+    class="rounded-2xl border border-slate-300/70 bg-slate-50 p-3 dark:border-white/10 dark:bg-slate-950/35"
+    data-model-discovery
+    data-prefix="{{ prefix }}"
+  >
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      Provider tools
+    </p>
+    <div class="mt-2 flex flex-col gap-3">
+      <div class="flex flex-wrap items-end gap-2">
+        <div class="flex-1 min-w-[12rem]">
+          <label for="{{ prefix }}-model-suggestions" class="{{ label_class }}">Discovered models</label>
+          <input
+            id="{{ prefix }}-model-suggestions"
+            type="text"
+            list="{{ prefix }}-model-suggestions-list"
+            placeholder="(click Discover models)"
+            class="{{ input_class }}"
+            data-model-suggestions-input
+            onchange="copyDiscoveredModelToInput('{{ prefix }}')"
+          >
+          <datalist id="{{ prefix }}-model-suggestions-list" data-model-suggestions-list></datalist>
+        </div>
+        <button
+          type="button"
+          class="{{ btn_secondary }}"
+          data-discover-button
+          onclick="discoverProviderModels('{{ prefix }}')"
+        >
+          <span data-discover-label>Discover models</span>
+        </button>
+      </div>
+      <div class="flex flex-wrap items-end gap-2">
+        <div class="flex-1 min-w-[10rem]">
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Or enter any custom model string in the "Model" field above — discovery is optional.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="{{ btn_secondary }}"
+          data-test-button
+          onclick="testProviderConnection('{{ prefix }}')"
+        >
+          <span data-test-label>Test connection</span>
+        </button>
+      </div>
+      <div
+        id="{{ prefix }}-model-discovery-status"
+        class="hidden rounded-xl border px-3 py-2 text-xs"
+        data-discovery-status
+        role="status"
+      ></div>
+      <div
+        id="{{ prefix }}-model-test-result"
+        class="hidden rounded-xl border px-3 py-2 text-xs"
+        data-test-result
+        role="status"
+      >
+        <div data-test-preview class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+{%- endmacro %}

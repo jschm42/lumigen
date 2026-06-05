@@ -38,7 +38,7 @@ def test_get_config_returns_none_when_not_configured(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="openai", model="gpt", api_key_encrypted=None),
+        lambda _session: SimpleNamespace(provider="openai", model="gpt", api_key_encrypted=None, default_enhancement_prompt=None),
     )
     assert service._get_config() is None
 
@@ -53,7 +53,7 @@ def test_get_config_falls_back_to_provider_key(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="openai", model="gpt", api_key_encrypted=None),
+        lambda _session: SimpleNamespace(provider="openai", model="gpt", api_key_encrypted=None, default_enhancement_prompt=None),
     )
     config = service._get_config()
     assert config is not None
@@ -69,11 +69,11 @@ def test_get_config_decrypts_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="openrouter", model="m", api_key_encrypted="enc"),
+        lambda _session: SimpleNamespace(provider="openrouter", model="m", api_key_encrypted="enc", default_enhancement_prompt=None),
     )
 
     config = service._get_config()
-    assert config == {"provider": "openrouter", "model": "m", "api_key": "dec:enc"}
+    assert config == {"provider": "openrouter", "model": "m", "api_key": "dec:enc", "default_prompt": None}
 
 
 @pytest.mark.asyncio
@@ -121,12 +121,12 @@ async def test_enhance_openai_builds_expected_request(monkeypatch: pytest.Monkey
     monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="openai", model="gpt-4.1-mini", api_key_encrypted="enc-openai"),
+        lambda _session: SimpleNamespace(provider="openai", model="gpt-4.1-mini", api_key_encrypted="enc-openai", default_enhancement_prompt=None),
     )
 
     output = await service.enhance("short prompt", "system instruction")
 
-    assert output == "improved prompt"
+    assert output["enhanced_prompt"] == "improved prompt"
     assert key_used["token"] == "enc-openai"
     assert len(calls) == 1
     call = calls[0]
@@ -135,8 +135,10 @@ async def test_enhance_openai_builds_expected_request(monkeypatch: pytest.Monkey
     assert call["headers"]["Content-Type"] == "application/json"
     assert call["json"]["model"] == "gpt-4.1-mini"
     assert call["json"]["temperature"] == 0.7
-    assert call["json"]["messages"][0] == {"role": "system", "content": "system instruction"}
-    assert call["json"]["messages"][1] == {"role": "user", "content": "short prompt"}
+    assert call["json"]["messages"][0]["role"] == "system"
+    assert "system instruction" in call["json"]["messages"][0]["content"]
+    assert "IMPORTANT: You MUST return your response as a valid JSON object" in call["json"]["messages"][0]["content"]
+    assert call["json"]["messages"][1] == {"role": "user", "content": "Enhance this prompt: short prompt"}
     assert isinstance(captured_timeout, httpx.Timeout)
     assert captured_timeout.connect == pytest.approx(6)
     assert captured_timeout.read == pytest.approx(77)
@@ -174,17 +176,20 @@ async def test_enhance_openrouter_builds_expected_request(monkeypatch: pytest.Mo
     monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="openrouter", model="or-model", api_key_encrypted="enc-or"),
+        lambda _session: SimpleNamespace(provider="openrouter", model="or-model", api_key_encrypted="enc-or", default_enhancement_prompt=None),
     )
 
     output = await service.enhance("hello", None)
-    assert output == "ok"
+    assert output["enhanced_prompt"] == "ok"
     assert len(calls) == 1
     call = calls[0]
     assert call["url"] == "https://or.test/api/v1/chat/completions"
     assert call["headers"]["Authorization"] == "Bearer or-secret"
     assert call["headers"]["X-Title"] == "Lumigen"
-    assert call["json"]["messages"] == [{"role": "user", "content": "hello"}]
+    assert len(call["json"]["messages"]) == 2
+    assert call["json"]["messages"][0]["role"] == "system"
+    assert "You are a prompt engineering expert" in call["json"]["messages"][0]["content"]
+    assert call["json"]["messages"][1] == {"role": "user", "content": "Enhance this prompt: hello"}
 
 
 @pytest.mark.asyncio
@@ -200,7 +205,7 @@ async def test_enhance_raises_for_unconfigured_unsupported_and_invalid_output(
 
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="google", model="m", api_key_encrypted="enc"),
+        lambda _session: SimpleNamespace(provider="google", model="m", api_key_encrypted="enc", default_enhancement_prompt=None),
     )
     with pytest.raises(ValueError, match="not supported"):
         await service.enhance("p", None)
@@ -222,9 +227,9 @@ async def test_enhance_raises_for_unconfigured_unsupported_and_invalid_output(
     monkeypatch.setattr("app.services.enhancement_service.httpx.AsyncClient", FakeAsyncClient400)
     monkeypatch.setattr(
         "app.services.enhancement_service.crud.get_enhancement_config",
-        lambda _session: SimpleNamespace(provider="openai", model="m", api_key_encrypted="enc"),
+        lambda _session: SimpleNamespace(provider="openai", model="m", api_key_encrypted="enc", default_enhancement_prompt=None),
     )
-    with pytest.raises(ValueError, match=r"request failed \(400\)"):
+    with pytest.raises(ValueError, match=r"Enhancement request failed: 400"):
         await service.enhance("p", None)
 
     class FakeAsyncClientEmpty:

@@ -1,0 +1,96 @@
+$ErrorActionPreference = "Stop"
+
+$envPath = Join-Path (Join-Path $PSScriptRoot "..") ".env"
+
+if (Test-Path -LiteralPath $envPath) {
+    Write-Host ".env already exists at $envPath"
+    $confirm = Read-Host "Overwrite? (y/N)"
+    if ($confirm -ne "y") {
+        Write-Host "Aborted."
+        exit 0
+    }
+}
+
+$sessionSecretKey = python -c "import secrets; print(secrets.token_hex(32))"
+$providerConfigKey = python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+$envContent = @"
+# Logging level: DEBUG, INFO, WARNING, ERROR (DEBUG shows outgoing provider requests)
+LOG_LEVEL=INFO
+
+SQLITE_PATH=./data/app.db
+DOCKER_DATA_DIR=./data
+DEFAULT_BASE_DIR=./data/images
+DEFAULT_STORAGE_TEMPLATE=/{profile}/{yyyy}/{mm}/{slug}-{gen_id}-{idx}.{ext}
+
+# Maximum total size (in MB) for uploaded input images per request. Unset or leave empty to allow unlimited uploads.
+# MAX_UPLOAD_SIZE_MB=10
+
+PROVIDER_DEFAULT_MAX_CONCURRENT=2
+PROVIDER_DEFAULT_MIN_INTERVAL_MS=250
+PROVIDER_DEFAULT_RETRY_MAX_ATTEMPTS=4
+PROVIDER_DEFAULT_RETRY_BASE_DELAY_MS=400
+PROVIDER_DEFAULT_RETRY_MAX_DELAY_MS=5000
+
+PROVIDER_STUB_MAX_CONCURRENT=4
+PROVIDER_STUB_MIN_INTERVAL_MS=50
+
+# API Keys for providers (used by default when not using custom API key in model config)
+OPENAI_API_KEY=
+OPENROUTER_API_KEY=
+GOOGLE_API_KEY=
+BFL_API_KEY=
+FAL_API_KEY=
+
+PROVIDER_OPENAI_MAX_CONCURRENT=1
+PROVIDER_OPENAI_MIN_INTERVAL_MS=800
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+PROVIDER_OPENROUTER_MAX_CONCURRENT=1
+PROVIDER_OPENROUTER_MIN_INTERVAL_MS=800
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+
+PROVIDER_GOOGLE_MAX_CONCURRENT=1
+PROVIDER_GOOGLE_MIN_INTERVAL_MS=800
+
+PROVIDER_BFL_MAX_CONCURRENT=1
+PROVIDER_BFL_MIN_INTERVAL_MS=800
+
+PROVIDER_FAL_MAX_CONCURRENT=1
+PROVIDER_FAL_MIN_INTERVAL_MS=500
+
+# LLM HTTP timeouts (seconds)
+LLM_MODELS_TIMEOUT_SECONDS=30
+LLM_MODELS_CONNECT_TIMEOUT_SECONDS=10
+LLM_GENERATE_TIMEOUT_SECONDS=60
+LLM_GENERATE_CONNECT_TIMEOUT_SECONDS=10
+LLM_ENHANCEMENT_TIMEOUT_SECONDS=60
+LLM_ENHANCEMENT_CONNECT_TIMEOUT_SECONDS=10
+
+# Optional provider-specific timeout overrides (seconds)
+PROVIDER_OPENROUTER_GENERATE_TIMEOUT_SECONDS=120
+PROVIDER_GOOGLE_GENERATE_TIMEOUT_SECONDS=240
+PROVIDER_GOOGLE_GENERATE_CONNECT_TIMEOUT_SECONDS=15
+PROVIDER_BFL_DOWNLOAD_TIMEOUT_SECONDS=60
+PROVIDER_BFL_DOWNLOAD_CONNECT_TIMEOUT_SECONDS=30
+
+# Optional local upscaling
+UPSCALER_COMMAND=
+UPSCALER_MODEL_DIR=./data/models/realesrgan
+
+# Encryption key for storing API keys in database
+PROVIDER_CONFIG_KEY=$providerConfigKey
+
+# Session and CSRF security
+SESSION_SECRET_KEY=$sessionSecretKey
+SESSION_COOKIE_NAME=lumigen_session
+SESSION_MAX_AGE_SECONDS=604800
+SESSION_HTTPS_ONLY=false
+PROXY_HEADERS_ENABLED=false
+PROXY_HEADERS_TRUSTED_HOSTS=127.0.0.1
+CSRF_TOKEN_TTL_SECONDS=28800
+AUTH_ALLOW_ONBOARDING_RESET=false
+"@
+
+$envContent | Set-Content -Path $envPath -Encoding UTF8
+Write-Host "Created .env at $envPath"

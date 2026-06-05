@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+
 import httpx
+from typing import Any
 
 from app.config import Settings
 from app.db import crud
@@ -46,10 +48,10 @@ class EnhancementService:
                 api_key = self._secrets.decrypt_api_key(config.api_key_encrypted)
             else:
                 api_key = self._secrets.get_default_api_key(config.provider)
-            
+
             if not api_key:
                 return None
-                
+
             return {
                 "provider": config.provider,
                 "model": config.model,
@@ -58,8 +60,8 @@ class EnhancementService:
             }
 
     async def enhance(
-        self, 
-        prompt: str, 
+        self,
+        prompt: str,
         model_specific_prompt: str | None = None,
         target_model: str = "Unknown",
         target_provider: str = "Unknown"
@@ -79,11 +81,11 @@ class EnhancementService:
 
         # Fallback logic for system prompt
         base_prompt = (
-            model_specific_prompt or 
-            global_default_prompt or 
+            model_specific_prompt or
+            global_default_prompt or
             SAFE_DEFAULT_ENHANCEMENT_PROMPT
         )
-        
+
         # Always append JSON requirements to ensure the UI can parse the response,
         # unless the user has already explicitly included JSON instructions.
         json_instr = (
@@ -91,12 +93,12 @@ class EnhancementService:
             '  - "enhanced_prompt": The improved prompt text.\n'
             '  - "explanation": A very brief (1 sentence) summary of what you improved.'
         )
-        
+
         if "enhanced_prompt" not in base_prompt:
             system_prompt_template = base_prompt + "\n\n" + json_instr
         else:
             system_prompt_template = base_prompt
-            
+
         # Inject context if placeholders exist
         system_prompt = system_prompt_template.format(
             target_model=target_model or "Unknown",
@@ -113,7 +115,7 @@ class EnhancementService:
             "messages": messages,
             "temperature": 0.7,
         }
-        
+
         # Request JSON if supported (OpenAI / OpenRouter with specific models)
         # For now we just rely on the system prompt instructions.
         if provider == "openai":
@@ -166,9 +168,9 @@ class EnhancementService:
                 clean_content = clean_content[7:]
             if clean_content.endswith("```"):
                 clean_content = clean_content[:-3]
-            
+
             result = json.loads(clean_content.strip())
-            
+
             # Validate keys
             if "enhanced_prompt" not in result:
                 # Fallback if it's JSON but wrong keys

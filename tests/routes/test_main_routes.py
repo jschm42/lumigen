@@ -38,7 +38,8 @@ def _override_session(fake_session: _FakeSession):
 
 
 def test_provider_models_success(client, app_module, monkeypatch) -> None:
-    async def fake_list_models(provider: str) -> list[str]:
+    async def fake_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        _ = api_key
         assert provider == "stub"
         return ["model-b", "model-a"]
 
@@ -54,8 +55,8 @@ def test_provider_models_success(client, app_module, monkeypatch) -> None:
 
 
 def test_provider_models_error_returns_payload(client, app_module, monkeypatch) -> None:
-    async def failing_list_models(provider: str) -> list[str]:
-        _ = provider
+    async def failing_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        _ = provider, api_key
         raise ProviderError("provider unavailable")
 
     monkeypatch.setattr(
@@ -666,7 +667,7 @@ def test_rerun_generation_default_view_returns_job_status_fragment(
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
     )
-    source = SimpleNamespace(id=10, status="failed")
+    source = SimpleNamespace(id=10, status="failed", request_snapshot_json={})
     new_gen = SimpleNamespace(
         id=11,
         status="queued",
@@ -704,7 +705,7 @@ def test_rerun_generation_chat_view_returns_chat_fragment(
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
     )
-    source = SimpleNamespace(id=10, status="failed")
+    source = SimpleNamespace(id=10, status="failed", request_snapshot_json={})
     new_gen = SimpleNamespace(
         id=12,
         status="queued",
@@ -796,7 +797,7 @@ def test_rerun_generation_with_unknown_profile_id_falls_back_to_snapshot(
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
     )
-    source = SimpleNamespace(id=10, status="failed")
+    source = SimpleNamespace(id=10, status="failed", request_snapshot_json={})
     new_gen = SimpleNamespace(
         id=14,
         status="queued",

@@ -410,7 +410,7 @@ def test_generate_page_gallery_workspace_skips_chat_data_loading(client, app_mod
     response = client.get("/?workspace_view=gallery&conversation=session:abc")
 
     assert response.status_code == 200
-    assert 'hx-get="/workspace/gallery"' in response.text
+    assert 'hx-get="/workspace/gallery' in response.text
 
 
 def test_workspace_gallery_fragment_renders_embedded_iframe(client) -> None:

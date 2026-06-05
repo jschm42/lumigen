@@ -95,13 +95,15 @@
        <div id="workspace-content" 
          hx-get="{% if workspace_view == 'profiles' %}/workspace/profiles{% elif workspace_view == 'gallery' %}/workspace/gallery?thumb_size={{ last_thumb_size }}{% if workspace_gallery_asset_id %}&asset_id={{ workspace_gallery_asset_id }}{% endif %}{% elif workspace_view == 'admin' %}/workspace/admin{% endif %}" 
            hx-trigger="load" 
-           class="h-full w-full overflow-y-auto">
+           class="subtle-scrollbar h-full w-full overflow-y-auto">
         <!-- Content will be loaded here via HTMX -->
       </div>
     {% elif not profiles %}
-      <div class="h-full p-5">
-        <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          No profiles available. Create a profile first under <a href="/profiles" class="font-semibold underline">Profiles</a>.
+      <div id="workspace-content" class="h-full w-full p-2 sm:p-3">
+        <div class="h-full p-5">
+          <div class="rounded-2xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            No profiles available. Create a profile first under <a href="/profiles" class="font-semibold underline">Profiles</a>.
+          </div>
         </div>
       </div>
     {% else %}

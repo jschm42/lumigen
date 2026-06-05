@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import difflib
 import hashlib
 import hmac
 import io
@@ -9,12 +10,11 @@ import json
 import logging
 import os
 import secrets
-import difflib
 import uuid
 import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -23,7 +23,7 @@ from urllib.parse import urlencode
 try:
     from datetime import UTC
 except ImportError:
-    UTC = timezone.utc
+    UTC = UTC
 
 import uvicorn
 from fastapi import (
@@ -86,6 +86,7 @@ from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 logging.basicConfig(
@@ -2081,10 +2082,10 @@ def _generate_text_diff(old_text: str, new_text: str) -> str:
     # Split into words to get a more granular diff than line-by-line
     old_words = old_text.split()
     new_words = new_text.split()
-    
+
     matcher = difflib.SequenceMatcher(None, old_words, new_words)
     output = []
-    
+
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == 'equal':
             output.append(" ".join(old_words[i1:i2]))
@@ -2095,7 +2096,7 @@ def _generate_text_diff(old_text: str, new_text: str) -> str:
         elif tag == 'replace':
             output.append(f'<span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-0.5 rounded line-through">{" ".join(old_words[i1:i2])}</span>')
             output.append(f'<span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-0.5 rounded">{" ".join(new_words[j1:j2])}</span>')
-            
+
     return " ".join(output)
 
 
@@ -2141,9 +2142,9 @@ async def api_enhance_prompt(
         )
         enhanced_prompt = result.get("enhanced_prompt", prompt)
         explanation = result.get("explanation", "Improved descriptive details.")
-        
+
         diff_html = _generate_text_diff(prompt, enhanced_prompt)
-        
+
         return templates.TemplateResponse(
             request,
             "fragments/enhancement_preview.html",
@@ -2654,12 +2655,130 @@ def job_cancel(
 
 
 @app.get("/api/providers/{provider}/models", response_class=JSONResponse)
-async def provider_models(provider: str) -> JSONResponse:
+async def provider_models(
+    request: Request,
+    provider: str,
+    api_key: str | None = Query(default=None),
+) -> JSONResponse:
+    """Return the list of model IDs available from *provider*.
+
+    The optional ``api_key`` query parameter lets the admin UI pass an inline
+    key from the model-config dialog. When omitted, the registry falls back to
+    the centrally stored or ``.env``-configured key for the provider.
+    """
+    # Resolve API key: inline takes priority, otherwise use centrally stored DB key
+    inline_key = ((api_key or "").strip() or None)
+    if not inline_key:
+        inline_key = model_config_service.get_default_api_key(provider.strip())
+
     try:
-        models = await provider_registry.list_models(provider.strip())
-        return JSONResponse({"provider": provider, "models": models, "error": None})
+        models = await provider_registry.list_models(
+            provider.strip(),
+            api_key=inline_key,
+        )
+        return JSONResponse(
+            {"provider": provider, "models": models, "error": None}
+        )
     except ProviderError as exc:
-        return JSONResponse({"provider": provider, "models": [], "error": str(exc)})
+        return JSONResponse(
+            {"provider": provider, "models": [], "error": str(exc)}
+        )
+
+
+@app.post("/api/providers/{provider}/test", response_class=JSONResponse)
+async def provider_test(
+    request: Request,
+    provider: str,
+) -> JSONResponse:
+    """Run a tiny generation request to verify *provider* connectivity.
+
+    Admin-only. The request body is JSON of the form ``{"model": "...",
+    "api_key": "..."}``. ``api_key`` is optional — when omitted, the registry
+    falls back to the centrally stored or ``.env``-configured key.
+    """
+    denied = require_admin_or_redirect(request)
+    if denied:
+        return JSONResponse(
+            {"provider": provider, "error": "Admin access required.", "image": None},
+            status_code=403,
+        )
+
+    provider_name = provider.strip()
+    if provider_name not in provider_registry.provider_names():
+        return JSONResponse(
+            {"provider": provider_name, "error": "Unsupported provider.", "image": None},
+            status_code=404,
+        )
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    model = str(payload.get("model") or "").strip()
+    if not model:
+        return JSONResponse(
+            {
+                "provider": provider_name,
+                "error": "Model is required.",
+                "image": None,
+            },
+            status_code=422,
+        )
+
+    inline_key_raw = payload.get("api_key")
+    inline_key: str | None = None
+    if isinstance(inline_key_raw, str):
+        inline_key = inline_key_raw.strip() or None
+
+    # If no inline key provided, try to get the centrally stored API key from DB
+    if not inline_key:
+        inline_key = model_config_service.get_default_api_key(provider_name)
+
+    try:
+        result = await provider_registry.test_connection(
+            provider_name, model=model, api_key=inline_key
+        )
+    except ProviderError as exc:
+        return JSONResponse(
+            {"provider": provider_name, "error": str(exc), "image": None}
+        )
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(
+            {
+                "provider": provider_name,
+                "error": f"Test failed: {exc.__class__.__name__}: {exc}",
+                "image": None,
+            }
+        )
+
+    if not result.images:
+        return JSONResponse(
+            {
+                "provider": provider_name,
+                "error": "Provider returned no image data.",
+                "image": None,
+            }
+        )
+
+    image = result.images[0]
+    data_url = (
+        f"data:{image.mime};base64,"
+        + base64.b64encode(image.data).decode("ascii")
+    )
+    return JSONResponse(
+        {
+            "provider": provider_name,
+            "error": None,
+            "image": {
+                "data_url": data_url,
+                "mime": image.mime,
+                "width": image.width,
+                "height": image.height,
+                "model": model,
+            },
+        }
+    )
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -3660,11 +3779,11 @@ def admin_update_enhancement(
     denied = require_admin_or_redirect(request)
     if denied:
         return denied
-    print(f"DEBUG: admin_update_enhancement called")
+    print("DEBUG: admin_update_enhancement called")
     print(f"DEBUG: provider={provider}")
     print(f"DEBUG: model={model}")
     print(f"DEBUG: default_enhancement_prompt='{default_enhancement_prompt}'")
-    
+
     provider = provider.strip()
     if provider not in provider_registry.provider_names():
         raise HTTPException(status_code=404, detail="Unsupported provider")
@@ -4333,10 +4452,10 @@ def new_profile_page(
     _request: Request,
     error: str | None = Query(default=None),
 ) -> HTMLResponse:
-    params: dict[str, str] = {"create": "1"}
+    params: dict[str, str] = {"workspace_view": "profiles", "create": "1"}
     if error:
         params["error"] = error
-    return RedirectResponse(url=f"/profiles?{urlencode(params)}", status_code=303)
+    return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
 @app.get("/profiles", response_class=HTMLResponse)
@@ -4390,10 +4509,10 @@ def edit_profile_page(
     profile_id: int,
     error: str | None = Query(default=None),
 ) -> HTMLResponse:
-    params: dict[str, str] = {"edit_id": str(profile_id)}
+    params: dict[str, str] = {"workspace_view": "profiles", "edit_id": str(profile_id)}
     if error:
         params["error"] = error
-    return RedirectResponse(url=f"/profiles?{urlencode(params)}", status_code=303)
+    return RedirectResponse(url=f"/?{urlencode(params)}", status_code=303)
 
 
 @app.post("/profiles")
@@ -4521,8 +4640,8 @@ def create_profile(
             storage_template_id=resolve_default_storage_template_id(session),
         )
     except (ValueError, IntegrityError) as exc:
-        return RedirectResponse(url=f"/profiles?create=1&error={str(exc)}", status_code=303)
-    return RedirectResponse(url="/profiles", status_code=303)
+        return RedirectResponse(url=f"/?workspace_view=profiles&create=1&error={str(exc)}", status_code=303)
+    return RedirectResponse(url="/?workspace_view=profiles", status_code=303)
 
 
 @app.post("/profiles/{profile_id}/update")
@@ -4646,10 +4765,10 @@ def update_profile(
         )
     except (ValueError, IntegrityError) as exc:
         return RedirectResponse(
-            url=f"/profiles?edit_id={profile_id}&error={str(exc)}", status_code=303
+            url=f"/?workspace_view=profiles&edit_id={profile_id}&error={str(exc)}", status_code=303
         )
 
-    return RedirectResponse(url="/profiles", status_code=303)
+    return RedirectResponse(url="/?workspace_view=profiles", status_code=303)
 
 
 @app.post("/profiles/{profile_id}/delete")
@@ -4667,10 +4786,10 @@ def delete_profile(
         crud.delete_profile(session, profile)
     except IntegrityError:
         return RedirectResponse(
-            url="/profiles?error=Profile cannot be deleted while generations still reference it",
+            url="/?workspace_view=profiles&error=Profile cannot be deleted while generations still reference it",
             status_code=303,
         )
-    return RedirectResponse(url="/profiles", status_code=303)
+    return RedirectResponse(url="/?workspace_view=profiles", status_code=303)
 
 
 def _parse_gallery_filters(
