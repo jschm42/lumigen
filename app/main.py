@@ -944,7 +944,7 @@ def build_session_items(
     hidden_tokens: set[str] = set()
     for generation in all_generations:
         token = generation_session_token(generation)
-        if generation_chat_hidden(generation) or generation_chat_deleted(generation) or generation_session_archived(generation):
+        if generation_chat_hidden(generation) or generation_session_archived(generation):
             hidden_tokens.add(token)
 
     # Build session index
@@ -952,6 +952,8 @@ def build_session_items(
     for generation in all_generations:
         token = generation_session_token(generation)
         if token in hidden_tokens:
+            continue
+        if generation_chat_deleted(generation):
             continue
         custom_title = generation_session_title(generation)
         created_at = generation.created_at or datetime.min
