@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 # For Python < 3.12 compatibility
 try:
     from datetime import UTC
 except ImportError:
-    UTC = timezone.utc
+    UTC = UTC
 from pathlib import Path, PurePosixPath
 
 from app.utils.paths import ensure_dir, ensure_within_base, prune_empty_directories

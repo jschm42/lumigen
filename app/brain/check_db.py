@@ -1,11 +1,14 @@
 
-import sys
 import os
+import sys
+
 sys.path.append(os.getcwd())
 
 from sqlalchemy import select
+
 from app.db.engine import SessionLocal
 from app.db.models import EnhancementConfig
+
 
 def check_config():
     with SessionLocal() as session:

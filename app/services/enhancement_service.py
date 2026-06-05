@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 import httpx
-from typing import Any
 
 from app.config import Settings
 from app.db import crud

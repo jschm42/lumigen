@@ -45,7 +45,6 @@ Typical usage
 from __future__ import annotations
 
 import io
-import shutil
 import zipfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime

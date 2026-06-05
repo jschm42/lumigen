@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 # For Python < 3.12 compatibility
 try:
     from datetime import UTC
 except ImportError:
-    UTC = timezone.utc
+    UTC = UTC
 from pathlib import Path
 
 from app.services.storage_service import StorageService

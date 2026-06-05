@@ -11,5 +11,8 @@
     "lint:css": "stylelint app/web/static/css/app.css",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "opencode-ai": "^1.16.0"
   }
 }

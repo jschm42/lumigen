@@ -1,7 +1,9 @@
 
-from app.db.engine import SessionLocal
-from app.db.models import ModelConfig, EnhancementConfig
 from sqlalchemy import select
+
+from app.db.engine import SessionLocal
+from app.db.models import EnhancementConfig, ModelConfig
+
 
 def check():
     with SessionLocal() as session:

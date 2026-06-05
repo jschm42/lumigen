@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.services.import_export_service import (
-    SUPPORTED_FORMAT_VERSIONS,
     ImportResult,
     RecordResult,
     _unique_name,
@@ -22,7 +20,6 @@ from app.services.import_export_service import (
     import_styles,
     validate_import_payload,
 )
-
 
 # ---------------------------------------------------------------------------
 # validate_import_payload
