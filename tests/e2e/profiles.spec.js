@@ -45,7 +45,7 @@ test.describe("Profiles page (authenticated)", () => {
   }) => {
     /* /profiles/new is a convenience redirect to /profiles?create=1 */
     await page.goto("/profiles/new");
-    await expect(page).toHaveURL(/\/profiles/);
+    await expect(page).toHaveURL(/workspace_view=profiles/);
     await expect(page).toHaveTitle(/Lumigen/);
   });
 });

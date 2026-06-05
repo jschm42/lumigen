@@ -62,6 +62,8 @@ test.describe("Admin page (authenticated admin)", () => {
 
   test("can save and reload enhancement prompt", async ({ page }) => {
     await page.goto("/admin?section=enhancement");
+    const modelInput = page.locator('input[name="model"]');
+    await modelInput.fill("test-model");
     const textarea = page.locator('textarea[name="default_enhancement_prompt"]');
     const testPrompt = `Test prompt ${Date.now()}`;
     await textarea.fill("");
@@ -72,5 +74,6 @@ test.describe("Admin page (authenticated admin)", () => {
     // Reload page to ensure value is persisted
     await page.goto("/admin?section=enhancement");
     await expect(textarea).toHaveValue(testPrompt);
+    await expect(modelInput).toHaveValue("test-model");
   });
 });
