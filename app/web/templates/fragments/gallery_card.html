@@ -13,10 +13,21 @@
     <div class="absolute inset-0 z-10 flex items-center justify-center bg-slate-200/70 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-70 dark:bg-slate-950/70">
       <!-- Buttons at Bottom -->
       <div class="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-2 bg-gradient-to-t from-slate-300/95 via-slate-300/65 to-transparent p-3 pt-12 dark:from-slate-950/90 dark:via-slate-950/50">
-        <a href="/assets/{{ asset.id }}/download" aria-label="Download asset" title="Download" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300/85 bg-white/90 text-slate-700 transition hover:border-sky-400 hover:bg-sky-100 hover:text-sky-800 dark:border-white/30 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/20 dark:hover:text-sky-100">
+        <a href="/assets/{{ asset.id }}/download"
+           data-hx-disable
+           download
+           aria-label="Download asset"
+           title="Download"
+           class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300/85 bg-white/90 text-slate-700 transition hover:border-sky-400 hover:bg-sky-100 hover:text-sky-800 dark:border-white/30 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:border-sky-300 dark:hover:bg-sky-500/20 dark:hover:text-sky-100">
           <i class="bi bi-download text-xl" aria-hidden="true"></i>
         </a>
-        <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-flex" data-confirm-message="Delete this asset?">
+        <form method="post"
+              action="/assets/{{ asset.id }}/delete"
+              hx-post="/assets/{{ asset.id }}/delete"
+              hx-swap="none"
+              hx-on::after-request="if(event.detail.successful){this.closest('[data-gallery-card]').remove();}"
+              class="inline-flex"
+              data-confirm-message="Delete this asset?">
           <input type="hidden" name="return_to" value="{{ return_to }}">
           <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-rose-300/70 bg-rose-100/90 text-rose-700 transition hover:border-rose-400 hover:bg-rose-200 dark:border-rose-300/50 dark:bg-slate-900/80 dark:text-rose-100 dark:hover:border-rose-300 dark:hover:bg-rose-500/30" aria-label="Delete asset" title="Delete">
             <i class="bi bi-trash text-xl" aria-hidden="true"></i>
