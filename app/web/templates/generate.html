@@ -186,11 +186,14 @@
             <input type="hidden" name="conversation" value="{{ active_conversation }}">
 
         <div class="pointer-events-auto bg-transparent px-4 py-3 sm:px-5" data-chat-top-panel>
-          <div class="mb-2">
+          <div class="mb-2 flex items-center gap-3">
             <a href="/?workspace_view=chat&conversation=new&artbook_filter={{ artbook_filter | urlencode }}&artbook_name_query={{ artbook_name_query | urlencode }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300/75 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-white/10">
               <i class="bi bi-arrow-left" aria-hidden="true"></i>
               <span>Back to Artbooks</span>
             </a>
+            {% if active_conversation_title %}
+              <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate flex-1">{{ active_conversation_title }}</h2>
+            {% endif %}
           </div>
           <div class="flex flex-wrap items-end gap-2">
             <div class="w-full max-w-md">

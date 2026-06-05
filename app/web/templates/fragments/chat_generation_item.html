@@ -118,7 +118,7 @@
           {% endfor %}
         </div>
       {% endif %}
-      <div class="mt-2 flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
+      <div class="mt-2 flex justify-end gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
           data-regenerate-prompt="{{ prompt_user_original | e }}"
@@ -126,6 +126,25 @@
           title="Re-Generate"
           class="inline-flex items-center gap-1.5 rounded-lg border border-sky-300/60 bg-sky-50/80 px-2.5 py-1 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-300/30 dark:bg-sky-300/10 dark:text-sky-200 dark:hover:bg-sky-300/20"
         ><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Re-Generate</button>
+        <form method="post"
+              action="/generations/{{ generation.id }}/chat-delete"
+              hx-post="/generations/{{ generation.id }}/chat-delete"
+              hx-target="#chat-generation-{{ generation.id }}"
+              hx-swap="outerHTML"
+              data-confirm-message="Delete this entry from the artbook? The generated images will remain in the gallery."
+              class="inline-flex">
+          {{ csrf_input }}
+          <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+          <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+          <input type="hidden" name="artbook_filter" value="{{ artbook_filter }}">
+          <input type="hidden" name="artbook_name_query" value="{{ artbook_name_query }}">
+          <button
+            type="submit"
+            aria-label="Delete entry"
+            title="Delete entry"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300/60 bg-rose-50/80 px-2.5 py-1 text-xs font-semibold text-rose-800 transition hover:bg-rose-100 dark:border-rose-300/30 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-900/30"
+          ><i class="bi bi-trash" aria-hidden="true"></i>Delete</button>
+        </form>
       </div>
     </article>
   </div>

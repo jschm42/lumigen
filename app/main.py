@@ -1474,6 +1474,7 @@ def generate_page(
     last_selected_style_ids = ""
     conversation_generations = []
     styles: list[Any] = []
+    active_conversation_title = ""
 
     if active_workspace_view == "chat":
         profiles = crud.list_profiles(session)
@@ -1494,6 +1495,7 @@ def generate_page(
                 last_profile_id = chat_session_prefs.last_profile_id
                 last_thumb_size = chat_session_prefs.last_thumb_size or "md"
                 last_selected_style_ids = chat_session_prefs.selected_style_ids or ""
+            active_conversation_title = resolve_artbook_title_for_token(session, active_conversation)
 
         if active_conversation == "new":
             conversation_generations = []
@@ -1518,6 +1520,7 @@ def generate_page(
             "session_has_more": session_has_more,
             "session_offset": effective_session_offset,
             "active_conversation": active_conversation,
+            "active_conversation_title": active_conversation_title,
             "workspace_view": active_workspace_view,
             "workspace_gallery_asset_id": asset_id,
             "artbook_filter": active_artbook_filter,
@@ -5288,6 +5291,42 @@ def delete_generation(
     return RedirectResponse(url="/gallery", status_code=303)
 
 
+@app.post("/generations/{generation_id}/chat-delete")
+def chat_delete_generation(
+    request: Request,
+    generation_id: int,
+    active_conversation: str = Form(default=""),
+    workspace_view: str = Form(default="chat"),
+    artbook_filter: str = Form(default="all"),
+    artbook_name_query: str = Form(default=""),
+    csrf_token: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    """Mark a single generation as deleted from the chat/artbook workspace (soft-delete)."""
+    validate_csrf_or_raise(request, csrf_token)
+    generation = crud.get_generation(session, generation_id)
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+
+    snapshot = dict(generation.request_snapshot_json or {})
+    snapshot["chat_deleted"] = True
+    generation.request_snapshot_json = snapshot
+    session.add(generation)
+    session.commit()
+
+    if is_htmx(request):
+        return Response(status_code=200)
+
+    return generate_workspace_redirect(
+        conversation=active_conversation or "new",
+        workspace_view=workspace_view,
+        extra_params={
+            "artbook_filter": normalize_artbook_filter(artbook_filter),
+            "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
+        },
+    )
+
+
 def _create_generation_for_retry(
     session: Session, source: Generation, profile_id: int | None
 ) -> Generation:
@@ -5402,6 +5441,17 @@ def asset_thumbnail(
         raise HTTPException(status_code=404, detail="Asset not found")
     absolute_path = generation_service.asset_absolute_path(asset, which="thumb")
     if not absolute_path.exists():
+        try:
+            original_path = generation_service.asset_absolute_path(asset, which="file")
+            if original_path.exists():
+                base_dir = generation_service._base_dir_from_snapshot(
+                    asset.generation.storage_template_snapshot_json
+                )
+                thumbnail_service.create_thumbnail(base_dir, asset.file_path)
+                if absolute_path.exists():
+                    return FileResponse(path=absolute_path, media_type="image/webp")
+        except Exception as exc:
+            logger.error(f"Failed to automatically generate missing asset thumbnail: {exc}")
         raise HTTPException(status_code=404, detail="Thumbnail missing")
     return FileResponse(path=absolute_path, media_type="image/webp")
 
@@ -5438,8 +5488,19 @@ def generation_input_image_thumbnail(
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid input image data") from exc
 
-    media_type = str(item.get("mime") or "image/png").strip() or "image/png"
-    return Response(content=image_bytes, media_type=media_type)
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            img = img.convert("RGB")
+            thumb_max_px = settings.thumb_max_px if hasattr(settings, "thumb_max_px") else 384
+            img.thumbnail((thumb_max_px, thumb_max_px))
+            buffer = io.BytesIO()
+            img.save(buffer, format="WEBP", quality=85)
+            thumb_bytes = buffer.getvalue()
+        return Response(content=thumb_bytes, media_type="image/webp")
+    except Exception as exc:
+        logger.error(f"Failed to generate thumbnail for input image: {exc}")
+        media_type = str(item.get("mime") or "image/png").strip() or "image/png"
+        return Response(content=image_bytes, media_type=media_type)
 
 
 if __name__ == "__main__":
