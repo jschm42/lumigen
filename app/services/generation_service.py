@@ -598,105 +598,38 @@ class GenerationService:
                     generation.failure_sidecar_path = failure_rel.as_posix()
                 except Exception as sidecar_exc:
                     generation.failure_sidecar_path = None
-                    # Log the error for debugging but don't add to generation.error
-                    # since we already have the main error
-                    logging.getLogger(__name__).error(
-                        f"Failed to write failure sidecar for generation {generation.id}: {sidecar_exc}"
-                    )
 
                 session.commit()
 
     def _raise_if_cancelled(self, session: Session, generation_id: int) -> None:
-        generation = crud.get_generation(session, generation_id)
-        if not generation:
-            raise GenerationCancelledError("Generation no longer exists.")
-        session.refresh(generation)
-        if generation.status == "cancelled":
-            raise GenerationCancelledError("Canceled by user.")
-
-    def delete_asset(self, session: Session, asset_id: int) -> bool:
-        asset = crud.get_asset(session, asset_id, with_generation=True)
-        if not asset or not asset.generation:
-            return False
-
-        base_dir = self._base_dir_from_snapshot(
-            asset.generation.storage_template_snapshot_json
+        """Raise ``GenerationCancelledError`` if the generation has been cancelled."""
+        generation = session.scalar(
+            select(Generation).where(Generation.id == generation_id)
         )
-        for rel in (asset.file_path, asset.thumbnail_path, asset.sidecar_path):
-            self.storage_service.delete_relative_file(base_dir, rel)
+        if generation and generation.status == "cancelled":
+            raise GenerationCancelledError("Generation was cancelled by user")
 
-        session.delete(asset)
-        session.commit()
-        return True
-
-    def delete_generation(self, session: Session, generation_id: int) -> bool:
-        generation = crud.get_generation(session, generation_id, with_assets=True)
-        if not generation:
-            return False
-
-        base_dir = self._base_dir_from_snapshot(
-            generation.storage_template_snapshot_json
-        )
-        for asset in list(generation.assets):
-            for rel in (asset.file_path, asset.thumbnail_path, asset.sidecar_path):
-                self.storage_service.delete_relative_file(base_dir, rel)
-
-        if generation.failure_sidecar_path:
-            self.storage_service.delete_relative_file(
-                base_dir, generation.failure_sidecar_path
-            )
-
-        session.delete(generation)
-        session.commit()
-        return True
-
-    def asset_absolute_path(self, asset: Asset, which: str = "file") -> Path:
-        generation = asset.generation
-        if not generation:
-            raise ValueError("Asset has no associated generation record")
-        base_dir = self._base_dir_from_snapshot(
-            generation.storage_template_snapshot_json
-        )
-        rel = asset.file_path if which == "file" else asset.thumbnail_path
-        return self.storage_service.resolve_managed_path(base_dir, rel)
-
-    def _provider_request_from_generation(
-        self, generation: Generation
-    ) -> ProviderGenerationRequest:
+    def _provider_request_from_generation(self, generation: Generation) -> ProviderGenerationRequest:
+        """Build a provider request from a generation row's stored snapshots."""
+        profile_snapshot = generation.profile_snapshot_json or {}
         request_data = generation.request_snapshot_json or {}
-
-        # Validate model is set
-        model = str(request_data.get("model") or generation.model or "").strip()
-        if not model:
-            raise ProviderError(
-                "Model configuration error: no model is specified. "
-                "Please check the profile model configuration in Admin settings."
+        model_config = (
+            crud.get_model_config(
+                session, profile_snapshot.get("model_config_id") or 0
             )
-
-        # Get API key - check model config to decide which key to use
-        api_key = None
-        model_config_id = self._parse_optional_int(request_data.get("model_config_id"))
-        provider = str(request_data.get("provider") or generation.provider or "").strip()
-
-        if model_config_id is not None and self.model_config_service:
-            # Get the model config to check if custom API key is enabled
-            config = self.model_config_service.get_model_config(model_config_id)
-
-            if config and config.use_custom_api_key:
-                # Use custom API key if enabled
-                api_key = self.model_config_service.get_api_key(model_config_id)
-            else:
-                # Fall back to environment variable
-                if provider:
-                    api_key = self.model_config_service.get_default_api_key(provider)
-        elif provider and self.model_config_service:
-            # No model config, try to use env variable directly
-            api_key = self.model_config_service.get_default_api_key(provider)
-
-        # Validate API key is available
+            if profile_snapshot.get("model_config_id")
+            else None
+        )
+        model = str(profile_snapshot.get("model") or "").strip()
+        api_key: str | None = None
+        if model_config and self.model_config_service:
+            api_key = self.model_config_service.get_default_api_key(
+                generation.provider
+            )
         if not api_key:
-            raise ProviderError(
-                "Model configuration error: API key not found. "
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "No API key configured for provider %s - generation may fail. "
                 "Please configure an API key for this model in Admin settings."
             )
 
@@ -733,6 +666,34 @@ class GenerationService:
         if candidate:
             return Path(str(candidate)).resolve()
         return self.settings.default_base_dir.resolve()
+
+    def asset_absolute_path(self, asset: Asset, which: str = "file") -> Path:
+        """Return the absolute path for an asset's image or thumbnail file.
+
+        Args:
+            asset: The Asset record to resolve.
+            which: Which file to resolve - "file" for the original image, "thumb" for the thumbnail.
+
+        Returns:
+            The resolved absolute Path to the file.
+
+        Raises:
+            ValueError: If the asset has no generation or the path cannot be resolved.
+        """
+        if not asset.generation:
+            raise ValueError(f"Asset {asset.id} has no associated generation")
+
+        base_dir = self._base_dir_from_snapshot(asset.generation.storage_template_snapshot_json)
+
+        if which == "thumb":
+            rel_path = asset.thumbnail_path
+        else:
+            rel_path = asset.file_path
+
+        if not rel_path:
+            raise ValueError(f"Asset {asset.id} has no {which} path")
+
+        return self.storage_service.resolve_managed_path(base_dir, rel_path)
 
     def _build_asset_sidecar_payload(
         self,
