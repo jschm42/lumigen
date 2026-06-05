@@ -83,9 +83,13 @@ class Settings(BaseSettings):
     llm_enhancement_timeout_seconds: float = 60.0
     llm_enhancement_connect_timeout_seconds: float = 10.0
 
+    provider_openai_generate_timeout_seconds: float = 120.0
+    provider_openai_generate_connect_timeout_seconds: float = 10.0
     provider_openrouter_generate_timeout_seconds: float = 120.0
     provider_google_generate_timeout_seconds: float = 240.0
     provider_google_generate_connect_timeout_seconds: float = 15.0
+    provider_fal_generate_timeout_seconds: float = 60.0
+    provider_fal_generate_connect_timeout_seconds: float = 10.0
     provider_bfl_download_timeout_seconds: float = 60.0
     provider_bfl_download_connect_timeout_seconds: float = 30.0
 

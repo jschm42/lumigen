@@ -84,8 +84,8 @@ class FalAdapter(ProviderAdapter):
         self._log_request("POST", queue_url, headers, payload)
 
         timeout = httpx.Timeout(
-            settings.llm_generate_timeout_seconds,
-            connect=settings.llm_generate_connect_timeout_seconds,
+            settings.provider_fal_generate_timeout_seconds,
+            connect=settings.provider_fal_generate_connect_timeout_seconds,
         )
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(queue_url, headers=headers, json=payload)
