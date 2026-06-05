@@ -4,8 +4,10 @@ import base64
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+
+from fastapi.responses import Response as FastAPIResponse
 from PIL import Image
-from fastapi.responses import FileResponse, Response as FastAPIResponse
+
 
 def _FakeSession():
     class FakeSession:
@@ -235,3 +237,35 @@ def test_asset_thumbnail_auto_generation(client, app_module, monkeypatch) -> Non
     assert response.status_code == 200
     assert len(thumbnail_created) == 1
     assert thumbnail_created[0] == (Path("fake_base").resolve(), "some/file.png")
+
+
+def test_chat_generation_item_renders_asset_delete_button(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(fake_session)
+
+    asset = SimpleNamespace(id=999, mime="image/webp", file_path="some/image.webp")
+    generation = SimpleNamespace(
+        id=888,
+        status="succeeded",
+        prompt_user="Delete me",
+        profile_name="Default",
+        provider="stub",
+        model="stub-v1",
+        request_snapshot_json={},
+        error=None,
+        failure_sidecar_path=None,
+        assets=[asset],
+    )
+
+    def fake_scalar(query):
+        return generation
+    fake_session.scalar = fake_scalar
+
+    response = client.get("/jobs/888?view=chat")
+    assert response.status_code == 200
+    body = response.text
+    assert 'action="/assets/999/delete"' in body
+    assert 'hx-post="/assets/999/delete"' in body
+    assert 'hx-swap="none"' in body
+    assert 'data-confirm-message="Delete this image?"' in body
+    assert 'bi-trash' in body

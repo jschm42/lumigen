@@ -169,16 +169,37 @@
             <button type="submit" class="inline-flex items-center justify-center rounded-lg border border-slate-300/75 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10">Cancel</button>
           </form>
         {% elif generation.status in ['failed', 'cancelled'] %}
-          <form method="post"
-                action="/generations/{{ generation.id }}/rerun?view=chat"
-                hx-post="/generations/{{ generation.id }}/rerun?view=chat"
-                hx-target="closest .chat-generation"
-                hx-swap="morph:outerHTML"
-                class="inline-flex">
-            {{ csrf_input }}
-            <input type="hidden" name="profile_id" value="" data-retry-profile-id>
-            <button type="submit" class="inline-flex items-center gap-1.5 justify-center rounded-lg border border-slate-300/75 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Retry</button>
-          </form>
+          <div class="inline-flex gap-2">
+            <form method="post"
+                  action="/generations/{{ generation.id }}/rerun?view=chat"
+                  hx-post="/generations/{{ generation.id }}/rerun?view=chat"
+                  hx-target="closest .chat-generation"
+                  hx-swap="morph:outerHTML"
+                  class="inline-flex">
+              {{ csrf_input }}
+              <input type="hidden" name="profile_id" value="" data-retry-profile-id>
+              <button type="submit" class="inline-flex items-center gap-1.5 justify-center rounded-lg border border-slate-300/75 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:border-sky-400/60 hover:bg-sky-50 dark:border-white/20 dark:bg-white/5 dark:text-slate-100 dark:hover:border-sky-300/60 dark:hover:bg-white/10"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Retry</button>
+            </form>
+            <form method="post"
+                  action="/generations/{{ generation.id }}/chat-delete"
+                  hx-post="/generations/{{ generation.id }}/chat-delete"
+                  hx-target="#chat-generation-{{ generation.id }}"
+                  hx-swap="outerHTML"
+                  data-confirm-message="Delete this entry from the artbook?"
+                  class="inline-flex">
+              {{ csrf_input }}
+              <input type="hidden" name="active_conversation" value="{{ active_conversation }}">
+              <input type="hidden" name="workspace_view" value="{{ workspace_view }}">
+              <input type="hidden" name="artbook_filter" value="{{ artbook_filter }}">
+              <input type="hidden" name="artbook_name_query" value="{{ artbook_name_query }}">
+              <button
+                type="submit"
+                aria-label="Delete entry"
+                title="Delete entry"
+                class="inline-flex items-center gap-1.5 justify-center rounded-lg border border-rose-300/60 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100 dark:border-rose-300/30 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-900/30"
+              ><i class="bi bi-trash" aria-hidden="true"></i>Delete</button>
+            </form>
+          </div>
         {% endif %}
       </div>
 
@@ -226,6 +247,23 @@
                   </button>
                 </form>
               {% endif %}
+              <form method="post"
+                    action="/assets/{{ asset.id }}/delete"
+                    hx-post="/assets/{{ asset.id }}/delete"
+                    hx-swap="none"
+                    hx-on::after-request="if(event.detail.successful){var ic=this.closest('.image-container');var bubble=ic.closest('.flex.justify-start');ic.remove();if(bubble&&!bubble.querySelector('.image-container')){bubble.remove();}}"
+                    data-confirm-message="Delete this image?"
+                    class="absolute right-3 top-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                {{ csrf_input }}
+                <button
+                  type="submit"
+                  aria-label="Delete image"
+                  title="Delete image"
+                  class="flex h-10 w-10 items-center justify-center rounded-full border border-rose-300/80 bg-white/95 text-rose-700 shadow-lg backdrop-blur-sm transition hover:bg-rose-100 dark:border-white/20 dark:bg-slate-900/90 dark:text-rose-200 dark:hover:bg-rose-900/30"
+                >
+                  <i class="bi bi-trash" aria-hidden="true"></i>
+                </button>
+              </form>
             </div>
           {% endfor %}
         </div>

@@ -140,10 +140,11 @@ test.describe("Home page (authenticated)", () => {
         const testPrompt = "a breathtaking mountain landscape at dawn";
 
         /* Intercept generate requests so we can observe submissions */
+        let resolveRequest;
         let generateCallCount = 0;
         await page.route("**/generate", (route) => {
           generateCallCount += 1;
-          route.fulfill({ status: 200, body: "" });
+          resolveRequest = () => route.fulfill({ status: 200, body: "" });
         });
 
         /* Inject a fake chat generation item that includes the Re-Generate button */
@@ -179,6 +180,8 @@ test.describe("Home page (authenticated)", () => {
         /* The form must have been submitted (generate endpoint called) */
         await expect(page.locator('[data-generate-submit]')).toBeDisabled({ timeout: 3000 });
         expect(generateCallCount).toBeGreaterThan(0);
+
+        if (resolveRequest) resolveRequest();
       });
 
       test("Re-Generate button is hidden by default and visible on hover", async ({
