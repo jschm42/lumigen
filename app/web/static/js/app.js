@@ -156,12 +156,12 @@
   }
 
   function setupConfirmDialog() {
-    var dialog = document.querySelector('[data-confirm-dialog]');
-    if (!dialog) return;
+    var initialDialog = document.querySelector('[data-confirm-dialog]');
+    if (!initialDialog) return;
 
-    var messageNode = dialog.querySelector('[data-confirm-dialog-message]');
-    var confirmButton = dialog.querySelector('[data-confirm-dialog-confirm]');
-    var cancelButton = dialog.querySelector('[data-confirm-dialog-cancel]');
+    var messageNode = initialDialog.querySelector('[data-confirm-dialog-message]');
+    var confirmButton = initialDialog.querySelector('[data-confirm-dialog-confirm]');
+    var cancelButton = initialDialog.querySelector('[data-confirm-dialog-cancel]');
     if (!messageNode || !confirmButton || !cancelButton) return;
 
     var pendingAction = null;
@@ -170,18 +170,62 @@
       pendingAction = null;
     }
 
+    // Re-resolve the dialog on every invocation: htmx swaps and hx-boost
+    // navigation can detach the original element, in which case
+    // ``showModal()`` throws ``InvalidStateError``.
+    function getDialog() {
+      var current = document.querySelector('[data-confirm-dialog]');
+      if (current && current.isConnected) {
+        return current;
+      }
+      // If the dialog was removed (e.g. by an htmx swap), try to restore the
+      // layout-managed dialog by re-parenting the initial node.
+      if (initialDialog && initialDialog.isConnected) {
+        return initialDialog;
+      }
+      if (initialDialog && document.body) {
+        document.body.appendChild(initialDialog);
+        return initialDialog;
+      }
+      return null;
+    }
+
     function openConfirm(message, onConfirm) {
-      messageNode.textContent = message || 'Are you sure?';
+      var dialog = getDialog();
+      if (!dialog) {
+        // Last-resort fallback when no dialog is available: ask the user via
+        // the native confirm dialog so confirmations cannot be silently
+        // bypassed.
+        if (typeof onConfirm === 'function' && window.confirm(message || 'Are you sure?')) {
+          onConfirm();
+        }
+        return;
+      }
       pendingAction = onConfirm;
+      var liveMessage = dialog.querySelector('[data-confirm-dialog-message]');
+      if (liveMessage) {
+        liveMessage.textContent = message || 'Are you sure?';
+      }
       if (!dialog.open) {
-        dialog.showModal();
+        try {
+          dialog.showModal();
+        } catch (_error) {
+          // Dialog is not in a connectable state; fall back to a native prompt.
+          if (typeof onConfirm === 'function' && window.confirm(message || 'Are you sure?')) {
+            clearPending();
+            onConfirm();
+          }
+        }
       }
     }
 
     confirmButton.addEventListener('click', function () {
       var action = pendingAction;
       clearPending();
-      dialog.close();
+      var dialog = getDialog();
+      if (dialog && dialog.open) {
+        dialog.close();
+      }
       if (typeof action === 'function') {
         action();
       }
@@ -189,10 +233,13 @@
 
     cancelButton.addEventListener('click', function () {
       clearPending();
-      dialog.close();
+      var dialog = getDialog();
+      if (dialog && dialog.open) {
+        dialog.close();
+      }
     });
 
-    dialog.addEventListener('close', function () {
+    initialDialog.addEventListener('close', function () {
       clearPending();
     });
 

@@ -314,6 +314,81 @@ class GenerationService:
         session.refresh(generation)
         return generation
 
+    def delete_asset(self, session: Session, asset_id: int) -> bool:
+        """Delete a single asset and its on-disk files.
+
+        Removes the image, sidecar and thumbnail files from storage, deletes the
+        ``Asset`` row and commits the session. Returns ``True`` if the asset was
+        deleted, ``False`` if it was not found.
+        """
+        asset = crud.get_asset(session, asset_id, with_generation=True)
+        if not asset:
+            return False
+
+        self._delete_asset_files(asset)
+        session.delete(asset)
+        session.commit()
+        return True
+
+    def delete_generation(self, session: Session, generation_id: int) -> bool:
+        """Delete a generation row together with all of its assets and files.
+
+        Each asset's image, sidecar and thumbnail is removed from storage, the
+        generation's failure sidecar (if any) is removed, and the row itself is
+        deleted via cascade. Returns ``True`` if the generation was deleted,
+        ``False`` if it was not found.
+        """
+        generation = crud.get_generation(session, generation_id, with_assets=True)
+        if not generation:
+            return False
+
+        base_dir = self._base_dir_from_snapshot(
+            generation.storage_template_snapshot_json
+        )
+
+        for asset in generation.assets:
+            self._delete_asset_files(asset, base_dir=base_dir)
+
+        if generation.failure_sidecar_path:
+            self.storage_service.delete_relative_file(
+                base_dir, generation.failure_sidecar_path
+            )
+
+        session.delete(generation)
+        session.commit()
+        return True
+
+    def _delete_asset_files(
+        self, asset: Asset, *, base_dir: Path | None = None
+    ) -> None:
+        """Best-effort removal of the on-disk files associated with *asset*.
+
+        The originating ``base_dir`` is taken from the asset's generation
+        snapshot when available. Missing files are silently ignored so a
+        partially-cleaned asset row still completes its database delete.
+        """
+        if not asset.generation:
+            return
+
+        resolved_base_dir = base_dir or self._base_dir_from_snapshot(
+            asset.generation.storage_template_snapshot_json
+        )
+
+        for relative_path in (
+            asset.thumbnail_path,
+            asset.sidecar_path,
+            asset.file_path,
+        ):
+            if not relative_path:
+                continue
+            try:
+                self.storage_service.delete_relative_file(
+                    resolved_base_dir, relative_path
+                )
+            except (FileNotFoundError, ValueError):
+                # File is already gone or the recorded path is unsafe; ignore.
+                continue
+
     async def run_generation_job(self, generation_id: int) -> None:
         """Execute the generation job: call the provider, save files, and update the DB status."""
         with SessionLocal() as session:
