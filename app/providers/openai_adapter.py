@@ -137,6 +137,19 @@ class OpenAIAdapter(ProviderAdapter):
             "n": max(1, int(request.n_images)),
             "size": self._size_string(request),
         }
+
+        # Keep adapter compatible with custom/proxy endpoints that accept input images
+        if request.input_images:
+            first_image = request.input_images[0]
+            b64_value = base64.b64encode(first_image.data).decode("ascii")
+            data_url = f"data:{first_image.mime};base64,{b64_value}"
+            payload["image"] = b64_value
+            payload["image_url"] = data_url
+            payload["input_image"] = b64_value
+            payload["input_images"] = [
+                f"data:{img.mime};base64,{base64.b64encode(img.data).decode('ascii')}"
+                for img in request.input_images
+            ]
         if is_dalle:
             payload["response_format"] = "b64_json"
         else:

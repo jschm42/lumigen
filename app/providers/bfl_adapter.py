@@ -287,6 +287,13 @@ class BFLAdapter(ProviderAdapter):
             "prompt": request.prompt,
         }
 
+        # Handle BFL input images (Base64-encoded reference images)
+        if request.input_images:
+            for idx, img in enumerate(request.input_images):
+                key = "input_image" if idx == 0 else f"input_image_{idx+1}"
+                b64_value = base64.b64encode(img.data).decode("ascii")
+                payload[key] = b64_value
+
         # Handle image dimensions
         if request.width and request.height:
             payload["width"] = request.width
