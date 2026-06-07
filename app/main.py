@@ -4222,6 +4222,17 @@ async def upload_session_input_image(
             status_code=400,
         )
 
+    # Auto-rotate / transpose EXIF orientation if applicable
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            fmt = img.format or "JPEG"
+            transposed = ImageOps.exif_transpose(img)
+            buffer = io.BytesIO()
+            transposed.save(buffer, format=fmt)
+            data = buffer.getvalue()
+    except Exception as exc:
+        logger.warning(f"Failed to auto-rotate uploaded image: {exc}")
+
     crud.upsert_chat_session_preferences(session, chat_session_id=token)
 
     session_subdir = _session_input_subdir(token)

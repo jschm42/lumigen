@@ -26,8 +26,11 @@ class ThumbnailService:
         thumbnail_rel = self.thumbnail_relative_path(image_relative_path)
         thumbnail_abs = self.storage_service.resolve_managed_path(base_dir, thumbnail_rel)
 
+        from PIL import ImageOps
+
         with Image.open(image_abs) as source:
-            image = source.convert("RGB")
+            transposed = ImageOps.exif_transpose(source)
+            image = transposed.convert("RGB")
             image.thumbnail((self.max_px, self.max_px))
             buffer = BytesIO()
             image.save(buffer, format="WEBP", quality=85)
