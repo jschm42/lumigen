@@ -689,22 +689,26 @@ class GenerationService:
         profile_snapshot = generation.profile_snapshot_json or {}
         request_data = generation.request_snapshot_json or {}
         model_config = (
-            crud.get_model_config(
-                session, profile_snapshot.get("model_config_id") or 0
-            )
-            if profile_snapshot.get("model_config_id")
+            self.model_config_service.get_model_config(profile_snapshot.get("model_config_id"))
+            if profile_snapshot.get("model_config_id") and self.model_config_service
             else None
         )
         model = str(profile_snapshot.get("model") or "").strip()
+        if not model:
+            raise ProviderError("Generation request has no model specified")
+
         api_key: str | None = None
-        if model_config and self.model_config_service:
-            api_key = self.model_config_service.get_default_api_key(
-                generation.provider
-            )
+        if self.model_config_service:
+            if model_config and getattr(model_config, "use_custom_api_key", False):
+                api_key = self.model_config_service.get_api_key(model_config.id)
+            else:
+                api_key = self.model_config_service.get_default_api_key(
+                    generation.provider
+                )
+
         if not api_key:
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                "No API key configured for provider %s - generation may fail. "
+            raise ProviderError(
+                f"No API key configured for provider {generation.provider}. "
                 "Please configure an API key for this model in Admin settings."
             )
 
