@@ -901,12 +901,17 @@ def default_artbook_title(created_at: datetime | None) -> str:
 def resolve_artbook_title_for_token(session: Session, session_token: str) -> str:
     """Resolve a stable title for an Artbook token.
 
-    Prefers an explicitly saved chat session title from existing generations,
-    otherwise derives the default title from the chat session creation date.
+    Prefers the title persisted on the ``ChatSession`` row (set by the rename
+    flow), then any explicit title stored in a generation's snapshot, and
+    finally falls back to a date-based default title.
     """
     token = (session_token or "").strip()
     if not token or token == "new":
         return "Artbook"
+
+    chat_session = crud.get_chat_session(session, token)
+    if chat_session and isinstance(chat_session.title, str) and chat_session.title.strip():
+        return chat_session.title.strip()
 
     generations = list_generations_for_session_token(session, token)
     for generation in reversed(generations):
@@ -914,7 +919,6 @@ def resolve_artbook_title_for_token(session: Session, session_token: str) -> str
         if existing_title:
             return existing_title
 
-    chat_session = crud.get_chat_session(session, token)
     if chat_session:
         return default_artbook_title(chat_session.created_at)
     return default_artbook_title(datetime.now())
@@ -946,6 +950,15 @@ def build_session_items(
         token = generation_session_token(generation)
         if generation_chat_hidden(generation) or generation_session_archived(generation):
             hidden_tokens.add(token)
+
+    # Preload ChatSession rows so we can backfill custom titles for empty
+    # artbooks (rename on an artbook with no generations yet) and for sessions
+    # whose generations pre-date the title being moved onto ChatSession.
+    chat_session_by_token: dict[str, ChatSession] = {
+        str(row.chat_session_id or "").strip(): row
+        for row in session.scalars(select(ChatSession)).all()
+        if str(row.chat_session_id or "").strip()
+    }
 
     # Build session index
     session_index: dict[str, dict[str, Any]] = {}
@@ -985,6 +998,18 @@ def build_session_items(
         }
         item["asset_ids"].update(generation_asset_ids)
 
+    # Backfill custom titles from the ChatSession row when no generation in the
+    # session has a stored title (e.g. the artbook was renamed before the first
+    # generation, or the snapshot was lost).
+    for token, item in session_index.items():
+        if item.get("custom_title"):
+            continue
+        chat_session = chat_session_by_token.get(token)
+        if chat_session is not None and isinstance(chat_session.title, str):
+            trimmed = chat_session.title.strip()
+            if trimmed:
+                item["custom_title"] = trimmed
+
     # Include empty ChatSession rows (Artbooks without generations yet).
     all_chat_sessions = list(
         session.scalars(
@@ -1006,10 +1031,16 @@ def build_session_items(
             if latest_at < cutoff_date:
                 continue
 
+        explicit_title = (
+            chat_session.title.strip()
+            if isinstance(chat_session.title, str) and chat_session.title.strip()
+            else ""
+        )
+
         session_index[token] = {
             "token": token,
             "profile_label": default_artbook_title(created_at),
-            "custom_title": "",
+            "custom_title": explicit_title,
             "latest_generation_id": 0,
             "started_at": created_at,
             "latest_created_at": latest_at,
@@ -2219,6 +2250,14 @@ def rename_chat_session(
                 "artbook_name_query": normalize_artbook_name_query(artbook_name_query),
             },
         )
+
+    # Persist the new title on the ChatSession row so empty Artbooks keep the
+    # rename even before any generation exists. If the row is missing (legacy
+    # data) but generations are present, lazily create it so the title sticks.
+    if chat_session_row is None:
+        chat_session_row = crud.upsert_chat_session_preferences(session, token)
+    chat_session_row.title = new_title
+    session.add(chat_session_row)
 
     for generation in generations:
         snapshot = dict(generation.request_snapshot_json or {})

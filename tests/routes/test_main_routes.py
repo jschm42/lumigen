@@ -150,6 +150,7 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
     fake_session = _FakeSession()
     generation_one = SimpleNamespace(request_snapshot_json={"foo": "bar"})
     generation_two = SimpleNamespace(request_snapshot_json={})
+    chat_session_row = SimpleNamespace(chat_session_id="session:abc", title=None)
 
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
@@ -158,6 +159,9 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
         app_module,
         "list_generations_for_session_token",
         lambda _session, _token: [generation_one, generation_two],
+    )
+    monkeypatch.setattr(
+        app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row
     )
 
     response = client.post(
@@ -175,8 +179,92 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
     assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc&artbook_filter=all"
     assert generation_one.request_snapshot_json["chat_session_title"] == "My Session"
     assert generation_two.request_snapshot_json["chat_session_title"] == "My Session"
+    assert chat_session_row.title == "My Session"
     assert fake_session.commits == 1
-    assert len(fake_session.added) == 2
+    assert chat_session_row in fake_session.added
+    assert generation_one in fake_session.added
+    assert generation_two in fake_session.added
+
+
+def test_rename_session_persists_title_on_empty_artbook(
+    client, app_module, monkeypatch
+) -> None:
+    """Renaming a freshly created Artbook (no generations yet) must persist the title on the ChatSession row."""
+    fake_session = _FakeSession()
+    chat_session_row = SimpleNamespace(
+        chat_session_id="session:empty", title=None
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [],
+    )
+    monkeypatch.setattr(
+        app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row
+    )
+
+    response = client.post(
+        "/sessions/rename",
+        data={
+            "session_token": "session:empty",
+            "title": "My Empty Artbook",
+            "active_conversation": "session:empty",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert chat_session_row.title == "My Empty Artbook"
+    assert chat_session_row in fake_session.added
+    assert fake_session.commits == 1
+
+
+def test_rename_session_creates_missing_chat_session_row(
+    client, app_module, monkeypatch
+) -> None:
+    """If the ChatSession row is missing but generations exist (legacy data), the endpoint creates the row and persists the title."""
+    fake_session = _FakeSession()
+    created_row = SimpleNamespace(chat_session_id="session:orphan", title=None)
+    generation = SimpleNamespace(request_snapshot_json={})
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [generation],
+    )
+    monkeypatch.setattr(
+        app_module.crud, "get_chat_session", lambda _session, _token: None
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "upsert_chat_session_preferences",
+        lambda _session, chat_session_id, **_kwargs: created_row,
+    )
+
+    response = client.post(
+        "/sessions/rename",
+        data={
+            "session_token": "session:orphan",
+            "title": "Rescued Artbook",
+            "active_conversation": "session:orphan",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert created_row.title == "Rescued Artbook"
+    assert generation.request_snapshot_json["chat_session_title"] == "Rescued Artbook"
+    assert created_row in fake_session.added
+    assert fake_session.commits == 1
 
 
 def test_archive_session_marks_generations_as_archived(client, app_module, monkeypatch) -> None:

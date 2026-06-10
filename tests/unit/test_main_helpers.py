@@ -185,6 +185,91 @@ def test_default_artbook_title_uses_bracketed_date(app_module) -> None:
     assert value == "Artbook [31.05.2026]"
 
 
+def test_resolve_artbook_title_prefers_chat_session_title(app_module) -> None:
+    chat_session = SimpleNamespace(
+        chat_session_id="session:abc",
+        title="My Cool Artbook",
+        created_at=datetime(2026, 6, 1, 9, 0, 0),
+    )
+    fake_session = SimpleNamespace()
+    monkey = pytest.MonkeyPatch()
+
+    def fake_get_chat_session(_session, _token):
+        return chat_session
+
+    def fake_list_generations(_session, _token):
+        return [
+            SimpleNamespace(
+                request_snapshot_json={"chat_session_title": "snapshot title"}
+            )
+        ]
+
+    monkey.setattr(
+        app_module.crud, "get_chat_session", fake_get_chat_session
+    )
+    monkey.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        fake_list_generations,
+    )
+    try:
+        assert (
+            app_module.resolve_artbook_title_for_token(fake_session, "session:abc")
+            == "My Cool Artbook"
+        )
+    finally:
+        monkey.undo()
+
+
+def test_resolve_artbook_title_falls_back_to_snapshot_then_default(app_module) -> None:
+    fake_session = SimpleNamespace()
+    monkey = pytest.MonkeyPatch()
+
+    monkey.setattr(
+        app_module.crud,
+        "get_chat_session",
+        lambda _session, _token: SimpleNamespace(
+            chat_session_id="session:abc",
+            title=None,
+            created_at=datetime(2026, 6, 1, 9, 0, 0),
+        ),
+    )
+    monkey.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [
+            SimpleNamespace(
+                request_snapshot_json={"chat_session_title": "snapshot title"}
+            )
+        ],
+    )
+    try:
+        assert (
+            app_module.resolve_artbook_title_for_token(fake_session, "session:abc")
+            == "snapshot title"
+        )
+
+        monkey.setattr(
+            app_module,
+            "list_generations_for_session_token",
+            lambda _session, _token: [],
+        )
+        assert (
+            app_module.resolve_artbook_title_for_token(fake_session, "session:abc")
+            == "Artbook [01.06.2026]"
+        )
+
+        monkey.setattr(
+            app_module.crud, "get_chat_session", lambda _session, _token: None
+        )
+        title = app_module.resolve_artbook_title_for_token(
+            fake_session, "session:abc"
+        )
+        assert title.startswith("Artbook [")
+    finally:
+        monkey.undo()
+
+
 def test_normalize_time_preset_supports_extended_values(app_module) -> None:
     assert app_module.normalize_time_preset("today") == "today"
     assert app_module.normalize_time_preset("last_60_days") == "last_60_days"

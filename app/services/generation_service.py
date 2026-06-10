@@ -160,6 +160,12 @@ class GenerationService:
             ),
             "prompt_final": prompt_final,
             "chat_session_id": chat_session_id or None,
+            "chat_session_title": (
+                str(effective_overrides.get("chat_session_title")).strip()
+                if isinstance(effective_overrides.get("chat_session_title"), str)
+                and str(effective_overrides.get("chat_session_title")).strip()
+                else None
+            ),
             "selected_style_ids": self._parse_int_list(
                 effective_overrides.get("selected_style_ids", [])
             ),
@@ -196,6 +202,7 @@ class GenerationService:
                 "category_ids": "category_ids" in effective_overrides,
                 "input_images": "input_images" in effective_overrides,
                 "chat_session_id": "chat_session_id" in effective_overrides,
+                "chat_session_title": "chat_session_title" in effective_overrides,
             },
         }
 
