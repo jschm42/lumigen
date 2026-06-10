@@ -3022,7 +3022,7 @@ def admin_update_fal_upscale_key(
 def admin_create_topaz_model(
     request: Request,
     name: str = Form(...),
-    model_identifier: str = Form(...),
+    fal_model_identifier: str = Form(..., alias="model_identifier"),
     params_json: str = Form(default="{}"),
     is_enabled: str = Form(default=""),
     csrf_token: str = Form(...),
@@ -3036,7 +3036,7 @@ def admin_create_topaz_model(
     enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
     try:
         name_value = normalize_model_config_name(name)
-        identifier_value = normalize_fal_model_identifier(model_identifier)
+        identifier_value = normalize_fal_model_identifier(fal_model_identifier)
         params_value = parse_fal_model_params_json(params_json)
         crud.create_topaz_upscale_model(
             session,
@@ -3052,7 +3052,7 @@ def admin_create_topaz_model(
             extra_params={
                 "fal_model_create_open": "1",
                 "fal_model_name": name,
-                "fal_model_identifier": model_identifier,
+                "fal_model_identifier": fal_model_identifier,
                 "fal_model_params_json": params_json,
                 "fal_model_is_enabled": "1" if enabled_value else "0",
             },
@@ -3066,7 +3066,7 @@ def admin_update_topaz_model(
     request: Request,
     topaz_model_id: int,
     name: str = Form(...),
-    model_identifier: str = Form(...),
+    fal_model_identifier: str = Form(..., alias="model_identifier"),
     params_json: str = Form(default="{}"),
     is_enabled: str = Form(default=""),
     csrf_token: str = Form(...),
@@ -3083,7 +3083,7 @@ def admin_update_topaz_model(
     enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
     try:
         name_value = normalize_model_config_name(name)
-        identifier_value = normalize_fal_model_identifier(model_identifier)
+        identifier_value = normalize_fal_model_identifier(fal_model_identifier)
         params_value = parse_fal_model_params_json(params_json)
         crud.update_topaz_upscale_model(
             session,
@@ -3100,7 +3100,7 @@ def admin_update_topaz_model(
             extra_params={
                 "fal_model_edit_id": topaz_model.id,
                 "fal_model_name": name,
-                "fal_model_identifier": model_identifier,
+                "fal_model_identifier": fal_model_identifier,
                 "fal_model_params_json": params_json,
                 "fal_model_is_enabled": "1" if enabled_value else "0",
             },
@@ -3609,7 +3609,7 @@ def admin_generate_style_image(
     request: Request,
     style_id: int,
     background_tasks: BackgroundTasks,
-    model_config_id: int = Form(...),
+    selected_model_config_id: int = Form(..., alias="model_config_id"),
     prompt: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
@@ -3624,7 +3624,7 @@ def admin_generate_style_image(
     if not style:
         raise HTTPException(status_code=404, detail="Style not found")
 
-    model_config = crud.get_model_config(session, model_config_id)
+    model_config = crud.get_model_config(session, selected_model_config_id)
     if not model_config:
         raise HTTPException(status_code=404, detail="Model configuration not found")
 
@@ -4574,7 +4574,7 @@ def edit_profile_page(
 def create_profile(
     request: Request,
     name: str = Form(...),
-    model_config_id: str = Form(...),
+    selected_model_config_id: str = Form(..., alias="model_config_id"),
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -4598,7 +4598,7 @@ def create_profile(
     validate_csrf_or_raise(request, csrf_token)
     try:
         name_value = normalize_profile_name(name)
-        model_config_value = parse_optional_int(model_config_id)
+        model_config_value = parse_optional_int(selected_model_config_id)
         if model_config_value is None:
             raise ValueError("Model selection is required")
         model_config = crud.get_model_config(session, model_config_value)
@@ -4704,7 +4704,7 @@ def update_profile(
     request: Request,
     profile_id: int,
     name: str = Form(...),
-    model_config_id: str = Form(...),
+    selected_model_config_id: str = Form(..., alias="model_config_id"),
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -4732,7 +4732,7 @@ def update_profile(
 
     try:
         name_value = normalize_profile_name(name)
-        model_config_value = parse_optional_int(model_config_id)
+        model_config_value = parse_optional_int(selected_model_config_id)
         if model_config_value is None:
             raise ValueError("Model selection is required")
         model_config = crud.get_model_config(session, model_config_value)
