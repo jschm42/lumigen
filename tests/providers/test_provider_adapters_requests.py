@@ -332,6 +332,54 @@ async def test_openai_generate_with_multiple_input_images_sends_array_field_and_
 
 
 @pytest.mark.asyncio
+async def test_openai_generate_with_expand_internal_params_omits_them_from_multipart_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Continue the scene",
+        width=640,
+        height=480,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gpt-image-2",
+        input_images=[
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+        ],
+        params={
+            "padded_image": b"ignored",
+            "mask": b"ignored-mask",
+            "target_width": 640,
+            "target_height": 480,
+            "quality": "high",
+        },
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert call["url"] == "https://api.openai.test/v1/images/edits"
+    assert data["model"] == "gpt-image-2"
+    assert data["quality"] == "high"
+    assert "padded_image" not in data
+    assert "mask" not in data
+    assert "target_width" not in data
+    assert "target_height" not in data
+    assert any(name == "image[]" for name, _ in files)
+    assert any(name == "mask" for name, _ in files)
+
+
+@pytest.mark.asyncio
 async def test_openai_generate_with_dalle2_input_images_uses_edits_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

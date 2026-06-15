@@ -24,6 +24,8 @@ class ProviderGenerationRequest:
     api_key: str | None = None
     params: dict[str, Any] = field(default_factory=dict)
     input_images: list[ProviderInputImage] = field(default_factory=list)
+    mode: str = "generate"
+    expand: dict[str, Any] | None = None
 
 
 @dataclass
@@ -32,6 +34,26 @@ class ProviderInputImage:
 
     data: bytes
     mime: str
+
+
+@dataclass
+class ExpandSpec:
+    """Per-side padding specification for an outpainting/expand request.
+
+    The caller supplies the source image plus independent pixel counts for
+    each side. The total target canvas is computed as
+    ``(width + left + right) × (height + top + bottom)``. ``fill`` controls
+    how the padded area is rendered before being sent to the provider
+    (transparent, a CSS colour, or ``"blur"`` to extend via edge blur).
+    """
+
+    top: int = 0
+    right: int = 0
+    bottom: int = 0
+    left: int = 0
+    fill: str = "transparent"
+    continuation_prompt: str | None = None
+    source_asset_id: int | None = None
 
 
 @dataclass

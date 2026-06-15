@@ -757,6 +757,83 @@
     });
   }
 
+  // ---- Expand Asset Dialog ----
+
+  (function initExpandDialog() {
+    var dialog = document.getElementById("expand-asset-dialog");
+    if (!dialog) return;
+
+    var sourceAssetInput = dialog.querySelector("[data-expand-source-asset-id]");
+    var conversationInput = dialog.querySelector("[data-expand-conversation]");
+    var promptInput = dialog.querySelector("[data-expand-prompt-input]");
+    var continuationInput = dialog.querySelector("[data-expand-continuation-prompt]");
+    var profileSelect = dialog.querySelector('select[name="profile_id"]');
+    var mainProfileSelect = document.getElementById("profile_id");
+    var defaultConversationInput = document.querySelector('[data-generation-form] input[name="conversation"]');
+    var closeButtons = dialog.querySelectorAll("[data-expand-dialog-close]");
+    var expandForm = dialog.querySelector("[data-expand-form]");
+
+    function closeDialog() {
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+
+    closeButtons.forEach(function (button) {
+      button.addEventListener("click", closeDialog);
+    });
+
+    dialog.addEventListener("click", function (event) {
+      var rect = dialog.getBoundingClientRect();
+      var isOutside =
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom;
+      if (isOutside) closeDialog();
+    });
+
+    if (expandForm && promptInput && continuationInput) {
+      expandForm.addEventListener("submit", function () {
+        continuationInput.value = promptInput.value;
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      var trigger = event.target.closest("[data-open-expand-dialog]");
+      if (!trigger) return;
+      event.preventDefault();
+
+      if (sourceAssetInput) {
+        sourceAssetInput.value = trigger.getAttribute("data-expand-asset-id") || "";
+      }
+      if (conversationInput) {
+        conversationInput.value =
+          trigger.getAttribute("data-expand-session-token") ||
+          (defaultConversationInput ? defaultConversationInput.value : "") ||
+          "new";
+      }
+      if (promptInput) {
+        promptInput.value = trigger.getAttribute("data-expand-prompt") || "";
+        promptInput.dispatchEvent(new Event("input"));
+      }
+      if (continuationInput && promptInput) {
+        continuationInput.value = promptInput.value;
+      }
+      if (profileSelect && mainProfileSelect) {
+        var selected = mainProfileSelect.options[mainProfileSelect.selectedIndex];
+        if (
+          selected &&
+          selected.getAttribute("data-provider") === "openai" &&
+          profileSelect.querySelector('option[value="' + selected.value + '"]')
+        ) {
+          profileSelect.value = selected.value;
+        }
+      }
+      dialog.showModal();
+    });
+  })();
+
   initStylesPicker();
   renderSelectedStyles(false);
 

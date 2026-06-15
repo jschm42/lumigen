@@ -10,7 +10,7 @@ from PIL import Image
 
 from app.config import Settings
 from app.db.models import Asset, Generation
-from app.providers.base import ProviderError
+from app.providers.base import ExpandSpec, ProviderError
 from app.services.generation_service import GenerationCancelledError, GenerationService
 
 
@@ -35,7 +35,7 @@ def _service_with_model_config(model_config_service) -> GenerationService:
 
 def test_provider_request_from_generation_uses_custom_model_key() -> None:
     model_config_service = SimpleNamespace(
-        get_model_config=lambda _id: SimpleNamespace(use_custom_api_key=True),
+        get_model_config=lambda _id: SimpleNamespace(id=_id, use_custom_api_key=True),
         get_api_key=lambda _id: "custom-key",
         get_default_api_key=lambda _provider: "env-key",
     )
@@ -48,7 +48,7 @@ def test_provider_request_from_generation_uses_custom_model_key() -> None:
         provider="openai",
         model="gpt-image-1",
         status="queued",
-        profile_snapshot_json={},
+        profile_snapshot_json={"model_config_id": 7, "model": "gpt-image-1"},
         storage_template_snapshot_json={},
         request_snapshot_json={
             "model": "gpt-image-1",
@@ -85,7 +85,7 @@ def test_provider_request_from_generation_uses_default_key_when_no_custom() -> N
         provider="openrouter",
         model="or-model",
         status="queued",
-        profile_snapshot_json={},
+        profile_snapshot_json={"model_config_id": 5, "model": "or-model"},
         storage_template_snapshot_json={},
         request_snapshot_json={
             "provider": "openrouter",
@@ -97,6 +97,50 @@ def test_provider_request_from_generation_uses_default_key_when_no_custom() -> N
 
     request = service._provider_request_from_generation(generation)
     assert request.api_key == "openrouter-env-key"
+
+
+def test_provider_request_from_generation_includes_expand_mode_and_spec() -> None:
+    model_config_service = SimpleNamespace(
+        get_model_config=lambda _id: SimpleNamespace(use_custom_api_key=False),
+        get_api_key=lambda _id: None,
+        get_default_api_key=lambda provider: f"{provider}-env-key",
+    )
+    service = _service_with_model_config(model_config_service)
+    generation = Generation(
+        profile_name="P",
+        prompt_user="u",
+        prompt_final="f",
+        provider="openai",
+        model="gpt-image-1",
+        status="queued",
+        profile_snapshot_json={"model_config_id": 2, "model": "gpt-image-1"},
+        storage_template_snapshot_json={},
+        request_snapshot_json={
+            "provider": "openai",
+            "model": "gpt-image-1",
+            "model_config_id": 2,
+            "output_format": "png",
+            "mode": "expand",
+            "expand": {
+                "top": 32,
+                "right": 64,
+                "bottom": 16,
+                "left": 8,
+                "fill": "transparent",
+                "continuation_prompt": "extend the forest",
+                "source_asset_id": 42,
+            },
+        },
+    )
+
+    request = service._provider_request_from_generation(generation)
+
+    assert request.mode == "expand"
+    assert isinstance(request.expand, ExpandSpec)
+    assert request.expand.top == 32
+    assert request.expand.right == 64
+    assert request.expand.continuation_prompt == "extend the forest"
+    assert request.expand.source_asset_id == 42
 
 
 def test_provider_request_from_generation_missing_model_or_api_key_raises() -> None:
@@ -114,7 +158,7 @@ def test_provider_request_from_generation_missing_model_or_api_key_raises() -> N
         provider="openai",
         model="",
         status="queued",
-        profile_snapshot_json={},
+        profile_snapshot_json={"model": ""},
         storage_template_snapshot_json={},
         request_snapshot_json={"provider": "openai", "model": ""},
     )
@@ -128,7 +172,7 @@ def test_provider_request_from_generation_missing_model_or_api_key_raises() -> N
         provider="openai",
         model="gpt-image-1",
         status="queued",
-        profile_snapshot_json={},
+        profile_snapshot_json={"model": "gpt-image-1"},
         storage_template_snapshot_json={},
         request_snapshot_json={"provider": "openai", "model": "gpt-image-1"},
     )
@@ -474,6 +518,82 @@ def test_create_generation_from_profile_omits_chat_session_title_when_absent(
     assert snapshot["overrides"]["chat_session_title"] is False
 
 
+def test_create_generation_from_profile_persists_expand_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_create_generation(_session, generation):  # type: ignore[no-untyped-def]
+        generation.id = 99
+        return generation
+
+    monkeypatch.setattr(
+        "app.services.generation_service.crud.create_generation",
+        fake_create_generation,
+    )
+
+    service = GenerationService(
+        settings=Settings(),
+        registry=SimpleNamespace(),
+        storage_service=SimpleNamespace(),
+        thumbnail_service=SimpleNamespace(),
+        sidecar_service=SimpleNamespace(),
+        model_config_service=None,
+        upscale_service=None,
+    )
+
+    profile = SimpleNamespace(
+        id=7,
+        name="Expand",
+        provider="openai",
+        model="gpt-image-1",
+        model_config_id=3,
+        base_prompt="base",
+        width=1024,
+        height=1024,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        upscale_provider=None,
+        upscale_model="",
+        params_json={},
+        storage_template_id=1,
+        storage_template=SimpleNamespace(id=1, name="t", base_dir=".", template="t"),
+        categories=[],
+    )
+
+    generation = service.create_generation_from_profile(
+        session=SimpleNamespace(),
+        profile=profile,
+        prompt_user="continue scene",
+        overrides={
+            "mode": "expand",
+            "expand": ExpandSpec(
+                top=10,
+                right=20,
+                bottom=30,
+                left=40,
+                continuation_prompt="continue scene",
+                source_asset_id=55,
+            ),
+        },
+    )
+
+    snapshot = generation.request_snapshot_json
+    assert snapshot["mode"] == "expand"
+    assert snapshot["source_asset_id"] == 55
+    assert snapshot["continuation_prompt"] == "continue scene"
+    assert snapshot["expand"] == {
+        "top": 10,
+        "right": 20,
+        "bottom": 30,
+        "left": 40,
+        "fill": "transparent",
+        "continuation_prompt": "continue scene",
+        "source_asset_id": 55,
+    }
+    assert snapshot["overrides"]["mode"] is True
+    assert snapshot["overrides"]["expand"] is True
+
+
 def test_create_generation_from_profile_requires_storage_template() -> None:
     service = GenerationService(
         settings=Settings(),
@@ -561,12 +681,21 @@ def test_cancel_generation_and_raise_if_cancelled_paths(monkeypatch: pytest.Monk
         def __init__(self) -> None:
             self.commits = 0
             self.refreshed = 0
+            self.values = [None, SimpleNamespace(status="cancelled")]
 
         def commit(self) -> None:
             self.commits += 1
 
         def refresh(self, _obj) -> None:  # type: ignore[no-untyped-def]
             self.refreshed += 1
+
+        def scalar(self, _query):  # type: ignore[no-untyped-def]
+            if self.values:
+                value = self.values.pop(0)
+                if value is None:
+                    raise GenerationCancelledError("Generation no longer exists")
+                return value
+            return None
 
     session = FakeSession()
 
@@ -609,18 +738,9 @@ def test_cancel_generation_and_raise_if_cancelled_paths(monkeypatch: pytest.Monk
     assert session.commits == 1
     assert session.refreshed == 1
 
-    calls = {"count": 0}
-
-    def _get_generation_for_raise(_session, _id):  # type: ignore[no-untyped-def]
-        calls["count"] += 1
-        if calls["count"] == 1:
-            return None
-        return SimpleNamespace(status="cancelled")
-
-    monkeypatch.setattr("app.services.generation_service.crud.get_generation", _get_generation_for_raise)
     with pytest.raises(GenerationCancelledError, match="no longer exists"):
         service._raise_if_cancelled(session, 1)
-    with pytest.raises(GenerationCancelledError, match="Canceled by user"):
+    with pytest.raises(GenerationCancelledError, match="cancelled by user"):
         service._raise_if_cancelled(session, 1)
 
 

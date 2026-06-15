@@ -772,7 +772,10 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     monkeypatch.setattr(
         app_module.crud,
         "list_profiles",
-        lambda _session: [SimpleNamespace(id=1, name="Default")],
+        lambda _session: [
+            SimpleNamespace(id=1, name="Default", provider="stub", model="stub-v1"),
+            SimpleNamespace(id=2, name="OpenAI Expand", provider="openai", model="gpt-image-1"),
+        ],
     )
 
     response = client.get("/assets/44")
@@ -788,6 +791,7 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert 'User prompt' in body
     assert 'forest scene' in body
     assert 'Vintage' in body
+    assert 'Expand edges' in body
 
 
 def test_asset_detail_htmx_returns_dialog_fragment_only(client, app_module, monkeypatch) -> None:
@@ -821,7 +825,7 @@ def test_asset_detail_htmx_returns_dialog_fragment_only(client, app_module, monk
     monkeypatch.setattr(
         app_module.crud,
         "list_profiles",
-        lambda _session: [SimpleNamespace(id=1, name="Default")],
+        lambda _session: [SimpleNamespace(id=1, name="OpenAI Expand", provider="openai", model="gpt-image-1")],
     )
 
     response = client.get("/assets/45", headers={"HX-Request": "true"})
@@ -832,6 +836,63 @@ def test_asset_detail_htmx_returns_dialog_fragment_only(client, app_module, monk
     assert 'id="asset-image-45"' in body
     assert 'href="/assets/45/file"' in body
     assert 'Original size' in body
+    assert 'Expand edges' in body
+
+
+def test_generate_page_renders_expand_dialog_when_openai_profiles_exist(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession(generations=[])
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(
+        app_module.crud,
+        "list_profiles",
+        lambda _session: [
+            SimpleNamespace(
+                id=1,
+                name="Default",
+                provider="stub",
+                model="stub-v1",
+                model_config_id=1,
+                width=512,
+                height=512,
+                n_images=1,
+                seed=None,
+                params_json={},
+            ),
+            SimpleNamespace(
+                id=2,
+                name="OpenAI Expand",
+                provider="openai",
+                model="gpt-image-1",
+                model_config_id=2,
+                width=1024,
+                height=1024,
+                n_images=1,
+                seed=None,
+                params_json={},
+            ),
+        ],
+    )
+    monkeypatch.setattr(app_module.crud, "list_dimension_presets", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "list_styles", lambda _session: [])
+    monkeypatch.setattr(app_module.crud, "get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module,
+        "build_session_items",
+        lambda _session, offset=0, limit=10, max_days=30, artbook_filter="all", artbook_name_query="": ([], False),
+    )
+
+    response = client.get("/")
+    body = response.text
+
+    assert response.status_code == 200
+    assert 'id="expand-asset-dialog"' in body
+    assert 'name="generation_mode" value="expand"' in body
+    assert 'data-expand-source-asset-id' in body
+    assert 'Expand image edges' in body
 
 
 def test_generate_page_renders_user_menu_popup(client, app_module, monkeypatch) -> None:

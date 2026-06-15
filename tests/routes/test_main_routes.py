@@ -1188,3 +1188,116 @@ def test_generate_submit_rejects_input_images_for_fal_provider(
     assert response.status_code == 303
     assert "FAL+provider+does+not+support+input+images" in response.headers["location"]
     assert fake_generation_service.create_called is False
+
+
+def test_generate_submit_with_expand_mode_sets_expand_overrides(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    captured: dict[str, object] = {}
+    source_asset = SimpleNamespace(id=44, generation=SimpleNamespace(id=9))
+    fake_session._scalar_value = source_asset
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="openai",
+        model="gpt-image-1",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_asset",
+        lambda _session, asset_id, with_generation=True: source_asset if asset_id == 44 else None,
+    )
+
+    class _FakeGenerationService:
+        def create_generation_from_profile(self, _session, _profile, _prompt, overrides=None):  # type: ignore[no-untyped-def]
+            captured["prompt"] = _prompt
+            captured["overrides"] = dict(overrides or {})
+            return SimpleNamespace(id=21)
+
+        def enqueue(self, *_args, **_kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "continue the image",
+            "profile_id": "1",
+            "generation_mode": "expand",
+            "expand_source_asset_id": "44",
+            "expand_top": "32",
+            "expand_right": "64",
+            "expand_bottom": "0",
+            "expand_left": "16",
+            "continuation_prompt": "continue the image",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    overrides = captured["overrides"]
+    assert overrides["mode"] == "expand"
+    assert overrides["expand"].top == 32
+    assert overrides["expand"].right == 64
+    assert overrides["expand"].left == 16
+    assert overrides["expand"].source_asset_id == 44
+
+
+def test_generate_submit_rejects_expand_for_unsupported_provider(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="stub",
+        model="stub-v1",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def __init__(self) -> None:
+            self.create_called = False
+
+        def create_generation_from_profile(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+            self.create_called = True
+            raise AssertionError("Must not be called on validation error")
+
+        def enqueue(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+    fake_generation_service = _FakeGenerationService()
+    monkeypatch.setattr(app_module, "generation_service", fake_generation_service)
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "continue the image",
+            "profile_id": "1",
+            "generation_mode": "expand",
+            "expand_source_asset_id": "44",
+            "expand_top": "32",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "only+available+for+OpenAI+profiles" in response.headers["location"]
+    assert fake_generation_service.create_called is False

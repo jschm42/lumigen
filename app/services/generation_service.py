@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import copy
-import logging
 from datetime import datetime
 
 # For Python < 3.12 compatibility
@@ -24,11 +23,13 @@ from app.db import crud
 from app.db.engine import SessionLocal
 from app.db.models import Asset, Generation, ModelConfig, Profile, Style
 from app.providers.base import (
+    ExpandSpec,
     ProviderError,
     ProviderGenerationRequest,
     ProviderInputImage,
 )
 from app.providers.registry import ProviderRegistry
+from app.services.expand_service import ExpandService, expand_to_provider_params
 from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
@@ -125,6 +126,12 @@ class GenerationService:
             effective_overrides.get("category_ids", profile_category_ids)
         )
 
+        mode = str(effective_overrides.get("mode") or "generate").strip().lower()
+        if mode not in {"generate", "edit", "expand"}:
+            raise ValueError(f"Unsupported generation mode: {mode!r}")
+        expand_spec = effective_overrides.get("expand")
+        serialized_expand = self._serialize_expand_spec(expand_spec)
+
         profile_snapshot = {
             "id": profile.id,
             "name": profile.name,
@@ -189,6 +196,18 @@ class GenerationService:
             "params_json": params_json,
             "category_ids": category_ids,
             "input_images": input_images or [],
+            "mode": mode,
+            "expand": serialized_expand,
+            "source_asset_id": (
+                serialized_expand.get("source_asset_id")
+                if isinstance(serialized_expand, dict)
+                else None
+            ),
+            "continuation_prompt": (
+                serialized_expand.get("continuation_prompt")
+                if isinstance(serialized_expand, dict)
+                else None
+            ),
             "overrides": {
                 "width": "width" in effective_overrides,
                 "height": "height" in effective_overrides,
@@ -203,6 +222,8 @@ class GenerationService:
                 "input_images": "input_images" in effective_overrides,
                 "chat_session_id": "chat_session_id" in effective_overrides,
                 "chat_session_title": "chat_session_title" in effective_overrides,
+                "mode": "mode" in effective_overrides,
+                "expand": "expand" in effective_overrides,
             },
         }
 
@@ -420,6 +441,7 @@ class GenerationService:
             try:
                 self._raise_if_cancelled(session, generation_id)
                 provider_request = self._provider_request_from_generation(generation)
+                provider_request = self._prepare_provider_request(session, provider_request)
                 self._raise_if_cancelled(session, generation_id)
                 result = await self.registry.generate(
                     generation.provider, provider_request
@@ -678,7 +700,7 @@ class GenerationService:
                         failure_payload,
                     )
                     generation.failure_sidecar_path = failure_rel.as_posix()
-                except Exception as sidecar_exc:
+                except Exception:
                     generation.failure_sidecar_path = None
 
                 session.commit()
@@ -734,6 +756,8 @@ class GenerationService:
                 except Exception:
                     continue
                 input_images.append(ProviderInputImage(data=image_bytes, mime=mime))
+        expand_data = request_data.get("expand")
+        expand_spec = self._expand_spec_from_snapshot(expand_data)
         return ProviderGenerationRequest(
             prompt=generation.prompt_final,
             width=request_data.get("width"),
@@ -745,7 +769,72 @@ class GenerationService:
             api_key=api_key,
             params=request_data.get("params_json") or {},
             input_images=input_images,
+            mode=str(request_data.get("mode") or "generate").strip().lower(),
+            expand=expand_spec,
         )
+
+    def _prepare_provider_request(
+        self,
+        session: Session,
+        request: ProviderGenerationRequest,
+    ) -> ProviderGenerationRequest:
+        """Return a provider request with expand artifacts prepared when needed."""
+        if request.mode != "expand":
+            return request
+        if not isinstance(request.expand, ExpandSpec):
+            raise ProviderError("Expand request is missing its expand specification")
+        source_asset_id = request.expand.source_asset_id
+        if source_asset_id is None or source_asset_id <= 0:
+            raise ProviderError("Expand request is missing the source asset")
+        asset = crud.get_asset(session, source_asset_id, with_generation=True)
+        if not asset or not asset.generation:
+            raise ProviderError("Expand source asset was not found")
+        absolute_path = self.asset_absolute_path(asset, which="file")
+        if not absolute_path.exists():
+            raise ProviderError("Expand source asset file is missing")
+        source_bytes = absolute_path.read_bytes()
+        try:
+            artifacts = ExpandService.prepare(source_bytes, request.expand)
+        except Exception as exc:
+            raise ProviderError(str(exc)) from exc
+        params = dict(request.params or {})
+        params.update(expand_to_provider_params(artifacts))
+        prompt = request.prompt.strip() if request.prompt else ""
+        continuation_prompt = (request.expand.continuation_prompt or "").strip()
+        if continuation_prompt:
+            prompt = continuation_prompt
+        prompt = self._build_expand_prompt(prompt)
+        return ProviderGenerationRequest(
+            prompt=prompt,
+            width=artifacts.target_width,
+            height=artifacts.target_height,
+            n_images=request.n_images,
+            seed=request.seed,
+            output_format=request.output_format,
+            model=request.model,
+            api_key=request.api_key,
+            params=params,
+            input_images=[
+                ProviderInputImage(data=artifacts.padded.data, mime="image/png"),
+                ProviderInputImage(data=artifacts.mask_bytes, mime="image/png"),
+            ],
+            mode=request.mode,
+            expand=request.expand,
+        )
+
+    def _build_expand_prompt(self, prompt: str) -> str:
+        """Return a stricter prompt for edge expansion requests."""
+        user_prompt = (prompt or "").strip()
+        instructions = (
+            "Extend the provided image only into the transparent border areas. "
+            "Preserve the original image content, composition, subjects, colors, lighting, "
+            "camera angle, and style exactly inside the existing non-transparent region. "
+            "Do not redraw, replace, or alter the original image area. "
+            "Generate new content only for the missing outer edges so it continues the scene naturally."
+        )
+        if user_prompt:
+            return f"{instructions}\n\nAdditional edge guidance: {user_prompt}"
+        return instructions
 
     def _base_dir_from_snapshot(self, snapshot: dict[str, Any] | None) -> Path:
         candidate = (snapshot or {}).get("base_dir")
@@ -942,6 +1031,43 @@ class GenerationService:
             return int(value)
         except (TypeError, ValueError):
             return None
+
+    def _serialize_expand_spec(self, value: Any) -> dict[str, Any] | None:
+        """Return a JSON-serializable expand spec snapshot."""
+        if not isinstance(value, ExpandSpec):
+            return None
+        return {
+            "top": int(value.top),
+            "right": int(value.right),
+            "bottom": int(value.bottom),
+            "left": int(value.left),
+            "fill": str(value.fill or "transparent"),
+            "continuation_prompt": (
+                str(value.continuation_prompt).strip()
+                if isinstance(value.continuation_prompt, str) and str(value.continuation_prompt).strip()
+                else None
+            ),
+            "source_asset_id": self._parse_optional_int(value.source_asset_id),
+        }
+
+    def _expand_spec_from_snapshot(self, value: Any) -> ExpandSpec | None:
+        """Rebuild an ``ExpandSpec`` from stored snapshot data."""
+        if not isinstance(value, dict):
+            return None
+        return ExpandSpec(
+            top=int(value.get("top") or 0),
+            right=int(value.get("right") or 0),
+            bottom=int(value.get("bottom") or 0),
+            left=int(value.get("left") or 0),
+            fill=str(value.get("fill") or "transparent"),
+            continuation_prompt=(
+                str(value.get("continuation_prompt")).strip()
+                if isinstance(value.get("continuation_prompt"), str)
+                and str(value.get("continuation_prompt")).strip()
+                else None
+            ),
+            source_asset_id=self._parse_optional_int(value.get("source_asset_id")),
+        )
 
     def _parse_int_list(self, value: Any) -> list[int]:
         if value is None:

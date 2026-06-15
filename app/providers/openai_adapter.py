@@ -28,6 +28,16 @@ class OpenAIAdapter(ProviderAdapter):
     display_name = "OpenAI"
     homepage_url = "https://platform.openai.com/api-keys"
     _logger = logging.getLogger(__name__)
+    _internal_param_keys = {
+        "padded_image",
+        "padded_width",
+        "padded_height",
+        "padded_offset_x",
+        "padded_offset_y",
+        "mask",
+        "target_width",
+        "target_height",
+    }
 
     async def list_models(self, settings: Settings) -> list[str]:
         if not settings.openai_api_key:
@@ -206,6 +216,8 @@ class OpenAIAdapter(ProviderAdapter):
             "n": str(max(1, int(request.n_images))),
             "size": self._size_string(request),
         }
+        if not is_dalle2:
+            data["background"] = "opaque"
         if is_dalle2:
             data["response_format"] = "b64_json"
         else:
@@ -215,7 +227,12 @@ class OpenAIAdapter(ProviderAdapter):
 
         if isinstance(request.params, dict):
             for key, value in request.params.items():
-                if key in data or value is None:
+                if (
+                    key in data
+                    or value is None
+                    or key in self._internal_param_keys
+                    or isinstance(value, (bytes, bytearray, memoryview))
+                ):
                     continue
                 data[key] = str(value)
 

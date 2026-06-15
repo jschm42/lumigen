@@ -8,6 +8,8 @@
 {% set prompt_user_original = request_snapshot.get('prompt_user_original') or asset.generation.prompt_user %}
 {% set selected_style_names = request_snapshot.get('selected_style_names') if request_snapshot.get('selected_style_names') is sequence and request_snapshot.get('selected_style_names') is not string else [] %}
 {% set back_href = return_to if return_to else '/gallery' %}
+{% set expand_profiles = expand_profiles if expand_profiles is defined else [] %}
+{% set can_expand_asset = session_token and expand_profiles %}
 
 <div class="mb-3">
   <a href="{{ back_href }}" class="{{ btn_secondary }}">
@@ -81,6 +83,19 @@
       <i class="bi bi-arrow-clockwise" style="font-size: 18px;"></i>
       Re-run
     </button>
+    {% if can_expand_asset %}
+      <button
+        type="button"
+        class="{{ btn_secondary }}"
+        data-open-expand-dialog
+        data-expand-asset-id="{{ asset.id }}"
+        data-expand-session-token="{{ session_token }}"
+        data-expand-prompt="{{ prompt_user_original | e }}"
+      >
+        <i class="bi bi-arrows-angle-expand" style="font-size: 18px;"></i>
+        Expand edges
+      </button>
+    {% endif %}
 
     <div class="ml-auto flex flex-wrap items-center gap-2">
       <form method="post" action="/assets/{{ asset.id }}/delete" data-confirm-message="Delete this asset?" class="inline-flex">

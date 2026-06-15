@@ -58,11 +58,12 @@ from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, ChatSession, Generation, User
-from app.providers.base import ProviderError
+from app.providers.base import ExpandSpec, ProviderError
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
 from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
+from app.services.expand_service import ExpandService, ExpandValidationError
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
 from app.services.import_export_service import (
@@ -115,6 +116,7 @@ ADMIN_USER_SECTIONS = {"models", "dimensions", "categories", "enhancement", "api
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 APP_COPYRIGHT_TEXT = "(c) 2026 by Jean Schmitz"
+EXPAND_SUPPORTED_PROVIDERS = {"openai"}
 OPENROUTER_ALLOWED_ASPECT_RATIOS = {
     "1:1",
     "2:3",
@@ -415,6 +417,53 @@ def parse_optional_int(value: str | None) -> int | None:
     if not stripped:
         return None
     return int(stripped)
+
+
+def list_expand_profiles(profiles: list[Any]) -> list[Any]:
+    """Return profiles currently eligible for edge expansion."""
+    return [
+        profile
+        for profile in profiles
+        if str(getattr(profile, "provider", "") or "").strip().lower() in EXPAND_SUPPORTED_PROVIDERS
+    ]
+
+
+def build_expand_spec_from_form(
+    *,
+    top: str,
+    right: str,
+    bottom: str,
+    left: str,
+    fill: str,
+    continuation_prompt: str,
+    source_asset_id: str,
+) -> ExpandSpec:
+    """Return a validated expand spec parsed from submitted form fields."""
+    source_id = parse_optional_int(source_asset_id)
+    if source_id is None or source_id <= 0:
+        raise ValueError("Select an image to expand first")
+
+    try:
+        spec = ExpandSpec(
+            top=parse_optional_int(top) or 0,
+            right=parse_optional_int(right) or 0,
+            bottom=parse_optional_int(bottom) or 0,
+            left=parse_optional_int(left) or 0,
+            fill=(fill or "transparent").strip() or "transparent",
+            continuation_prompt=(continuation_prompt or "").strip() or None,
+            source_asset_id=source_id,
+        )
+    except ValueError as exc:
+        raise ValueError("Expand values must be whole numbers") from exc
+
+    if max(spec.top, spec.right, spec.bottom, spec.left) <= 0:
+        raise ValueError("Add at least one edge extension value greater than 0")
+
+    try:
+        ExpandService.validate(spec)
+    except ExpandValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    return spec
 
 
 def resolve_default_storage_template_id(session: Session) -> int:
@@ -1511,6 +1560,7 @@ def generate_page(
 
     if active_workspace_view == "chat":
         profiles = crud.list_profiles(session)
+        expand_profiles = list_expand_profiles(profiles)
         dimension_presets = crud.list_dimension_presets(session)
         styles = crud.list_styles(session)
         enhancement_config = crud.get_enhancement_config(session)
@@ -1547,6 +1597,7 @@ def generate_page(
         {
             "request": request,
             "profiles": profiles,
+            "expand_profiles": expand_profiles if active_workspace_view == "chat" else [],
             "dimension_presets": dimension_presets,
             "conversation_generations": conversation_generations,
             "session_items": session_items,
@@ -1779,6 +1830,14 @@ def generate_submit(
     upscale_provider_override: str = Form(default="__profile__"),
     input_images: list[UploadFile] = File(default=[]),
     input_image_asset_id: str = Form(default=""),
+    generation_mode: str = Form(default="generate"),
+    expand_source_asset_id: str = Form(default=""),
+    expand_top: str = Form(default=""),
+    expand_right: str = Form(default=""),
+    expand_bottom: str = Form(default=""),
+    expand_left: str = Form(default=""),
+    expand_fill: str = Form(default="transparent"),
+    continuation_prompt: str = Form(default=""),
     style_ids: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
@@ -1834,6 +1893,32 @@ def generate_submit(
         overrides["prompt_user_original"] = prompt_user_original
         overrides["selected_style_ids"] = [style.id for style in selected_styles]
         overrides["selected_style_names"] = [style.name for style in selected_styles]
+
+        generation_mode_value = (generation_mode or "generate").strip().lower()
+        if generation_mode_value not in {"generate", "expand"}:
+            raise ValueError("Unsupported generation mode")
+        if generation_mode_value == "expand":
+            provider_value = str(profile.provider or "").strip().lower()
+            if provider_value not in EXPAND_SUPPORTED_PROVIDERS:
+                raise ValueError("Edge expansion is currently only available for OpenAI profiles")
+            expand_spec = build_expand_spec_from_form(
+                top=expand_top,
+                right=expand_right,
+                bottom=expand_bottom,
+                left=expand_left,
+                fill=expand_fill,
+                continuation_prompt=continuation_prompt,
+                source_asset_id=expand_source_asset_id,
+            )
+            source_asset = crud.get_asset(session, int(expand_spec.source_asset_id or 0), with_generation=True)
+            if not source_asset or not source_asset.generation:
+                raise ValueError("Source image for edge expansion was not found")
+            overrides["mode"] = "expand"
+            overrides["expand"] = expand_spec
+            if not prompt_user_original.strip() and expand_spec.continuation_prompt:
+                prompt_user_original = expand_spec.continuation_prompt
+                prompt_user = expand_spec.continuation_prompt
+                overrides["prompt_user_original"] = prompt_user_original
 
         encoded_images: list[dict[str, str]] = []
 
@@ -4940,11 +5025,13 @@ def _build_asset_detail_template_context(
 ) -> dict[str, Any]:
     """Build a complete template context for rendering asset detail content."""
     profiles = crud.list_profiles(session)
+    expand_profiles = list_expand_profiles(profiles)
     session_token = generation_session_token(asset.generation) if asset.generation else ""
     return {
         "request": request,
         "asset": asset,
         "profiles": profiles,
+        "expand_profiles": expand_profiles,
         "session_token": session_token,
         "return_to": return_to,
         "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
@@ -5266,34 +5353,14 @@ def asset_detail(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    profiles = crud.list_profiles(session)
-    session_token = generation_session_token(asset.generation) if asset.generation else ""
     resolved_return_to = safe_gallery_return_to(return_to)
-
-    context = {
-        "request": request,
-        "asset": asset,
-        "profiles": profiles,
-        "session_token": session_token,
-        "return_to": resolved_return_to,
-        "asset_meta_pretty": dumps_json(asset.meta_json, pretty=True),
-        "profile_snapshot_pretty": (
-            dumps_json(asset.generation.profile_snapshot_json, pretty=True)
-            if asset.generation
-            else "{}"
-        ),
-        "storage_snapshot_pretty": (
-            dumps_json(asset.generation.storage_template_snapshot_json, pretty=True)
-            if asset.generation
-            else "{}"
-        ),
-        "request_snapshot_pretty": (
-            dumps_json(asset.generation.request_snapshot_json, pretty=True)
-            if asset.generation
-            else "{}"
-        ),
-        "compact_dialog": htmx_request,
-    }
+    context = _build_asset_detail_template_context(
+        request,
+        session,
+        asset,
+        return_to=resolved_return_to,
+        compact_dialog=htmx_request,
+    )
     template_name = (
         "fragments/asset_detail_dialog_body.html"
         if htmx_request

@@ -549,6 +549,67 @@
   </div>
 </dialog>
 
+{% if expand_profiles %}
+<dialog id="expand-asset-dialog" class="w-[min(92vw,36rem)] rounded-3xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-950/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
+  <article class="rounded-3xl p-5 sm:p-6">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Expand image edges</h3>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Generate matching content beyond the current image borders.</p>
+      </div>
+      <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300/80 bg-white text-sm font-semibold text-slate-700 transition hover:border-sky-400/40 hover:bg-sky-50 dark:border-white/20 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-800" data-expand-dialog-close aria-label="Close">×</button>
+    </div>
+
+    <form method="post" action="/generate" class="mt-5 space-y-4" data-expand-form>
+      {{ csrf_input }}
+      <input type="hidden" name="conversation" value="{{ active_conversation }}" data-expand-conversation>
+      <input type="hidden" name="generation_mode" value="expand">
+      <input type="hidden" name="expand_source_asset_id" value="" data-expand-source-asset-id>
+      <input type="hidden" name="expand_fill" value="transparent">
+
+      <div>
+        <label class="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300" for="expand_profile_id">Profile</label>
+        <select id="expand_profile_id" name="profile_id" required class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100">
+          {% for profile in expand_profiles %}
+            <option value="{{ profile.id }}">{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <label class="block text-sm text-slate-700 dark:text-slate-300">
+          <span class="mb-1 block font-semibold">Top</span>
+          <input type="number" min="0" step="1" name="expand_top" value="256" class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100">
+        </label>
+        <label class="block text-sm text-slate-700 dark:text-slate-300">
+          <span class="mb-1 block font-semibold">Right</span>
+          <input type="number" min="0" step="1" name="expand_right" value="256" class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100">
+        </label>
+        <label class="block text-sm text-slate-700 dark:text-slate-300">
+          <span class="mb-1 block font-semibold">Bottom</span>
+          <input type="number" min="0" step="1" name="expand_bottom" value="256" class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100">
+        </label>
+        <label class="block text-sm text-slate-700 dark:text-slate-300">
+          <span class="mb-1 block font-semibold">Left</span>
+          <input type="number" min="0" step="1" name="expand_left" value="256" class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100">
+        </label>
+      </div>
+
+      <div>
+        <label class="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300" for="expand_prompt">Prompt for new edges</label>
+        <textarea id="expand_prompt" name="prompt_user" rows="3" required data-expand-prompt-input class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-sky-400/45 focus:outline-none dark:border-white/15 dark:bg-slate-950/75 dark:text-slate-100" placeholder="Describe how the new edge areas should continue the scene..."></textarea>
+        <input type="hidden" name="continuation_prompt" value="" data-expand-continuation-prompt>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10" data-expand-dialog-close>Cancel</button>
+        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-200">Expand edges</button>
+      </div>
+    </form>
+  </article>
+</dialog>
+{% endif %}
+
 {% if styles %}
 <dialog id="styles-picker-dialog" class="w-full max-w-2xl rounded-2xl border border-slate-300/80 bg-white/95 p-0 text-slate-900 shadow-2xl shadow-slate-300/55 backdrop:bg-slate-900/35 dark:border-white/15 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-slate-950/80 dark:backdrop:bg-slate-950/55">
   <article class="rounded-2xl p-5 sm:p-6">

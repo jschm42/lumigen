@@ -19,6 +19,8 @@
 {% set provider_value = (snapshot.get('provider') or generation.provider or '')|string|lower %}
 {% set params_json = snapshot.get('params_json') if snapshot.get('params_json') is mapping else {} %}
 {% set image_config = params_json.get('image_config') if params_json.get('image_config') is mapping else {} %}
+{% set expand_profiles = expand_profiles if expand_profiles is defined else [] %}
+{% set can_expand_asset = generation_session_token and expand_profiles %}
 {% set ratio_value = '' %}
 
 {% if provider_value == 'openrouter' %}
@@ -230,6 +232,18 @@
                 class="absolute bottom-3 left-3 flex h-10 w-10 items-center justify-center rounded-full border border-slate-300/80 bg-white/95 text-slate-700 opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-sky-100 group-hover:opacity-100 dark:border-white/20 dark:bg-slate-900/90 dark:text-white dark:hover:bg-sky-500/80">
                 <i class="bi bi-image" aria-hidden="true"></i>
               </button>
+              {% if can_expand_asset %}
+                <button
+                  type="button"
+                  data-open-expand-dialog
+                  data-expand-asset-id="{{ asset.id }}"
+                  data-expand-session-token="{{ generation_session_token }}"
+                  data-expand-prompt="{{ prompt_user_original | e }}"
+                  title="Expand edges"
+                  class="absolute bottom-3 left-16 flex h-10 w-10 items-center justify-center rounded-full border border-slate-300/80 bg-white/95 text-slate-700 opacity-0 shadow-lg backdrop-blur-sm transition-opacity duration-200 hover:bg-sky-100 group-hover:opacity-100 dark:border-white/20 dark:bg-slate-900/90 dark:text-white dark:hover:bg-sky-500/80">
+                  <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i>
+                </button>
+              {% endif %}
               {% if generation_session_token %}
                 <form method="post" action="/sessions/cover" class="absolute left-3 top-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                   {{ csrf_input }}
