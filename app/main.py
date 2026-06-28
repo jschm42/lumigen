@@ -343,6 +343,72 @@ def read_session_cookie_payload(request: Request) -> dict[str, Any]:
     return {}
 
 
+def _session_cookie_age_seconds(raw_cookie: str) -> float | None:
+    """Return the age of the session cookie's signing timestamp in seconds.
+
+    Returns ``None`` if the timestamp cannot be extracted.
+    """
+    signer = TimestampSigner(str(settings.session_secret_key))
+    try:
+        _value, date_signed = signer.unsign(
+            raw_cookie,
+            return_timestamp=True,
+        )
+    except (BadSignature, ValueError, TypeError):
+        return None
+    return datetime.now(UTC).timestamp() - date_signed.timestamp()
+
+
+def _maybe_roll_session_cookie(response: Response, raw_cookie: str | None) -> None:
+    """Re-sign the session cookie with a fresh timestamp when it is getting stale.
+
+    HTMX fragment requests bypass ``layout.html`` and therefore never call
+    ``ensure_csrf_token`` — the only code path that normally touches (and thus
+    re-signs) the session.  Without this roll the cookie's signing timestamp
+    eventually exceeds ``session_max_age_seconds`` even though the user is
+    actively using the app, causing intermittent auth failures on endpoints
+    such as ``/assets/{id}/download``.
+
+    The cookie is only refreshed when:
+
+    * the inner middleware stack did **not** already add a ``Set-Cookie`` for
+      the session cookie (avoiding clobbering CSRF rotations or logins), and
+    * the current signing timestamp is older than the configured refresh
+      interval (avoiding a ``Set-Cookie`` on every single request).
+    """
+    if not raw_cookie:
+        return
+
+    cookie_name = settings.session_cookie_name
+    for header_value in response.headers.getlist("set-cookie"):
+        if header_value.lower().startswith(f"{cookie_name}="):
+            return
+
+    age = _session_cookie_age_seconds(raw_cookie)
+    refresh_interval = max(settings.session_max_age_seconds // 4, 3600)
+    if age is None or age < refresh_interval:
+        return
+
+    signer = TimestampSigner(str(settings.session_secret_key))
+    try:
+        unsigned = signer.unsign(
+            raw_cookie.encode("utf-8"),
+            max_age=settings.session_max_age_seconds,
+        )
+    except (BadSignature, SignatureExpired, ValueError, TypeError):
+        return
+
+    fresh = signer.sign(unsigned).decode("utf-8")
+    security_flags = "httponly; samesite=lax"
+    if settings.session_https_only:
+        security_flags += "; secure"
+    max_age_clause = f"Max-Age={settings.session_max_age_seconds}; " if settings.session_max_age_seconds else ""
+    response.headers.append(
+        "set-cookie",
+        f"{cookie_name}={fresh}; path=/; {max_age_clause}{security_flags}",
+    )
+
+
 def login_redirect(next_path: str = "/") -> RedirectResponse:
     params = {"next": next_path}
     return RedirectResponse(url=f"/login?{urlencode(params)}", status_code=303)
@@ -405,7 +471,10 @@ async def auth_guard_middleware(request: Request, call_next):
 
     if not user:
         return login_redirect(path)
-    return await call_next(request)
+    raw_cookie = request.cookies.get(settings.session_cookie_name)
+    response = await call_next(request)
+    _maybe_roll_session_cookie(response, raw_cookie)
+    return response
 
 
 def parse_optional_int(value: str | None) -> int | None:

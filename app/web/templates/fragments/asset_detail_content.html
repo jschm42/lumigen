@@ -63,11 +63,11 @@
       <i class="bi bi-copy" style="font-size: 18px;"></i>
       Copy prompt
     </button>
-    <a href="/assets/{{ asset.id }}/download" class="{{ btn_secondary }}">
+    <a href="/assets/{{ asset.id }}/download" data-hx-disable download class="{{ btn_secondary }}">
       <i class="bi bi-download" style="font-size: 18px;"></i>
       Download
     </a>
-    <a href="/assets/{{ asset.id }}/file" target="_blank" rel="noopener" class="{{ btn_secondary }}">
+    <a href="/assets/{{ asset.id }}/file" data-hx-disable target="_blank" rel="noopener" class="{{ btn_secondary }}">
       <i class="bi bi-box-arrow-up-right" style="font-size: 18px;"></i>
       Original size
     </a>

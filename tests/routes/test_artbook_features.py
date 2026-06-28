@@ -269,3 +269,6 @@ def test_chat_generation_item_renders_asset_delete_button(client, app_module, mo
     assert 'hx-swap="none"' in body
     assert 'data-confirm-message="Delete this image?"' in body
     assert 'bi-trash' in body
+    assert 'href="/assets/999/download"' in body
+    assert 'download-button' in body
+    assert 'data-hx-disable' in body

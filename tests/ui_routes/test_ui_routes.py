@@ -784,6 +784,8 @@ def test_asset_detail_page_hides_asset_header_and_shows_original_size_button(cli
     assert 'max-h-[75vh]' in body
     assert 'href="/assets/44/file"' in body
     assert 'Original size' in body
+    assert 'data-hx-disable' in body
+    assert 'href="/assets/44/download"' in body
     assert 'Back to gallery' in body
     assert 'User prompt' in body
     assert 'forest scene' in body
