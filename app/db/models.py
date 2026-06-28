@@ -245,6 +245,7 @@ class ChatSession(Base, TimestampMixin):
     selected_style_ids: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     last_profile: Mapped[Profile | None] = relationship()
     input_images: Mapped[list[SessionInputImage]] = relationship(

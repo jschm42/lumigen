@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from app.config import Settings
-from app.providers.base import ProviderGenerationRequest, ProviderInputImage
+from app.providers.base import ProviderError, ProviderGenerationRequest, ProviderInputImage
 from app.providers.bfl_adapter import BFLAdapter
 from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
@@ -151,8 +151,8 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     settings = Settings(
         openai_api_key="openai-key",
         openai_base_url="https://api.openai.test/v1",
-        llm_generate_timeout_seconds=91,
-        llm_generate_connect_timeout_seconds=7,
+        provider_openai_generate_timeout_seconds=91,
+        provider_openai_generate_connect_timeout_seconds=7,
     )
     request = ProviderGenerationRequest(
         prompt="A mountain",
@@ -184,6 +184,245 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     assert len(result.images) == 1
     assert result.images[0].width == 640
     assert result.images[0].height == 480
+
+
+def _multipart_records_from_call(call: dict) -> tuple[list[tuple[str, tuple[str, bytes, str]]], dict[str, str]]:
+    """Convert a captured ``post`` call into (files, data) tuples for assertions."""
+    raw_files = call.get("files") or []
+    files: list[tuple[str, tuple[str, bytes, str]]] = []
+    for field_name, file_tuple in raw_files:
+        filename, file_obj, content_type = file_tuple
+        files.append((field_name, (filename, file_obj.read(), content_type)))
+    return files, dict(call.get("data") or {})
+
+
+class _MultipartCapturingClient:
+    """Test double that records ``post`` calls, including multipart ``files`` and ``data``."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        _ = args, kwargs
+        self.calls: list[dict] = []
+
+    async def __aenter__(self) -> _MultipartCapturingClient:
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> bool:
+        return False
+
+    async def post(  # type: ignore[no-untyped-def]
+        self,
+        url: str,
+        headers: dict | None = None,
+        json: dict | None = None,
+        data: dict | None = None,
+        files: list | None = None,
+        params: dict | None = None,
+    ) -> httpx.Response:
+        _ = json, params
+        self.calls.append(
+            {
+                "method": "POST",
+                "url": url,
+                "headers": headers or {},
+                "data": data or {},
+                "files": files or [],
+            }
+        )
+        image_bytes = _png_bytes(8, 8)
+        image_b64 = base64.b64encode(image_bytes).decode("ascii")
+        return _json_response(
+            "POST",
+            url,
+            200,
+            {"created": 99, "data": [{"b64_json": image_b64}]},
+        )
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_input_images_uses_edits_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Make it look like a watercolor",
+        width=1024,
+        height=1024,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gpt-image-1",
+        input_images=[ProviderInputImage(data=_png_bytes(16, 16), mime="image/png")],
+        params={"quality": "high"},
+    )
+
+    result = await adapter.generate(request, settings)
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["url"] == "https://api.openai.test/v1/images/edits"
+    assert call["headers"]["Authorization"] == "Bearer openai-key"
+    assert "Content-Type" not in call["headers"]
+
+    files, data = _multipart_records_from_call(call)
+    assert data["model"] == "gpt-image-1"
+    assert data["prompt"] == "Make it look like a watercolor"
+    assert data["n"] == "1"
+    assert data["size"] == "1024x1024"
+    assert data["output_format"] == "png"
+    assert "response_format" not in data
+    assert data["quality"] == "high"
+
+    assert len(files) == 1
+    field_name, (filename, file_bytes, content_type) = files[0]
+    assert field_name == "image[]"
+    assert filename.endswith(".png")
+    assert content_type == "image/png"
+    assert file_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+
+    assert len(result.images) == 1
+    assert result.images[0].mime == "image/png"
+    assert result.raw_meta["model"] == "gpt-image-1"
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_multiple_input_images_sends_array_field_and_mask(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Blend the two",
+        width=512,
+        height=512,
+        n_images=2,
+        seed=None,
+        output_format="webp",
+        model="gpt-image-1",
+        input_images=[
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+        ],
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert data["model"] == "gpt-image-1"
+    assert data["n"] == "2"
+    assert data["output_format"] == "webp"
+
+    image_fields = [name for name, _ in files if name == "image[]"]
+    mask_fields = [name for name, _ in files if name == "mask"]
+    assert len(image_fields) == 1
+    assert len(mask_fields) == 1
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_dalle2_input_images_uses_edits_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Turn it into a sketch",
+        width=256,
+        height=256,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="dall-e-2",
+        input_images=[
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+        ],
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert call["url"] == "https://api.openai.test/v1/images/edits"
+    assert data["model"] == "dall-e-2"
+    assert data["response_format"] == "b64_json"
+    assert "output_format" not in data
+    assert data["prompt"] == "Turn it into a sketch"
+
+    image_fields = [name for name, _ in files if name == "image"]
+    assert len(image_fields) == 1
+    assert any(name == "mask" for name, _ in files)
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_dalle2_no_prompt_uses_variations_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="dall-e-2",
+        input_images=[ProviderInputImage(data=_png_bytes(16, 16), mime="image/png")],
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert call["url"] == "https://api.openai.test/v1/images/variations"
+    assert data["model"] == "dall-e-2"
+    assert data["response_format"] == "b64_json"
+    assert "prompt" not in data
+    assert len([name for name, _ in files if name == "image"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_dalle3_input_images_raises_error() -> None:
+    adapter = OpenAIAdapter()
+    settings = Settings(openai_api_key="openai-key")
+    request = ProviderGenerationRequest(
+        prompt="Edit it",
+        width=1024,
+        height=1024,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="dall-e-3",
+        input_images=[ProviderInputImage(data=_png_bytes(16, 16), mime="image/png")],
+    )
+
+    with pytest.raises(ProviderError, match="DALL-E 3 does not support input images"):
+        await adapter.generate(request, settings)
 
 
 @pytest.mark.asyncio

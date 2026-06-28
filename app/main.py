@@ -901,12 +901,17 @@ def default_artbook_title(created_at: datetime | None) -> str:
 def resolve_artbook_title_for_token(session: Session, session_token: str) -> str:
     """Resolve a stable title for an Artbook token.
 
-    Prefers an explicitly saved chat session title from existing generations,
-    otherwise derives the default title from the chat session creation date.
+    Prefers the title persisted on the ``ChatSession`` row (set by the rename
+    flow), then any explicit title stored in a generation's snapshot, and
+    finally falls back to a date-based default title.
     """
     token = (session_token or "").strip()
     if not token or token == "new":
         return "Artbook"
+
+    chat_session = crud.get_chat_session(session, token)
+    if chat_session and isinstance(chat_session.title, str) and chat_session.title.strip():
+        return chat_session.title.strip()
 
     generations = list_generations_for_session_token(session, token)
     for generation in reversed(generations):
@@ -914,7 +919,6 @@ def resolve_artbook_title_for_token(session: Session, session_token: str) -> str
         if existing_title:
             return existing_title
 
-    chat_session = crud.get_chat_session(session, token)
     if chat_session:
         return default_artbook_title(chat_session.created_at)
     return default_artbook_title(datetime.now())
@@ -946,6 +950,15 @@ def build_session_items(
         token = generation_session_token(generation)
         if generation_chat_hidden(generation) or generation_session_archived(generation):
             hidden_tokens.add(token)
+
+    # Preload ChatSession rows so we can backfill custom titles for empty
+    # artbooks (rename on an artbook with no generations yet) and for sessions
+    # whose generations pre-date the title being moved onto ChatSession.
+    chat_session_by_token: dict[str, ChatSession] = {
+        str(row.chat_session_id or "").strip(): row
+        for row in session.scalars(select(ChatSession)).all()
+        if str(row.chat_session_id or "").strip()
+    }
 
     # Build session index
     session_index: dict[str, dict[str, Any]] = {}
@@ -985,6 +998,18 @@ def build_session_items(
         }
         item["asset_ids"].update(generation_asset_ids)
 
+    # Backfill custom titles from the ChatSession row when no generation in the
+    # session has a stored title (e.g. the artbook was renamed before the first
+    # generation, or the snapshot was lost).
+    for token, item in session_index.items():
+        if item.get("custom_title"):
+            continue
+        chat_session = chat_session_by_token.get(token)
+        if chat_session is not None and isinstance(chat_session.title, str):
+            trimmed = chat_session.title.strip()
+            if trimmed:
+                item["custom_title"] = trimmed
+
     # Include empty ChatSession rows (Artbooks without generations yet).
     all_chat_sessions = list(
         session.scalars(
@@ -1006,10 +1031,16 @@ def build_session_items(
             if latest_at < cutoff_date:
                 continue
 
+        explicit_title = (
+            chat_session.title.strip()
+            if isinstance(chat_session.title, str) and chat_session.title.strip()
+            else ""
+        )
+
         session_index[token] = {
             "token": token,
             "profile_label": default_artbook_title(created_at),
-            "custom_title": "",
+            "custom_title": explicit_title,
             "latest_generation_id": 0,
             "started_at": created_at,
             "latest_created_at": latest_at,
@@ -2220,6 +2251,14 @@ def rename_chat_session(
             },
         )
 
+    # Persist the new title on the ChatSession row so empty Artbooks keep the
+    # rename even before any generation exists. If the row is missing (legacy
+    # data) but generations are present, lazily create it so the title sticks.
+    if chat_session_row is None:
+        chat_session_row = crud.upsert_chat_session_preferences(session, token)
+    chat_session_row.title = new_title
+    session.add(chat_session_row)
+
     for generation in generations:
         snapshot = dict(generation.request_snapshot_json or {})
         snapshot["chat_session_title"] = new_title
@@ -2983,7 +3022,7 @@ def admin_update_fal_upscale_key(
 def admin_create_topaz_model(
     request: Request,
     name: str = Form(...),
-    model_identifier: str = Form(...),
+    fal_model_identifier: str = Form(..., alias="model_identifier"),
     params_json: str = Form(default="{}"),
     is_enabled: str = Form(default=""),
     csrf_token: str = Form(...),
@@ -2997,7 +3036,7 @@ def admin_create_topaz_model(
     enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
     try:
         name_value = normalize_model_config_name(name)
-        identifier_value = normalize_fal_model_identifier(model_identifier)
+        identifier_value = normalize_fal_model_identifier(fal_model_identifier)
         params_value = parse_fal_model_params_json(params_json)
         crud.create_topaz_upscale_model(
             session,
@@ -3013,7 +3052,7 @@ def admin_create_topaz_model(
             extra_params={
                 "fal_model_create_open": "1",
                 "fal_model_name": name,
-                "fal_model_identifier": model_identifier,
+                "fal_model_identifier": fal_model_identifier,
                 "fal_model_params_json": params_json,
                 "fal_model_is_enabled": "1" if enabled_value else "0",
             },
@@ -3027,7 +3066,7 @@ def admin_update_topaz_model(
     request: Request,
     topaz_model_id: int,
     name: str = Form(...),
-    model_identifier: str = Form(...),
+    fal_model_identifier: str = Form(..., alias="model_identifier"),
     params_json: str = Form(default="{}"),
     is_enabled: str = Form(default=""),
     csrf_token: str = Form(...),
@@ -3044,7 +3083,7 @@ def admin_update_topaz_model(
     enabled_value = str(is_enabled).strip().lower() in {"1", "true", "on", "yes"}
     try:
         name_value = normalize_model_config_name(name)
-        identifier_value = normalize_fal_model_identifier(model_identifier)
+        identifier_value = normalize_fal_model_identifier(fal_model_identifier)
         params_value = parse_fal_model_params_json(params_json)
         crud.update_topaz_upscale_model(
             session,
@@ -3061,7 +3100,7 @@ def admin_update_topaz_model(
             extra_params={
                 "fal_model_edit_id": topaz_model.id,
                 "fal_model_name": name,
-                "fal_model_identifier": model_identifier,
+                "fal_model_identifier": fal_model_identifier,
                 "fal_model_params_json": params_json,
                 "fal_model_is_enabled": "1" if enabled_value else "0",
             },
@@ -3570,7 +3609,7 @@ def admin_generate_style_image(
     request: Request,
     style_id: int,
     background_tasks: BackgroundTasks,
-    model_config_id: int = Form(...),
+    selected_model_config_id: int = Form(..., alias="model_config_id"),
     prompt: str = Form(default=""),
     csrf_token: str = Form(...),
     session: Session = Depends(get_session),
@@ -3585,7 +3624,7 @@ def admin_generate_style_image(
     if not style:
         raise HTTPException(status_code=404, detail="Style not found")
 
-    model_config = crud.get_model_config(session, model_config_id)
+    model_config = crud.get_model_config(session, selected_model_config_id)
     if not model_config:
         raise HTTPException(status_code=404, detail="Model configuration not found")
 
@@ -4535,7 +4574,7 @@ def edit_profile_page(
 def create_profile(
     request: Request,
     name: str = Form(...),
-    model_config_id: str = Form(...),
+    selected_model_config_id: str = Form(..., alias="model_config_id"),
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -4559,7 +4598,7 @@ def create_profile(
     validate_csrf_or_raise(request, csrf_token)
     try:
         name_value = normalize_profile_name(name)
-        model_config_value = parse_optional_int(model_config_id)
+        model_config_value = parse_optional_int(selected_model_config_id)
         if model_config_value is None:
             raise ValueError("Model selection is required")
         model_config = crud.get_model_config(session, model_config_value)
@@ -4665,7 +4704,7 @@ def update_profile(
     request: Request,
     profile_id: int,
     name: str = Form(...),
-    model_config_id: str = Form(...),
+    selected_model_config_id: str = Form(..., alias="model_config_id"),
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -4693,7 +4732,7 @@ def update_profile(
 
     try:
         name_value = normalize_profile_name(name)
-        model_config_value = parse_optional_int(model_config_id)
+        model_config_value = parse_optional_int(selected_model_config_id)
         if model_config_value is None:
             raise ValueError("Model selection is required")
         model_config = crud.get_model_config(session, model_config_value)

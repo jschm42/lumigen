@@ -377,6 +377,7 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
             "category_ids": [2, 2, "3", -1],
             "input_images": [{"name": "img"}],
             "chat_session_id": "session:abc",
+            "chat_session_title": "My Cool Artbook",
             "prompt_user_original": "a subject",
             "selected_style_ids": [9, "10", -1],
             "selected_style_names": ["Cinematic", "", "Painterly"],
@@ -395,12 +396,14 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
     assert request_snapshot["upscale_topaz_model_id"] == 12
     assert request_snapshot["category_ids"] == [2, 3]
     assert request_snapshot["chat_session_id"] == "session:abc"
+    assert request_snapshot["chat_session_title"] == "My Cool Artbook"
     assert request_snapshot["prompt_user_original"] == "a subject"
     assert request_snapshot["selected_style_ids"] == [9, 10]
     assert request_snapshot["selected_style_names"] == ["Cinematic", "Painterly"]
     assert request_snapshot["params_json"] == {"extra": True}
     assert request_snapshot["overrides"]["width"] is True
     assert request_snapshot["overrides"]["height"] is False
+    assert request_snapshot["overrides"]["chat_session_title"] is True
 
     storage_snapshot = generation.storage_template_snapshot_json
     assert storage_snapshot["id"] == 9
@@ -412,6 +415,63 @@ def test_create_generation_from_profile_builds_snapshots_and_applies_overrides(
     assert profile_snapshot["category_ids"] == [1, 2]
     assert profile_snapshot["category_names"] == ["A", "B"]
     assert "generation" in captured
+
+
+def test_create_generation_from_profile_omits_chat_session_title_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the caller does not pass ``chat_session_title`` in overrides, it must be stored as ``None`` rather than the default title."""
+    def fake_create_generation(_session, generation):  # type: ignore[no-untyped-def]
+        generation.id = 88
+        return generation
+
+    monkeypatch.setattr(
+        "app.services.generation_service.crud.create_generation",
+        fake_create_generation,
+    )
+
+    service = GenerationService(
+        settings=Settings(),
+        registry=SimpleNamespace(),
+        storage_service=SimpleNamespace(),
+        thumbnail_service=SimpleNamespace(),
+        sidecar_service=SimpleNamespace(),
+        model_config_service=None,
+        upscale_service=None,
+    )
+
+    profile = SimpleNamespace(
+        id=4,
+        name="Untitled Profile",
+        provider="stub",
+        model="m",
+        model_config_id=None,
+        base_prompt="",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        upscale_provider=None,
+        upscale_model="",
+        params_json={},
+        storage_template_id=1,
+        storage_template=SimpleNamespace(
+            id=1, name="t", base_dir=".", template="t"
+        ),
+        categories=[],
+    )
+
+    generation = service.create_generation_from_profile(
+        session=SimpleNamespace(),
+        profile=profile,
+        prompt_user="hi",
+        overrides={},
+    )
+
+    snapshot = generation.request_snapshot_json
+    assert snapshot["chat_session_title"] is None
+    assert snapshot["overrides"]["chat_session_title"] is False
 
 
 def test_create_generation_from_profile_requires_storage_template() -> None:
