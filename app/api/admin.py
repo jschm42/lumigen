@@ -120,10 +120,10 @@ def list_admin_models(session: Session = Depends(get_session)) -> list[dict[str,
             "name": c.name,
             "provider": c.provider,
             "model_identifier": c.model,
-            "is_active": c.is_active,
-            "is_default": getattr(c, "is_default", False),
-            "supported_aspect_ratios": ["1:1", "16:9", "9:16"],
-            "supported_resolutions": ["1K", "2K"],
+            "is_active": True,
+            "is_default": False,
+            "supported_aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"],
+            "supported_resolutions": ["0.5K", "1K", "2K", "4K"],
         }
         for c in configs
     ]
@@ -147,14 +147,13 @@ def create_model_config(
         name=name,
         provider=provider,
         model=model,
-        is_active=payload.get("is_active", True),
     )
     return {
         "id": cfg.id,
         "name": cfg.name,
         "provider": cfg.provider,
         "model_identifier": cfg.model,
-        "is_active": cfg.is_active,
+        "is_active": True,
     }
 
 
@@ -175,14 +174,13 @@ def update_model_config(
         name=payload.get("name", cfg.name),
         provider=payload.get("provider", cfg.provider),
         model=payload.get("model_identifier", cfg.model),
-        is_active=payload.get("is_active", cfg.is_active),
     )
     return {
         "id": cfg.id,
         "name": cfg.name,
         "provider": cfg.provider,
         "model_identifier": cfg.model,
-        "is_active": cfg.is_active,
+        "is_active": True,
     }
 
 

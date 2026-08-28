@@ -23,9 +23,9 @@ def list_styles(session: Session = Depends(get_session)) -> list[dict[str, Any]]
             "name": s.name,
             "description": s.description or "",
             "prompt_template": s.prompt or "",
-            "negative_prompt": s.negative_prompt or "",
-            "image_url": f"/admin/styles/{s.id}/image" if s.image_filename else None,
-            "is_custom": getattr(s, "is_custom", True),
+            "negative_prompt": getattr(s, "negative_prompt", "") or "",
+            "image_url": f"/admin/styles/{s.id}/image" if getattr(s, "image_path", None) else None,
+            "is_custom": True,
             "category": "General",
         })
     return result

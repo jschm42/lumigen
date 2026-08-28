@@ -523,6 +523,34 @@ def upsert_chat_session_preferences(
     return row
 
 
+def list_chat_sessions(session: Session) -> list[ChatSession]:
+    """Return all chat sessions ordered by updated_at descending."""
+    stmt = (
+        select(ChatSession)
+        .options(
+            selectinload(ChatSession.last_profile),
+            selectinload(ChatSession.last_model_config),
+        )
+        .order_by(ChatSession.updated_at.desc())
+    )
+    return list(session.scalars(stmt).all())
+
+
+def create_chat_session(session: Session, **fields) -> ChatSession:
+    """Create a new chat session from the given field values and return it."""
+    row = ChatSession(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def delete_chat_session(session: Session, chat_session: ChatSession) -> None:
+    """Delete the given chat session from the database."""
+    session.delete(chat_session)
+    session.commit()
+
+
 def list_styles(session: Session) -> list[Style]:
     """Return all styles ordered by name."""
     stmt = select(Style).order_by(Style.name.asc())

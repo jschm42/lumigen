@@ -157,45 +157,31 @@ def get_job_status(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """Get the current status, progress, and assets for a generation job."""
+    from app.api.assets import serialize_asset
+
     gen = crud.get_generation(session, generation_id)
     if not gen:
         raise HTTPException(status_code=404, detail="Generation job not found")
 
-    assets_list = []
-    for a in gen.assets:
-        assets_list.append({
-            "id": a.id,
-            "slug": a.slug,
-            "prompt": a.prompt,
-            "negative_prompt": a.negative_prompt,
-            "seed": a.seed,
-            "aspect_ratio": a.aspect_ratio,
-            "resolution": a.resolution,
-            "provider": a.provider,
-            "model": a.model,
-            "created_at": a.created_at.isoformat() if a.created_at else "",
-            "is_favorite": getattr(a, "is_favorite", False),
-            "rating": getattr(a, "rating", 0) or 0,
-            "thumbnail_url": f"/assets/{a.id}/thumb",
-            "image_url": f"/assets/{a.id}/file",
-            "download_url": f"/assets/{a.id}/download",
-        })
+    req_snapshot = gen.request_snapshot_json or {}
+    assets_list = [serialize_asset(a, gen) for a in gen.assets]
+    progress = 100 if gen.status == "succeeded" else (0 if gen.status == "failed" else 50)
 
     return {
         "id": gen.id,
         "status": gen.status,
-        "progress": gen.progress,
-        "error_message": gen.error_message,
-        "prompt": gen.prompt,
-        "negative_prompt": gen.negative_prompt,
-        "session_token": gen.chat_session_id,
+        "progress": progress,
+        "error_message": gen.error,
+        "prompt": gen.prompt_user or gen.prompt_final,
+        "negative_prompt": req_snapshot.get("negative_prompt", ""),
+        "session_token": req_snapshot.get("chat_session_id") or req_snapshot.get("conversation", ""),
         "created_at": gen.created_at.isoformat() if gen.created_at else "",
-        "completed_at": gen.completed_at.isoformat() if gen.completed_at else None,
+        "completed_at": gen.finished_at.isoformat() if gen.finished_at else None,
         "model_name": gen.model,
         "provider": gen.provider,
-        "aspect_ratio": gen.aspect_ratio,
-        "resolution": gen.resolution,
-        "seed": gen.seed,
+        "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
+        "resolution": req_snapshot.get("resolution", "1K"),
+        "seed": req_snapshot.get("seed"),
         "assets": assets_list,
     }
 

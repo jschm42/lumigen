@@ -56,7 +56,7 @@ onUnmounted(() => {
           class="inline-flex items-center gap-3 rounded-2xl border border-slate-300/60 bg-white/70 px-3 py-2 transition hover:border-sky-400/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-sky-300/50 dark:hover:bg-white/10"
         >
           <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-400/40 bg-slate-200/80 dark:border-sky-300/30 dark:bg-slate-900/70">
-            <img src="/static/app-logo.svg" alt="Lumigen" class="h-8 w-8 rounded-lg invert dark:invert-0" />
+            <img src="/app-logo.svg" alt="Lumigen" class="h-8 w-8 rounded-lg invert dark:invert-0" />
           </span>
           <span class="grid min-w-0 gap-0.5 text-left">
             <strong class="text-sm font-bold tracking-tight text-slate-900 dark:text-white">Lumigen</strong>

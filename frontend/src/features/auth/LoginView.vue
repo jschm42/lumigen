@@ -51,7 +51,7 @@ async function handleSubmit() {
       <!-- Logo & Header -->
       <div class="text-center space-y-2">
         <div class="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-sky-400/40 bg-slate-200/80 dark:border-sky-300/30 dark:bg-slate-900/70 shadow-lg">
-          <img src="/static/app-logo.svg" alt="Lumigen" class="h-12 w-12 rounded-xl invert dark:invert-0" />
+          <img src="/app-logo.svg" alt="Lumigen" class="h-12 w-12 rounded-xl invert dark:invert-0" />
         </div>
         <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Lumigen Studio</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400">Melde dich an, um auf dein Studio zuzugreifen</p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useGenerateStore } from '@/stores/generate'
 import { useProfilesStore } from '@/stores/profiles'
 import StylePickerModal from './StylePickerModal.vue'
@@ -9,10 +9,28 @@ const profilesStore = useProfilesStore()
 
 const isStyleModalOpen = ref(false)
 
-onMounted(() => {
-  generateStore.loadModelsAndStyles()
-  profilesStore.fetchProfiles()
+onMounted(async () => {
+  await Promise.all([
+    generateStore.loadModelsAndStyles(),
+    profilesStore.fetchProfiles(),
+  ])
 })
+
+watch(
+  () => generateStore.selectedProfileId,
+  (profileId) => {
+    if (!profileId) return
+    const profile = profilesStore.profiles.find((p) => p.id === Number(profileId))
+    if (profile) {
+      if (profile.default_aspect_ratio) {
+        generateStore.aspectRatio = profile.default_aspect_ratio
+      }
+      if (profile.default_resolution) {
+        generateStore.resolution = profile.default_resolution
+      }
+    }
+  }
+)
 
 const aspectRatios = [
   { value: '1:1', label: '1:1 Quadrat' },
@@ -50,8 +68,8 @@ const selectedStyleName = computed(() => {
           Modell
         </label>
         <select
-          v-model="generateStore.selectedModelConfigId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+          v-model.number="generateStore.selectedModelConfigId"
+          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer"
         >
           <option :value="null" disabled>Modell wählen</option>
           <option
@@ -70,8 +88,8 @@ const selectedStyleName = computed(() => {
           Profil (Optional)
         </label>
         <select
-          v-model="generateStore.selectedProfileId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+          v-model.number="generateStore.selectedProfileId"
+          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer"
         >
           <option :value="null">Kein Profil aktiv</option>
           <option
@@ -141,7 +159,7 @@ const selectedStyleName = computed(() => {
         <button
           type="button"
           @click="isStyleModalOpen = true"
-          class="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-slate-300/80 bg-white/70 text-slate-800 hover:bg-white dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+          class="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-slate-300/80 bg-white/70 text-slate-800 hover:bg-white dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <span class="truncate">{{ selectedStyleName }}</span>
           <span class="text-xs text-sky-500">🎨</span>
@@ -163,7 +181,7 @@ const selectedStyleName = computed(() => {
           <button
             type="button"
             @click="randomizeSeed"
-            class="px-2 py-1 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors shrink-0"
+            class="px-2 py-1 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors shrink-0 cursor-pointer"
             title="Neuer Zufalls-Seed"
           >
             🎲
@@ -172,7 +190,7 @@ const selectedStyleName = computed(() => {
             v-if="generateStore.seed"
             type="button"
             @click="clearSeed"
-            class="px-2 py-1 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors shrink-0"
+            class="px-2 py-1 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors shrink-0 cursor-pointer"
             title="Seed leeren"
           >
             ✕

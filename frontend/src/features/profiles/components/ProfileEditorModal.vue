@@ -99,39 +99,16 @@ async function handleSubmit() {
         :rows="2"
       />
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <!-- Default Model -->
-        <div>
-          <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-            Standard Modell
-          </label>
-          <select
-            v-model="formData.default_model_config_id"
-            class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
-          >
-            <option :value="null">Standardeinstellung des Studios</option>
-            <option
-              v-for="model in generateStore.activeModels"
-              :key="model.id"
-              :value="model.id"
-            >
-              {{ model.name }} ({{ model.provider }})
-            </option>
-          </select>
-        </div>
-
-        <!-- Default Aspect Ratio -->
-        <div>
-          <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-            Standard Format
-          </label>
-          <select
-            v-model="formData.default_aspect_ratio"
-            class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
-          >
-            <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
-          </select>
-        </div>
+      <div>
+        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
+          Standard Format (Seitenverhältnis)
+        </label>
+        <select
+          v-model="formData.default_aspect_ratio"
+          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
+        >
+          <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
+        </select>
       </div>
     </form>
 

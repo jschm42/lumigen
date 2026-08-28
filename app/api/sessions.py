@@ -6,11 +6,25 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.assets import serialize_asset
 from app.db import crud
 from app.db.engine import get_session
 from app.db.models import Generation
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def generation_session_token(generation: Generation) -> str:
+    """Extract or derive the session token from a Generation record."""
+    snapshot = generation.request_snapshot_json or {}
+    raw_token = snapshot.get("chat_session_id") or snapshot.get("conversation")
+    if isinstance(raw_token, str):
+        token = raw_token.strip()
+        if token:
+            return token
+    if generation.profile_id is not None:
+        return f"profile:{generation.profile_id}"
+    return f"profile-name:{generation.profile_name}"
 
 
 @router.get("")
@@ -20,6 +34,12 @@ def list_sessions(
 ) -> dict[str, Any]:
     """List all chat sessions / artbooks with summary stats."""
     db_sessions = crud.list_chat_sessions(session)
+    all_generations = session.query(Generation).all()
+    generations_by_session: dict[str, list[Generation]] = {}
+    for g in all_generations:
+        tok = generation_session_token(g)
+        generations_by_session.setdefault(tok, []).append(g)
+
     result = []
     q_lower = q.lower().strip()
 
@@ -27,17 +47,14 @@ def list_sessions(
         if q_lower and q_lower not in (s.title or "").lower():
             continue
 
-        generations = (
-            session.query(Generation)
-            .filter(Generation.chat_session_id == s.chat_session_id)
-            .all()
-        )
+        generations = generations_by_session.get(s.chat_session_id, [])
         gen_count = len(generations)
         asset_count = sum(len(g.assets) for g in generations)
 
         cover_url = None
-        if s.cover_asset_id:
-            cover_url = f"/assets/{s.cover_asset_id}/thumb"
+        cover_id = getattr(s, "cover_asset_id", None)
+        if cover_id:
+            cover_url = f"/assets/{cover_id}/thumb"
         elif generations and generations[0].assets:
             cover_url = f"/assets/{generations[0].assets[0].id}/thumb"
 
@@ -47,7 +64,7 @@ def list_sessions(
             "title": s.title or "Unbenannte Session",
             "created_at": s.created_at.isoformat() if s.created_at else "",
             "updated_at": s.updated_at.isoformat() if s.updated_at else "",
-            "cover_asset_id": s.cover_asset_id,
+            "cover_asset_id": cover_id,
             "cover_asset_url": cover_url,
             "generation_count": gen_count,
             "asset_count": asset_count,
@@ -69,51 +86,34 @@ def get_session_history(
 ) -> dict[str, Any]:
     """Get generations history for a specific session."""
     chat_session = crud.get_chat_session(session, session_token)
-    generations = (
+    all_generations = (
         session.query(Generation)
-        .filter(Generation.chat_session_id == session_token)
         .order_by(Generation.created_at.asc())
         .all()
     )
+    generations = [g for g in all_generations if generation_session_token(g) == session_token]
 
     gen_list = []
     for g in generations:
-        assets_list = []
-        for a in g.assets:
-            assets_list.append({
-                "id": a.id,
-                "slug": a.slug,
-                "prompt": a.prompt,
-                "negative_prompt": a.negative_prompt,
-                "seed": a.seed,
-                "aspect_ratio": a.aspect_ratio,
-                "resolution": a.resolution,
-                "provider": a.provider,
-                "model": a.model,
-                "generation_id": a.generation_id,
-                "created_at": a.created_at.isoformat() if a.created_at else "",
-                "is_favorite": getattr(a, "is_favorite", False),
-                "rating": getattr(a, "rating", 0) or 0,
-                "thumbnail_url": f"/assets/{a.id}/thumb",
-                "image_url": f"/assets/{a.id}/file",
-                "download_url": f"/assets/{a.id}/download",
-            })
+        req_snapshot = g.request_snapshot_json or {}
+        progress = 100 if g.status == "succeeded" else (0 if g.status == "failed" else 50)
+        assets_list = [serialize_asset(a, g) for a in g.assets]
 
         gen_list.append({
             "id": g.id,
             "status": g.status,
-            "progress": g.progress,
-            "error_message": g.error_message,
-            "prompt": g.prompt,
-            "negative_prompt": g.negative_prompt,
-            "session_token": g.chat_session_id,
+            "progress": progress,
+            "error_message": g.error,
+            "prompt": g.prompt_user or g.prompt_final,
+            "negative_prompt": req_snapshot.get("negative_prompt", ""),
+            "session_token": session_token,
             "created_at": g.created_at.isoformat() if g.created_at else "",
-            "completed_at": g.completed_at.isoformat() if g.completed_at else None,
+            "completed_at": g.finished_at.isoformat() if g.finished_at else None,
             "model_name": g.model,
             "provider": g.provider,
-            "aspect_ratio": g.aspect_ratio,
-            "resolution": g.resolution,
-            "seed": g.seed,
+            "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
+            "resolution": req_snapshot.get("resolution", "1K"),
+            "seed": req_snapshot.get("seed"),
             "assets": assets_list,
         })
 
@@ -160,8 +160,10 @@ def delete_session(
     session_token: str,
     session: Session = Depends(get_session),
 ) -> dict[str, bool]:
-    """Delete a session and all its generations."""
-    crud.delete_chat_session(session, session_token)
+    """Delete a session."""
+    chat_session = crud.get_chat_session(session, session_token)
+    if chat_session:
+        crud.delete_chat_session(session, chat_session)
     return {"success": True}
 
 
@@ -170,12 +172,12 @@ def toggle_session_pin(
     session_token: str,
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Toggle pin on a session."""
+    """Toggle pin status of a session."""
     chat_session = crud.get_chat_session(session, session_token)
     if not chat_session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        chat_session = crud.create_chat_session(session, chat_session_id=session_token, title="Session")
 
-    new_pin = not getattr(chat_session, "is_pinned", False)
-    setattr(chat_session, "is_pinned", new_pin)
+    current_pin = getattr(chat_session, "is_pinned", False)
+    setattr(chat_session, "is_pinned", not current_pin)
     session.commit()
-    return {"success": True, "is_pinned": new_pin}
+    return {"success": True, "is_pinned": chat_session.is_pinned}

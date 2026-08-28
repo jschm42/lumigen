@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useGenerateStore } from '@/stores/generate'
+import { useProfilesStore } from '@/stores/profiles'
 import SessionSidebar from './components/SessionSidebar.vue'
 import GenerationControls from './components/GenerationControls.vue'
 import GenerationFeed from './components/GenerationFeed.vue'
 import PromptComposer from './components/PromptComposer.vue'
 import AssetDetailModal from '@/features/gallery/components/AssetDetailModal.vue'
 
+const generateStore = useGenerateStore()
+const profilesStore = useProfilesStore()
 const isSidebarOpen = ref(true)
+
+onMounted(async () => {
+  await Promise.all([
+    generateStore.loadModelsAndStyles(),
+    profilesStore.fetchProfiles(),
+  ])
+})
 </script>
 
 <template>

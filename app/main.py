@@ -246,6 +246,27 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 if (dist_dir / "spa-assets").exists():
     app.mount("/spa-assets", StaticFiles(directory=str(dist_dir / "spa-assets")), name="spa-assets")
 
+
+@app.get("/app-logo.svg", include_in_schema=False)
+def app_logo_endpoint() -> FileResponse:
+    """Serve app logo SVG directly."""
+    if (dist_dir / "app-logo.svg").exists():
+        return FileResponse(dist_dir / "app-logo.svg", media_type="image/svg+xml")
+    if (static_dir / "app-logo.svg").exists():
+        return FileResponse(static_dir / "app-logo.svg", media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Logo not found")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_endpoint() -> FileResponse:
+    """Serve favicon."""
+    if (static_dir / "favicon.ico").exists():
+        return FileResponse(static_dir / "favicon.ico", media_type="image/x-icon")
+    if (dist_dir / "app-logo.svg").exists():
+        return FileResponse(dist_dir / "app-logo.svg", media_type="image/svg+xml")
+    return FileResponse(static_dir / "app-logo.svg", media_type="image/svg+xml")
+
+
 app.include_router(api_router)
 
 storage_service = StorageService(max_slug_length=settings.max_slug_length)
@@ -453,6 +474,15 @@ def is_embedded_request(request: Request, *, include_htmx: bool = False) -> bool
 
 def is_spa_request(request: Request) -> bool:
     """Return True if request is from a browser targeting the Vue SPA."""
+    path = request.url.path
+    if (
+        path.startswith("/api/")
+        or path.startswith("/assets/")
+        or path.startswith("/jobs/")
+        or path.startswith("/static/")
+        or path.startswith("/spa-assets/")
+    ):
+        return False
     ua = (request.headers.get("user-agent") or "").lower()
     if "testclient" in ua:
         return False
@@ -471,6 +501,7 @@ async def auth_guard_middleware(request: Request, call_next):
         or path.startswith("/spa-assets")
         or path.startswith("/temp")
         or path == "/favicon.ico"
+        or path == "/app-logo.svg"
     )
     if is_static:
         return await call_next(request)

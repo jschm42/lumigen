@@ -70,18 +70,22 @@ export const useGenerateStore = defineStore('generate', () => {
 
   async function loadModelsAndStyles() {
     try {
-      const [modelsData, stylesData] = await Promise.all([
-        generationApi.getActiveModelConfigs(),
-        generationApi.getStyles(),
-      ])
-      activeModels.value = modelsData
-      styles.value = stylesData
+      const modelsData = await generationApi.getActiveModelConfigs()
+      activeModels.value = modelsData || []
 
-      // Auto-select default model if none selected
-      if (!selectedModelConfigId.value && activeModels.value.length > 0) {
+      // Auto-select default model if none selected or current selection is invalid
+      const currentSelectedExists = activeModels.value.some((m) => m.id === selectedModelConfigId.value)
+      if (!currentSelectedExists && activeModels.value.length > 0) {
         const defaultModel = activeModels.value.find((m) => m.is_default) || activeModels.value[0]
         selectedModelConfigId.value = defaultModel.id
       }
+    } catch (_error) {
+      // fallback
+    }
+
+    try {
+      const stylesData = await generationApi.getStyles()
+      styles.value = stylesData || []
     } catch (_error) {
       // fallback
     }
