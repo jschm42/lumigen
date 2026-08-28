@@ -132,6 +132,16 @@ class GenerationService:
         expand_spec = effective_overrides.get("expand")
         serialized_expand = self._serialize_expand_spec(expand_spec)
 
+        effective_provider = (
+            str(effective_overrides.get("provider") or profile.provider or "").strip().lower()
+        )
+        effective_model = str(
+            effective_overrides.get("model") or profile.model or ""
+        ).strip()
+        effective_model_config_id = effective_overrides.get(
+            "model_config_id", profile.model_config_id
+        )
+
         profile_snapshot = {
             "id": profile.id,
             "name": profile.name,
@@ -190,9 +200,9 @@ class GenerationService:
             "upscale_topaz_model_id": upscale_topaz_model_id,
             "upscaling_active": False,
             "output_format": profile.output_format,
-            "provider": profile.provider,
-            "model": profile.model,
-            "model_config_id": profile.model_config_id,
+            "provider": effective_provider,
+            "model": effective_model,
+            "model_config_id": effective_model_config_id,
             "params_json": params_json,
             "category_ids": category_ids,
             "input_images": input_images or [],
@@ -232,8 +242,8 @@ class GenerationService:
             profile_name=profile.name,
             prompt_user=prompt_user,
             prompt_final=prompt_final,
-            provider=profile.provider,
-            model=profile.model,
+            provider=effective_provider,
+            model=effective_model,
             status="queued",
             error=None,
             profile_snapshot_json=profile_snapshot,
@@ -717,12 +727,13 @@ class GenerationService:
         """Build a provider request from a generation row's stored snapshots."""
         profile_snapshot = generation.profile_snapshot_json or {}
         request_data = generation.request_snapshot_json or {}
+        model_config_id = request_data.get("model_config_id") or profile_snapshot.get("model_config_id")
         model_config = (
-            self.model_config_service.get_model_config(profile_snapshot.get("model_config_id"))
-            if profile_snapshot.get("model_config_id") and self.model_config_service
+            self.model_config_service.get_model_config(model_config_id)
+            if model_config_id and self.model_config_service
             else None
         )
-        model = str(profile_snapshot.get("model") or "").strip()
+        model = str(request_data.get("model") or profile_snapshot.get("model") or generation.model or "").strip()
         if not model:
             raise ProviderError("Generation request has no model specified")
 

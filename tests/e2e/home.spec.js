@@ -35,6 +35,7 @@ test.describe("Home page (authenticated)", () => {
     test.beforeEach(async ({ page }) => {
       await page.goto("/");
       await page.click('button:has-text("New Artbook")');
+      await expect(page.locator("#prompt_user")).toBeVisible();
     });
 
     test("shows the prompt input area", async ({ page }) => {

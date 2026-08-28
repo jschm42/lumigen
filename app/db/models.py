@@ -82,8 +82,8 @@ class Profile(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    provider: Mapped[str] = mapped_column(String(64), nullable=False)
-    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     model_config_id: Mapped[int | None] = mapped_column(
         ForeignKey("model_configs.id", ondelete="SET NULL"),
         nullable=True,
@@ -245,9 +245,17 @@ class ChatSession(Base, TimestampMixin):
     selected_style_ids: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )
+    last_llm_model: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    last_model_config_id: Mapped[int | None] = mapped_column(
+        ForeignKey("model_configs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     last_profile: Mapped[Profile | None] = relationship()
+    last_model_config: Mapped[ModelConfig | None] = relationship()
     input_images: Mapped[list[SessionInputImage]] = relationship(
         back_populates="chat_session",
         cascade="all, delete-orphan",

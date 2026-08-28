@@ -471,7 +471,10 @@ def get_chat_session(session: Session, chat_session_id: str) -> ChatSession | No
     """Return a chat session by its string ID with the last profile eagerly loaded, or ``None``."""
     stmt = (
         select(ChatSession)
-        .options(selectinload(ChatSession.last_profile))
+        .options(
+            selectinload(ChatSession.last_profile),
+            selectinload(ChatSession.last_model_config),
+        )
         .where(ChatSession.chat_session_id == chat_session_id)
     )
     return session.scalar(stmt)
@@ -483,6 +486,8 @@ def upsert_chat_session_preferences(
     last_profile_id: int | None = None,
     last_thumb_size: str | None = None,
     selected_style_ids: str | None = None,
+    last_llm_model: str | None = None,
+    last_model_config_id: int | None = None,
 ) -> ChatSession:
     """Persist UI preferences for a chat session, creating the row if it does not yet exist."""
     existing = get_chat_session(session, chat_session_id)
@@ -493,6 +498,10 @@ def upsert_chat_session_preferences(
             existing.last_thumb_size = last_thumb_size
         if selected_style_ids is not None:
             existing.selected_style_ids = selected_style_ids
+        if last_llm_model is not None:
+            existing.last_llm_model = last_llm_model
+        if last_model_config_id is not None:
+            existing.last_model_config_id = last_model_config_id
         session.add(existing)
         session.commit()
         if hasattr(session, "refresh"):
@@ -504,6 +513,8 @@ def upsert_chat_session_preferences(
         last_profile_id=last_profile_id,
         last_thumb_size=last_thumb_size or "md",
         selected_style_ids=selected_style_ids,
+        last_llm_model=last_llm_model,
+        last_model_config_id=last_model_config_id,
     )
     session.add(row)
     session.commit()

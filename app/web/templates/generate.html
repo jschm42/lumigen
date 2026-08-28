@@ -196,14 +196,14 @@
             {% endif %}
           </div>
           <div class="flex flex-wrap items-end gap-2">
-            <div class="w-full max-w-md">
+            <div class="w-full max-w-xs">
               <select id="profile_id" name="profile_id" data-generation-profile required aria-label="Profile selection" class="{{ input_class }}">
                 {% for profile in profiles %}
                   <option
                     value="{{ profile.id }}"
                     {% if last_profile_id and profile.id == last_profile_id %}selected{% endif %}
                     data-model-config-id="{{ profile.model_config_id if profile.model_config_id is not none else '' }}"
-                    data-provider="{{ profile.provider }}"
+                    data-provider="{{ profile.provider if profile.provider is not none else '' }}"
                     data-width="{{ profile.width if profile.width is not none else '' }}"
                     data-height="{{ profile.height if profile.height is not none else '' }}"
                     data-n-images="{{ profile.n_images if profile.n_images is not none else '' }}"
@@ -213,8 +213,22 @@
                     data-fal-image-size="{{ profile.params_json.get('fal_image_size', '') if profile.params_json else '' }}"
                     data-google-aspect-ratio="{{ profile.params_json.get('image_config', {}).get('aspect_ratio', '') if profile.params_json else '' }}"
                     data-google-resolution="{{ profile.params_json.get('image_config', {}).get('image_size', '') if profile.params_json else '' }}"
-                  >{{ profile.name }} ({{ profile.provider }} / {{ profile.model }})</option>
+                  >{{ profile.name }}</option>
                 {% endfor %}
+              </select>
+            </div>
+            <div class="w-full max-w-xs">
+              <select id="model_config_id" name="model_config_id" data-generation-model aria-label="Model selection" class="{{ input_class }}">
+                {% if model_configs %}
+                  {% for mc in model_configs %}
+                    <option
+                      value="{{ mc.id }}"
+                      {% if last_model_config_id and mc.id == last_model_config_id %}selected{% elif not last_model_config_id and loop.first %}selected{% endif %}
+                    >{{ mc.name }} ({{ mc.provider }})</option>
+                  {% endfor %}
+                {% else %}
+                  <option value="" disabled selected>No Image Model configured</option>
+                {% endif %}
               </select>
             </div>
             <div class="flex gap-1" data-thumb-size-buttons>

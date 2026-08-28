@@ -405,30 +405,46 @@
 
   function saveSessionPreference(data) {
     var chatSessionId = getActiveConversationToken();
-    
-    // Always store in localStorage for global persistence/fallback
-    if (data.profile_id !== undefined) {
-      localStorage.setItem("lumigen_last_profile_id", data.profile_id);
-    }
-    if (data.selected_style_ids !== undefined) {
-      localStorage.setItem("lumigen_last_selected_style_ids", data.selected_style_ids);
-    }
-    if (data.thumb_size !== undefined) {
-      localStorage.setItem("lumigen_thumb_size", data.thumb_size);
+    if (!chatSessionId || chatSessionId === "new" || chatSessionId === "all") {
+      // For "new" session, save to localStorage as a fallback
+      if (data.profile_id !== undefined) {
+        localStorage.setItem("lumigen_last_profile_id", data.profile_id);
+      }
+      if (data.thumb_size !== undefined) {
+        localStorage.setItem("lumigen_thumb_size", data.thumb_size);
+      }
+      if (data.selected_style_ids !== undefined) {
+        localStorage.setItem("lumigen_selected_style_ids", data.selected_style_ids);
+      }
+      if (data.profile_id !== undefined) {
+        localStorage.setItem("lumigen_last_profile_id", data.profile_id);
+      }
+      if (data.model_config_id !== undefined) {
+        localStorage.setItem("lumigen_last_model_config_id", data.model_config_id);
+      }
+      if (data.last_llm_model !== undefined) {
+        localStorage.setItem("lumigen_last_llm_model", data.last_llm_model);
+      }
+      return;
     }
 
-    // Save to server only for established sessions
-    if (!chatSessionId || chatSessionId === "all" || chatSessionId === "new") return;
-
-    var payload = { chat_session_id: chatSessionId };
+    var payload = {
+      chat_session_id: chatSessionId,
+    };
     if (data.profile_id !== undefined) {
       payload.last_profile_id = data.profile_id;
+    }
+    if (data.model_config_id !== undefined) {
+      payload.last_model_config_id = data.model_config_id;
     }
     if (data.thumb_size !== undefined) {
       payload.last_thumb_size = data.thumb_size;
     }
     if (data.selected_style_ids !== undefined) {
       payload.selected_style_ids = data.selected_style_ids;
+    }
+    if (data.last_llm_model !== undefined) {
+      payload.last_llm_model = data.last_llm_model;
     }
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
@@ -446,6 +462,7 @@
   }
 
   var profileSelect = document.querySelector("[data-generation-profile]");
+  var modelSelect = document.querySelector("[data-generation-model]");
 
   function syncRetryProfileIds() {
     /**
@@ -458,6 +475,19 @@
     var inputs = document.querySelectorAll("[data-retry-profile-id]");
     inputs.forEach(function (input) {
       input.value = profileId;
+    });
+  }
+
+  function syncRetryModelConfigIds() {
+    /**
+     * Synchronize the currently selected image model ID into all retry form
+     * hidden inputs.
+     */
+    if (!modelSelect) return;
+    var modelConfigId = modelSelect.value || "";
+    var inputs = document.querySelectorAll("[data-retry-model-config-id]");
+    inputs.forEach(function (input) {
+      input.value = modelConfigId;
     });
   }
 
@@ -484,6 +514,57 @@
         saveSessionPreference({ profile_id: profileId });
       }
       syncRetryProfileIds();
+    });
+  }
+
+  if (modelSelect) {
+    var modelChatSessionId = getActiveConversationToken();
+    var modelServerSelected = modelSelect.querySelector("option[selected]");
+    if (modelChatSessionId === "new" || !modelServerSelected) {
+      var localModelId = localStorage.getItem("lumigen_last_model_config_id");
+      if (localModelId) {
+        var modelExists = Array.from(modelSelect.options).some(function(opt) { return opt.value === localModelId; });
+        if (modelExists) {
+          modelSelect.value = localModelId;
+        }
+      }
+    }
+
+    modelSelect.addEventListener("change", function () {
+      var modelId = parseInt(modelSelect.value, 10);
+      if (!isNaN(modelId) && modelId > 0) {
+        saveSessionPreference({ model_config_id: modelId });
+      }
+      syncRetryModelConfigIds();
+    });
+  }
+
+  syncRetryProfileIds();
+  syncRetryModelConfigIds();
+  document.addEventListener("htmx:afterSwap", function () {
+    syncRetryProfileIds();
+    syncRetryModelConfigIds();
+  });
+
+  var llmSelect = document.querySelector("[data-session-llm]");
+  if (llmSelect) {
+    var sessionTok = getActiveConversationToken();
+    var llmServerSelected = llmSelect.querySelector("option[selected]");
+    if (sessionTok === "new" || !llmServerSelected) {
+      var localLlm = localStorage.getItem("lumigen_last_llm_model");
+      if (localLlm) {
+        var llmExists = Array.from(llmSelect.options).some(function(opt) { return opt.value === localLlm; });
+        if (llmExists) {
+          llmSelect.value = localLlm;
+        }
+      }
+    }
+
+    llmSelect.addEventListener("change", function () {
+      var modelVal = (llmSelect.value || "").trim();
+      if (modelVal) {
+        saveSessionPreference({ last_llm_model: modelVal });
+      }
     });
   }
 
@@ -717,19 +798,20 @@
       dialog.showModal();
 
       var profileId = profileSelect ? profileSelect.value : null;
+      var llmSelect = document.querySelector("[data-session-llm]");
+      var llmModel = llmSelect ? (llmSelect.value || "").trim() : "";
 
-      if (!profileId || profileId === "" || profileId === "null") {
-        alert("Please select a profile first to enhance the prompt for that specific model.");
-        dialog.close();
-        return;
-      }
-      
       var csrfMeta = document.querySelector('meta[name="csrf-token"]');
       var csrfToken = csrfMeta ? String(csrfMeta.getAttribute('content') || '').trim() : '';
 
       var formData = new FormData();
       formData.append('prompt', promptInput.value);
-      formData.append('profile_id', profileId);
+      if (profileId && profileId !== "" && profileId !== "null") {
+        formData.append('profile_id', profileId);
+      }
+      if (llmModel) {
+        formData.append('llm_model', llmModel);
+      }
 
       fetch('/api/enhance-prompt', {
         method: 'POST',
@@ -754,6 +836,19 @@
             '<button type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 dark:border-0 dark:bg-white/10 dark:text-slate-100" onclick="closeEnhancementPreview()">Close</button>' +
           '</div>';
       });
+    });
+  }
+
+  // Clear selected styles when the input-clear button is clicked
+  var inputClearBtn = document.querySelector("[data-input-clear]");
+  if (inputClearBtn) {
+    inputClearBtn.addEventListener("click", function () {
+      selectedStyleIds = [];
+      document.querySelectorAll(".styles-picker-item").forEach(function (item) {
+        item.setAttribute("aria-pressed", "false");
+        item.classList.remove("ring-2", "ring-sky-400", "border-sky-400");
+      });
+      renderSelectedStyles();
     });
   }
 

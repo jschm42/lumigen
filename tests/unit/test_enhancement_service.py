@@ -249,3 +249,64 @@ async def test_enhance_raises_for_unconfigured_unsupported_and_invalid_output(
     monkeypatch.setattr("app.services.enhancement_service.httpx.AsyncClient", FakeAsyncClientEmpty)
     with pytest.raises(ValueError, match="empty content"):
         await service.enhance("p", None)
+
+
+def test_list_available_llm_models_and_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    secrets = SimpleNamespace(
+        decrypt_api_key=lambda token: "k",
+        get_default_api_key=lambda provider: "or-key" if provider == "openrouter" else None,
+    )
+    service = EnhancementService(Settings(), secrets)
+    monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr("app.services.enhancement_service.crud.get_enhancement_config", lambda _session: None)
+
+    assert service.is_ready() is True
+    models = service.list_available_llm_models()
+    assert any("openrouter:" in m["id"] for m in models)
+
+
+@pytest.mark.asyncio
+async def test_enhance_with_explicit_llm_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            calls.append({"url": url, "headers": headers or {}, "json": json})
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"enhanced_prompt": "enhanced sunset", "explanation": "added details"}'
+                            }
+                        }
+                    ]
+                },
+            )
+
+    secrets = SimpleNamespace(
+        decrypt_api_key=lambda token: "k",
+        get_default_api_key=lambda provider: "key-123" if provider == "openrouter" else None,
+    )
+    service = EnhancementService(Settings(), secrets)
+    monkeypatch.setattr("app.services.enhancement_service.SessionLocal", lambda: _SessionCtx(SimpleNamespace()))
+    monkeypatch.setattr("app.services.enhancement_service.crud.get_enhancement_config", lambda _session: None)
+    monkeypatch.setattr("app.services.enhancement_service.httpx.AsyncClient", FakeClient)
+
+    res = await service.enhance("sunset", llm_model="openrouter:anthropic/claude-3.5-sonnet")
+    assert res["enhanced_prompt"] == "enhanced sunset"
+    assert calls[0]["json"]["model"] == "anthropic/claude-3.5-sonnet"
+    assert calls[0]["headers"]["Authorization"] == "Bearer key-123"
+

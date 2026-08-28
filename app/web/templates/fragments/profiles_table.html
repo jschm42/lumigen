@@ -3,8 +3,7 @@
   <thead class="bg-slate-200/70 text-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
     <tr>
       <th class="px-4 py-3 font-semibold">Name</th>
-      <th class="px-4 py-3 font-semibold">Provider</th>
-      <th class="px-4 py-3 font-semibold">Model</th>
+      <th class="px-4 py-3 font-semibold">Dimensions / Ratio</th>
       <th class="px-4 py-3 font-semibold">Categories</th>
       <th class="px-4 py-3 font-semibold">Format</th>
       <th class="px-4 py-3 font-semibold">Actions</th>
@@ -13,9 +12,18 @@
   <tbody class="divide-y divide-slate-300/60 bg-white/90 text-slate-800 dark:divide-white/10 dark:bg-slate-950/40 dark:text-slate-100">
   {% for profile in profiles %}
     <tr>
-      <td class="px-4 py-3">{{ profile.name }}</td>
-      <td class="px-4 py-3">{{ profile.provider }}</td>
-      <td class="px-4 py-3">{{ profile.model_config.name if profile.model_config else profile.model }}</td>
+      <td class="px-4 py-3 font-medium">{{ profile.name }}</td>
+      <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+        {% if profile.width and profile.height %}
+          {{ profile.width }} &times; {{ profile.height }} px
+        {% elif profile.params_json and profile.params_json.get('fal_aspect_ratio') %}
+          Ratio: {{ profile.params_json.get('fal_aspect_ratio') }}
+        {% elif profile.params_json and profile.params_json.get('image_config', {}).get('aspect_ratio') %}
+          Ratio: {{ profile.params_json.get('image_config', {}).get('aspect_ratio') }}
+        {% else %}
+          Default
+        {% endif %}
+      </td>
       <td class="px-4 py-3">
         {% if profile.categories %}
           {{ profile.categories | map(attribute='name') | join(', ') }}
@@ -35,7 +43,7 @@
     </tr>
   {% else %}
     <tr>
-      <td colspan="6" class="px-4 py-4 text-slate-500 dark:text-slate-400">No profiles yet.</td>
+      <td colspan="5" class="px-4 py-4 text-slate-500 dark:text-slate-400">No profiles yet.</td>
     </tr>
   {% endfor %}
   </tbody>

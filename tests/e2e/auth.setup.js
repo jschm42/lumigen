@@ -47,20 +47,7 @@ setup("create admin account, model config, profile and save auth state", async (
   expect([200, 303]).toContain(modelConfigResponse.status());
 
   /* ------------------------------------------------------------------
-   * 3. Fetch the created model config ID from the profile create form.
-   * ------------------------------------------------------------------ */
-  await page.goto("/profiles/new");
-  /* /profiles/new redirects to /profiles?create=1; select is in the DOM
-     even when the create-profile dialog is hidden */
-  const firstOption = await page
-    .locator('select[name="model_config_id"] option:not([value=""])')
-    .first()
-    .getAttribute("value");
-  const modelConfigId = firstOption ?? null;
-  expect(modelConfigId).toBeTruthy();
-
-  /* ------------------------------------------------------------------
-   * 4. Create a test profile using the stub model config.
+   * 3. Create a test profile.
    * ------------------------------------------------------------------ */
   await page.goto("/profiles");
   const profileCsrf = await page.locator('meta[name="csrf-token"]').getAttribute("content");
@@ -69,7 +56,6 @@ setup("create admin account, model config, profile and save auth state", async (
   const profileResponse = await page.request.post("/profiles", {
     form: {
       name: "E2E Test Profile",
-      model_config_id: modelConfigId ?? "",
       csrf_token: profileCsrf ?? "",
     },
   });

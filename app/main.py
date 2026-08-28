@@ -1545,6 +1545,7 @@ def generate_page(
 
     # Keep heavy DB queries chat-only so sidebar workspace switches stay responsive.
     profiles = []
+    model_configs: list[Any] = []
     dimension_presets = []
     enhancement_ready = False
     upscale_ready = False
@@ -1552,19 +1553,23 @@ def generate_page(
     fal_upscale_models: list[Any] = []
     fal_upscale_ready = False
     last_profile_id = None
+    last_model_config_id = None
     last_thumb_size = "md"
     last_selected_style_ids = ""
+    last_llm_model = None
+    llm_models: list[dict[str, str]] = []
     conversation_generations = []
     styles: list[Any] = []
     active_conversation_title = ""
 
     if active_workspace_view == "chat":
         profiles = crud.list_profiles(session)
+        model_configs = crud.list_model_configs(session)
         expand_profiles = list_expand_profiles(profiles)
         dimension_presets = crud.list_dimension_presets(session)
         styles = crud.list_styles(session)
-        enhancement_config = crud.get_enhancement_config(session)
-        enhancement_ready = bool(enhancement_config and enhancement_config.api_key_encrypted)
+        enhancement_ready = enhancement_service.is_ready()
+        llm_models = enhancement_service.list_available_llm_models()
         upscale_ready = upscale_service.is_available()
         upscale_models = upscale_service.list_available_models()
         fal_upscale_models = crud.list_topaz_upscale_models(
@@ -1576,8 +1581,10 @@ def generate_page(
             chat_session_prefs = crud.get_chat_session(session, active_conversation)
             if chat_session_prefs:
                 last_profile_id = chat_session_prefs.last_profile_id
+                last_model_config_id = chat_session_prefs.last_model_config_id
                 last_thumb_size = chat_session_prefs.last_thumb_size or "md"
                 last_selected_style_ids = chat_session_prefs.selected_style_ids or ""
+                last_llm_model = chat_session_prefs.last_llm_model or None
             active_conversation_title = resolve_artbook_title_for_token(session, active_conversation)
 
         if active_conversation == "new":
@@ -1597,6 +1604,7 @@ def generate_page(
         {
             "request": request,
             "profiles": profiles,
+            "model_configs": model_configs,
             "expand_profiles": expand_profiles if active_workspace_view == "chat" else [],
             "dimension_presets": dimension_presets,
             "conversation_generations": conversation_generations,
@@ -1612,6 +1620,8 @@ def generate_page(
             "hide_footer": True,
             "hide_header": True,
             "enhancement_ready": enhancement_ready,
+            "llm_models": llm_models,
+            "last_llm_model": last_llm_model,
             "upscale_ready": upscale_ready,
             "upscale_models": upscale_models,
             "fal_upscale_models": fal_upscale_models,
@@ -1620,6 +1630,7 @@ def generate_page(
             "styles": styles,
             "error": error or "",
             "last_profile_id": last_profile_id,
+            "last_model_config_id": last_model_config_id,
             "last_thumb_size": last_thumb_size,
             "last_selected_style_ids": last_selected_style_ids,
         },
@@ -1814,6 +1825,7 @@ def generate_submit(
     background_tasks: BackgroundTasks,
     prompt_user: str = Form(...),
     profile_id: int = Form(...),
+    model_config_id: str = Form(default=""),
     conversation: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -1855,12 +1867,34 @@ def generate_submit(
         else:
             resolved_conversation = conversation_value
         overrides["chat_session_id"] = resolved_conversation
-        crud.upsert_chat_session_preferences(
-            session,
-            chat_session_id=resolved_conversation,
-            last_profile_id=profile_id,
-            selected_style_ids=style_ids,
-        )
+
+        model_cfg = None
+        parsed_model_cfg_id = parse_optional_int(model_config_id)
+        if parsed_model_cfg_id is not None:
+            model_cfg = crud.get_model_config(session, parsed_model_cfg_id)
+        if not model_cfg and getattr(profile, "model_config_id", None):
+            model_cfg = crud.get_model_config(session, profile.model_config_id)
+        if not model_cfg:
+            all_configs = crud.list_model_configs(session)
+            if all_configs:
+                model_cfg = all_configs[0]
+
+        if model_cfg:
+            overrides["model_config_id"] = model_cfg.id
+            overrides["provider"] = model_cfg.provider
+            overrides["model"] = model_cfg.model
+        elif getattr(profile, "provider", None) and getattr(profile, "model", None):
+            overrides["provider"] = profile.provider
+            overrides["model"] = profile.model
+
+        upsert_kwargs: dict[str, Any] = {
+            "chat_session_id": resolved_conversation,
+            "last_profile_id": profile_id,
+            "selected_style_ids": style_ids,
+        }
+        if "model_config_id" in overrides:
+            upsert_kwargs["last_model_config_id"] = overrides["model_config_id"]
+        crud.upsert_chat_session_preferences(session, **upsert_kwargs)
         overrides["chat_session_title"] = resolve_artbook_title_for_token(
             session,
             resolved_conversation,
@@ -2226,40 +2260,33 @@ async def api_enhance_prompt(
     request: Request,
     prompt: str = Form(...),
     profile_id: str = Form(default=""),
+    llm_model: str = Form(default=""),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
-    """Enhance the user prompt using the configured LLM and return a preview fragment."""
-    if not profile_id or profile_id == "null":
-        return HTMLResponse(
-            content='<div class="p-4 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50">Please select a profile first.</div>',
-            status_code=200
-        )
+    """Enhance the user prompt using the chosen LLM and return a preview fragment."""
+    target_model = "Unknown"
+    target_provider = "Unknown"
+    model_specific_prompt = None
 
-    try:
-        p_id = int(profile_id)
-    except ValueError:
-        return HTMLResponse(
-            content='<div class="p-4 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">Invalid profile ID.</div>',
-            status_code=200
-        )
-
-    profile = crud.get_profile(session, p_id)
-    if not profile:
-        return HTMLResponse(
-            content='<div class="p-4 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">Profile not found.</div>',
-            status_code=200
-        )
-
-    target_model = profile.model
-    target_provider = profile.provider
-    model_specific_prompt = profile.model_config.enhancement_prompt if profile.model_config else None
+    if profile_id and profile_id not in {"null", "none", ""}:
+        try:
+            p_id = int(profile_id)
+            profile = crud.get_profile(session, p_id)
+            if profile:
+                target_model = profile.model
+                target_provider = profile.provider
+                if profile.model_config:
+                    model_specific_prompt = profile.model_config.enhancement_prompt
+        except ValueError:
+            pass
 
     try:
         result = await enhancement_service.enhance(
             prompt=prompt,
             model_specific_prompt=model_specific_prompt,
             target_model=target_model,
-            target_provider=target_provider
+            target_provider=target_provider,
+            llm_model=llm_model.strip() or None,
         )
         enhanced_prompt = result.get("enhanced_prompt", prompt)
         explanation = result.get("explanation", "Improved descriptive details.")
@@ -2275,13 +2302,13 @@ async def api_enhance_prompt(
                 "enhanced_prompt": enhanced_prompt,
                 "explanation": explanation,
                 "diff_html": diff_html,
-            }
+            },
         )
     except Exception as e:
         logger.error(f"Prompt enhancement failed: {e}")
         return HTMLResponse(
             content=f'<div class="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg border border-red-100 dark:border-red-900/30">Enhancement failed: {str(e)}</div>',
-            status_code=200 # Return 200 so HTMX doesn't just error out silently if we want to show the message
+            status_code=200,
         )
 
 
@@ -4251,8 +4278,10 @@ async def update_session_preferences(
         )
 
     last_profile_id = payload.get("last_profile_id")
+    last_model_config_id = payload.get("last_model_config_id")
     last_thumb_size = payload.get("last_thumb_size")
     selected_style_ids = payload.get("selected_style_ids")
+    last_llm_model = payload.get("last_llm_model")
 
     # Validate profile_id if provided
     if last_profile_id is not None:
@@ -4261,11 +4290,25 @@ async def update_session_preferences(
                 {"success": False, "error": "Invalid profile ID"}, status_code=400
             )
 
+    # Validate model_config_id if provided
+    if last_model_config_id is not None:
+        if not isinstance(last_model_config_id, int) or last_model_config_id <= 0:
+            return JSONResponse(
+                {"success": False, "error": "Invalid model config ID"}, status_code=400
+            )
+
     # Validate thumb_size if provided
     if last_thumb_size is not None:
         if last_thumb_size not in {"sm", "md", "lg"}:
             return JSONResponse(
                 {"success": False, "error": "Invalid thumb size"}, status_code=400
+            )
+
+    # Validate last_llm_model if provided
+    if last_llm_model is not None:
+        if not isinstance(last_llm_model, str):
+            return JSONResponse(
+                {"success": False, "error": "Invalid LLM model"}, status_code=400
             )
 
     selected_style_ids_csv: str | None = None
@@ -4283,8 +4326,12 @@ async def update_session_preferences(
         "last_profile_id": last_profile_id,
         "last_thumb_size": last_thumb_size,
     }
+    if last_model_config_id is not None:
+        upsert_kwargs["last_model_config_id"] = last_model_config_id
     if selected_style_ids is not None:
         upsert_kwargs["selected_style_ids"] = selected_style_ids_csv
+    if last_llm_model is not None:
+        upsert_kwargs["last_llm_model"] = last_llm_model.strip()
 
     crud.upsert_chat_session_preferences(session, **upsert_kwargs)
     return JSONResponse({"success": True, "error": None})
@@ -4659,7 +4706,7 @@ def edit_profile_page(
 def create_profile(
     request: Request,
     name: str = Form(...),
-    selected_model_config_id: str = Form(..., alias="model_config_id"),
+    selected_model_config_id: str = Form(default="", alias="model_config_id"),
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -4684,61 +4731,44 @@ def create_profile(
     try:
         name_value = normalize_profile_name(name)
         model_config_value = parse_optional_int(selected_model_config_id)
-        if model_config_value is None:
-            raise ValueError("Model selection is required")
-        model_config = crud.get_model_config(session, model_config_value)
-        if not model_config:
-            raise ValueError("Selected model does not exist")
-        provider_value = str(model_config.provider or "").strip().lower()
-        if provider_value == "openrouter":
-            width_value = None
-            height_value = None
-        elif provider_value == "fal":
+        provider_value: str | None = None
+        model_value: str | None = None
+        model_cfg_id: int | None = None
+        if model_config_value is not None:
+            model_config = crud.get_model_config(session, model_config_value)
+            if model_config:
+                provider_value = model_config.provider
+                model_value = model_config.model
+                model_cfg_id = model_config.id
+
+        width_value = parse_optional_int(width)
+        height_value = parse_optional_int(height)
+        if openrouter_aspect_ratio or openrouter_image_size or provider_value == "openrouter":
             width_value = None
             height_value = None
         else:
-            width_value = parse_optional_int(width)
-            height_value = parse_optional_int(height)
             if width_value is not None and width_value <= 0:
                 raise ValueError("Width must be greater than 0")
             if height_value is not None and height_value <= 0:
                 raise ValueError("Height must be greater than 0")
-        params_value = apply_openrouter_image_config(
-            params_json={},
-            provider=provider_value,
-            aspect_ratio=openrouter_aspect_ratio,
-            image_size=openrouter_image_size,
-        )
-        if provider_value == "fal":
-            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
-                params_value["fal_image_size"] = (fal_image_size or "").strip()
-            params_value = apply_fal_image_config(
-                params_json=params_value,
-                provider=provider_value,
-                fal_aspect_ratio=fal_aspect_ratio,
-                fal_resolution=fal_resolution,
-            )
-            # Handle FAL-specific parameters (backward compatibility)
-            extra = parse_fal_model_params_json(fal_extra_params)
-            for key, val in extra.items():
-                if key not in ("fal_aspect_ratio", "fal_resolution", "fal_image_size", "image_config") and val is not None:
-                    params_value[key] = val
-        else:
-            # Handle generic parameters for all other providers
-            # Remove previously stored extra params (all keys except reserved ones)
-            reserved_keys = {
-                "fal_aspect_ratio",
-                "fal_resolution",
-                "fal_image_size",
-                "image_config",
+
+        params_value: dict[str, Any] = {}
+        if fal_aspect_ratio:
+            params_value["fal_aspect_ratio"] = fal_aspect_ratio
+        if fal_resolution:
+            params_value["fal_resolution"] = fal_resolution
+        if fal_image_size:
+            params_value["fal_image_size"] = fal_image_size
+        if openrouter_aspect_ratio or openrouter_image_size:
+            params_value["image_config"] = {
+                k: v for k, v in [("aspect_ratio", openrouter_aspect_ratio), ("image_size", openrouter_image_size)] if v
             }
-            for key in list(params_value.keys()):
-                if key not in reserved_keys:
-                    del params_value[key]
-            extra = parse_generic_params_json(extra_params)
-            for key, val in extra.items():
-                if key not in reserved_keys and val is not None:
-                    params_value[key] = val
+
+        extra = parse_generic_params_json(extra_params)
+        for key, val in extra.items():
+            if val is not None:
+                params_value[key] = val
+
         if (upscale_choice or "").strip():
             (
                 upscale_provider_value,
@@ -4761,9 +4791,9 @@ def create_profile(
         crud.create_profile(
             session,
             name=name_value,
-            provider=model_config.provider,
-            model=model_config.model,
-            model_config_id=model_config.id,
+            provider=provider_value,
+            model=model_value,
+            model_config_id=model_cfg_id,
             base_prompt=base_prompt.strip() or None,
             negative_prompt=None,
             width=width_value,
@@ -4789,7 +4819,7 @@ def update_profile(
     request: Request,
     profile_id: int,
     name: str = Form(...),
-    selected_model_config_id: str = Form(..., alias="model_config_id"),
+    selected_model_config_id: str = Form(default="", alias="model_config_id"),
     base_prompt: str = Form(default=""),
     width: str = Form(default=""),
     height: str = Form(default=""),
@@ -4818,51 +4848,55 @@ def update_profile(
     try:
         name_value = normalize_profile_name(name)
         model_config_value = parse_optional_int(selected_model_config_id)
-        if model_config_value is None:
-            raise ValueError("Model selection is required")
-        model_config = crud.get_model_config(session, model_config_value)
-        if not model_config:
-            raise ValueError("Selected model does not exist")
-        provider_value = str(model_config.provider or "").strip().lower()
-        if provider_value == "openrouter":
-            width_value = None
-            height_value = None
-        elif provider_value == "fal":
+        provider_value = getattr(profile, "provider", None)
+        model_value = getattr(profile, "model", None)
+        model_cfg_id = getattr(profile, "model_config_id", None)
+        if model_config_value is not None:
+            model_config = crud.get_model_config(session, model_config_value)
+            if model_config:
+                provider_value = model_config.provider
+                model_value = model_config.model
+                model_cfg_id = model_config.id
+
+        width_value = parse_optional_int(width)
+        height_value = parse_optional_int(height)
+        if openrouter_aspect_ratio or openrouter_image_size or provider_value == "openrouter":
             width_value = None
             height_value = None
         else:
-            width_value = parse_optional_int(width)
-            height_value = parse_optional_int(height)
             if width_value is not None and width_value <= 0:
                 raise ValueError("Width must be greater than 0")
             if height_value is not None and height_value <= 0:
                 raise ValueError("Height must be greater than 0")
-        params_value = apply_openrouter_image_config(
-            params_json=dict(profile.params_json or {}),
-            provider=provider_value,
-            aspect_ratio=openrouter_aspect_ratio,
-            image_size=openrouter_image_size,
-        )
-        if provider_value == "fal":
-            if (fal_image_size or "").strip() and not (fal_aspect_ratio or "").strip():
-                params_value["fal_image_size"] = (fal_image_size or "").strip()
-            params_value = apply_fal_image_config(
-                params_json=params_value,
-                provider=provider_value,
-                fal_aspect_ratio=fal_aspect_ratio,
-                fal_resolution=fal_resolution,
-            )
-            # Handle FAL-specific parameters (backward compatibility)
-            extra = parse_fal_model_params_json(fal_extra_params)
-            for key, val in extra.items():
-                if val is not None:
-                    params_value[key] = val
-        else:
-            # Handle generic parameters for all other providers
-            extra = parse_generic_params_json(extra_params)
-            for key, val in extra.items():
-                if val is not None:
-                    params_value[key] = val
+
+        params_value = dict(getattr(profile, "params_json", None) or {})
+        if fal_aspect_ratio:
+            params_value["fal_aspect_ratio"] = fal_aspect_ratio
+        elif "fal_aspect_ratio" in params_value and not fal_aspect_ratio:
+            params_value.pop("fal_aspect_ratio", None)
+
+        if fal_resolution:
+            params_value["fal_resolution"] = fal_resolution
+        elif "fal_resolution" in params_value and not fal_resolution:
+            params_value.pop("fal_resolution", None)
+
+        if fal_image_size:
+            params_value["fal_image_size"] = fal_image_size
+        elif "fal_image_size" in params_value and not fal_image_size:
+            params_value.pop("fal_image_size", None)
+
+        if openrouter_aspect_ratio or openrouter_image_size:
+            params_value["image_config"] = {
+                k: v for k, v in [("aspect_ratio", openrouter_aspect_ratio), ("image_size", openrouter_image_size)] if v
+            }
+        elif "image_config" in params_value and not openrouter_aspect_ratio and not openrouter_image_size:
+            params_value.pop("image_config", None)
+
+        extra = parse_generic_params_json(extra_params)
+        for key, val in extra.items():
+            if val is not None:
+                params_value[key] = val
+
         if (upscale_choice or "").strip():
             (
                 upscale_provider_value,
@@ -4886,9 +4920,9 @@ def update_profile(
             session,
             profile,
             name=name_value,
-            provider=model_config.provider,
-            model=model_config.model,
-            model_config_id=model_config.id,
+            provider=provider_value,
+            model=model_value,
+            model_config_id=model_cfg_id,
             base_prompt=base_prompt.strip() or None,
             negative_prompt=None,
             width=width_value,
@@ -5447,7 +5481,10 @@ def chat_delete_generation(
 
 
 def _create_generation_for_retry(
-    session: Session, source: Generation, profile_id: int | None
+    session: Session,
+    source: Generation,
+    profile_id: int | None,
+    model_config_id: int | None = None,
 ) -> Generation:
     """Create a new queued generation for a retry request.
 
@@ -5460,10 +5497,16 @@ def _create_generation_for_retry(
         profile = crud.get_profile(session, profile_id)
         if profile is not None:
             request_snapshot = source.request_snapshot_json or {}
-            overrides: dict = {}
+            overrides: dict[str, Any] = {}
             chat_session_id = request_snapshot.get("chat_session_id")
             if chat_session_id:
                 overrides["chat_session_id"] = chat_session_id
+            if model_config_id is not None:
+                model_cfg = crud.get_model_config(session, model_config_id)
+                if model_cfg:
+                    overrides["model_config_id"] = model_cfg.id
+                    overrides["provider"] = model_cfg.provider
+                    overrides["model"] = model_cfg.model
             return generation_service.create_generation_from_profile(
                 session, profile, source.prompt_user, overrides=overrides
             )
@@ -5478,6 +5521,7 @@ def rerun_generation(
     view: str = Query(default="default"),
     csrf_token: str = Form(...),
     profile_id: int | None = Form(default=None),
+    model_config_id: int | None = Form(default=None),
     session: Session = Depends(get_session),
 ) -> HTMLResponse:
     validate_csrf_or_raise(request, csrf_token)
@@ -5485,7 +5529,7 @@ def rerun_generation(
     if not source:
         raise HTTPException(status_code=404, detail="Generation not found")
 
-    generation = _create_generation_for_retry(session, source, profile_id)
+    generation = _create_generation_for_retry(session, source, profile_id, model_config_id)
     generation_service.enqueue(background_tasks, generation.id)
 
     # Update session preferences if we have a chat session
@@ -5496,6 +5540,7 @@ def rerun_generation(
             session,
             chat_session_id=chat_session_id,
             last_profile_id=profile_id,
+            last_model_config_id=model_config_id,
         )
 
     template_name = (
