@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import base64
+import json
+import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
+from itsdangerous import TimestampSigner
+from starlette.responses import Response
 
 
 def test_parse_optional_int(app_module) -> None:
@@ -288,3 +294,68 @@ def test_parse_proxy_trusted_hosts(app_module) -> None:
         "127.0.0.1",
         "10.0.0.1",
     ]
+
+
+def _sign_session_payload(app_module, payload: dict, *, age_seconds: int = 0) -> str:
+    """Sign a session payload with the app's secret key, optionally back-dated."""
+    signer = TimestampSigner(str(app_module.settings.session_secret_key))
+    raw = base64.b64encode(json.dumps(payload).encode("utf-8"))
+    if age_seconds <= 0:
+        return signer.sign(raw).decode("utf-8")
+
+    fake_now = int(time.time()) - age_seconds
+    with patch.object(type(signer), "get_timestamp", return_value=fake_now):
+        return signer.sign(raw).decode("utf-8")
+
+
+def test_session_cookie_age_seconds_returns_positive_age(app_module) -> None:
+    payload = {"user_id": 1}
+    raw_cookie = _sign_session_payload(app_module, payload, age_seconds=7200)
+    age = app_module._session_cookie_age_seconds(raw_cookie)
+    assert age is not None
+    assert age > 7100
+
+
+def test_session_cookie_age_seconds_returns_none_for_garbage(app_module) -> None:
+    assert app_module._session_cookie_age_seconds("not-a-valid-cookie") is None
+    assert app_module._session_cookie_age_seconds("a.b") is None
+
+
+def test_maybe_roll_session_cookie_noop_when_fresh(app_module) -> None:
+    raw_cookie = _sign_session_payload(app_module, {"user_id": 1})
+    response = Response()
+    app_module._maybe_roll_session_cookie(response, raw_cookie)
+    assert not response.headers.getlist("set-cookie")
+
+
+def test_maybe_roll_session_cookie_noop_when_none(app_module) -> None:
+    response = Response()
+    app_module._maybe_roll_session_cookie(response, None)
+    assert not response.headers.getlist("set-cookie")
+
+
+def test_maybe_roll_session_cookie_adds_set_cookie_when_stale(app_module) -> None:
+    max_age = app_module.settings.session_max_age_seconds
+    age = max(max_age // 4, 3600) + 100
+    raw_cookie = _sign_session_payload(app_module, {"user_id": 1}, age_seconds=age)
+    response = Response()
+    app_module._maybe_roll_session_cookie(response, raw_cookie)
+    cookies = response.headers.getlist("set-cookie")
+    assert len(cookies) == 1
+    assert cookies[0].startswith(f"{app_module.settings.session_cookie_name}=")
+
+
+def test_maybe_roll_session_cookie_skips_when_session_middleware_already_set(app_module) -> None:
+    """If SessionMiddleware already added a Set-Cookie, auth_guard must not clobber it."""
+    max_age = app_module.settings.session_max_age_seconds
+    age = max(max_age // 4, 3600) + 100
+    raw_cookie = _sign_session_payload(app_module, {"user_id": 1}, age_seconds=age)
+    response = Response()
+    response.headers.append(
+        "set-cookie",
+        f"{app_module.settings.session_cookie_name}=already-set; path=/; httponly",
+    )
+    app_module._maybe_roll_session_cookie(response, raw_cookie)
+    cookies = response.headers.getlist("set-cookie")
+    assert len(cookies) == 1
+    assert cookies[0].startswith(f"{app_module.settings.session_cookie_name}=already-set")
