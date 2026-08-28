@@ -54,6 +54,7 @@ from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.api import api_router
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
@@ -219,6 +220,7 @@ app.add_middleware(
 
 template_dir = Path(__file__).resolve().parent / "web" / "templates"
 static_dir = Path(__file__).resolve().parent / "web" / "static"
+dist_dir = Path(__file__).resolve().parent / "web" / "dist"
 
 templates = Jinja2Templates(directory=str(template_dir))
 templates.env.globals["app_version"] = settings.app_version
@@ -240,6 +242,11 @@ def static_url(path: str) -> str:
 templates.env.globals["static_url"] = static_url
 
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+if (dist_dir / "spa-assets").exists():
+    app.mount("/spa-assets", StaticFiles(directory=str(dist_dir / "spa-assets")), name="spa-assets")
+
+app.include_router(api_router)
 
 storage_service = StorageService(max_slug_length=settings.max_slug_length)
 thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_px)
@@ -444,10 +451,27 @@ def is_embedded_request(request: Request, *, include_htmx: bool = False) -> bool
     return embedded_param and iframe_request
 
 
+def is_spa_request(request: Request) -> bool:
+    """Return True if request is from a browser targeting the Vue SPA."""
+    ua = (request.headers.get("user-agent") or "").lower()
+    if "testclient" in ua:
+        return False
+    if is_htmx(request):
+        return False
+    if request.query_params.get("ui") == "jinja":
+        return False
+    return (dist_dir / "index.html").exists()
+
+
 @app.middleware("http")
 async def auth_guard_middleware(request: Request, call_next):
     path = request.url.path
-    is_static = path.startswith("/static")
+    is_static = (
+        path.startswith("/static")
+        or path.startswith("/spa-assets")
+        or path.startswith("/temp")
+        or path == "/favicon.ico"
+    )
     if is_static:
         return await call_next(request)
 
@@ -462,17 +486,30 @@ async def auth_guard_middleware(request: Request, call_next):
             if candidate and candidate.is_active:
                 user = candidate
 
-    public_paths = {"/login"}
+    public_paths = {
+        "/login",
+        "/onboarding",
+        "/api/auth/status",
+        "/api/auth/login",
+        "/api/auth/setup",
+    }
     if path in public_paths:
-        if users_exist and user and request.method.upper() == "GET":
+        if users_exist and user and request.method.upper() == "GET" and path == "/login":
+            if is_spa_request(request):
+                return FileResponse(dist_dir / "index.html")
             return RedirectResponse(url="/", status_code=303)
         return await call_next(request)
 
     if not users_exist:
+        if is_spa_request(request):
+            return FileResponse(dist_dir / "index.html")
         return RedirectResponse(url="/login", status_code=303)
 
     if not user:
+        if is_spa_request(request):
+            return FileResponse(dist_dir / "index.html")
         return login_redirect(path)
+
     raw_cookie = request.cookies.get(settings.session_cookie_name)
     response = await call_next(request)
     _maybe_roll_session_cookie(response, raw_cookie)
@@ -1486,7 +1523,10 @@ def login_page(
     error: str | None = Query(default=None),
     message: str | None = Query(default=None),
     session: Session = Depends(get_session),
-) -> HTMLResponse:
+) -> Any:
+    if is_spa_request(request):
+        return FileResponse(dist_dir / "index.html")
+
     users_exist = has_bootstrapped_users(session)
     token = ensure_csrf_token(request)
     next_path = (next_url or "/").strip() or "/"
@@ -1570,7 +1610,10 @@ def generate_page(
     artbook_name_query: str = Query(default=""),
     session_offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
-) -> HTMLResponse:
+) -> Any:
+    if is_spa_request(request):
+        return FileResponse(dist_dir / "index.html")
+
     active_workspace_view = (workspace_view or "chat").strip().lower()
     if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
         active_workspace_view = "chat"
@@ -3019,10 +3062,13 @@ def admin_page(
     fal_model_params_json: str | None = Query(default=None),
     fal_model_is_enabled: str | None = Query(default=None),
     session: Session = Depends(get_session),
-) -> HTMLResponse:
+) -> Any:
     denied = require_admin_or_redirect(request)
     if denied:
         return denied
+
+    if is_spa_request(request):
+        return FileResponse(dist_dir / "index.html")
 
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
@@ -4721,7 +4767,10 @@ def profiles_page(
     edit_id: int | None = Query(default=None),
     error: str | None = Query(default=None),
     session: Session = Depends(get_session),
-) -> HTMLResponse:
+) -> Any:
+    if is_spa_request(request):
+        return FileResponse(dist_dir / "index.html")
+
     profiles = crud.list_profiles(session)
     model_configs = crud.list_model_configs(session)
     categories = crud.list_categories(session)
@@ -5175,7 +5224,10 @@ def gallery_page(
     message: str | None = Query(default=None),
     error: str | None = Query(default=None),
     session: Session = Depends(get_session),
-) -> HTMLResponse:
+) -> Any:
+    if is_spa_request(request):
+        return FileResponse(dist_dir / "index.html")
+
     filters = _parse_gallery_filters(
         profile_name=profile_name,
         provider=provider,
