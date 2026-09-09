@@ -79,7 +79,7 @@ function clearSeed() {
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    if (!generateStore.isSubmitting) {
+    if (!generateStore.isGenerating) {
       generateStore.submit()
     }
   }
@@ -232,7 +232,8 @@ function handleKeydown(e: KeyboardEvent) {
       <Button
         variant="primary"
         size="md"
-        :loading="generateStore.isSubmitting"
+        :loading="generateStore.isGenerating"
+        :disabled="!generateStore.prompt.trim() || generateStore.isGenerating"
         @click="generateStore.submit"
         class="h-10 px-4 shrink-0 rounded-xl font-semibold shadow-md"
         title="Generierung starten"
@@ -240,7 +241,8 @@ function handleKeydown(e: KeyboardEvent) {
         <template #icon>
           <span class="text-sm">⚡</span>
         </template>
-        Generieren
+        <span v-if="generateStore.isGenerating">Generiert...</span>
+        <span v-else>Generieren</span>
       </Button>
     </div>
 

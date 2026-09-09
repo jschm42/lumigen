@@ -10,13 +10,20 @@ const props = defineProps<Props>()
 
 const galleryStore = useGalleryStore()
 
-function handleCardClick() {
+function handleCardClick(e: MouseEvent) {
+  // Quick selection with Ctrl / Cmd (or Shift for range selection)
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    e.preventDefault()
+    e.stopPropagation()
+    galleryStore.toggleSelectAsset(props.asset.id, e.shiftKey)
+    return
+  }
   galleryStore.openDetailModal(props.asset)
 }
 
 function toggleSelect(e: MouseEvent) {
   e.stopPropagation()
-  galleryStore.toggleSelectAsset(props.asset.id)
+  galleryStore.toggleSelectAsset(props.asset.id, e.shiftKey)
 }
 
 function toggleFav(e: MouseEvent) {
@@ -28,6 +35,7 @@ function toggleFav(e: MouseEvent) {
 <template>
   <div
     @click="handleCardClick"
+    :title="galleryStore.selectedAssetIds.includes(asset.id) ? 'Ausgewählt (Strg+Klick zum Abwählen)' : 'Klicken zum Öffnen (Strg+Klick zur Schnellauswahl)'"
     :class="[
       'group relative rounded-2xl overflow-hidden border bg-slate-900 shadow-sm transition-all duration-200 cursor-pointer select-none',
       galleryStore.selectedAssetIds.includes(asset.id)
@@ -46,16 +54,22 @@ function toggleFav(e: MouseEvent) {
     </div>
 
     <!-- Top Overlay (Select checkbox & Favorite star) -->
-    <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+    <div
+      :class="[
+        'absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none transition-opacity duration-150',
+        galleryStore.selectedAssetIds.includes(asset.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+      ]"
+    >
       <button
         type="button"
         @click="toggleSelect"
         :class="[
           'w-6 h-6 rounded-lg flex items-center justify-center pointer-events-auto transition-colors border shadow-sm',
           galleryStore.selectedAssetIds.includes(asset.id)
-            ? 'bg-sky-500 border-sky-500 text-white'
+            ? 'bg-sky-500 border-sky-500 text-white shadow-sky-500/50'
             : 'bg-black/60 border-white/30 text-white hover:bg-black/80',
         ]"
+        title="Auswählen (oder Strg + Klick auf das Bild)"
       >
         <span v-if="galleryStore.selectedAssetIds.includes(asset.id)" class="text-xs font-bold">✓</span>
       </button>

@@ -55,7 +55,10 @@ export interface Category {
   id: number
   name: string
   color?: string
+  asset_count?: number
+  profile_count?: number
 }
+
 
 export interface AssetMetadata {
   prompt?: string
@@ -99,7 +102,7 @@ export interface Asset {
 
 export interface Generation {
   id: number
-  status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled'
+  status: 'queued' | 'running' | 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled'
   progress?: number
   error_message?: string | null
   prompt: string

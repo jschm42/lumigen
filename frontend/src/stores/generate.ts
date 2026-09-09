@@ -80,6 +80,10 @@ export const useGenerateStore = defineStore('generate', () => {
   const isSubmitting = ref<boolean>(false)
   const isLoadingHistory = ref<boolean>(false)
 
+  const isGenerating = computed(() => {
+    return isSubmitting.value || activeJobIds.value.length > 0
+  })
+
   const selectedModel = computed(() => {
     return activeModels.value.find((m) => m.id === selectedModelConfigId.value) || null
   })
@@ -276,6 +280,12 @@ export const useGenerateStore = defineStore('generate', () => {
     try {
       const res = await sessionsApi.getSessionHistory(sessionToken)
       generations.value = Array.isArray(res?.generations) ? res.generations : []
+      generations.value.forEach((g) => {
+        const isStillRunning = (g.status === 'queued' || g.status === 'running' || g.status === 'pending' || g.status === 'processing') && (!g.assets || g.assets.length === 0)
+        if (isStillRunning && !activeJobIds.value.includes(g.id)) {
+          pollJob(g.id)
+        }
+      })
     } catch (_error) {
       generations.value = []
     } finally {
@@ -358,7 +368,7 @@ export const useGenerateStore = defineStore('generate', () => {
       // Temporary optimistic generation item
       const optimisticGen: Generation = {
         id: res.job_id,
-        status: 'pending',
+        status: 'queued',
         progress: 10,
         prompt: prompt.value,
         negative_prompt: payload.negative_prompt,
@@ -420,6 +430,7 @@ export const useGenerateStore = defineStore('generate', () => {
     generations,
     activeJobIds,
     isSubmitting,
+    isGenerating,
     isLoadingHistory,
     selectedModel,
     addAttachedImage,

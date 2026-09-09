@@ -75,12 +75,29 @@ export const useGalleryStore = defineStore('gallery', () => {
     }
   }
 
-  function toggleSelectAsset(id: number) {
+  const lastSelectedAssetId = ref<number | null>(null)
+
+  function toggleSelectAsset(id: number, isRange = false) {
+    if (isRange && lastSelectedAssetId.value !== null && lastSelectedAssetId.value !== id) {
+      const idx1 = assets.value.findIndex((a) => a.id === lastSelectedAssetId.value)
+      const idx2 = assets.value.findIndex((a) => a.id === id)
+      if (idx1 !== -1 && idx2 !== -1) {
+        const start = Math.min(idx1, idx2)
+        const end = Math.max(idx1, idx2)
+        const rangeIds = assets.value.slice(start, end + 1).map((a) => a.id)
+        const newSet = new Set([...selectedAssetIds.value, ...rangeIds])
+        selectedAssetIds.value = Array.from(newSet)
+        lastSelectedAssetId.value = id
+        return
+      }
+    }
+
     if (selectedAssetIds.value.includes(id)) {
       selectedAssetIds.value = selectedAssetIds.value.filter((item) => item !== id)
     } else {
       selectedAssetIds.value.push(id)
     }
+    lastSelectedAssetId.value = id
   }
 
   function selectAll() {
@@ -89,6 +106,7 @@ export const useGalleryStore = defineStore('gallery', () => {
 
   function clearSelection() {
     selectedAssetIds.value = []
+    lastSelectedAssetId.value = null
   }
 
   function openDetailModal(asset: Asset) {
@@ -151,6 +169,91 @@ export const useGalleryStore = defineStore('gallery', () => {
     }
   }
 
+  async function createCategory(name: string, color?: string) {
+    try {
+      const newCat = await galleryApi.createCategory(name, color)
+      categories.value.push(newCat)
+      categories.value.sort((a, b) => a.name.localeCompare(b.name))
+      toastStore.success(`Kategorie "${newCat.name}" erstellt.`)
+      return newCat
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Fehler beim Erstellen der Kategorie.')
+      throw error
+    }
+  }
+
+  async function updateCategory(id: number, name: string, color?: string) {
+    try {
+      const updated = await galleryApi.updateCategory(id, name, color)
+      const index = categories.value.findIndex((c) => c.id === id)
+      if (index !== -1) {
+        categories.value[index] = { ...categories.value[index], ...updated }
+      }
+      toastStore.success('Kategorie aktualisiert.')
+      return updated
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Fehler beim Aktualisieren der Kategorie.')
+      throw error
+    }
+  }
+
+  async function deleteCategory(id: number) {
+    try {
+      await galleryApi.deleteCategory(id)
+      categories.value = categories.value.filter((c) => c.id !== id)
+      assets.value.forEach((a) => {
+        if (a.category_ids) {
+          a.category_ids = a.category_ids.filter((cid) => cid !== id)
+        }
+      })
+      if (activeAsset.value?.category_ids) {
+        activeAsset.value.category_ids = activeAsset.value.category_ids.filter((cid) => cid !== id)
+      }
+      toastStore.success('Kategorie gelöscht.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Fehler beim Löschen der Kategorie.')
+      throw error
+    }
+  }
+
+  async function updateAssetCategories(assetId: number, categoryIds: number[]) {
+    try {
+      const res = await galleryApi.updateCategories(assetId, categoryIds)
+      const asset = assets.value.find((a) => a.id === assetId)
+      if (asset) {
+        asset.category_ids = categoryIds
+      }
+      if (activeAsset.value && activeAsset.value.id === assetId) {
+        activeAsset.value.category_ids = categoryIds
+      }
+      toastStore.success('Kategorien aktualisiert.')
+      return res
+    } catch (_error) {
+      toastStore.error('Fehler beim Aktualisieren der Kategorien.')
+    }
+  }
+
+  async function bulkCategorize(categoryIds: number[], mode: 'replace' | 'append' = 'replace') {
+    if (selectedAssetIds.value.length === 0) return
+    try {
+      await galleryApi.bulkCategorize(selectedAssetIds.value, categoryIds, mode)
+      assets.value.forEach((a) => {
+        if (selectedAssetIds.value.includes(a.id)) {
+          if (mode === 'append') {
+            const set = new Set([...(a.category_ids || []), ...categoryIds])
+            a.category_ids = Array.from(set)
+          } else {
+            a.category_ids = [...categoryIds]
+          }
+        }
+      })
+      toastStore.success(`${selectedAssetIds.value.length} Bilder aktualisiert.`)
+      loadCategories()
+    } catch (_error) {
+      toastStore.error('Fehler bei der Batch-Kategorisierung.')
+    }
+  }
+
   function resetFilters() {
     filters.value = {
       q: '',
@@ -189,6 +292,12 @@ export const useGalleryStore = defineStore('gallery', () => {
     toggleFavorite,
     deleteAsset,
     bulkDelete,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    updateAssetCategories,
+    bulkCategorize,
     resetFilters,
   }
 })
+

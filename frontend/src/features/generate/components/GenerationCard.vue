@@ -14,7 +14,22 @@ const props = defineProps<Props>()
 const imageViewerStore = useImageViewerStore()
 
 const isPendingOrProcessing = computed(() => {
-  return props.generation.status === 'pending' || props.generation.status === 'processing'
+  const s = props.generation.status
+  if (s === 'failed' || s === 'cancelled') return false
+  if (props.generation.assets && props.generation.assets.length > 0) return false
+  return true
+})
+
+const statusMessage = computed(() => {
+  const s = props.generation.status
+  if (s === 'queued') return 'In der Warteschlange...'
+  if (s === 'running') {
+    if (props.generation.progress && props.generation.progress > 0 && props.generation.progress < 100) {
+      return `Bild wird generiert... (${props.generation.progress}%)`
+    }
+    return 'Bild wird generiert...'
+  }
+  return 'Bild wird generiert...'
 })
 
 function handleImageClick(asset: Asset) {
@@ -50,15 +65,24 @@ function handleImageClick(asset: Asset) {
       </div>
     </div>
 
-    <!-- Processing State -->
+    <!-- Processing State (shown until generation finishes with assets or fails) -->
     <div
       v-if="isPendingOrProcessing"
       class="py-12 flex flex-col items-center justify-center gap-3 bg-slate-100/60 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-300 dark:border-white/10"
     >
       <Spinner size="lg" class="text-sky-500" />
       <span class="text-xs font-semibold text-slate-600 dark:text-slate-300 animate-pulse">
-        Bild wird generiert...
+        {{ statusMessage }}
       </span>
+      <div
+        v-if="generation.progress && generation.progress > 0 && generation.progress < 100"
+        class="w-44 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden"
+      >
+        <div
+          class="h-full bg-sky-500 rounded-full transition-all duration-300"
+          :style="{ width: `${generation.progress}%` }"
+        />
+      </div>
     </div>
 
     <!-- Failed State -->

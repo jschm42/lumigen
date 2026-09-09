@@ -3,9 +3,11 @@ import { ref } from 'vue'
 import { useGalleryStore } from '@/stores/gallery'
 import Button from '@/components/ui/Button.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import BulkCategorizeModal from './BulkCategorizeModal.vue'
 
 const galleryStore = useGalleryStore()
 const isDeleteConfirmOpen = ref(false)
+const isCategorizeModalOpen = ref(false)
 
 function handleBulkDelete() {
   isDeleteConfirmOpen.value = true
@@ -35,7 +37,16 @@ async function confirmDelete() {
       Abwählen
     </button>
 
-    <!-- Bulk Delete -->
+    <!-- Bulk Categorize Button -->
+    <Button
+      variant="secondary"
+      size="xs"
+      @click="isCategorizeModalOpen = true"
+    >
+      🏷️ Kategorien
+    </Button>
+
+    <!-- Bulk Delete Button -->
     <Button
       variant="danger"
       size="xs"
@@ -50,5 +61,11 @@ async function confirmDelete() {
       @update:open="isDeleteConfirmOpen = $event"
       @confirm="confirmDelete"
     />
+
+    <BulkCategorizeModal
+      :open="isCategorizeModalOpen"
+      @update:open="isCategorizeModalOpen = $event"
+    />
   </div>
 </template>
+

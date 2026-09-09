@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useGalleryStore } from '@/stores/gallery'
 
 const galleryStore = useGalleryStore()
 const isCategoryPopoverOpen = ref(false)
+const popoverRef = ref<HTMLElement | null>(null)
+
+function handleClickOutside(event: MouseEvent) {
+  if (popoverRef.value && !popoverRef.value.contains(event.target as Node)) {
+    isCategoryPopoverOpen.value = false
+  }
+}
 
 onMounted(() => {
   galleryStore.loadCategories()
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 const timePresets = [
@@ -31,7 +43,7 @@ function toggleCategory(catId: number) {
 </script>
 
 <template>
-  <div class="space-y-3 p-4 rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 shadow-sm text-xs">
+  <div class="relative z-30 space-y-3 p-4 rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 shadow-sm text-xs">
     <!-- Top Filter Row: Search & Selects -->
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
       <!-- Search Input -->
@@ -72,7 +84,7 @@ function toggleCategory(catId: number) {
       </div>
 
       <!-- Categories Popover -->
-      <div class="relative">
+      <div class="relative" ref="popoverRef">
         <button
           type="button"
           @click="isCategoryPopoverOpen = !isCategoryPopoverOpen"
@@ -84,7 +96,7 @@ function toggleCategory(catId: number) {
 
         <div
           v-if="isCategoryPopoverOpen"
-          class="absolute left-0 top-full mt-1.5 w-56 p-2 rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-slate-900 z-30 space-y-1"
+          class="absolute left-0 top-full mt-1.5 w-60 p-2 rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900 z-50 space-y-1"
         >
           <div
             v-for="cat in galleryStore.categories"

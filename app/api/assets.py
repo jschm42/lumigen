@@ -245,16 +245,24 @@ def bulk_categorize_assets(
     payload: dict[str, Any],
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Bulk assign categories to multiple assets."""
+    """Bulk assign categories to multiple assets with replace or append mode."""
     asset_ids = payload.get("asset_ids", [])
     category_ids = payload.get("category_ids", [])
-    if not asset_ids or not category_ids:
+    mode = str(payload.get("mode") or "replace").strip().lower()
+    if not asset_ids:
         return {"success": True}
 
-    cats = crud.list_categories_by_ids(session, category_ids)
+    cats = crud.list_categories_by_ids(session, category_ids) if category_ids else []
     for aid in asset_ids:
         asset = crud.get_asset(session, aid)
         if asset:
-            asset.categories = list(cats)
+            if mode == "append":
+                existing_ids = {c.id for c in asset.categories}
+                for c in cats:
+                    if c.id not in existing_ids:
+                        asset.categories.append(c)
+            else:
+                asset.categories = list(cats)
     session.commit()
     return {"success": True}
+

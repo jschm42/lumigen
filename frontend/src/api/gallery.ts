@@ -64,10 +64,11 @@ export const galleryApi = {
     return res.data
   },
 
-  async bulkCategorize(assetIds: number[], categoryIds: number[]): Promise<{ success: boolean }> {
+  async bulkCategorize(assetIds: number[], categoryIds: number[], mode: 'replace' | 'append' = 'replace'): Promise<{ success: boolean }> {
     const res = await apiClient.post('/api/assets/bulk-categorize', {
       asset_ids: assetIds,
       category_ids: categoryIds,
+      mode,
     })
     return res.data
   },
@@ -81,4 +82,15 @@ export const galleryApi = {
     const res = await apiClient.post<Category>('/api/categories', { name, color })
     return res.data
   },
+
+  async updateCategory(id: number, name: string, color?: string): Promise<Category> {
+    const res = await apiClient.put<Category>(`/api/categories/${id}`, { name, color })
+    return res.data
+  },
+
+  async deleteCategory(id: number): Promise<{ success: boolean }> {
+    const res = await apiClient.delete<{ success: boolean }>(`/api/categories/${id}`)
+    return res.data
+  },
 }
+
