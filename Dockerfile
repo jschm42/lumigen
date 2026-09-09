@@ -1,3 +1,12 @@
+# Stage 1: Build Vue SPA frontend
+FROM node:20-slim AS frontend-builder
+WORKDIR /build/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python backend runtime
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -23,6 +32,7 @@ COPY VERSION ./
 COPY alembic ./alembic
 COPY app ./app
 COPY docker ./docker-assets
+COPY --from=frontend-builder /build/app/web/dist ./app/web/dist
 
 RUN set -eux; \
     if [ -f /app/docker-assets/realesrgan-ncnn-vulkan ]; then \

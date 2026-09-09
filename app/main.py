@@ -495,7 +495,48 @@ def is_spa_request(request: Request) -> bool:
         return False
     if request.query_params.get("ui") == "jinja":
         return False
+    if templates is None:
+        return True
     return (dist_dir / "index.html").exists()
+
+
+def spa_fallback_response() -> HTMLResponse:
+    """Fallback response when the Vue SPA distribution has not been built yet and Jinja templates are absent."""
+    html_content = """<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Lumigen - Frontend nicht gebaut</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0b0f19; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { max-width: 520px; padding: 2.5rem; background: #111827; border-radius: 1.25rem; border: 1px solid rgba(255,255,255,0.1); text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    h2 { color: #38bdf8; margin-top: 0; }
+    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
+    pre { background: #030712; padding: 1rem; border-radius: 0.75rem; text-align: left; font-size: 0.85rem; color: #38bdf8; border: 1px solid rgba(255,255,255,0.05); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Lumigen Frontend nicht gebaut</h2>
+    <p>Die kompilierten Frontend-Dateien unter <code>app/web/dist/index.html</code> wurden nicht gefunden.</p>
+    <p>Bitte baue das Frontend oder erstelle das Docker-Image neu:</p>
+    <pre># Docker Image neu bauen:
+docker compose build --no-cache
+
+# Oder lokal bauen:
+cd frontend && npm install && npm run build</pre>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(status_code=503, content=html_content)
+
+
+def serve_spa_index() -> Response:
+    """Serve index.html from dist_dir or return fallback page if not built."""
+    index_file = dist_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return spa_fallback_response()
 
 
 @app.middleware("http")
@@ -532,18 +573,18 @@ async def auth_guard_middleware(request: Request, call_next):
     if path in public_paths:
         if users_exist and user and request.method.upper() == "GET" and path == "/login":
             if is_spa_request(request):
-                return FileResponse(dist_dir / "index.html")
+                return serve_spa_index()
             return RedirectResponse(url="/", status_code=303)
         return await call_next(request)
 
     if not users_exist:
         if is_spa_request(request):
-            return FileResponse(dist_dir / "index.html")
+            return serve_spa_index()
         return RedirectResponse(url="/login", status_code=303)
 
     if not user:
         if is_spa_request(request):
-            return FileResponse(dist_dir / "index.html")
+            return serve_spa_index()
         return login_redirect(path)
 
     raw_cookie = request.cookies.get(settings.session_cookie_name)
@@ -1561,7 +1602,9 @@ def login_page(
     session: Session = Depends(get_session),
 ) -> Any:
     if is_spa_request(request):
-        return FileResponse(dist_dir / "index.html")
+        return serve_spa_index()
+    if templates is None:
+        return spa_fallback_response()
 
     users_exist = has_bootstrapped_users(session)
     token = ensure_csrf_token(request)
@@ -1648,7 +1691,9 @@ def generate_page(
     session: Session = Depends(get_session),
 ) -> Any:
     if is_spa_request(request):
-        return FileResponse(dist_dir / "index.html")
+        return serve_spa_index()
+    if templates is None:
+        return spa_fallback_response()
 
     active_workspace_view = (workspace_view or "chat").strip().lower()
     if active_workspace_view not in {"chat", "profiles", "gallery", "admin"}:
@@ -3104,7 +3149,9 @@ def admin_page(
         return denied
 
     if is_spa_request(request):
-        return FileResponse(dist_dir / "index.html")
+        return serve_spa_index()
+    if templates is None:
+        return spa_fallback_response()
 
     encryption_ready = bool((settings.provider_config_key or "").strip())
     active_admin_section = normalize_admin_section(section)
@@ -4805,7 +4852,9 @@ def profiles_page(
     session: Session = Depends(get_session),
 ) -> Any:
     if is_spa_request(request):
-        return FileResponse(dist_dir / "index.html")
+        return serve_spa_index()
+    if templates is None:
+        return spa_fallback_response()
 
     profiles = crud.list_profiles(session)
     model_configs = crud.list_model_configs(session)
@@ -5262,7 +5311,9 @@ def gallery_page(
     session: Session = Depends(get_session),
 ) -> Any:
     if is_spa_request(request):
-        return FileResponse(dist_dir / "index.html")
+        return serve_spa_index()
+    if templates is None:
+        return spa_fallback_response()
 
     filters = _parse_gallery_filters(
         profile_name=profile_name,
