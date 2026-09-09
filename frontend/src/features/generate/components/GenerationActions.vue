@@ -99,6 +99,16 @@ function handleExpandSubmitted(jobId: number) {
       <span>📐</span> Erweitern
     </button>
 
+    <!-- Use as Input Image -->
+    <button
+      type="button"
+      @click="generateStore.attachAssetAsImage(asset)"
+      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+      title="Als Eingabebild in den Prompt-Composer laden"
+    >
+      <span>🖼️</span> Als Eingabebild
+    </button>
+
     <!-- Copy Prompt -->
     <button
       type="button"

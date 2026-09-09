@@ -14,62 +14,49 @@ onMounted(async () => {
     generateStore.loadModelsAndStyles(),
     profilesStore.fetchProfiles(),
   ])
+  if (generateStore.selectedProfileId) {
+    const profile = profilesStore.profiles.find((p) => p.id === Number(generateStore.selectedProfileId))
+    if (profile) {
+      generateStore.applyProfileDefaults(profile)
+    }
+  }
 })
 
 watch(
   () => generateStore.selectedProfileId,
   (profileId) => {
-    if (!profileId) return
+    if (!profileId) {
+      generateStore.clearProfileDefaults()
+      return
+    }
     const profile = profilesStore.profiles.find((p) => p.id === Number(profileId))
     if (profile) {
-      if (profile.default_aspect_ratio) {
-        generateStore.aspectRatio = profile.default_aspect_ratio
-      }
-      if (profile.default_resolution) {
-        generateStore.resolution = profile.default_resolution
-      }
+      generateStore.applyProfileDefaults(profile)
     }
   }
 )
 
-const aspectRatios = [
-  { value: '1:1', label: '1:1 Quadrat' },
-  { value: '16:9', label: '16:9 Quer' },
-  { value: '9:16', label: '9:16 Hoch' },
-  { value: '4:3', label: '4:3 Klassisch' },
-  { value: '3:4', label: '3:4 Portrait' },
-  { value: '21:9', label: '21:9 Panorama' },
-]
 
+const aspectRatios = ['1:1', '16:9', '9:16', '4:3', '3:4', '21:9']
 const resolutions = ['0.5K', '1K', '2K', '4K']
 
-function randomizeSeed() {
-  generateStore.seed = String(Math.floor(Math.random() * 1000000000))
-}
-
-function clearSeed() {
-  generateStore.seed = ''
-}
-
 const selectedStyleName = computed(() => {
-  if (!generateStore.selectedStyleId) return 'Standard (Kein Style)'
+  if (!generateStore.selectedStyleId) return 'Kein Style'
   const style = generateStore.styles.find((s) => String(s.id) === String(generateStore.selectedStyleId))
-  return style ? style.name : 'Gewählter Style'
+  return style ? style.name : 'Style aktiv'
 })
 </script>
 
 <template>
-  <div class="space-y-4 text-xs">
-    <!-- Row 1: Model & Profile selection -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <div class="flex flex-wrap items-center justify-between gap-2.5 text-xs">
+    <!-- Left: Model & Profile selection -->
+    <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
       <!-- Model Config Selector -->
-      <div>
-        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-          Modell
-        </label>
+      <div class="min-w-[160px] flex-1 max-w-xs">
         <select
           v-model.number="generateStore.selectedModelConfigId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer"
+          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
+          title="Modell wählen"
         >
           <option :value="null" disabled>Modell wählen</option>
           <option
@@ -83,15 +70,13 @@ const selectedStyleName = computed(() => {
       </div>
 
       <!-- Profile Selector -->
-      <div>
-        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-          Profil (Optional)
-        </label>
+      <div class="min-w-[140px] flex-1 max-w-xs">
         <select
           v-model.number="generateStore.selectedProfileId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer"
+          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
+          title="Profil wählen (Optional)"
         >
-          <option :value="null">Kein Profil aktiv</option>
+          <option :value="null">Kein Profil (Standard)</option>
           <option
             v-for="profile in profilesStore.profiles"
             :key="profile.id"
@@ -103,100 +88,64 @@ const selectedStyleName = computed(() => {
       </div>
     </div>
 
-    <!-- Row 2: Aspect Ratio Buttons -->
-    <div>
-      <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-        Seitenverhältnis
-      </label>
-      <div class="flex flex-wrap gap-1.5">
+    <!-- Center/Right: Aspect Ratio, Resolution & Style Trigger -->
+    <div class="flex flex-wrap items-center gap-2 shrink-0">
+      <!-- Aspect Ratio Pills -->
+      <div class="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-white/10">
         <button
           v-for="ar in aspectRatios"
-          :key="ar.value"
+          :key="ar"
           type="button"
-          @click="generateStore.aspectRatio = ar.value"
+          @click="generateStore.aspectRatio = ar"
           :class="[
-            'px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border',
-            generateStore.aspectRatio === ar.value
-              ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-500/30'
-              : 'bg-white/60 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900/60 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/10',
+            'px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer',
+            generateStore.aspectRatio === ar
+              ? 'bg-sky-500 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white',
           ]"
         >
-          {{ ar.value }}
+          {{ ar }}
         </button>
       </div>
-    </div>
 
-    <!-- Row 3: Resolution & Style Picker & Seed -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-      <!-- Resolution -->
-      <div>
-        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-          Auflösung
-        </label>
-        <div class="flex gap-1">
-          <button
-            v-for="res in resolutions"
-            :key="res"
-            type="button"
-            @click="generateStore.resolution = res"
-            :class="[
-              'flex-1 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border text-center',
-              generateStore.resolution === res
-                ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
-                : 'bg-white/60 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900/60 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/10',
-            ]"
-          >
-            {{ res }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Style Preset Selector Trigger -->
-      <div>
-        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-          Style Preset
-        </label>
-        <button
-          type="button"
-          @click="isStyleModalOpen = true"
-          class="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-slate-300/80 bg-white/70 text-slate-800 hover:bg-white dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+      <!-- Fallback Ratio Select for narrow screens -->
+      <div class="sm:hidden">
+        <select
+          v-model="generateStore.aspectRatio"
+          class="rounded-xl border border-slate-300/80 bg-white/80 px-2 py-1.5 text-xs text-slate-800 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200"
         >
-          <span class="truncate">{{ selectedStyleName }}</span>
-          <span class="text-xs text-sky-500">🎨</span>
+          <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
+        </select>
+      </div>
+
+      <!-- Resolution Pills -->
+      <div class="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-white/10">
+        <button
+          v-for="res in resolutions"
+          :key="res"
+          type="button"
+          @click="generateStore.resolution = res"
+          :class="[
+            'px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer',
+            generateStore.resolution === res
+              ? 'bg-sky-500 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white',
+          ]"
+        >
+          {{ res }}
         </button>
       </div>
 
-      <!-- Seed Input -->
-      <div>
-        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-          Seed
-        </label>
-        <div class="flex gap-1.5">
-          <input
-            type="text"
-            v-model="generateStore.seed"
-            placeholder="Zufall"
-            class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-          />
-          <button
-            type="button"
-            @click="randomizeSeed"
-            class="px-2 py-1 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors shrink-0 cursor-pointer"
-            title="Neuer Zufalls-Seed"
-          >
-            🎲
-          </button>
-          <button
-            v-if="generateStore.seed"
-            type="button"
-            @click="clearSeed"
-            class="px-2 py-1 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors shrink-0 cursor-pointer"
-            title="Seed leeren"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
+      <!-- Style Preset Trigger -->
+      <button
+        type="button"
+        @click="isStyleModalOpen = true"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-300/80 bg-white/80 text-slate-700 hover:bg-white dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors shadow-sm cursor-pointer"
+        title="Style-Vorlage wählen"
+      >
+        <span class="text-xs text-sky-500">🎨</span>
+        <span class="truncate max-w-[100px] text-[11px] font-medium">{{ selectedStyleName }}</span>
+      </button>
     </div>
 
     <!-- Style Picker Modal -->

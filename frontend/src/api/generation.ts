@@ -8,9 +8,19 @@ export interface SubmitGenerationPayload {
   model_config_id?: number | null
   aspect_ratio?: string
   resolution?: string
+  image_size?: string
+  fal_aspect_ratio?: string
+  fal_resolution?: string
+  google_aspect_ratio?: string
+  google_resolution?: string
+  width?: number | string | null
+  height?: number | string | null
+  n_images?: number | null
   seed?: number | string | null
+  upscale_model?: string | null
   session_token?: string
   input_images?: File[]
+  asset_id?: number | null
   style_id?: string | number | null
   fal_params?: Record<string, any>
   generic_params?: Record<string, any>
@@ -42,6 +52,16 @@ export const generationApi = {
     if (payload.model_config_id != null) formData.append('model_config_id', String(payload.model_config_id))
     if (payload.aspect_ratio) formData.append('aspect_ratio', payload.aspect_ratio)
     if (payload.resolution) formData.append('resolution', payload.resolution)
+    if (payload.image_size) formData.append('image_size', payload.image_size)
+    if (payload.fal_aspect_ratio) formData.append('fal_aspect_ratio', payload.fal_aspect_ratio)
+    if (payload.fal_resolution) formData.append('fal_resolution', payload.fal_resolution)
+    if (payload.google_aspect_ratio) formData.append('google_aspect_ratio', payload.google_aspect_ratio)
+    if (payload.google_resolution) formData.append('google_resolution', payload.google_resolution)
+    if (payload.width != null && payload.width !== '') formData.append('width', String(payload.width))
+    if (payload.height != null && payload.height !== '') formData.append('height', String(payload.height))
+    if (payload.n_images != null) formData.append('n_images', String(payload.n_images))
+    if (payload.upscale_model) formData.append('upscale_model', payload.upscale_model)
+    if (payload.asset_id != null) formData.append('asset_id', String(payload.asset_id))
     if (payload.seed !== undefined && payload.seed !== null && payload.seed !== '') {
       formData.append('seed', String(payload.seed))
     }
@@ -104,4 +124,10 @@ export const generationApi = {
     const res = await apiClient.get<StylePreset[]>('/api/styles')
     return res.data
   },
+
+  async getUpscaleModels(): Promise<{ value: string; label: string }[]> {
+    const res = await apiClient.get<{ value: string; label: string }[]>('/api/upscale-models')
+    return res.data
+  },
 }
+

@@ -47,8 +47,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
-    <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+  <header class="sticky top-0 z-40 shrink-0 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80">
+    <div class="flex w-full items-center justify-between px-3 sm:px-6 py-2 sm:py-2.5">
       <!-- Logo & Title -->
       <div class="flex items-center gap-6">
         <router-link

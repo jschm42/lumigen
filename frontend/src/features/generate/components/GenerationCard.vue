@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Generation } from '@/types'
+import type { Asset, Generation } from '@/types'
+import { useImageViewerStore } from '@/stores/imageViewer'
 import Spinner from '@/components/ui/Spinner.vue'
 import Badge from '@/components/ui/Badge.vue'
 import GenerationActions from './GenerationActions.vue'
@@ -10,10 +11,19 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const imageViewerStore = useImageViewerStore()
 
 const isPendingOrProcessing = computed(() => {
   return props.generation.status === 'pending' || props.generation.status === 'processing'
 })
+
+function handleImageClick(asset: Asset) {
+  imageViewerStore.openViewer({
+    asset,
+    generation: props.generation,
+    url: asset.image_url || asset.thumbnail_url,
+  })
+}
 </script>
 
 <template>
@@ -67,14 +77,34 @@ const isPendingOrProcessing = computed(() => {
         :key="asset.id"
         class="space-y-3"
       >
-        <!-- Result image container with proper aspect ratio -->
-        <div class="relative group rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-300/60 dark:border-white/10 max-h-[70vh]">
+        <!-- Result image container with restricted preview size and click-to-open viewer -->
+        <div
+          @click="handleImageClick(asset)"
+          class="relative group rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-300/60 dark:border-white/10 max-h-[380px] sm:max-h-[420px] cursor-pointer select-none transition-all duration-200 hover:border-sky-500/50 hover:shadow-lg"
+          title="Klicken zum Vergrößern (Vollbild & Zoom)"
+        >
           <img
             :src="asset.image_url || asset.thumbnail_url"
             :alt="asset.prompt"
-            class="w-full h-auto object-contain max-h-[70vh]"
+            class="max-h-[380px] sm:max-h-[420px] w-auto max-w-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
             loading="lazy"
           />
+
+          <!-- Hover Hint Overlay -->
+          <div
+            class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-between p-3 pointer-events-none"
+          >
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/80 text-white text-xs font-medium backdrop-blur-md shadow-md border border-white/10">
+              <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+              </svg>
+              <span>Vollbild & Zoom</span>
+            </span>
+
+            <span v-if="asset.aspect_ratio" class="px-2 py-0.5 rounded bg-black/60 text-slate-300 text-[11px] font-mono border border-white/5">
+              {{ asset.aspect_ratio }}
+            </span>
+          </div>
         </div>
 
         <!-- Action bar -->

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import AppHeader from './AppHeader.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import ImageViewerModal from '@/components/ui/ImageViewerModal.vue'
 </script>
 
 <template>
-  <div class="relative flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased font-sans">
+  <div class="relative flex h-screen w-screen overflow-hidden flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased font-sans">
     <!-- Ambient glowing backgrounds -->
     <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div class="absolute -top-40 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10"></div>
@@ -15,10 +16,13 @@ import ToastContainer from '@/components/ui/ToastContainer.vue'
     <!-- Header -->
     <AppHeader />
 
-    <!-- Main Content Area -->
-    <main class="flex-1 w-full mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+    <!-- Main Content Area: Maximized on display with clean fluid padding -->
+    <main class="flex-1 w-full min-h-0 flex flex-col overflow-hidden px-2 sm:px-4 py-2">
       <slot />
     </main>
+
+    <!-- Global Image Zoom & Lightbox Viewer Modal -->
+    <ImageViewerModal />
 
     <!-- Global Toast Container -->
     <ToastContainer />

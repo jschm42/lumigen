@@ -59,7 +59,7 @@ async function handleDelete() {
 </script>
 
 <template>
-  <aside class="flex flex-col w-72 shrink-0 rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 p-3.5 h-[calc(100vh-6.5rem)] select-none">
+  <aside class="flex flex-col w-72 sm:w-80 shrink-0 rounded-2xl border border-slate-200/80 bg-white/75 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/75 p-3.5 h-full min-h-0 select-none shadow-sm">
     <!-- Top Action: New Artbook / Session -->
     <div class="mb-3">
       <Button

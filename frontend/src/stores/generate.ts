@@ -4,13 +4,36 @@ import { generationApi, type SubmitGenerationPayload } from '@/api/generation'
 import { sessionsApi } from '@/api/sessions'
 import { useSessionsStore } from './sessions'
 import { useToastStore } from './toast'
-import type { Generation, ModelConfig, StylePreset } from '@/types'
+import type { Asset, Generation, ModelConfig, StylePreset } from '@/types'
 
 export interface AttachedImage {
   id: string
-  file: File
+  file?: File
+  assetId?: number
   previewUrl: string
+  name?: string
 }
+
+export interface DimensionPresetOption {
+  label: string
+  value: string
+  ratio?: string
+}
+
+export const DIMENSION_PRESETS: DimensionPresetOption[] = [
+  { label: 'Benutzerdefiniert', value: '' },
+  { label: '512 × 512 (1:1)', value: '512x512', ratio: '1:1' },
+  { label: '768 × 768 (1:1)', value: '768x768', ratio: '1:1' },
+  { label: '1024 × 1024 (1:1)', value: '1024x1024', ratio: '1:1' },
+  { label: '1152 × 896 (9:7)', value: '1152x896', ratio: '4:3' },
+  { label: '896 × 1152 (7:9)', value: '896x1152', ratio: '3:4' },
+  { label: '1216 × 832 (3:2)', value: '1216x832', ratio: '3:2' },
+  { label: '832 × 1216 (2:3)', value: '832x1216', ratio: '2:3' },
+  { label: '1344 × 768 (16:9)', value: '1344x768', ratio: '16:9' },
+  { label: '768 × 1344 (9:16)', value: '768x1344', ratio: '9:16' },
+  { label: '1536 × 640 (21:9)', value: '1536x640', ratio: '21:9' },
+  { label: '640 × 1536 (9:21)', value: '640x1536', ratio: '9:16' },
+]
 
 export const useGenerateStore = defineStore('generate', () => {
   const sessionsStore = useSessionsStore()
@@ -27,6 +50,25 @@ export const useGenerateStore = defineStore('generate', () => {
   const seed = ref<string>('')
   const selectedStyleId = ref<string | number | null>(null)
   const attachedImages = ref<AttachedImage[]>([])
+
+  // Advanced Overrides (from old prompt panel)
+  const isAdvancedOpen = ref<boolean>(false)
+  const dimensionPreset = ref<string>('')
+  const customWidth = ref<string>('')
+  const customHeight = ref<string>('')
+  const nImages = ref<number | null>(null)
+  const openRouterAspectRatio = ref<string>('')
+  const openRouterImageSize = ref<string>('')
+  const falAspectRatio = ref<string>('')
+  const falResolution = ref<string>('')
+  const googleAspectRatio = ref<string>('')
+  const googleResolution = ref<string>('')
+  const upscaleModel = ref<string>('__profile__')
+  const availableUpscaleModels = ref<{ value: string; label: string }[]>([
+    { value: '__none__', label: 'Kein Upscaling' },
+    { value: 'fal', label: 'FAL.ai Standard' },
+    { value: 'local:RealESRGAN_x4plus', label: 'Real-ESRGAN x4plus (Lokal)' },
+  ])
 
   // Available options
   const activeModels = ref<ModelConfig[]>([])
@@ -52,20 +94,144 @@ export const useGenerateStore = defineStore('generate', () => {
       id: Math.random().toString(36).substring(2, 9),
       file,
       previewUrl,
+      name: file.name,
     })
+  }
+
+  function attachAssetAsImage(asset: Asset) {
+    if (attachedImages.value.length >= 5) {
+      toastStore.warning('Maximal 5 Referenzbilder erlaubt.')
+      return
+    }
+    const alreadyExists = attachedImages.value.some((img) => img.assetId === asset.id)
+    if (alreadyExists) {
+      toastStore.info('Dieses Bild ist bereits ausgewählt.')
+      return
+    }
+    attachedImages.value.push({
+      id: `asset-${asset.id}`,
+      assetId: asset.id,
+      previewUrl: asset.thumbnail_url || asset.image_url,
+      name: `Asset #${asset.id}`,
+    })
+    toastStore.success(`Asset #${asset.id} als Eingabebild hinzugefügt!`)
   }
 
   function removeAttachedImage(id: string) {
     const item = attachedImages.value.find((img) => img.id === id)
     if (item) {
-      URL.revokeObjectURL(item.previewUrl)
+      if (item.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(item.previewUrl)
+      }
       attachedImages.value = attachedImages.value.filter((img) => img.id !== id)
     }
   }
 
   function clearAttachedImages() {
-    attachedImages.value.forEach((img) => URL.revokeObjectURL(img.previewUrl))
+    attachedImages.value.forEach((img) => {
+      if (img.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(img.previewUrl)
+      }
+    })
     attachedImages.value = []
+  }
+
+  function onDimensionPresetChange(preset: string) {
+    dimensionPreset.value = preset
+    if (preset && preset.includes('x')) {
+      const [w, h] = preset.split('x')
+      customWidth.value = w
+      customHeight.value = h
+      const found = DIMENSION_PRESETS.find((p) => p.value === preset)
+      if (found?.ratio) {
+        aspectRatio.value = found.ratio
+        falAspectRatio.value = found.ratio
+        openRouterAspectRatio.value = found.ratio
+        googleAspectRatio.value = found.ratio
+      }
+    }
+  }
+
+  function syncDimensionsToPreset() {
+    if (customWidth.value && customHeight.value) {
+      const dimKey = `${customWidth.value.trim()}x${customHeight.value.trim()}`
+      const match = DIMENSION_PRESETS.find((p) => p.value === dimKey)
+      dimensionPreset.value = match ? match.value : ''
+    } else {
+      dimensionPreset.value = ''
+    }
+  }
+
+  function applyProfileDefaults(profile: any) {
+    if (profile.default_model_config_id) {
+      selectedModelConfigId.value = profile.default_model_config_id
+    }
+
+    if (profile.aspect_ratio || profile.default_aspect_ratio) {
+      aspectRatio.value = profile.aspect_ratio || profile.default_aspect_ratio || '1:1'
+    }
+    if (profile.resolution || profile.default_resolution) {
+      resolution.value = profile.resolution || profile.default_resolution || '1K'
+    }
+
+    // Dimensions: width / height & Preset
+    if (profile.width && profile.height) {
+      customWidth.value = String(profile.width)
+      customHeight.value = String(profile.height)
+      const dimKey = `${profile.width}x${profile.height}`
+      const match = DIMENSION_PRESETS.find((p) => p.value === dimKey)
+      dimensionPreset.value = match ? match.value : ''
+    } else {
+      customWidth.value = ''
+      customHeight.value = ''
+      dimensionPreset.value = ''
+    }
+
+    // Provider specific overrides
+    openRouterAspectRatio.value = profile.openrouter_aspect_ratio || ''
+    openRouterImageSize.value = profile.openrouter_image_size || ''
+    falAspectRatio.value = profile.fal_aspect_ratio || ''
+    falResolution.value = profile.fal_resolution || ''
+    googleAspectRatio.value = profile.google_aspect_ratio || ''
+    googleResolution.value = profile.google_resolution || ''
+
+    // nImages & seed
+    nImages.value = profile.n_images ?? null
+    seed.value = profile.seed != null ? String(profile.seed) : ''
+
+    // Upscaling: Pre-fill matching profile config
+    if (profile.upscale_provider === 'fal') {
+      if (profile.upscale_topaz_model_id) {
+        upscaleModel.value = `falm:${profile.upscale_topaz_model_id}`
+      } else {
+        upscaleModel.value = 'fal'
+      }
+    } else if (profile.upscale_provider === 'local' && profile.upscale_model) {
+      upscaleModel.value = `local:${profile.upscale_model}`
+    } else if (profile.upscale_model === '__none__' || (!profile.upscale_provider && !profile.upscale_model)) {
+      upscaleModel.value = '__none__'
+    } else if (profile.upscale_model) {
+      upscaleModel.value = profile.upscale_model
+    } else {
+      upscaleModel.value = '__none__'
+    }
+  }
+
+  function clearProfileDefaults() {
+    dimensionPreset.value = ''
+    customWidth.value = ''
+    customHeight.value = ''
+    openRouterAspectRatio.value = ''
+    openRouterImageSize.value = ''
+    falAspectRatio.value = ''
+    falResolution.value = ''
+    googleAspectRatio.value = ''
+    googleResolution.value = ''
+    nImages.value = null
+    seed.value = ''
+    upscaleModel.value = '__none__'
+    aspectRatio.value = '1:1'
+    resolution.value = '1K'
   }
 
   async function loadModelsAndStyles() {
@@ -89,7 +255,17 @@ export const useGenerateStore = defineStore('generate', () => {
     } catch (_error) {
       // fallback
     }
+
+    try {
+      const upscaleData = await generationApi.getUpscaleModels()
+      if (Array.isArray(upscaleData) && upscaleData.length > 0) {
+        availableUpscaleModels.value = upscaleData
+      }
+    } catch (_error) {
+      // fallback
+    }
   }
+
 
   async function loadSessionHistory(sessionToken: string) {
     if (!sessionToken) {
@@ -99,7 +275,7 @@ export const useGenerateStore = defineStore('generate', () => {
     isLoadingHistory.value = true
     try {
       const res = await sessionsApi.getSessionHistory(sessionToken)
-      generations.value = res.generations
+      generations.value = Array.isArray(res?.generations) ? res.generations : []
     } catch (_error) {
       generations.value = []
     } finally {
@@ -149,17 +325,32 @@ export const useGenerateStore = defineStore('generate', () => {
 
     isSubmitting.value = true
     try {
+      const inputFiles = attachedImages.value
+        .filter((img) => img.file)
+        .map((img) => img.file as File)
+      const firstAsset = attachedImages.value.find((img) => img.assetId)
+
       const payload: SubmitGenerationPayload = {
         prompt: prompt.value.trim(),
         negative_prompt: showNegativePrompt.value ? negativePrompt.value.trim() : undefined,
         profile_id: selectedProfileId.value,
         model_config_id: selectedModelConfigId.value,
-        aspect_ratio: aspectRatio.value,
+        aspect_ratio: openRouterAspectRatio.value || aspectRatio.value,
         resolution: resolution.value,
+        image_size: openRouterImageSize.value || undefined,
+        fal_aspect_ratio: falAspectRatio.value || undefined,
+        fal_resolution: falResolution.value || undefined,
+        google_aspect_ratio: googleAspectRatio.value || undefined,
+        google_resolution: googleResolution.value || undefined,
+        width: customWidth.value ? Number(customWidth.value) : undefined,
+        height: customHeight.value ? Number(customHeight.value) : undefined,
+        n_images: nImages.value || undefined,
         seed: seed.value ? seed.value : null,
+        upscale_model: upscaleModel.value !== '__profile__' ? upscaleModel.value : undefined,
         session_token: sessionsStore.activeSessionToken || undefined,
         style_id: selectedStyleId.value,
-        input_images: attachedImages.value.map((img) => img.file),
+        input_images: inputFiles.length > 0 ? inputFiles : undefined,
+        asset_id: firstAsset ? firstAsset.assetId : undefined,
       }
 
       const res = await generationApi.submitGeneration(payload)
@@ -179,7 +370,7 @@ export const useGenerateStore = defineStore('generate', () => {
       // Start polling
       pollJob(res.job_id)
 
-      // Clear input images but keep prompt for quick iterations or clear if desired
+      // Clear input images but keep prompt for quick iterations
       clearAttachedImages()
     } catch (error: any) {
       toastStore.error(error?.response?.data?.detail || 'Fehler beim Starten der Generierung.')
@@ -211,6 +402,19 @@ export const useGenerateStore = defineStore('generate', () => {
     seed,
     selectedStyleId,
     attachedImages,
+    isAdvancedOpen,
+    dimensionPreset,
+    customWidth,
+    customHeight,
+    nImages,
+    openRouterAspectRatio,
+    openRouterImageSize,
+    falAspectRatio,
+    falResolution,
+    googleAspectRatio,
+    googleResolution,
+    upscaleModel,
+    availableUpscaleModels,
     activeModels,
     styles,
     generations,
@@ -219,8 +423,13 @@ export const useGenerateStore = defineStore('generate', () => {
     isLoadingHistory,
     selectedModel,
     addAttachedImage,
+    attachAssetAsImage,
     removeAttachedImage,
     clearAttachedImages,
+    onDimensionPresetChange,
+    syncDimensionsToPreset,
+    applyProfileDefaults,
+    clearProfileDefaults,
     loadModelsAndStyles,
     loadSessionHistory,
     pollJob,
@@ -228,3 +437,4 @@ export const useGenerateStore = defineStore('generate', () => {
     remixGeneration,
   }
 })
+

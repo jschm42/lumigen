@@ -222,26 +222,28 @@ template_dir = Path(__file__).resolve().parent / "web" / "templates"
 static_dir = Path(__file__).resolve().parent / "web" / "static"
 dist_dir = Path(__file__).resolve().parent / "web" / "dist"
 
-templates = Jinja2Templates(directory=str(template_dir))
-templates.env.globals["app_version"] = settings.app_version
-templates.env.filters["dict"] = dict
+if template_dir.exists():
+    templates = Jinja2Templates(directory=str(template_dir))
+    templates.env.globals["app_version"] = settings.app_version
+    templates.env.filters["dict"] = dict
 
+    def static_url(path: str) -> str:
+        normalized = path.lstrip("/")
+        base_url = str(app.url_path_for("static", path=normalized))
+        file_path = static_dir / normalized
+        try:
+            version = int(file_path.stat().st_mtime)
+        except OSError:
+            return base_url
+        separator = "&" if "?" in base_url else "?"
+        return f"{base_url}{separator}v={version}"
 
-def static_url(path: str) -> str:
-    normalized = path.lstrip("/")
-    base_url = str(app.url_path_for("static", path=normalized))
-    file_path = static_dir / normalized
-    try:
-        version = int(file_path.stat().st_mtime)
-    except OSError:
-        return base_url
-    separator = "&" if "?" in base_url else "?"
-    return f"{base_url}{separator}v={version}"
+    templates.env.globals["static_url"] = static_url
+else:
+    templates = None
 
-
-templates.env.globals["static_url"] = static_url
-
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 if (dist_dir / "spa-assets").exists():
     app.mount("/spa-assets", StaticFiles(directory=str(dist_dir / "spa-assets")), name="spa-assets")
@@ -264,7 +266,9 @@ def favicon_endpoint() -> FileResponse:
         return FileResponse(static_dir / "favicon.ico", media_type="image/x-icon")
     if (dist_dir / "app-logo.svg").exists():
         return FileResponse(dist_dir / "app-logo.svg", media_type="image/svg+xml")
-    return FileResponse(static_dir / "app-logo.svg", media_type="image/svg+xml")
+    if (static_dir / "app-logo.svg").exists():
+        return FileResponse(static_dir / "app-logo.svg", media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Favicon not found")
 
 
 app.include_router(api_router)
@@ -337,7 +341,8 @@ def ensure_csrf_token(request: Request) -> str:
     return token
 
 
-templates.env.globals["ensure_csrf_token"] = ensure_csrf_token
+if templates is not None:
+    templates.env.globals["ensure_csrf_token"] = ensure_csrf_token
 
 
 def is_csrf_valid(request: Request, provided: str | None) -> bool:

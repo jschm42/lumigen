@@ -16,7 +16,7 @@ function scrollToBottom() {
 }
 
 watch(
-  () => generateStore.generations.length,
+  () => generateStore.generations?.length ?? 0,
   () => {
     scrollToBottom()
   }
@@ -39,7 +39,7 @@ onMounted(() => {
 
     <!-- Empty State -->
     <div
-      v-else-if="generateStore.generations.length === 0"
+      v-else-if="!generateStore.generations || generateStore.generations.length === 0"
       class="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-8 space-y-4"
     >
       <div class="w-16 h-16 rounded-3xl bg-sky-500/10 dark:bg-sky-400/10 border border-sky-400/20 flex items-center justify-center text-3xl shadow-inner">
@@ -58,7 +58,7 @@ onMounted(() => {
     <!-- Generation Cards List -->
     <div v-else class="space-y-6">
       <GenerationCard
-        v-for="gen in generateStore.generations"
+        v-for="gen in (generateStore.generations || [])"
         :key="gen.id"
         :generation="gen"
       />

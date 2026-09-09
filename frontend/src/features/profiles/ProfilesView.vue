@@ -23,7 +23,7 @@ const filteredProfiles = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-6 pb-20">
+  <div class="h-full overflow-y-auto space-y-6 pb-20 pr-1">
     <!-- Top Action Bar -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 shadow-sm">
       <div class="space-y-0.5">

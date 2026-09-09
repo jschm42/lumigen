@@ -16,18 +16,18 @@ onMounted(() => {
 const gridColsClass = computed(() => {
   switch (galleryStore.filters.thumb_size) {
     case 'sm':
-      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
+      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-2.5'
     case 'lg':
-      return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'
+      return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4'
     case 'md':
     default:
-      return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5'
+      return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-3.5'
   }
 })
 </script>
 
 <template>
-  <div class="space-y-6 pb-20">
+  <div class="h-full overflow-y-auto space-y-4 pb-20 pr-1">
     <!-- Top Filter Bar -->
     <GalleryFilters />
 

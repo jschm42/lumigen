@@ -25,16 +25,31 @@ export interface Profile {
   description?: string
   system_prompt?: string
   negative_prompt?: string
+  width?: number | null
+  height?: number | null
+  aspect_ratio?: string | null
   default_aspect_ratio?: string
+  resolution?: string
   default_resolution?: string
   default_model_config_id?: number | null
+  n_images?: number | null
+  seed?: number | null
   upscale_provider?: string | null
   upscale_model?: string | null
+  upscale_topaz_model_id?: number | null
   upscale_factor?: number | null
+  fal_aspect_ratio?: string
+  fal_resolution?: string
+  openrouter_aspect_ratio?: string
+  openrouter_image_size?: string
+  google_aspect_ratio?: string
+  google_resolution?: string
+  params_json?: Record<string, any>
   generic_params?: Record<string, any>
   category_ids?: number[]
   created_at?: string
 }
+
 
 export interface Category {
   id: number

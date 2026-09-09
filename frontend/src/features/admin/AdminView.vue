@@ -21,7 +21,7 @@ const tabs: TabItem[] = [
 </script>
 
 <template>
-  <div class="space-y-6 pb-20">
+  <div class="h-full overflow-y-auto space-y-6 pb-20 pr-1">
     <!-- Header with Tabs -->
     <div class="space-y-4">
       <div class="space-y-0.5">

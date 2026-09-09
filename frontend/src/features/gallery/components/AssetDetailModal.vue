@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useGalleryStore } from '@/stores/gallery'
 import { useGenerateStore } from '@/stores/generate'
 import { useToastStore } from '@/stores/toast'
+import { useImageViewerStore } from '@/stores/imageViewer'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
@@ -12,8 +13,18 @@ const router = useRouter()
 const galleryStore = useGalleryStore()
 const generateStore = useGenerateStore()
 const toastStore = useToastStore()
+const imageViewerStore = useImageViewerStore()
 
 const isDeleteConfirmOpen = ref(false)
+
+function openImageViewer() {
+  if (!galleryStore.activeAsset) return
+  imageViewerStore.openViewer({
+    asset: galleryStore.activeAsset,
+    url: galleryStore.activeAsset.image_url || galleryStore.activeAsset.thumbnail_url,
+    showMetadata: true,
+  })
+}
 
 async function copyText(text: string) {
   try {
@@ -40,6 +51,13 @@ function handleRemix() {
   galleryStore.closeDetailModal()
   router.push('/')
   toastStore.info('Prompt & Einstellungen in Studio geladen!')
+}
+
+function handleUseAsInputImage() {
+  if (!galleryStore.activeAsset) return
+  generateStore.attachAssetAsImage(galleryStore.activeAsset)
+  galleryStore.closeDetailModal()
+  router.push('/')
 }
 
 async function handleDelete() {
@@ -76,13 +94,23 @@ async function handleDelete() {
     </template>
 
     <div v-if="galleryStore.activeAsset" class="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
-      <!-- Left: High-Res Image Display -->
-      <div class="lg:col-span-7 flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-200/60 dark:border-white/10 overflow-hidden min-h-[350px]">
+      <!-- Left: High-Res Image Display with Zoom Trigger -->
+      <div
+        @click="openImageViewer"
+        class="lg:col-span-7 group relative flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-200/60 dark:border-white/10 overflow-hidden min-h-[350px] cursor-pointer hover:border-sky-500/50 transition-colors"
+        title="In Vollbild & Zoom-Viewer öffnen"
+      >
         <img
           :src="galleryStore.activeAsset.image_url || galleryStore.activeAsset.thumbnail_url"
           :alt="galleryStore.activeAsset.prompt"
-          class="max-h-[65vh] w-auto object-contain rounded-xl shadow-2xl"
+          class="max-h-[65vh] w-auto object-contain rounded-xl shadow-2xl transition-transform duration-200 group-hover:scale-[1.01]"
         />
+        <div class="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-white text-xs flex items-center gap-1.5 border border-white/10 shadow-lg pointer-events-none">
+          <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+          </svg>
+          <span>Vollbild & Zoom</span>
+        </div>
       </div>
 
       <!-- Right: Metadata Sidecar Inspector -->
@@ -150,6 +178,10 @@ async function handleDelete() {
         <div class="pt-2 border-t border-slate-200 dark:border-white/10 flex flex-wrap gap-2">
           <Button variant="primary" size="sm" @click="handleRemix">
             🔁 Remix in Studio
+          </Button>
+
+          <Button variant="surface" size="sm" @click="handleUseAsInputImage">
+            🖼️ Als Eingabebild nutzen
           </Button>
 
           <a

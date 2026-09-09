@@ -18,21 +18,36 @@ settings = get_settings()
 def serialize_profile(p: Profile) -> dict[str, Any]:
     """Serialize Profile instance to clean dictionary for frontend consumption."""
     params = p.params_json or {}
+    image_config = params.get("image_config") if isinstance(params.get("image_config"), dict) else {}
     return {
         "id": p.id,
         "name": p.name,
         "description": params.get("description", ""),
         "system_prompt": p.base_prompt or "",
         "negative_prompt": p.negative_prompt or "",
+        "width": p.width,
+        "height": p.height,
+        "aspect_ratio": p.aspect_ratio or "1:1",
         "default_aspect_ratio": p.aspect_ratio or "1:1",
+        "resolution": params.get("resolution", "1K"),
         "default_resolution": params.get("resolution", "1K"),
         "default_model_config_id": p.model_config_id,
+        "n_images": p.n_images if p.n_images is not None else 1,
+        "seed": p.seed,
         "upscale_provider": p.upscale_provider,
         "upscale_model": p.upscale_model,
         "upscale_topaz_model_id": p.upscale_topaz_model_id,
+        "fal_aspect_ratio": params.get("fal_aspect_ratio", ""),
+        "fal_resolution": params.get("fal_resolution", ""),
+        "openrouter_aspect_ratio": image_config.get("aspect_ratio", ""),
+        "openrouter_image_size": image_config.get("image_size", ""),
+        "google_aspect_ratio": image_config.get("aspect_ratio", ""),
+        "google_resolution": image_config.get("image_size", ""),
+        "params_json": params,
         "category_ids": [c.id for c in p.categories] if hasattr(p, "categories") and p.categories else [],
         "created_at": p.created_at.isoformat() if p.created_at else "",
     }
+
 
 
 @router.get("")
