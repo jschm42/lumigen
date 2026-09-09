@@ -44,7 +44,7 @@ export interface ExpandPayload {
 }
 
 export const generationApi = {
-  async submitGeneration(payload: SubmitGenerationPayload): Promise<{ job_id: number; status: string }> {
+  async submitGeneration(payload: SubmitGenerationPayload): Promise<{ job_id: number; status: string; session_token?: string }> {
     const formData = new FormData()
     formData.append('prompt', payload.prompt)
     if (payload.negative_prompt) formData.append('negative_prompt', payload.negative_prompt)

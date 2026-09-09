@@ -18,6 +18,9 @@ const renameTitle = ref('')
 const isDeleteOpen = ref(false)
 const deleteToken = ref('')
 
+const isDeleteAllOpen = ref(false)
+const isDeletingAll = ref(false)
+
 onMounted(() => {
   sessionsStore.fetchSessions()
 })
@@ -55,6 +58,17 @@ async function handleDelete() {
     generateStore.loadSessionHistory('')
   }
   isDeleteOpen.value = false
+}
+
+async function handleDeleteAll() {
+  isDeletingAll.value = true
+  try {
+    await sessionsStore.deleteAllSessions()
+    generateStore.loadSessionHistory('')
+  } finally {
+    isDeletingAll.value = false
+    isDeleteAllOpen.value = false
+  }
 }
 </script>
 
@@ -146,6 +160,22 @@ async function handleDelete() {
       </div>
     </div>
 
+    <!-- Bottom Action: Delete All Sessions -->
+    <div v-if="sessionsStore.sessions.length > 0" class="pt-2.5 mt-2 border-t border-slate-200/80 dark:border-white/10 shrink-0">
+      <Button
+        variant="ghost"
+        size="xs"
+        fullWidth
+        @click="isDeleteAllOpen = true"
+        class="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 justify-center text-xs font-medium"
+      >
+        <template #icon>
+          <span class="text-xs">🗑️</span>
+        </template>
+        Alle Sessions löschen
+      </Button>
+    </div>
+
     <!-- Rename Modal -->
     <Modal :open="isRenameOpen" title="Session umbenennen" size="sm" @update:open="isRenameOpen = $event">
       <div class="space-y-4">
@@ -168,6 +198,18 @@ async function handleDelete() {
       message="Möchtest du diese Session und ihren Verlauf wirklich löschen?"
       @update:open="isDeleteOpen = $event"
       @confirm="handleDelete"
+    />
+
+    <!-- Delete All Confirm Dialog -->
+    <ConfirmDialog
+      :open="isDeleteAllOpen"
+      title="Alle Sessions löschen"
+      message="Möchtest du wirklich alle Sessions und deren Verläufe unwiderruflich löschen? Die generierten Bilder in der Galerie bleiben erhalten."
+      confirmText="Alle löschen"
+      variant="danger"
+      :loading="isDeletingAll"
+      @update:open="isDeleteAllOpen = $event"
+      @confirm="handleDeleteAll"
     />
   </aside>
 </template>

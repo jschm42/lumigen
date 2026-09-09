@@ -310,6 +310,10 @@ export const useGenerateStore = defineStore('generate', () => {
           generations.value.push(gen)
         }
 
+        if (gen.session_token && !sessionsStore.activeSessionToken) {
+          sessionsStore.setActiveSessionToken(gen.session_token)
+        }
+
         if (gen.status === 'succeeded') {
           clearInterval(interval)
           activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
@@ -365,6 +369,12 @@ export const useGenerateStore = defineStore('generate', () => {
 
       const res = await generationApi.submitGeneration(payload)
       
+      // If no session was active, immediately adopt the newly created session
+      if (res.session_token && !sessionsStore.activeSessionToken) {
+        sessionsStore.setActiveSessionToken(res.session_token)
+        sessionsStore.fetchSessions()
+      }
+
       // Temporary optimistic generation item
       const optimisticGen: Generation = {
         id: res.job_id,
@@ -373,6 +383,7 @@ export const useGenerateStore = defineStore('generate', () => {
         prompt: prompt.value,
         negative_prompt: payload.negative_prompt,
         created_at: new Date().toISOString(),
+        session_token: res.session_token,
         assets: [],
       }
       generations.value.push(optimisticGen)

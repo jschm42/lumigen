@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { sessionsApi } from '@/api/sessions'
+import { useToastStore } from './toast'
 import type { ChatSession } from '@/types'
 
 export const useSessionsStore = defineStore('sessions', () => {
+  const toastStore = useToastStore()
   const sessions = ref<ChatSession[]>([])
   const activeSessionToken = ref<string>('')
   const activeSession = ref<ChatSession | null>(null)
@@ -58,6 +60,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     return res
   }
 
+  async function deleteAllSessions() {
+    try {
+      const res = await sessionsApi.deleteAllSessions()
+      if (res.success) {
+        sessions.value = []
+        createNewSession()
+        toastStore.success('Alle Sessions wurden gelöscht.')
+      }
+      return res
+    } catch (_error) {
+      toastStore.error('Fehler beim Löschen der Sessions.')
+      throw _error
+    }
+  }
+
   async function togglePin(token: string) {
     const res = await sessionsApi.togglePin(token)
     if (res.success) {
@@ -78,6 +95,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     createNewSession,
     renameSession,
     deleteSession,
+    deleteAllSessions,
     togglePin,
   }
 })

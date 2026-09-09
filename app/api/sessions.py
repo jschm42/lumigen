@@ -17,14 +17,14 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 def generation_session_token(generation: Generation) -> str:
     """Extract or derive the session token from a Generation record."""
     snapshot = generation.request_snapshot_json or {}
+    if snapshot.get("chat_hidden") or snapshot.get("chat_deleted"):
+        return ""
     raw_token = snapshot.get("chat_session_id") or snapshot.get("conversation")
     if isinstance(raw_token, str):
         token = raw_token.strip()
         if token:
             return token
-    if generation.profile_id is not None:
-        return f"profile:{generation.profile_id}"
-    return f"profile-name:{generation.profile_name}"
+    return ""
 
 
 @router.get("")
@@ -40,10 +40,34 @@ def list_sessions(
         tok = generation_session_token(g)
         generations_by_session.setdefault(tok, []).append(g)
 
+    # Lazily ensure any generation sessions have a ChatSession row in the database
+    existing_tokens = {s.chat_session_id for s in db_sessions if s.chat_session_id}
+    created_any = False
+    for tok, gens in generations_by_session.items():
+        if tok and tok.startswith("session:") and tok not in existing_tokens:
+            first_prompt = gens[0].prompt_user or gens[0].prompt_final or "Neue Session"
+            raw_prompt = first_prompt.strip().replace("\r\n", " ").replace("\n", " ")
+            cleaned_title = raw_prompt[:40].rsplit(" ", 1)[0] if len(raw_prompt) > 40 else raw_prompt
+            cleaned_title = cleaned_title.strip() or "Neue Session"
+            new_s = crud.create_chat_session(
+                session,
+                chat_session_id=tok,
+                title=cleaned_title,
+            )
+            db_sessions.append(new_s)
+            existing_tokens.add(tok)
+            created_any = True
+
+    if created_any:
+        from datetime import datetime
+        db_sessions.sort(key=lambda s: s.updated_at or s.created_at or datetime.min, reverse=True)
+
     result = []
     q_lower = q.lower().strip()
 
     for s in db_sessions:
+        if not s.chat_session_id or not s.chat_session_id.startswith("session:"):
+            continue
         if q_lower and q_lower not in (s.title or "").lower():
             continue
 
@@ -155,6 +179,33 @@ def rename_session(
     }
 
 
+@router.delete("")
+@router.post("/delete-all")
+def delete_all_sessions(
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Delete all chat sessions and clear session linkages from generations."""
+    db_sessions = crud.list_chat_sessions(session)
+    count = len(db_sessions)
+    for s in db_sessions:
+        crud.delete_chat_session(session, s)
+
+    all_generations = session.query(Generation).all()
+    for g in all_generations:
+        snapshot = dict(g.request_snapshot_json or {})
+        if "chat_session_id" in snapshot or "chat_session_title" in snapshot or "conversation" in snapshot:
+            snapshot["chat_hidden"] = True
+            snapshot["chat_deleted"] = True
+            snapshot.pop("chat_session_id", None)
+            snapshot.pop("chat_session_title", None)
+            snapshot.pop("conversation", None)
+            g.request_snapshot_json = snapshot
+            session.add(g)
+
+    session.commit()
+    return {"success": True, "deleted_count": count}
+
+
 @router.delete("/{session_token}")
 def delete_session(
     session_token: str,
@@ -164,6 +215,19 @@ def delete_session(
     chat_session = crud.get_chat_session(session, session_token)
     if chat_session:
         crud.delete_chat_session(session, chat_session)
+
+    all_generations = session.query(Generation).all()
+    for g in all_generations:
+        if generation_session_token(g) == session_token:
+            snapshot = dict(g.request_snapshot_json or {})
+            snapshot["chat_hidden"] = True
+            snapshot["chat_deleted"] = True
+            snapshot.pop("chat_session_id", None)
+            snapshot.pop("chat_session_title", None)
+            snapshot.pop("conversation", None)
+            g.request_snapshot_json = snapshot
+            session.add(g)
+    session.commit()
     return {"success": True}
 
 

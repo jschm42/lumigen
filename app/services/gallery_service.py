@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Asset, Category, Generation
@@ -67,7 +67,7 @@ class GalleryService:
         if normalized_category_ids:
             filters.append(Asset.categories.any(Category.id.in_(normalized_category_ids)))
         if unrated_only:
-            filters.append(Asset.rating.is_(None))
+            filters.append(or_(Asset.rating.is_(None), Asset.rating == 0))
         elif min_rating is not None:
             filters.append(Asset.rating.is_not(None))
             filters.append(Asset.rating >= min_rating)

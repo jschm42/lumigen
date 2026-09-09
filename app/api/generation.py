@@ -153,6 +153,19 @@ async def api_generate_submit(
         conversation_value = build_chat_session_token()
     overrides["chat_session_id"] = conversation_value
 
+    chat_session = crud.get_chat_session(session, conversation_value)
+    if not chat_session:
+        raw_prompt = prompt.strip().replace("\r\n", " ").replace("\n", " ")
+        cleaned_title = raw_prompt[:40].rsplit(" ", 1)[0] if len(raw_prompt) > 40 else raw_prompt
+        cleaned_title = cleaned_title.strip() or "Neue Session"
+        crud.create_chat_session(
+            session,
+            chat_session_id=conversation_value,
+            title=cleaned_title,
+            last_profile_id=profile.id if profile else None,
+            last_model_config_id=model_config_id,
+        )
+
     if model_config_id:
         model_cfg = crud.get_model_config(session, model_config_id)
         if model_cfg:
@@ -340,6 +353,7 @@ async def api_generate_submit(
     return {
         "job_id": generation.id,
         "status": generation.status,
+        "session_token": conversation_value,
     }
 
 

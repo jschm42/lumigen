@@ -112,6 +112,13 @@ async function handleDelete() {
   await galleryStore.deleteAsset(galleryStore.activeAsset.id)
   isDeleteConfirmOpen.value = false
 }
+
+function handleRateAsset(star: number) {
+  if (!galleryStore.activeAsset) return
+  const current = galleryStore.activeAsset.rating || 0
+  const next = current === star ? 0 : star
+  galleryStore.rateAsset(galleryStore.activeAsset, next)
+}
 </script>
 
 <template>
@@ -131,8 +138,9 @@ async function handleDelete() {
             v-for="star in [1, 2, 3, 4, 5]"
             :key="star"
             type="button"
-            @click="galleryStore.rateAsset(galleryStore.activeAsset, star)"
+            @click="handleRateAsset(star)"
             class="text-base text-amber-400 hover:scale-110 transition-transform"
+            :title="galleryStore.activeAsset.rating === star ? 'Bewertung aufheben' : `${star} Sterne`"
           >
             {{ (galleryStore.activeAsset.rating || 0) >= star ? '★' : '☆' }}
           </button>

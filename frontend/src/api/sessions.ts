@@ -27,6 +27,11 @@ export const sessionsApi = {
     return res.data
   },
 
+  async deleteAllSessions(): Promise<{ success: boolean; deleted_count: number }> {
+    const res = await apiClient.delete('/api/sessions')
+    return res.data
+  },
+
   async togglePin(sessionToken: string): Promise<{ success: boolean; is_pinned: boolean }> {
     const res = await apiClient.post(`/api/sessions/${sessionToken}/pin`)
     return res.data

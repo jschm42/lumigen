@@ -164,7 +164,7 @@ def rate_asset(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    setattr(asset, "rating", rating)
+    setattr(asset, "rating", rating if rating > 0 else None)
     session.commit()
     return {"success": True, "rating": rating}
 
