@@ -57,6 +57,7 @@ function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && isRatingOpen.value) {
     isRatingOpen.value = false
     hoverRating.value = 0
+    event.stopPropagation()
   }
 }
 

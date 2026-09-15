@@ -12,13 +12,22 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isCategoryPopoverOpen.value) {
+    isCategoryPopoverOpen.value = false
+    event.stopPropagation()
+  }
+}
+
 onMounted(() => {
   galleryStore.loadCategories()
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('keydown', handleKeydown)
 })
 
 const timePresets = [

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useGalleryStore } from '@/stores/gallery'
+import { useImageViewerStore } from '@/stores/imageViewer'
 import GalleryFilters from './components/GalleryFilters.vue'
 import GalleryCard from './components/GalleryCard.vue'
 import BatchActionBar from './components/BatchActionBar.vue'
@@ -8,9 +9,40 @@ import AssetDetailModal from './components/AssetDetailModal.vue'
 import Spinner from '@/components/ui/Spinner.vue'
 
 const galleryStore = useGalleryStore()
+const imageViewerStore = useImageViewerStore()
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+
+  // Do not clear selection if a modal or image viewer is active
+  if (
+    imageViewerStore.isOpen ||
+    galleryStore.isDetailModalOpen ||
+    document.body.style.overflow === 'hidden' ||
+    document.querySelector('.fixed.inset-0.z-50')
+  ) {
+    return
+  }
+
+  // If focused in an input/textarea, blur it first
+  const activeEl = document.activeElement as HTMLElement | null
+  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+    activeEl.blur()
+    return
+  }
+
+  if (galleryStore.selectedAssetIds.length > 0) {
+    galleryStore.clearSelection()
+  }
+}
 
 onMounted(() => {
   galleryStore.fetchAssets(true)
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 
 const gridColsClass = computed(() => {

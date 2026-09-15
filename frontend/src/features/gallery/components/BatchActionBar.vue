@@ -33,8 +33,9 @@ async function confirmDelete() {
       type="button"
       @click="galleryStore.clearSelection"
       class="text-slate-400 hover:text-white transition-colors"
+      title="Auswahl aufheben (Esc)"
     >
-      Abwählen
+      Abwählen (Esc)
     </button>
 
     <!-- Bulk Categorize Button -->
