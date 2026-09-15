@@ -82,6 +82,7 @@ from app.services.import_export_service import (
 from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
+from app.services.style_service import ensure_default_styles
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
 from app.utils.jsonutil import dumps_json
@@ -200,6 +201,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             base_dir=settings.default_base_dir,
             template=settings.default_storage_template,
         )
+        ensure_default_styles(session)
     yield
 
 
@@ -546,6 +548,7 @@ async def auth_guard_middleware(request: Request, call_next):
         path.startswith("/static")
         or path.startswith("/spa-assets")
         or path.startswith("/temp")
+        or ("/styles/" in path and path.endswith("/image"))
         or path == "/favicon.ico"
         or path == "/app-logo.svg"
     )

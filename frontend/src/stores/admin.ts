@@ -98,6 +98,18 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  async function restoreDefaultStyles() {
+    try {
+      const res = await adminApi.restoreDefaultStyles()
+      toastStore.success(res.message || 'Standard-Styles wiederhergestellt.')
+      await fetchStyles()
+      return res
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Fehler beim Wiederherstellen der Standard-Styles.')
+      throw error
+    }
+  }
+
   async function fetchUsers() {
     try {
       users.value = await adminApi.listUsers()
@@ -129,6 +141,7 @@ export const useAdminStore = defineStore('admin', () => {
     deleteModelConfig,
     fetchStyles,
     deleteStyle,
+    restoreDefaultStyles,
     fetchUsers,
     fetchSystemInfo,
   }

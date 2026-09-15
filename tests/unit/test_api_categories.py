@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api import assets as assets_api
 from app.api import categories as cat_api
 from app.db import crud
-from app.db.models import Asset, Base, Category, Generation, Profile, StorageTemplate
+from app.db.models import Asset, Base, Generation, Profile, StorageTemplate
 
 
 @pytest.fixture

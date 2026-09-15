@@ -74,8 +74,43 @@ export const adminApi = {
     return res.data
   },
 
-  async generateStylePreview(styleId: string | number, prompt?: string): Promise<{ job_id: number }> {
-    const res = await apiClient.post(`/api/admin/styles/${styleId}/generate-preview`, { prompt })
+  async generateStylePreview(
+    styleId: string | number,
+    prompt?: string,
+    modelConfigId?: number,
+  ): Promise<{ job_id: number; model_name?: string }> {
+    const res = await apiClient.post(`/api/admin/styles/${styleId}/generate-preview`, {
+      prompt,
+      model_config_id: modelConfigId,
+    })
+    return res.data
+  },
+
+  async getStylePreviewSettings(): Promise<{
+    model_config_id: number | null
+    models: { id: number; name: string; provider: string; model: string }[]
+  }> {
+    const res = await apiClient.get('/api/admin/styles/preview-settings')
+    return res.data
+  },
+
+  async updateStylePreviewSettings(
+    modelConfigId: number,
+  ): Promise<{ success: boolean; model_config_id: number; name: string }> {
+    const res = await apiClient.post('/api/admin/styles/preview-settings', {
+      model_config_id: modelConfigId,
+    })
+    return res.data
+  },
+
+  async restoreDefaultStyles(): Promise<{
+    success: boolean
+    message: string
+    created: number
+    updated: number
+    total: number
+  }> {
+    const res = await apiClient.post('/api/admin/styles/restore-defaults')
     return res.data
   },
 

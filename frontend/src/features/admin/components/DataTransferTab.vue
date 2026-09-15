@@ -61,6 +61,14 @@ async function handleFileSelect(e: Event) {
           >
             <span>🎨</span> Styles als ZIP
           </a>
+
+          <a
+            href="/api/admin/export/styles"
+            download="lumigen_styles.json"
+            class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-2"
+          >
+            <span>📄</span> Styles als JSON
+          </a>
         </div>
       </Card>
 

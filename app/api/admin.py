@@ -1,18 +1,44 @@
 """Admin REST API routes."""
 from __future__ import annotations
 
+import io
+import json
 import shutil
 import sys
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, Response
+from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import get_session
 from app.services.auth_service import AuthService
+from app.services.import_export_service import (
+    export_all,
+    export_styles,
+    export_styles_zip,
+    import_models,
+    import_profiles,
+    import_styles,
+    import_styles_zip,
+    validate_import_payload,
+)
 from app.services.model_config_service import ModelConfigService
+from app.services.style_service import restore_default_styles
+from app.utils.paths import ensure_dir
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 settings = get_settings()
@@ -198,21 +224,164 @@ def delete_model_config(
     return {"success": True}
 
 
+def _serialize_style(s: crud.Style) -> dict[str, Any]:
+    """Serialize a Style model instance to a dictionary for API responses."""
+    updated_ts = (
+        int(s.updated_at.timestamp()) if getattr(s, "updated_at", None) else 0
+    )
+    img_url = (
+        f"/api/admin/styles/{s.id}/image?t={updated_ts}"
+        if getattr(s, "image_path", None)
+        else None
+    )
+    return {
+        "id": s.id,
+        "name": s.name,
+        "description": s.description or "",
+        "prompt_template": s.prompt or "",
+        "negative_prompt": getattr(s, "negative_prompt", "") or "",
+        "image_url": img_url,
+    }
+
+
 @router.get("/styles")
 def list_admin_styles(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     """List styles for administration."""
     styles = crud.list_styles(session)
-    return [
-        {
-            "id": s.id,
-            "name": s.name,
-            "description": s.description or "",
-            "prompt_template": s.prompt or "",
-            "negative_prompt": s.negative_prompt or "",
-            "image_url": f"/admin/styles/{s.id}/image" if s.image_filename else None,
-        }
-        for s in styles
-    ]
+    return [_serialize_style(s) for s in styles]
+
+
+@router.get("/styles/{style_id}/image")
+def get_admin_style_image(
+    style_id: int,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    """Serve the thumbnail image for a style preset."""
+    style = crud.get_style(session, style_id)
+    if not style or not style.image_path:
+        raise HTTPException(status_code=404, detail="Style image not found")
+    img_path = settings.data_dir / "styles" / f"{style_id}.webp"
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Style image file missing")
+    return FileResponse(
+        path=img_path,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=60"},
+    )
+
+
+@router.post("/styles")
+async def save_admin_style(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Create or update a style preset with optional thumbnail image."""
+    content_type = request.headers.get("content-type", "")
+    image_file: UploadFile | None = None
+    style_id: int | None = None
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        name = str(form.get("name") or "").strip()
+        description = str(form.get("description") or "").strip()
+        prompt = str(form.get("prompt_template") or form.get("prompt") or "").strip()
+        raw_id = form.get("id")
+        if raw_id:
+            try:
+                style_id = int(str(raw_id))
+            except ValueError:
+                pass
+        upload = form.get("image")
+        if isinstance(upload, UploadFile) and upload.filename:
+            image_file = upload
+    else:
+        payload = await request.json()
+        name = str(payload.get("name") or "").strip()
+        description = str(payload.get("description") or "").strip()
+        prompt = str(payload.get("prompt_template") or payload.get("prompt") or "").strip()
+        raw_id = payload.get("id")
+        if raw_id:
+            try:
+                style_id = int(str(raw_id))
+            except ValueError:
+                pass
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Style-Name ist erforderlich.")
+    if len(name) > 30:
+        raise HTTPException(
+            status_code=400, detail="Style-Name darf maximal 30 Zeichen lang sein."
+        )
+    if len(description) > 120:
+        raise HTTPException(
+            status_code=400, detail="Beschreibung darf maximal 120 Zeichen lang sein."
+        )
+    if not prompt:
+        raise HTTPException(
+            status_code=400, detail="Prompt-Template ist erforderlich."
+        )
+    if len(prompt) > 1000:
+        raise HTTPException(
+            status_code=400, detail="Prompt darf maximal 1000 Zeichen lang sein."
+        )
+
+    if style_id:
+        style = crud.get_style(session, style_id)
+        if not style:
+            raise HTTPException(status_code=404, detail="Style nicht gefunden.")
+        existing = crud.get_style_by_name(session, name)
+        if existing and existing.id != style.id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ein Style mit dem Namen '{name}' existiert bereits.",
+            )
+        style = crud.update_style(
+            session, style, name=name, description=description, prompt=prompt
+        )
+    else:
+        existing = crud.get_style_by_name(session, name)
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ein Style mit dem Namen '{name}' existiert bereits.",
+            )
+        style = crud.create_style(
+            session,
+            name=name,
+            description=description,
+            prompt=prompt,
+            image_path=None,
+        )
+
+    if image_file:
+        image_data = await image_file.read()
+        if image_data:
+            if len(image_data) > 5 * 1024 * 1024:
+                raise HTTPException(
+                    status_code=400, detail="Bild darf maximal 5 MB groß sein."
+                )
+            img_dir = settings.data_dir / "styles"
+            ensure_dir(img_dir)
+            img_path = img_dir / f"{style.id}.webp"
+            try:
+                with io.BytesIO(image_data) as buf:
+                    pil_img = Image.open(buf)
+                    pil_img = ImageOps.exif_transpose(pil_img)
+                    pil_img = pil_img.convert("RGB")
+                    thumb_size = min(pil_img.width, pil_img.height, 256)
+                    pil_img.thumbnail((thumb_size, thumb_size), Image.Resampling.LANCZOS)
+                    out_buf = io.BytesIO()
+                    pil_img.save(out_buf, format="WEBP", quality=85)
+                    img_path.write_bytes(out_buf.getvalue())
+                style = crud.update_style(
+                    session, style, image_path=img_path.as_posix()
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"Fehler bei der Bildverarbeitung: {exc}"
+                )
+
+    return _serialize_style(style)
 
 
 @router.delete("/styles/{style_id}")
@@ -227,6 +396,117 @@ def delete_admin_style(
 
     crud.delete_style(session, s)
     return {"success": True}
+
+
+def _get_preview_model_config_id() -> int | None:
+    """Return configured model_config_id for style preview generation, or None."""
+    config_file = settings.data_dir / "style_preview_config.json"
+    if config_file.exists():
+        try:
+            data = json.loads(config_file.read_text(encoding="utf-8"))
+            val = data.get("model_config_id")
+            return int(val) if val is not None else None
+        except Exception:
+            return None
+    return None
+
+
+def _set_preview_model_config_id(model_config_id: int) -> None:
+    """Persist configured model_config_id for style preview generation."""
+    config_file = settings.data_dir / "style_preview_config.json"
+    ensure_dir(config_file.parent)
+    config_file.write_text(
+        json.dumps({"model_config_id": model_config_id}, indent=2), encoding="utf-8"
+    )
+
+
+@router.get("/styles/preview-settings")
+def get_style_preview_settings(
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Return the currently configured model for style preview generation."""
+    saved_id = _get_preview_model_config_id()
+    model_configs = crud.list_model_configs(session)
+    selected_id = saved_id
+    if not any(m.id == selected_id for m in model_configs) and model_configs:
+        selected_id = model_configs[0].id
+
+    return {
+        "model_config_id": selected_id,
+        "models": [
+            {"id": m.id, "name": m.name, "provider": m.provider, "model": m.model}
+            for m in model_configs
+        ],
+    }
+
+
+@router.post("/styles/preview-settings")
+def update_style_preview_settings(
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Update the default model configuration used for style preview generation."""
+    model_config_id = payload.get("model_config_id")
+    if not model_config_id:
+        raise HTTPException(status_code=400, detail="model_config_id ist erforderlich.")
+
+    cfg = crud.get_model_config(session, int(model_config_id))
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Modell-Konfiguration nicht gefunden.")
+
+    _set_preview_model_config_id(cfg.id)
+    return {"success": True, "model_config_id": cfg.id, "name": cfg.name}
+
+
+@router.post("/styles/{style_id}/generate-preview")
+def generate_style_preview(
+    style_id: int,
+    background_tasks: BackgroundTasks,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Trigger background generation for a style preview thumbnail."""
+    from app.api.generation import generation_service
+
+    style = crud.get_style(session, style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style nicht gefunden.")
+
+    model_config_id = (payload or {}).get("model_config_id") if payload else None
+    if not model_config_id:
+        model_config_id = _get_preview_model_config_id()
+
+    if model_config_id:
+        model_config = crud.get_model_config(session, int(model_config_id))
+    else:
+        model_configs = crud.list_model_configs(session)
+        model_config = model_configs[0] if model_configs else None
+
+    if not model_config:
+        raise HTTPException(
+            status_code=400, detail="Keine Modell-Konfiguration verfügbar."
+        )
+
+    user_prompt = ((payload or {}).get("prompt") if payload else "") or style.prompt
+    generation = generation_service.create_generation_for_style(
+        session, style, model_config, user_prompt.strip()
+    )
+    generation_service.enqueue(background_tasks, generation.id)
+    return {"job_id": generation.id, "model_name": model_config.name}
+
+
+@router.post("/styles/restore-defaults")
+def restore_styles_defaults(session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Restore all default style presets to their standard definitions."""
+    result = restore_default_styles(session, overwrite=True)
+    return {
+        "success": True,
+        "message": (
+            f"{result['created']} neu erstellt, {result['updated']} aktualisiert "
+            f"({result['total']} Gesamt)."
+        ),
+        **result,
+    }
 
 
 @router.get("/users")
@@ -309,4 +589,109 @@ def get_system_diagnostics(session: Session = Depends(get_session)) -> dict[str,
         "total_assets": total_assets,
         "total_generations": total_generations,
         "python_version": sys.version.split()[0],
+    }
+
+
+@router.get("/export/all")
+def export_all_data(session: Session = Depends(get_session)) -> Response:
+    """Export complete backup of profiles, models, and styles as JSON."""
+    data = export_all(session)
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    filename = f"lumigen_backup_{timestamp}.json"
+    return Response(
+        content=json.dumps(data, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/styles")
+def export_styles_data(session: Session = Depends(get_session)) -> Response:
+    """Export styles metadata as a JSON file."""
+    data = export_styles(session)
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    filename = f"lumigen_styles_{timestamp}.json"
+    return Response(
+        content=json.dumps(data, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/styles-zip")
+def export_styles_zip_data(session: Session = Depends(get_session)) -> Response:
+    """Export styles and their preview thumbnails as a ZIP archive."""
+    styles_dir = settings.data_dir / "styles"
+    zip_bytes = export_styles_zip(session, styles_dir)
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    filename = f"lumigen_styles_{timestamp}.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/import")
+async def import_data(
+    file: UploadFile = File(...),
+    conflict_strategy: str = Form(default="overwrite"),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Import data from a JSON backup file or ZIP archive."""
+    if conflict_strategy not in {"skip", "overwrite", "rename"}:
+        conflict_strategy = "overwrite"
+
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    if filename.endswith(".zip") or content.startswith(b"PK\x03\x04"):
+        styles_dir = settings.data_dir / "styles"
+        import_result = import_styles_zip(
+            session, content, styles_dir, conflict_strategy=conflict_strategy
+        )
+        return {
+            "success": True,
+            "imported": {
+                "styles_created": import_result.created,
+                "styles_updated": import_result.updated,
+                "styles_skipped": import_result.skipped,
+                "styles_failed": import_result.failed,
+            },
+        }
+
+    try:
+        data = json.loads(content.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Ungültiges JSON: {exc}")
+
+    imported_counts: dict[str, int] = {}
+
+    if isinstance(data, dict):
+        error, _version, profiles_data, models_data, styles_data = validate_import_payload(data)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+
+        if models_data:
+            res_models = import_models(session, models_data, conflict_strategy)
+            imported_counts["models"] = res_models.created + res_models.updated
+        if profiles_data:
+            res_profiles = import_profiles(session, profiles_data, conflict_strategy)
+            imported_counts["profiles"] = res_profiles.created + res_profiles.updated
+        if styles_data:
+            res_styles = import_styles(session, styles_data, conflict_strategy)
+            imported_counts["styles"] = res_styles.created + res_styles.updated
+
+    elif isinstance(data, list):
+        res_styles = import_styles(session, data, conflict_strategy)
+        imported_counts["styles"] = res_styles.created + res_styles.updated
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unerwartetes JSON-Format (Objekt oder Liste erwartet).",
+        )
+
+    return {
+        "success": True,
+        "imported": imported_counts,
     }

@@ -18,13 +18,21 @@ def list_styles(session: Session = Depends(get_session)) -> list[dict[str, Any]]
     styles = crud.list_styles(session)
     result = []
     for s in styles:
+        updated_ts = (
+            int(s.updated_at.timestamp()) if getattr(s, "updated_at", None) else 0
+        )
+        img_url = (
+            f"/api/admin/styles/{s.id}/image?t={updated_ts}"
+            if getattr(s, "image_path", None)
+            else None
+        )
         result.append({
             "id": s.id,
             "name": s.name,
             "description": s.description or "",
             "prompt_template": s.prompt or "",
             "negative_prompt": getattr(s, "negative_prompt", "") or "",
-            "image_url": f"/admin/styles/{s.id}/image" if getattr(s, "image_path", None) else None,
+            "image_url": img_url,
             "is_custom": True,
             "category": "General",
         })
