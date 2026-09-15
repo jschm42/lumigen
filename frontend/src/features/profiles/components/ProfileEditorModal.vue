@@ -2,6 +2,8 @@
 import { ref, watch, onMounted } from 'vue'
 import { useProfilesStore } from '@/stores/profiles'
 import { useGenerateStore } from '@/stores/generate'
+import { galleryApi } from '@/api/gallery'
+import type { Category } from '@/types'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
@@ -22,19 +24,43 @@ const formData = ref({
   upscale_provider: null as string | null,
   upscale_model: null as string | null,
   upscale_factor: null as number | null,
+  category_ids: [] as number[],
 })
 
 const aspectRatios = ['1:1', '16:9', '9:16', '4:3', '3:4', '21:9']
+const availableCategories = ref<Category[]>([])
+const isLoadingCategories = ref(false)
+const newCategoryName = ref('')
+const isCreatingCategory = ref(false)
 const isSubmitting = ref(false)
+
+async function loadCategories() {
+  isLoadingCategories.value = true
+  try {
+    availableCategories.value = await galleryApi.listCategories()
+  } catch (_e) {
+    availableCategories.value = []
+  } finally {
+    isLoadingCategories.value = false
+  }
+}
 
 onMounted(() => {
   generateStore.loadModelsAndStyles()
+  loadCategories()
 })
 
 watch(
   () => profilesStore.activeProfile,
   (profile) => {
     if (profile) {
+      let initialCatIds: number[] = []
+      if (profile.category_ids && Array.isArray(profile.category_ids)) {
+        initialCatIds = [...profile.category_ids]
+      } else if (profile.categories && Array.isArray(profile.categories)) {
+        initialCatIds = profile.categories.map((c: any) => c.id)
+      }
+
       formData.value = {
         id: profile.id || 0,
         name: profile.name || '',
@@ -47,11 +73,38 @@ watch(
         upscale_provider: profile.upscale_provider || null,
         upscale_model: profile.upscale_model || null,
         upscale_factor: profile.upscale_factor || null,
+        category_ids: initialCatIds,
       }
     }
   },
   { immediate: true }
 )
+
+function toggleCategory(catId: number) {
+  if (formData.value.category_ids.includes(catId)) {
+    formData.value.category_ids = formData.value.category_ids.filter((id) => id !== catId)
+  } else {
+    formData.value.category_ids.push(catId)
+  }
+}
+
+async function handleQuickCreateCategory() {
+  const name = newCategoryName.value.trim()
+  if (!name) return
+  isCreatingCategory.value = true
+  try {
+    const created = await galleryApi.createCategory(name)
+    availableCategories.value.push(created)
+    if (!formData.value.category_ids.includes(created.id)) {
+      formData.value.category_ids.push(created.id)
+    }
+    newCategoryName.value = ''
+  } catch (_e) {
+    // ignore or let store handle
+  } finally {
+    isCreatingCategory.value = false
+  }
+}
 
 async function handleSubmit() {
   if (!formData.value.name.trim()) return
@@ -109,6 +162,68 @@ async function handleSubmit() {
         >
           <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
         </select>
+      </div>
+
+      <!-- Categories Section -->
+      <div class="space-y-2 pt-2 border-t border-slate-200/80 dark:border-white/10">
+        <div class="flex items-center justify-between">
+          <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500">
+            Kategorien
+          </label>
+          <span v-if="formData.category_ids.length > 0" class="text-[10px] font-medium text-sky-600 dark:text-sky-400">
+            {{ formData.category_ids.length }} ausgewählt
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+          Bilder, die mit diesem Profil generiert werden, werden automatisch diesen Kategorien zugewiesen.
+        </p>
+
+        <!-- Category Chips -->
+        <div v-if="isLoadingCategories" class="py-2 text-slate-400">
+          Kategorien werden geladen...
+        </div>
+        <div v-else class="flex flex-wrap gap-2 max-h-40 overflow-y-auto py-1">
+          <button
+            v-for="cat in availableCategories"
+            :key="cat.id"
+            type="button"
+            @click="toggleCategory(cat.id)"
+            :class="[
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-sm',
+              formData.category_ids.includes(cat.id)
+                ? 'bg-sky-500 border-sky-500 text-white shadow-sky-500/20'
+                : 'bg-white border-slate-300/80 text-slate-700 hover:border-sky-400 dark:bg-slate-800 dark:border-white/10 dark:text-slate-200 dark:hover:border-white/30',
+            ]"
+          >
+            <span>🏷️</span>
+            <span>{{ cat.name }}</span>
+            <span v-if="formData.category_ids.includes(cat.id)" class="text-[10px] font-bold">✓</span>
+          </button>
+          <div v-if="availableCategories.length === 0" class="text-slate-400 italic py-1">
+            Noch keine Kategorien vorhanden.
+          </div>
+        </div>
+
+        <!-- Quick create category -->
+        <div class="flex items-center gap-2 pt-1">
+          <input
+            v-model="newCategoryName"
+            type="text"
+            placeholder="Neue Kategorie hinzufügen..."
+            class="flex-1 rounded-xl border border-slate-300/80 bg-white/80 px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
+            @keydown.enter.prevent="handleQuickCreateCategory"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            :loading="isCreatingCategory"
+            :disabled="!newCategoryName.trim()"
+            @click="handleQuickCreateCategory"
+          >
+            + Hinzufügen
+          </Button>
+        </div>
       </div>
     </form>
 

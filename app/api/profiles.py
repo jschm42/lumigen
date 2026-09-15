@@ -45,6 +45,7 @@ def serialize_profile(p: Profile) -> dict[str, Any]:
         "google_resolution": image_config.get("image_size", ""),
         "params_json": params,
         "category_ids": [c.id for c in p.categories] if hasattr(p, "categories") and p.categories else [],
+        "categories": [{"id": c.id, "name": c.name} for c in p.categories] if hasattr(p, "categories") and p.categories else [],
         "created_at": p.created_at.isoformat() if p.created_at else "",
     }
 
@@ -113,6 +114,13 @@ def create_profile(
         "resolution": payload.get("default_resolution", "1K"),
     }
 
+    category_ids = payload.get("category_ids")
+    categories = []
+    if isinstance(category_ids, list):
+        parsed_cat_ids = [int(cid) for cid in category_ids if str(cid).isdigit()]
+        if parsed_cat_ids:
+            categories = crud.list_categories_by_ids(session, parsed_cat_ids)
+
     p = crud.create_profile(
         session,
         name=name,
@@ -124,8 +132,10 @@ def create_profile(
         aspect_ratio=payload.get("default_aspect_ratio", "1:1"),
         params_json=params,
         storage_template_id=storage_template_id,
+        categories=categories,
     )
-    return serialize_profile(p)
+    fresh = crud.get_profile(session, p.id)
+    return serialize_profile(fresh or p)
 
 
 @router.put("/{profile_id}")
@@ -175,19 +185,36 @@ def update_profile(
     if isinstance(negative_prompt_val, str):
         negative_prompt_val = negative_prompt_val.strip() or None
 
+    update_kwargs: dict[str, Any] = {
+        "name": payload.get("name", p.name),
+        "provider": provider,
+        "model": model,
+        "model_config_id": parsed_model_cfg_id,
+        "base_prompt": base_prompt_val,
+        "negative_prompt": negative_prompt_val,
+        "aspect_ratio": payload.get("default_aspect_ratio", p.aspect_ratio),
+        "params_json": params,
+    }
+
+    if "category_ids" in payload:
+        raw_cat_ids = payload.get("category_ids")
+        if isinstance(raw_cat_ids, list):
+            parsed_cat_ids = [int(cid) for cid in raw_cat_ids if str(cid).isdigit()]
+            update_kwargs["categories"] = (
+                crud.list_categories_by_ids(session, parsed_cat_ids)
+                if parsed_cat_ids
+                else []
+            )
+        else:
+            update_kwargs["categories"] = []
+
     p = crud.update_profile(
         session,
         p,
-        name=payload.get("name", p.name),
-        provider=provider,
-        model=model,
-        model_config_id=parsed_model_cfg_id,
-        base_prompt=base_prompt_val,
-        negative_prompt=negative_prompt_val,
-        aspect_ratio=payload.get("default_aspect_ratio", p.aspect_ratio),
-        params_json=params,
+        **update_kwargs,
     )
-    return serialize_profile(p)
+    fresh = crud.get_profile(session, p.id)
+    return serialize_profile(fresh or p)
 
 
 @router.delete("/{profile_id}")

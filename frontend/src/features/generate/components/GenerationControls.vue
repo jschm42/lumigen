@@ -40,6 +40,11 @@ watch(
 const aspectRatios = ['1:1', '16:9', '9:16', '4:3', '3:4', '21:9']
 const resolutions = ['0.5K', '1K', '2K', '4K']
 
+const selectedProfile = computed(() => {
+  if (!generateStore.selectedProfileId) return null
+  return profilesStore.profiles.find((p) => p.id === Number(generateStore.selectedProfileId)) || null
+})
+
 const selectedStyleName = computed(() => {
   if (!generateStore.selectedStyleId) return 'Kein Style'
   const style = generateStore.styles.find((s) => String(s.id) === String(generateStore.selectedStyleId))
@@ -55,10 +60,9 @@ const selectedStyleName = computed(() => {
       <div class="min-w-[160px] flex-1 max-w-xs">
         <select
           v-model.number="generateStore.selectedModelConfigId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-slate-900 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
-          title="Modell wählen"
+          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
         >
-          <option :value="null" disabled>Modell wählen</option>
+          <option :value="null">Modell wählen...</option>
           <option
             v-for="model in generateStore.activeModels"
             :key="model.id"
@@ -85,6 +89,19 @@ const selectedStyleName = computed(() => {
             {{ profile.name }}
           </option>
         </select>
+        <div
+          v-if="selectedProfile && selectedProfile.categories && selectedProfile.categories.length > 0"
+          class="flex flex-wrap items-center gap-1 mt-1"
+        >
+          <span
+            v-for="cat in selectedProfile.categories"
+            :key="cat.id"
+            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 font-medium border border-indigo-200/60 dark:border-indigo-800/40"
+            :title="`Bilder werden automatisch '${cat.name}' zugeordnet`"
+          >
+            🏷️ {{ cat.name }}
+          </span>
+        </div>
       </div>
     </div>
 

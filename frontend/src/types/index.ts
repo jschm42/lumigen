@@ -47,6 +47,7 @@ export interface Profile {
   params_json?: Record<string, any>
   generic_params?: Record<string, any>
   category_ids?: number[]
+  categories?: { id: number; name: string }[]
   created_at?: string
 }
 

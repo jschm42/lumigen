@@ -56,6 +56,21 @@ function handleDelete() {
           {{ profile.negative_prompt }}
         </p>
       </div>
+
+      <!-- Categories preview -->
+      <div v-if="profile.categories && profile.categories.length > 0" class="pt-1.5 space-y-1">
+        <span class="text-[10px] font-semibold uppercase text-slate-400 block">Kategorien</span>
+        <div class="flex flex-wrap gap-1">
+          <Badge
+            v-for="cat in profile.categories"
+            :key="cat.id"
+            variant="indigo"
+            size="xs"
+          >
+            🏷️ {{ cat.name }}
+          </Badge>
+        </div>
+      </div>
     </div>
 
     <!-- Footer Actions -->
