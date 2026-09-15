@@ -85,4 +85,22 @@ router.beforeEach(async (to, _from, next) => {
   next()
 })
 
+router.onError((error, to) => {
+  const message = error?.message || ''
+  const isChunkLoadFailed =
+    message.includes('Failed to fetch dynamically imported module') ||
+    message.includes('Importing a module script failed') ||
+    error?.name === 'ChunkLoadError'
+
+  if (isChunkLoadFailed) {
+    const reloadKey = 'lumigen_chunk_reload'
+    const lastReload = sessionStorage.getItem(reloadKey)
+    const now = Date.now()
+    if (!lastReload || now - Number(lastReload) > 10000) {
+      sessionStorage.setItem(reloadKey, String(now))
+      window.location.href = to.fullPath
+    }
+  }
+})
+
 export default router

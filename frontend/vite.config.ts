@@ -41,6 +41,6 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../app/web/dist'),
     assetsDir: 'spa-assets',
-    emptyOutDir: true,
+    emptyOutDir: false,
   },
 })

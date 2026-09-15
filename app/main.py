@@ -537,7 +537,14 @@ def serve_spa_index() -> Response:
     """Serve index.html from dist_dir or return fallback page if not built."""
     index_file = dist_dir / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return spa_fallback_response()
 
 
