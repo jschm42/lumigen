@@ -467,6 +467,12 @@ def get_asset(
     return session.scalar(stmt)
 
 
+def delete_asset(session: Session, asset: Asset) -> None:
+    """Delete the given asset row from the database."""
+    session.delete(asset)
+    session.commit()
+
+
 def get_chat_session(session: Session, chat_session_id: str) -> ChatSession | None:
     """Return a chat session by its string ID with the last profile eagerly loaded, or ``None``."""
     stmt = (

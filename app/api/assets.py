@@ -211,12 +211,16 @@ def delete_asset(
     asset_id: int,
     session: Session = Depends(get_session),
 ) -> dict[str, bool]:
-    """Delete a single asset."""
-    asset = crud.get_asset(session, asset_id)
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+    """Delete a single asset and its associated files."""
+    from app.api.generation import generation_service
 
-    crud.delete_asset(session, asset)
+    if not generation_service.delete_asset(session, asset_id):
+        # Fallback to direct DB deletion if asset row exists without generation
+        asset = crud.get_asset(session, asset_id)
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        crud.delete_asset(session, asset)
+
     return {"success": True}
 
 
@@ -225,17 +229,28 @@ def bulk_delete_assets(
     payload: dict[str, Any],
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Bulk delete multiple assets by IDs."""
+    """Bulk delete multiple assets by IDs and clean up their files."""
+    from app.api.generation import generation_service
+
     asset_ids = payload.get("asset_ids", [])
     if not asset_ids:
         return {"success": True, "deleted_count": 0}
 
     deleted_count = 0
-    for aid in asset_ids:
-        asset = crud.get_asset(session, aid)
-        if asset:
-            crud.delete_asset(session, asset)
+    for raw_id in asset_ids:
+        try:
+            aid = int(raw_id)
+        except (ValueError, TypeError):
+            continue
+
+        if generation_service.delete_asset(session, aid):
             deleted_count += 1
+        else:
+            # Fallback to direct DB deletion if asset row exists without generation
+            asset = crud.get_asset(session, aid)
+            if asset:
+                crud.delete_asset(session, asset)
+                deleted_count += 1
 
     return {"success": True, "deleted_count": deleted_count}
 

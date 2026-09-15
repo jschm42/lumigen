@@ -146,3 +146,14 @@ def test_bulk_categorize_and_single_asset(db_session: Session):
     cats = cat_api.list_categories(session=db_session)
     c2_data = next(c for c in cats if c["id"] == c2.id)
     assert c2_data["asset_count"] >= 1
+
+    # 5. Delete single asset
+    del_res = assets_api.delete_asset(a1.id, session=db_session)
+    assert del_res["success"] is True
+    assert crud.get_asset(db_session, a1.id) is None
+
+    # 6. Bulk delete assets
+    bulk_del_res = assets_api.bulk_delete_assets({"asset_ids": [a2.id]}, session=db_session)
+    assert bulk_del_res["success"] is True
+    assert bulk_del_res["deleted_count"] == 1
+    assert crud.get_asset(db_session, a2.id) is None
