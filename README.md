@@ -9,6 +9,9 @@ no subscription, no tracking, your images stay on your machine.
 ![Generation Session](docs/screenshots/generation_session_view.png)
 ![Image Gallery](docs/screenshots/gallery_view.png)
 
+*Sample images shown in screenshots were generated for demonstration purposes using Black Forest Labs FLUX models.*
+
+
 
 ## Why Lumigen
 
