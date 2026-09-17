@@ -4,6 +4,7 @@ import AppHeader from './AppHeader.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ImageViewerModal from '@/components/ui/ImageViewerModal.vue'
 import QueueModal from '@/components/queue/QueueModal.vue'
+import CreditsModal from '@/components/ui/CreditsModal.vue'
 import { useQueueStore } from '@/stores/queue'
 
 const queueStore = useQueueStore()
@@ -35,6 +36,9 @@ onMounted(() => {
 
     <!-- Global Generation Queue Slide-over Drawer -->
     <QueueModal />
+
+    <!-- Global Credits & Licenses Modal -->
+    <CreditsModal />
 
     <!-- Global Toast Container -->
     <ToastContainer />

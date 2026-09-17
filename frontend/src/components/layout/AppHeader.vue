@@ -3,11 +3,13 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useQueueStore } from '@/stores/queue'
+import { useCreditsStore } from '@/stores/credits'
 import ThemeToggle from './ThemeToggle.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const queueStore = useQueueStore()
+const creditsStore = useCreditsStore()
 
 const isUserMenuOpen = ref(false)
 
@@ -71,12 +73,15 @@ onUnmounted(() => {
           <span class="grid min-w-0 gap-0.5 text-left">
             <span class="flex items-center gap-2">
               <strong class="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">Lumigen</strong>
-              <span
+              <button
                 v-if="versionDisplay"
-                class="rounded-md bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600 dark:bg-white/10 dark:text-slate-300"
+                type="button"
+                @click.prevent.stop="creditsStore.open"
+                title="Credits, Lizenzen & Versionsdetails anzeigen"
+                class="rounded-md bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600 dark:bg-white/10 dark:text-slate-300 hover:bg-sky-100 hover:text-sky-600 dark:hover:bg-sky-950/60 dark:hover:text-sky-300 transition-colors cursor-pointer"
               >
                 {{ versionDisplay }}
-              </span>
+              </button>
             </span>
             <small class="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">AI Image Studio</small>
           </span>
@@ -173,6 +178,14 @@ onUnmounted(() => {
             >
               ⚙️ Studio Einstellungen
             </router-link>
+
+            <button
+              type="button"
+              @click="isUserMenuOpen = false; creditsStore.open()"
+              class="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              📜 Credits & Lizenzen
+            </button>
 
             <button
               type="button"

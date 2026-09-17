@@ -2,10 +2,13 @@
 import { onMounted } from 'vue'
 import { useAdminStore } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
+import { useCreditsStore } from '@/stores/credits'
 import Card from '@/components/ui/Card.vue'
+import Button from '@/components/ui/Button.vue'
 
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
+const creditsStore = useCreditsStore()
 
 onMounted(() => {
   adminStore.fetchSystemInfo()
@@ -62,6 +65,22 @@ function formatBytes(bytes?: number): string {
           <span class="font-mono text-slate-700 dark:text-slate-300">{{ adminStore.systemInfo?.python_version || '3.12+' }}</span>
         </div>
       </div>
+    </Card>
+
+    <!-- Credits & Licenses Card -->
+    <Card padding="md" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 to-sky-50/50 dark:from-slate-900/50 dark:to-sky-950/20 border border-slate-200/90 dark:border-white/10">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="text-base">📜</span>
+          <h4 class="font-bold text-slate-900 dark:text-white">Credits, Danksagungen & Lizenzen</h4>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
+          Übersicht aller angebundenen KI-Provider (Black Forest Labs, OpenAI, Google Imagen, fal.ai, MiniMax etc.), deren Attributionsbestimmungen sowie genutzter Open-Source-Lizenzen und Schriftarten.
+        </p>
+      </div>
+      <Button variant="secondary" size="sm" class="shrink-0 cursor-pointer" @click="creditsStore.open">
+        Credits & Lizenzen anzeigen
+      </Button>
     </Card>
   </div>
 </template>
