@@ -79,7 +79,7 @@ function clearSeed() {
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    if (!generateStore.isGenerating) {
+    if (!generateStore.isSubmitting && generateStore.prompt.trim()) {
       generateStore.submit()
     }
   }
@@ -232,16 +232,22 @@ function handleKeydown(e: KeyboardEvent) {
       <Button
         variant="primary"
         size="md"
-        :loading="generateStore.isGenerating"
-        :disabled="!generateStore.prompt.trim() || generateStore.isGenerating"
+        :loading="generateStore.isSubmitting"
+        :disabled="!generateStore.prompt.trim() || generateStore.isSubmitting"
         @click="generateStore.submit"
         class="h-10 px-4 shrink-0 rounded-xl font-semibold shadow-md"
-        title="Generierung starten"
+        title="Generierung starten oder in Warteschlange einreihen"
       >
         <template #icon>
           <span class="text-sm">⚡</span>
         </template>
-        <span v-if="generateStore.isGenerating">Generiert...</span>
+        <span v-if="generateStore.isSubmitting">Einreihen...</span>
+        <span v-else-if="generateStore.activeJobIds.length > 0" class="inline-flex items-center gap-1.5">
+          <span>Generieren</span>
+          <span class="px-1.5 py-0.5 rounded-full bg-white/25 dark:bg-sky-400/20 text-[10px] font-mono leading-none">
+            +{{ generateStore.activeJobIds.length }}
+          </span>
+        </span>
         <span v-else>Generieren</span>
       </Button>
     </div>

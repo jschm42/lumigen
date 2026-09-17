@@ -87,8 +87,18 @@ export const generationApi = {
     return res.data
   },
 
-  async cancelJob(jobId: number): Promise<{ success: boolean }> {
+  async getQueue(): Promise<{ active: Generation[]; recent: Generation[]; total_active: number }> {
+    const res = await apiClient.get<{ active: Generation[]; recent: Generation[]; total_active: number }>('/api/jobs/queue')
+    return res.data
+  },
+
+  async cancelJob(jobId: number): Promise<{ success: boolean; status?: string; message?: string }> {
     const res = await apiClient.post(`/api/jobs/${jobId}/cancel`)
+    return res.data
+  },
+
+  async retryJob(jobId: number): Promise<{ job_id: number; status: string }> {
+    const res = await apiClient.post(`/api/jobs/${jobId}/retry`)
     return res.data
   },
 

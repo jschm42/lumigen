@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import copy
 from datetime import datetime
@@ -50,6 +51,15 @@ class GenerationService:
     background job, writing image/sidecar/thumbnail files via the storage and
     sidecar services, and updating the final job status.
     """
+
+    _queue_semaphore: asyncio.Semaphore | None = None
+
+    @classmethod
+    def get_queue_semaphore(cls) -> asyncio.Semaphore:
+        """Return the shared asyncio.Semaphore controlling concurrent generation jobs."""
+        if cls._queue_semaphore is None:
+            cls._queue_semaphore = asyncio.Semaphore(1)
+        return cls._queue_semaphore
 
     def __init__(
         self,
@@ -429,6 +439,11 @@ class GenerationService:
 
     async def run_generation_job(self, generation_id: int) -> None:
         """Execute the generation job: call the provider, save files, and update the DB status."""
+        async with self.get_queue_semaphore():
+            await self._execute_generation_job(generation_id)
+
+    async def _execute_generation_job(self, generation_id: int) -> None:
+        """Internal execution of a generation job after acquiring the queue semaphore."""
         with SessionLocal() as session:
             generation = crud.get_generation(session, generation_id)
             if not generation:

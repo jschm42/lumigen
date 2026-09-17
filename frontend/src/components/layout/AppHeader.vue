@@ -2,10 +2,12 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useQueueStore } from '@/stores/queue'
 import ThemeToggle from './ThemeToggle.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const queueStore = useQueueStore()
 
 const isUserMenuOpen = ref(false)
 
@@ -79,11 +81,49 @@ onUnmounted(() => {
           >
             {{ link.name }}
           </router-link>
+
+          <!-- Queue Trigger Button -->
+          <button
+            type="button"
+            @click="queueStore.toggleQueue"
+            :class="[
+              'ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150 cursor-pointer',
+              queueStore.isOpen
+                ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 ring-1 ring-sky-500/30'
+                : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
+            ]"
+            title="Warteschlange öffnen (Fortschritt & Steuerung)"
+          >
+            <span class="text-xs">⏳</span>
+            <span>Queue</span>
+            <span
+              v-if="queueStore.totalActive > 0"
+              class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[10px] font-bold text-white shadow-sm"
+            >
+              {{ queueStore.totalActive }}
+            </span>
+          </button>
         </nav>
       </div>
 
       <!-- Right Controls: Theme Toggle & User Menu -->
       <div class="flex items-center gap-3">
+        <!-- Mobile Queue Button -->
+        <button
+          type="button"
+          @click="queueStore.toggleQueue"
+          class="md:hidden relative inline-flex items-center justify-center p-2 rounded-xl border border-slate-300/60 bg-white/70 text-slate-800 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200"
+          title="Warteschlange"
+        >
+          <span class="text-sm leading-none">⏳</span>
+          <span
+            v-if="queueStore.totalActive > 0"
+            class="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[9px] font-bold text-white shadow-sm"
+          >
+            {{ queueStore.totalActive }}
+          </span>
+        </button>
+
         <ThemeToggle />
 
         <!-- User Dropdown Menu -->

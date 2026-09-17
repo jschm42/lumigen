@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useSessionsStore } from '@/stores/sessions'
 import { useGenerateStore } from '@/stores/generate'
+import { useQueueStore } from '@/stores/queue'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
@@ -10,6 +11,7 @@ import type { ChatSession } from '@/types'
 
 const sessionsStore = useSessionsStore()
 const generateStore = useGenerateStore()
+const queueStore = useQueueStore()
 
 const isRenameOpen = ref(false)
 const renameToken = ref('')
@@ -88,6 +90,40 @@ async function handleDeleteAll() {
         </template>
         Neue Session / Artbook
       </Button>
+    </div>
+
+    <!-- Queue Status Card in Left Navigation Area -->
+    <div class="mb-3">
+      <button
+        type="button"
+        @click="queueStore.openQueue"
+        class="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 hover:bg-sky-50/60 hover:border-sky-400/50 dark:border-white/10 dark:bg-slate-950/50 dark:hover:bg-sky-950/30 dark:hover:border-sky-500/40 transition-all text-left group cursor-pointer shadow-xs"
+        title="Warteschlange öffnen"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300 text-xs">
+            ⏳
+          </span>
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 flex items-center gap-1.5">
+              <span>Warteschlange</span>
+              <span
+                v-if="queueStore.totalActive > 0"
+                class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-sky-500 text-white"
+              >
+                {{ queueStore.totalActive }}
+              </span>
+            </div>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+              {{ queueStore.totalActive > 0 ? `${queueStore.totalActive} Auftrag in Arbeit` : 'Alle Aufträge fertig' }}
+            </p>
+          </div>
+        </div>
+
+        <svg class="w-4 h-4 text-slate-400 group-hover:text-sky-500 transition-transform group-hover:translate-x-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
     </div>
 
     <!-- Search Input -->

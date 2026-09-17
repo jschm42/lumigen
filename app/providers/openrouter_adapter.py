@@ -21,6 +21,33 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 
+OPENROUTER_IMAGES_ALLOWED_ASPECT_RATIOS = {
+    "1:1",
+    "1:2",
+    "1:4",
+    "1:8",
+    "2:1",
+    "2:3",
+    "2.35:1",
+    "3:2",
+    "3:4",
+    "4:1",
+    "4:3",
+    "4:5",
+    "5:2",
+    "5:4",
+    "8:1",
+    "9:16",
+    "16:9",
+    "9:19.5",
+    "19.5:9",
+    "9:20",
+    "20:9",
+    "9:21",
+    "21:9",
+    "auto",
+}
+
 
 class OpenRouterAdapter(ProviderAdapter):
     """Provider adapter for the OpenRouter image-generation API."""
@@ -116,6 +143,17 @@ class OpenRouterAdapter(ProviderAdapter):
                 )
             if response.status_code >= 400:
                 message = self._extract_error_message(response)
+                if self._is_images_endpoint_error(response, message):
+                    self._logger.info(
+                        "Model '%s' requires /images endpoint. Retrying via OpenRouter images API.",
+                        request.model,
+                    )
+                    return await self._generate_via_images_api(
+                        request=request,
+                        settings=settings,
+                        client=client,
+                        headers=headers,
+                    )
                 raise ProviderError(
                     f"OpenRouter request failed ({response.status_code}): {message}"
                 )
@@ -711,3 +749,139 @@ class OpenRouterAdapter(ProviderAdapter):
 
         text = str(data)
         return text[:400]
+
+    def _is_images_endpoint_error(
+        self, response: httpx.Response, message: str
+    ) -> bool:
+        """Check if OpenRouter indicated that the model requires the /images endpoint."""
+        if response.status_code not in {400, 404}:
+            return False
+        lower_msg = message.lower()
+        return (
+            "use the /api/v1/images endpoint instead" in lower_msg
+            or "use the /images endpoint instead" in lower_msg
+            or ("/images endpoint" in lower_msg)
+            or ("image generation model" in lower_msg and "chat/completions" in lower_msg)
+        )
+
+    def _build_images_payload(
+        self, request: ProviderGenerationRequest
+    ) -> dict[str, Any]:
+        """Build request payload for OpenRouter's dedicated /api/v1/images endpoint."""
+        payload: dict[str, Any] = {
+            "model": request.model,
+            "prompt": request.prompt,
+            "n": max(1, int(request.n_images)),
+        }
+
+        aspect_ratio = None
+        if isinstance(request.params, dict):
+            image_config = request.params.get("image_config")
+            if isinstance(image_config, dict):
+                aspect_ratio = image_config.get("aspect_ratio")
+            if not aspect_ratio:
+                aspect_ratio = request.params.get("aspect_ratio")
+
+        if aspect_ratio:
+            ratio_str = str(aspect_ratio).strip()
+            if ratio_str in OPENROUTER_IMAGES_ALLOWED_ASPECT_RATIOS:
+                payload["aspect_ratio"] = ratio_str
+
+        if request.seed is not None:
+            payload["seed"] = int(request.seed)
+
+        if request.input_images:
+            input_refs = []
+            for image in request.input_images:
+                data_url = self._to_input_data_url(image.data, image.mime)
+                if data_url:
+                    input_refs.append({
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    })
+            if input_refs:
+                payload["input_references"] = input_refs
+
+        return payload
+
+    async def _generate_via_images_api(
+        self,
+        request: ProviderGenerationRequest,
+        settings: Settings,
+        client: httpx.AsyncClient,
+        headers: dict[str, str],
+    ) -> ProviderGenerationResult:
+        """Generate images via OpenRouter's dedicated /api/v1/images endpoint."""
+        images_url = settings.openrouter_base_url.rstrip("/") + "/images"
+        payload = self._build_images_payload(request)
+        self._log_request("POST", images_url, headers, payload)
+
+        response = await client.post(images_url, headers=headers, json=payload)
+
+        if response.status_code == 429:
+            raise ProviderRateLimitError("OpenRouter rate limit reached (429).")
+        if response.status_code == 503:
+            raise ProviderServiceUnavailableError(
+                "OpenRouter service unavailable (503)."
+            )
+        if response.status_code >= 500:
+            raise ProviderServiceUnavailableError(
+                f"OpenRouter upstream error ({response.status_code})."
+            )
+        if response.status_code >= 400:
+            message = self._extract_error_message(response)
+            raise ProviderError(
+                f"OpenRouter images request failed ({response.status_code}): {message}"
+            )
+
+        try:
+            body = response.json()
+        except Exception as exc:
+            raise ProviderError(
+                "OpenRouter returned a non-JSON images response."
+            ) from exc
+
+        normalized_output_format = self._normalize_output_format(
+            request.output_format
+        )
+        image_refs = self._extract_image_refs(
+            body, output_format=normalized_output_format
+        )
+        if not image_refs:
+            summary = self._summarize_empty_image_response(body)
+            raise ProviderError(
+                f"OpenRouter returned no generated image data. {summary}"
+            )
+
+        fallback_width, fallback_height = self._resolve_dimensions(request)
+        images: list[ProviderImage] = []
+        for idx, image_ref in enumerate(image_refs, start=1):
+            image_bytes, mime = await self._read_image_payload(
+                client, image_ref, idx
+            )
+            width, height = self._probe_dimensions(
+                image_bytes, fallback_width, fallback_height
+            )
+            images.append(
+                ProviderImage(
+                    data=image_bytes,
+                    mime=mime,
+                    width=width,
+                    height=height,
+                    meta={"provider": self.name, "index": idx},
+                )
+            )
+
+        return ProviderGenerationResult(
+            images=images,
+            raw_meta={
+                "provider": self.name,
+                "id": body.get("id"),
+                "created": body.get("created"),
+                "model": body.get("model") or request.model,
+                "endpoint": "images",
+                "usage": body.get("usage"),
+                "count": len(images),
+            },
+        )
+

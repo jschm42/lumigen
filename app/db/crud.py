@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, case, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
@@ -453,6 +453,24 @@ def get_generation(
     if with_assets:
         stmt = stmt.options(selectinload(Generation.assets))
     return session.scalar(stmt)
+
+
+def list_queue_generations(session: Session, limit: int = 30) -> list[Generation]:
+    """Return active (running, queued) generations first, followed by recent ones."""
+    stmt: Select[tuple[Generation]] = (
+        select(Generation)
+        .options(selectinload(Generation.assets))
+        .order_by(
+            case(
+                (Generation.status == "running", 1),
+                (Generation.status == "queued", 2),
+                else_=3,
+            ),
+            Generation.created_at.desc(),
+        )
+        .limit(limit)
+    )
+    return list(session.scalars(stmt))
 
 
 def get_asset(

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import type { Asset, Generation } from '@/types'
 import { useImageViewerStore } from '@/stores/imageViewer'
+import { useGenerateStore } from '@/stores/generate'
 import Spinner from '@/components/ui/Spinner.vue'
 import Badge from '@/components/ui/Badge.vue'
 import GenerationActions from './GenerationActions.vue'
@@ -12,6 +13,17 @@ interface Props {
 
 const props = defineProps<Props>()
 const imageViewerStore = useImageViewerStore()
+const generateStore = useGenerateStore()
+const isRetrying = ref(false)
+
+async function handleRetry() {
+  isRetrying.value = true
+  try {
+    await generateStore.retryGeneration(props.generation)
+  } finally {
+    isRetrying.value = false
+  }
+}
 
 const isPendingOrProcessing = computed(() => {
   const s = props.generation.status
@@ -85,13 +97,30 @@ function handleImageClick(asset: Asset) {
       </div>
     </div>
 
-    <!-- Failed State -->
+    <!-- Failed or Cancelled State with Retry Button -->
     <div
-      v-else-if="generation.status === 'failed'"
-      class="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-700 dark:text-rose-300"
+      v-else-if="generation.status === 'failed' || generation.status === 'cancelled'"
+      class="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-700 dark:text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
     >
-      <div class="font-semibold mb-1">Generierung fehlgeschlagen</div>
-      <p>{{ generation.error_message || 'Unbekannter Fehler beim Generieren.' }}</p>
+      <div class="space-y-1 min-w-0 flex-1">
+        <div class="font-semibold flex items-center gap-1.5">
+          <span>{{ generation.status === 'cancelled' ? 'Generierung abgebrochen' : 'Generierung fehlgeschlagen' }}</span>
+        </div>
+        <p class="break-words text-rose-600 dark:text-rose-400">
+          {{ generation.error_message || (generation.status === 'cancelled' ? 'Der Auftrag wurde manuell abgebrochen.' : 'Unbekannter Fehler beim Generieren.') }}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        @click="handleRetry"
+        :disabled="isRetrying"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50 shrink-0 self-start sm:self-center"
+        title="Diesen Job erneut ausführen"
+      >
+        <span :class="{ 'animate-spin': isRetrying }">🔄</span>
+        <span>{{ isRetrying ? 'Wird gestartet...' : 'Erneut versuchen' }}</span>
+      </button>
     </div>
 
     <!-- Succeeded State (Image Results) -->

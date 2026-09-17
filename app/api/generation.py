@@ -392,6 +392,85 @@ def get_job_status(
     }
 
 
+def serialize_queue_item(gen: Any) -> dict[str, Any]:
+    """Serialize a Generation model for the queue overview."""
+    from app.api.assets import serialize_asset
+
+    req_snapshot = gen.request_snapshot_json or {}
+    assets_list = [serialize_asset(a, gen) for a in gen.assets] if gen.assets else []
+    progress = 100 if gen.status == "succeeded" else (0 if gen.status in {"failed", "queued", "cancelled"} else 50)
+
+    return {
+        "id": gen.id,
+        "status": gen.status,
+        "progress": progress,
+        "error_message": gen.error,
+        "prompt": gen.prompt_user or gen.prompt_final or "",
+        "negative_prompt": req_snapshot.get("negative_prompt", ""),
+        "session_token": req_snapshot.get("chat_session_id") or req_snapshot.get("conversation", ""),
+        "created_at": gen.created_at.isoformat() if gen.created_at else "",
+        "completed_at": gen.finished_at.isoformat() if gen.finished_at else None,
+        "model_name": gen.model,
+        "provider": gen.provider,
+        "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
+        "resolution": req_snapshot.get("resolution", "1K"),
+        "seed": req_snapshot.get("seed"),
+        "assets": assets_list,
+    }
+
+
+@router.get("/jobs/queue")
+def get_queue(session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Return active and recent generation jobs in the queue."""
+    items = crud.list_queue_generations(session, limit=30)
+    active = [serialize_queue_item(g) for g in items if g.status in {"queued", "running"}]
+    recent = [serialize_queue_item(g) for g in items if g.status not in {"queued", "running"}]
+    return {
+        "active": active,
+        "recent": recent,
+        "total_active": len(active),
+    }
+
+
+@router.post("/jobs/{generation_id}/cancel")
+def cancel_job(
+    generation_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Cancel a queued or running generation job."""
+    gen = generation_service.cancel_generation(session, generation_id)
+    if not gen:
+        raise HTTPException(status_code=404, detail="Generation job not found")
+    return {
+        "success": True,
+        "job_id": gen.id,
+        "status": gen.status,
+    }
+
+
+@router.post("/jobs/{generation_id}/retry")
+def retry_job(
+    generation_id: int,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Clone a failed or cancelled generation job and enqueue it for processing."""
+    source = crud.get_generation(session, generation_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Generation job not found")
+
+    new_gen = generation_service.create_generation_from_snapshot(session, source)
+    generation_service.enqueue(background_tasks, new_gen.id)
+    req_snapshot = new_gen.request_snapshot_json or {}
+    session_token = req_snapshot.get("chat_session_id") or req_snapshot.get("conversation", "")
+
+    return {
+        "job_id": new_gen.id,
+        "status": new_gen.status,
+        "session_token": session_token,
+    }
+
+
 @router.post("/enhance-prompt")
 async def api_enhance_prompt(
     request: Request,

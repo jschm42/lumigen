@@ -31,7 +31,7 @@ def serialize_profile(p: Profile) -> dict[str, Any]:
         "default_aspect_ratio": p.aspect_ratio or "1:1",
         "resolution": params.get("resolution", "1K"),
         "default_resolution": params.get("resolution", "1K"),
-        "default_model_config_id": p.model_config_id,
+        "default_model_config_id": None,
         "n_images": p.n_images if p.n_images is not None else 1,
         "seed": p.seed,
         "upscale_provider": p.upscale_provider,

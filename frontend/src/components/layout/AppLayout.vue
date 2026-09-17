@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import AppHeader from './AppHeader.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ImageViewerModal from '@/components/ui/ImageViewerModal.vue'
+import QueueModal from '@/components/queue/QueueModal.vue'
+import { useQueueStore } from '@/stores/queue'
+
+const queueStore = useQueueStore()
+
+onMounted(() => {
+  queueStore.fetchQueue()
+})
 </script>
 
 <template>
@@ -23,6 +32,9 @@ import ImageViewerModal from '@/components/ui/ImageViewerModal.vue'
 
     <!-- Global Image Zoom & Lightbox Viewer Modal -->
     <ImageViewerModal />
+
+    <!-- Global Generation Queue Slide-over Drawer -->
+    <QueueModal />
 
     <!-- Global Toast Container -->
     <ToastContainer />

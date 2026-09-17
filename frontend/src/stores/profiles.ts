@@ -33,7 +33,6 @@ export const useProfilesStore = defineStore('profiles', () => {
       negative_prompt: '',
       default_aspect_ratio: '1:1',
       default_resolution: '1K',
-      default_model_config_id: null,
       upscale_provider: null,
       upscale_model: null,
       upscale_factor: null,

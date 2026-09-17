@@ -4,6 +4,7 @@ import { generationApi, type SubmitGenerationPayload } from '@/api/generation'
 import { sessionsApi } from '@/api/sessions'
 import { useSessionsStore } from './sessions'
 import { useToastStore } from './toast'
+import { useQueueStore } from './queue'
 import type { Asset, Generation, ModelConfig, StylePreset } from '@/types'
 
 export interface AttachedImage {
@@ -38,6 +39,7 @@ export const DIMENSION_PRESETS: DimensionPresetOption[] = [
 export const useGenerateStore = defineStore('generate', () => {
   const sessionsStore = useSessionsStore()
   const toastStore = useToastStore()
+  const queueStore = useQueueStore()
 
   // Input states
   const prompt = ref<string>('')
@@ -167,10 +169,6 @@ export const useGenerateStore = defineStore('generate', () => {
   }
 
   function applyProfileDefaults(profile: any) {
-    if (profile.default_model_config_id) {
-      selectedModelConfigId.value = profile.default_model_config_id
-    }
-
     if (profile.aspect_ratio || profile.default_aspect_ratio) {
       aspectRatio.value = profile.aspect_ratio || profile.default_aspect_ratio || '1:1'
     }
@@ -390,11 +388,40 @@ export const useGenerateStore = defineStore('generate', () => {
 
       // Start polling
       pollJob(res.job_id)
+      queueStore.fetchQueue()
 
       // Clear input images but keep prompt for quick iterations
       clearAttachedImages()
     } catch (error: any) {
       toastStore.error(error?.response?.data?.detail || 'Fehler beim Starten der Generierung.')
+    } finally {
+      isSubmitting.value = false
+    }
+  }
+
+  async function retryGeneration(gen: Generation) {
+    isSubmitting.value = true
+    try {
+      const res = await generationApi.retryJob(gen.id)
+      const optimisticGen: Generation = {
+        id: res.job_id,
+        status: 'queued',
+        progress: 10,
+        prompt: gen.prompt,
+        negative_prompt: gen.negative_prompt,
+        model_name: gen.model_name,
+        aspect_ratio: gen.aspect_ratio,
+        resolution: gen.resolution,
+        created_at: new Date().toISOString(),
+        session_token: gen.session_token,
+        assets: [],
+      }
+      generations.value.push(optimisticGen)
+      pollJob(res.job_id)
+      queueStore.fetchQueue()
+      toastStore.info(`Generierung #${res.job_id} erneut eingereiht!`)
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Fehler beim erneuten Starten.')
     } finally {
       isSubmitting.value = false
     }
@@ -456,6 +483,7 @@ export const useGenerateStore = defineStore('generate', () => {
     loadSessionHistory,
     pollJob,
     submit,
+    retryGeneration,
     remixGeneration,
   }
 })
