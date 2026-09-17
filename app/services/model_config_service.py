@@ -56,9 +56,12 @@ class ModelConfigService:
         """Get the centrally stored provider API key from the DB, if configured."""
         with SessionLocal() as session:
             row = crud.get_provider_api_key(session, provider.lower())
-            if not row:
+            if not row or not row.api_key_encrypted:
                 return None
-            return self.decrypt_api_key(row.api_key_encrypted)
+            try:
+                return self.decrypt_api_key(row.api_key_encrypted)
+            except (ValueError, Exception):
+                return None
 
     def get_default_api_key(self, provider: str) -> str | None:
         """Get the API key for a provider: DB-stored key takes priority over .env."""

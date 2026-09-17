@@ -8,6 +8,7 @@ import asyncio
 import base64
 import logging
 from io import BytesIO
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -24,13 +25,123 @@ class FalUpscaleService:
     """Async upscaling service backed by the FAL.ai Topaz upscale API."""
 
     QUEUE_URL = "https://queue.fal.run"
+    MODELS_API_URL = "https://api.fal.ai/v1/models"
     DEFAULT_MODEL_IDENTIFIER = "fal-ai/topaz/upscale/image"
     MAX_POLL_ATTEMPTS = 90
     POLL_INTERVAL = 2.0
 
+    DEFAULT_DISCOVERED_MODELS: list[dict[str, Any]] = [
+        {
+            "endpoint_id": "fal-ai/clarity-upscaler",
+            "name": "Clarity Upscaler",
+            "description": "High-fidelity upscaler designed to restore fine details and sharpness.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/creative-upscaler",
+            "name": "Creative Upscaler",
+            "description": "FLUX-based creative upscaling with controllable detail enhancement.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/esrgan",
+            "name": "Upscale Images (ESRGAN)",
+            "description": "Fast Real-ESRGAN super-resolution upscaler up to 4x.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/aura-sr",
+            "name": "AuraSR",
+            "description": "Open-source super-resolution model by fal.ai for sharp 4x upscaling.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/ccsr",
+            "name": "CCSR Upscaler",
+            "description": "Content-consistent super-resolution upscaler for realistic textures.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/flux-vision-upscaler",
+            "name": "Flux Vision Upscaler",
+            "description": "Vision-guided high-detail generative upscaling.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/recraft/upscale/creative",
+            "name": "Recraft Creative Upscale",
+            "description": "Recraft AI creative detail enhancement and resolution boost.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/recraft/upscale/crisp",
+            "name": "Recraft Crisp Upscale",
+            "description": "Crisp, clean line and geometry preservation upscaling.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/seedvr/upscale/image",
+            "name": "SeedVR2",
+            "description": "Super-resolution and realism enhancement for images.",
+            "category": "image-to-image",
+        },
+        {
+            "endpoint_id": "fal-ai/topaz/upscale/image",
+            "name": "Topaz Upscale Image",
+            "description": "Topaz Gigapixel AI photo upscaling engine hosted on fal.ai.",
+            "category": "image-to-image",
+        },
+    ]
+
     def is_available(self, api_key: str | None) -> bool:
         """Return ``True`` if a FAL.ai API key is configured."""
         return bool((api_key or "").strip())
+
+    async def discover_upscale_models(
+        self, api_key: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Query FAL.ai models endpoint for image-to-image upscale models.
+
+        Falls back to curated presets if the API is offline or returns an error.
+        """
+        headers: dict[str, str] = {"Accept": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Key {api_key}"
+
+        try:
+            timeout = httpx.Timeout(10.0, connect=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(
+                    f"{self.MODELS_API_URL}?q=upscale", headers=headers
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    models_list = data.get("models") or []
+                    results: list[dict[str, Any]] = []
+                    seen_ids: set[str] = set()
+                    for m in models_list:
+                        endpoint_id = m.get("endpoint_id")
+                        if not endpoint_id or endpoint_id in seen_ids:
+                            continue
+                        meta = m.get("metadata") or {}
+                        category = meta.get("category", "")
+                        # Filter for image models (exclude video-to-video / audio)
+                        if category == "video-to-video" or "video" in endpoint_id.lower():
+                            continue
+                        seen_ids.add(endpoint_id)
+                        name = meta.get("display_name") or endpoint_id
+                        results.append({
+                            "endpoint_id": endpoint_id,
+                            "name": name,
+                            "description": meta.get("description", ""),
+                            "category": category or "image-to-image",
+                        })
+                    if results:
+                        return results
+        except Exception as exc:
+            _logger.warning("FAL model discovery request failed: %s", exc)
+
+        return [dict(x) for x in self.DEFAULT_DISCOVERED_MODELS]
 
     async def upscale_bytes(
         self,

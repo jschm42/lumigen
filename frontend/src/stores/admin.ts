@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { adminApi, type SystemInfo } from '@/api/admin'
 import { useToastStore } from './toast'
-import type { ModelConfig, ProviderApiKeyStatus, StylePreset, User } from '@/types'
+import type { ModelConfig, ProviderApiKeyStatus, StylePreset, UpscaleModel, User } from '@/types'
 
 export const useAdminStore = defineStore('admin', () => {
   const toastStore = useToastStore()
@@ -126,9 +126,76 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  const upscaleModels = ref<UpscaleModel[]>([])
+
+  async function fetchUpscaleModels() {
+    try {
+      upscaleModels.value = await adminApi.listUpscaleModels()
+    } catch (_error) {
+      upscaleModels.value = []
+    }
+  }
+
+  async function saveUpscaleModel(config: Partial<UpscaleModel>) {
+    try {
+      const saved = await adminApi.saveUpscaleModel(config)
+      const index = upscaleModels.value.findIndex((m) => m.id === saved.id)
+      if (index !== -1) {
+        upscaleModels.value[index] = saved
+      } else {
+        upscaleModels.value.push(saved)
+      }
+      if (saved.is_default) {
+        upscaleModels.value.forEach((m) => {
+          if (m.id !== saved.id) m.is_default = false
+        })
+      }
+      toastStore.success(`Upscale model "${saved.name}" saved.`)
+      return saved
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to save upscale model.')
+      throw error
+    }
+  }
+
+  async function deleteUpscaleModel(id: number) {
+    try {
+      await adminApi.deleteUpscaleModel(id)
+      upscaleModels.value = upscaleModels.value.filter((m) => m.id !== id)
+      toastStore.success('Upscale model deleted.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to delete upscale model.')
+      throw error
+    }
+  }
+
+  async function toggleUpscaleModel(id: number) {
+    try {
+      const res = await adminApi.toggleUpscaleModel(id)
+      const model = upscaleModels.value.find((m) => m.id === id)
+      if (model) model.is_enabled = res.is_enabled
+      toastStore.success(`Model ${res.is_enabled ? 'enabled' : 'disabled'}.`)
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to toggle model.')
+    }
+  }
+
+  async function setDefaultUpscaleModel(id: number) {
+    try {
+      await adminApi.setDefaultUpscaleModel(id)
+      upscaleModels.value.forEach((m) => {
+        m.is_default = m.id === id
+      })
+      toastStore.success('Default upscale model updated.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to set default model.')
+    }
+  }
+
   return {
     providerStatuses,
     modelConfigs,
+    upscaleModels,
     styles,
     users,
     systemInfo,
@@ -139,6 +206,11 @@ export const useAdminStore = defineStore('admin', () => {
     fetchModelConfigs,
     saveModelConfig,
     deleteModelConfig,
+    fetchUpscaleModels,
+    saveUpscaleModel,
+    deleteUpscaleModel,
+    toggleUpscaleModel,
+    setDefaultUpscaleModel,
     fetchStyles,
     deleteStyle,
     restoreDefaultStyles,

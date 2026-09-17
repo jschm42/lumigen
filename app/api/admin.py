@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import get_session
+from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.services.auth_service import AuthService
 from app.services.import_export_service import (
     export_all,
@@ -44,13 +45,14 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 settings = get_settings()
 auth_service = AuthService()
 model_config_service = ModelConfigService(settings)
+fal_upscale_service = FalUpscaleService()
 
 
 @router.get("/providers")
 def get_providers(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     """List provider API key statuses."""
     keys = crud.list_provider_api_keys(session)
-    key_map = {k.provider: k for k in keys}
+    key_map = {k.provider.lower(): k for k in keys}
     providers = [
         {"provider": "openrouter", "display_name": "OpenRouter"},
         {"provider": "fal", "display_name": "FAL.AI"},
@@ -60,7 +62,7 @@ def get_providers(session: Session = Depends(get_session)) -> list[dict[str, Any
     ]
     result = []
     for p in providers:
-        has_key = p["provider"] in key_map or bool(model_config_service.get_default_api_key(p["provider"]))
+        has_key = p["provider"] in key_map or model_config_service.has_env_api_key(p["provider"])
         result.append({
             "provider": p["provider"],
             "display_name": p["display_name"],
@@ -80,7 +82,12 @@ def update_provider_key(
     if not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
 
-    crud.upsert_provider_api_key(session, provider=provider, api_key=api_key)
+    provider_name = provider.strip().lower()
+    try:
+        encrypted = model_config_service.encrypt_api_key(api_key)
+        crud.upsert_provider_api_key(session, provider=provider_name, api_key_encrypted=encrypted)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True}
 
 
@@ -90,7 +97,7 @@ def delete_provider_key(
     session: Session = Depends(get_session),
 ) -> dict[str, bool]:
     """Delete provider API key."""
-    crud.delete_provider_api_key(session, provider)
+    crud.delete_provider_api_key(session, provider.strip().lower())
     return {"success": True}
 
 
@@ -100,7 +107,15 @@ async def test_provider_connection(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """Test API connection to provider."""
-    # Simple ping/test
+    provider_name = provider.strip().lower()
+    has_key = (
+        crud.get_provider_api_key(session, provider_name) is not None
+        or model_config_service.has_env_api_key(provider_name)
+    )
+    if not has_key:
+        raise HTTPException(
+            status_code=400, detail=f"No API key configured for {provider.upper()}."
+        )
     return {"success": True, "message": f"Connection to {provider.upper()} tested successfully."}
 
 
@@ -688,10 +703,168 @@ async def import_data(
     else:
         raise HTTPException(
             status_code=400,
-            detail="Unerwartetes JSON-Format (Objekt oder Liste erwartet).",
+            detail="Unexpected JSON format (object or list expected).",
         )
 
     return {
         "success": True,
         "imported": imported_counts,
     }
+
+
+# --- Upscale Models Management ---
+
+
+@router.get("/upscale/discover-models")
+async def discover_upscale_models(
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Discover available image-to-image upscale models from FAL.ai."""
+    fal_key = model_config_service.get_default_api_key("fal")
+    models = await fal_upscale_service.discover_upscale_models(api_key=fal_key)
+    return {"models": models, "count": len(models)}
+
+
+@router.get("/upscale-models")
+def list_admin_upscale_models(
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
+    """List all configured Topaz/FAL upscale models."""
+    models = crud.list_topaz_upscale_models(session, enabled_only=False)
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "model_identifier": m.model_identifier,
+            "params_json": m.params_json or {},
+            "is_enabled": m.is_enabled,
+            "is_default": getattr(m, "is_default", False),
+            "created_at": m.created_at.isoformat() if m.created_at else "",
+            "updated_at": m.updated_at.isoformat() if m.updated_at else "",
+        }
+        for m in models
+    ]
+
+
+@router.post("/upscale-models")
+def create_admin_upscale_model(
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Create a new upscale model configuration."""
+    name = str(payload.get("name") or "").strip()
+    model_identifier = str(payload.get("model_identifier") or "").strip()
+    is_enabled = bool(payload.get("is_enabled", True))
+    is_default = bool(payload.get("is_default", False))
+    params_json = payload.get("params_json") or {}
+
+    if not name or not model_identifier:
+        raise HTTPException(status_code=400, detail="Name and model identifier are required.")
+
+    existing = crud.get_topaz_upscale_model_by_name(session, name)
+    if existing:
+        raise HTTPException(status_code=400, detail=f"An upscale model named '{name}' already exists.")
+
+    model = crud.create_topaz_upscale_model(
+        session,
+        name=name,
+        model_identifier=model_identifier,
+        params_json=params_json,
+        is_enabled=is_enabled,
+        is_default=is_default,
+    )
+    return {
+        "id": model.id,
+        "name": model.name,
+        "model_identifier": model.model_identifier,
+        "params_json": model.params_json,
+        "is_enabled": model.is_enabled,
+        "is_default": model.is_default,
+    }
+
+
+@router.put("/upscale-models/{model_id}")
+def update_admin_upscale_model(
+    model_id: int,
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Update an existing upscale model configuration."""
+    model = crud.get_topaz_upscale_model(session, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Upscale model not found.")
+
+    name = str(payload.get("name") or model.name).strip()
+    model_identifier = str(payload.get("model_identifier") or model.model_identifier).strip()
+
+    if not name or not model_identifier:
+        raise HTTPException(status_code=400, detail="Name and model identifier are required.")
+
+    if name != model.name:
+        existing = crud.get_topaz_upscale_model_by_name(session, name)
+        if existing and existing.id != model_id:
+            raise HTTPException(status_code=400, detail=f"An upscale model named '{name}' already exists.")
+
+    fields: dict[str, Any] = {
+        "name": name,
+        "model_identifier": model_identifier,
+    }
+    if "is_enabled" in payload:
+        fields["is_enabled"] = bool(payload["is_enabled"])
+    if "is_default" in payload:
+        fields["is_default"] = bool(payload["is_default"])
+    if "params_json" in payload:
+        fields["params_json"] = payload["params_json"] or {}
+
+    updated = crud.update_topaz_upscale_model(session, model, **fields)
+    return {
+        "id": updated.id,
+        "name": updated.name,
+        "model_identifier": updated.model_identifier,
+        "params_json": updated.params_json,
+        "is_enabled": updated.is_enabled,
+        "is_default": updated.is_default,
+    }
+
+
+@router.delete("/upscale-models/{model_id}")
+def delete_admin_upscale_model(
+    model_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, bool]:
+    """Delete an upscale model configuration."""
+    model = crud.get_topaz_upscale_model(session, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Upscale model not found.")
+
+    crud.delete_topaz_upscale_model(session, model)
+    return {"success": True}
+
+
+@router.post("/upscale-models/{model_id}/toggle")
+def toggle_admin_upscale_model(
+    model_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Toggle active/enabled state of an upscale model."""
+    model = crud.get_topaz_upscale_model(session, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Upscale model not found.")
+
+    model.is_enabled = not model.is_enabled
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+    return {"id": model.id, "is_enabled": model.is_enabled}
+
+
+@router.post("/upscale-models/{model_id}/set-default")
+def set_default_admin_upscale_model(
+    model_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Designate an upscale model as the studio default."""
+    target = crud.set_default_topaz_upscale_model(session, model_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Upscale model not found.")
+    return {"id": target.id, "is_default": True}

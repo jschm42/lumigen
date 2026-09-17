@@ -157,6 +157,7 @@ class TopazUpscaleModel(Base, TimestampMixin):
     model_identifier: Mapped[str] = mapped_column(String(160), nullable=False)
     params_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean(), default=True, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean(), default=False, nullable=False)
 
     profiles: Mapped[list[Profile]] = relationship(back_populates="upscale_topaz_model")
 

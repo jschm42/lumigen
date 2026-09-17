@@ -162,8 +162,49 @@ def get_topaz_upscale_model_by_name(
     return session.scalar(stmt)
 
 
+def get_default_topaz_upscale_model(
+    session: Session,
+) -> TopazUpscaleModel | None:
+    """Return the designated default enabled Topaz/FAL upscale model, or None if no default is configured."""
+    stmt = (
+        select(TopazUpscaleModel)
+        .where(
+            TopazUpscaleModel.is_enabled.is_(True),
+            TopazUpscaleModel.is_default.is_(True),
+        )
+    )
+    return session.scalar(stmt)
+
+
+def set_default_topaz_upscale_model(
+    session: Session, topaz_model_id: int
+) -> TopazUpscaleModel | None:
+    """Set the specified model as the only default upscale model."""
+    target = get_topaz_upscale_model(session, topaz_model_id)
+    if not target:
+        return None
+
+    # Reset existing defaults
+    all_models = list_topaz_upscale_models(session)
+    for m in all_models:
+        m.is_default = (m.id == topaz_model_id)
+        session.add(m)
+
+    session.commit()
+    session.refresh(target)
+    return target
+
+
 def create_topaz_upscale_model(session: Session, **fields) -> TopazUpscaleModel:
     """Create a new Topaz upscale model row and return it."""
+    is_default = fields.get("is_default", False)
+    if is_default:
+        # Clear other defaults first
+        all_models = list_topaz_upscale_models(session)
+        for m in all_models:
+            m.is_default = False
+            session.add(m)
+
     row = TopazUpscaleModel(**fields)
     session.add(row)
     session.commit()
@@ -177,6 +218,14 @@ def update_topaz_upscale_model(
     **fields,
 ) -> TopazUpscaleModel:
     """Update a Topaz upscale model's fields and return the refreshed instance."""
+    is_default = fields.get("is_default")
+    if is_default:
+        all_models = list_topaz_upscale_models(session)
+        for m in all_models:
+            if m.id != topaz_model.id:
+                m.is_default = False
+                session.add(m)
+
     for key, value in fields.items():
         setattr(topaz_model, key, value)
     session.add(topaz_model)
@@ -337,18 +386,29 @@ def list_provider_api_keys(session: Session) -> list[ProviderApiKey]:
 
 
 def upsert_provider_api_key(
-    session: Session, provider: str, api_key_encrypted: str
+    session: Session,
+    provider: str,
+    api_key_encrypted: str | None = None,
+    *,
+    api_key: str | None = None,
 ) -> ProviderApiKey:
-    """Insert or update the encrypted API key for *provider* and return the row."""
-    existing = get_provider_api_key(session, provider)
+    """Insert or update the encrypted API key for *provider* and return the row.
+
+    Accepts encrypted token via *api_key_encrypted* or *api_key*.
+    """
+    key_encrypted = api_key_encrypted or api_key
+    if not key_encrypted:
+        raise ValueError("Encrypted API key is required.")
+    provider_name = provider.strip().lower()
+    existing = get_provider_api_key(session, provider_name)
     if existing:
-        existing.api_key_encrypted = api_key_encrypted
+        existing.api_key_encrypted = key_encrypted
         session.add(existing)
         session.commit()
         session.refresh(existing)
         return existing
 
-    row = ProviderApiKey(provider=provider, api_key_encrypted=api_key_encrypted)
+    row = ProviderApiKey(provider=provider_name, api_key_encrypted=key_encrypted)
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -357,7 +417,7 @@ def upsert_provider_api_key(
 
 def delete_provider_api_key(session: Session, provider: str) -> bool:
     """Delete the stored API key for *provider*. Returns ``True`` if a row was deleted."""
-    existing = get_provider_api_key(session, provider)
+    existing = get_provider_api_key(session, provider.strip().lower())
     if not existing:
         return False
     session.delete(existing)

@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -280,4 +280,98 @@ def bulk_categorize_assets(
                 asset.categories = list(cats)
     session.commit()
     return {"success": True}
+
+
+@router.post("/{asset_id}/upscale")
+def upscale_asset(
+    asset_id: int,
+    background_tasks: BackgroundTasks,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Upscale an existing asset using the configured FAL upscale model."""
+    from app.api.generation import generation_service, model_config_service
+    from app.db.models import Generation
+
+    asset = crud.get_asset(session, asset_id, with_generation=True)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found.")
+
+    # 1. Check upscale model configuration
+    req_model_id = None
+    if payload and payload.get("topaz_model_id"):
+        try:
+            req_model_id = int(payload["topaz_model_id"])
+        except (ValueError, TypeError):
+            req_model_id = None
+
+    topaz_config = None
+    if req_model_id:
+        topaz_config = crud.get_topaz_upscale_model(session, req_model_id)
+    if not topaz_config:
+        topaz_config = crud.get_default_topaz_upscale_model(session)
+
+    if not topaz_config or not topaz_config.is_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="No upscale model configured. Please configure a FAL upscale model in Admin -> Upscaling.",
+        )
+
+    # 2. Check FAL API key
+    fal_key = model_config_service.get_default_api_key("fal")
+    if not fal_key:
+        raise HTTPException(
+            status_code=400,
+            detail="FAL.ai API key is not configured. Please add your FAL API key in Admin -> API Keys.",
+        )
+
+    # 3. Create an upscale Generation record
+    orig_gen = asset.generation
+    orig_req_snapshot = orig_gen.request_snapshot_json if orig_gen else {}
+    profile_snapshot = orig_gen.profile_snapshot_json if orig_gen else {}
+    storage_snapshot = orig_gen.storage_template_snapshot_json if orig_gen else {
+        "template": settings.default_storage_template,
+        "base_dir": settings.default_base_dir,
+    }
+
+    prompt_user = orig_gen.prompt_user if orig_gen else f"Upscale Asset #{asset.id}"
+    prompt_final = orig_gen.prompt_final if orig_gen else prompt_user
+
+    chat_session_id = orig_req_snapshot.get("chat_session_id") or orig_req_snapshot.get("conversation", "")
+    req_snapshot = {
+        **orig_req_snapshot,
+        "chat_session_id": chat_session_id,
+        "source_asset_id": asset.id,
+        "is_upscale": True,
+        "upscale_model": topaz_config.model_identifier,
+        "upscale_topaz_model_id": topaz_config.id,
+        "output_format": "png",
+    }
+
+    generation = Generation(
+        profile_id=orig_gen.profile_id if orig_gen else None,
+        profile_name=orig_gen.profile_name if orig_gen else "Upscale",
+        prompt_user=prompt_user,
+        prompt_final=prompt_final,
+        provider="fal",
+        model=topaz_config.model_identifier,
+        status="queued",
+        error=None,
+        profile_snapshot_json=profile_snapshot,
+        storage_template_snapshot_json=storage_snapshot,
+        request_snapshot_json=req_snapshot,
+    )
+    crud.create_generation(session, generation)
+
+    generation_service.enqueue_upscale(
+        background_tasks,
+        generation.id,
+        source_asset_id=asset.id,
+        upscale_model_id=topaz_config.id,
+    )
+
+    return {
+        "job_id": generation.id,
+        "status": generation.status,
+    }
 

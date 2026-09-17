@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ModelConfig, ProviderApiKeyStatus, StylePreset, User } from '@/types'
+import type { DiscoveredUpscaleModel, ModelConfig, ProviderApiKeyStatus, StylePreset, UpscaleModel, User } from '@/types'
 
 export interface SystemInfo {
   app_version: string
@@ -148,6 +148,40 @@ export const adminApi = {
     const res = await apiClient.post('/api/admin/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    return res.data
+  },
+
+  async listUpscaleModels(): Promise<UpscaleModel[]> {
+    const res = await apiClient.get<UpscaleModel[]>('/api/admin/upscale-models')
+    return res.data
+  },
+
+  async saveUpscaleModel(data: Partial<UpscaleModel>): Promise<UpscaleModel> {
+    if (data.id) {
+      const res = await apiClient.put<UpscaleModel>(`/api/admin/upscale-models/${data.id}`, data)
+      return res.data
+    }
+    const res = await apiClient.post<UpscaleModel>('/api/admin/upscale-models', data)
+    return res.data
+  },
+
+  async deleteUpscaleModel(id: number): Promise<{ success: boolean }> {
+    const res = await apiClient.delete(`/api/admin/upscale-models/${id}`)
+    return res.data
+  },
+
+  async toggleUpscaleModel(id: number): Promise<{ id: number; is_enabled: boolean }> {
+    const res = await apiClient.post(`/api/admin/upscale-models/${id}/toggle`)
+    return res.data
+  },
+
+  async setDefaultUpscaleModel(id: number): Promise<{ id: number; is_default: boolean }> {
+    const res = await apiClient.post(`/api/admin/upscale-models/${id}/set-default`)
+    return res.data
+  },
+
+  async discoverUpscaleModels(): Promise<{ models: DiscoveredUpscaleModel[]; count: number }> {
+    const res = await apiClient.get('/api/admin/upscale/discover-models')
     return res.data
   },
 }

@@ -175,3 +175,21 @@ export interface GalleryFilterState {
   thumb_size: 'sm' | 'md' | 'lg'
   artbook_token?: string
 }
+
+export interface UpscaleModel {
+  id?: number
+  name: string
+  model_identifier: string
+  params_json?: Record<string, any>
+  is_enabled: boolean
+  is_default: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface DiscoveredUpscaleModel {
+  endpoint_id: string
+  name: string
+  description?: string
+  category?: string
+}

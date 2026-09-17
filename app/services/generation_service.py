@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import copy
+import logging
 from datetime import datetime
 
-# For Python < 3.12 compatibility
 try:
     from datetime import UTC
 except ImportError:
@@ -37,6 +37,8 @@ from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
 from app.utils.paths import ensure_dir
+
+_logger = logging.getLogger(__name__)
 
 
 class GenerationCancelledError(ProviderError):
@@ -343,6 +345,21 @@ class GenerationService:
         """Add the generation job to FastAPI's background task queue."""
         background_tasks.add_task(self.run_generation_job, generation_id)
 
+    def enqueue_upscale(
+        self,
+        background_tasks: BackgroundTasks,
+        generation_id: int,
+        source_asset_id: int,
+        upscale_model_id: int | None = None,
+    ) -> None:
+        """Add the upscale job to FastAPI's background task queue."""
+        background_tasks.add_task(
+            self.run_asset_upscale_job,
+            generation_id,
+            source_asset_id,
+            upscale_model_id,
+        )
+
     def cancel_generation(
         self, session: Session, generation_id: int
     ) -> Generation | None:
@@ -441,6 +458,212 @@ class GenerationService:
         """Execute the generation job: call the provider, save files, and update the DB status."""
         async with self.get_queue_semaphore():
             await self._execute_generation_job(generation_id)
+
+    async def run_asset_upscale_job(
+        self,
+        generation_id: int,
+        source_asset_id: int,
+        upscale_model_id: int | None = None,
+    ) -> None:
+        """Execute on-demand upscaling of an existing asset."""
+        async with self.get_queue_semaphore():
+            await self._execute_asset_upscale_job(
+                generation_id=generation_id,
+                source_asset_id=source_asset_id,
+                upscale_model_id=upscale_model_id,
+            )
+
+    async def _execute_asset_upscale_job(
+        self,
+        generation_id: int,
+        source_asset_id: int,
+        upscale_model_id: int | None = None,
+    ) -> None:
+        """Internal execution of an asset upscale job."""
+        with SessionLocal() as session:
+            generation = crud.get_generation(session, generation_id)
+            if not generation or generation.status == "cancelled":
+                return
+            if generation.status != "queued":
+                return
+
+            generation.status = "running"
+            generation.error = None
+            session.commit()
+
+            source_asset = crud.get_asset(session, source_asset_id, with_generation=True)
+            if not source_asset:
+                generation.status = "failed"
+                generation.error = f"Source asset #{source_asset_id} not found."
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
+                return
+
+            base_dir = self._base_dir_from_snapshot(
+                generation.storage_template_snapshot_json
+            )
+            ensure_dir(base_dir)
+
+            try:
+                self._raise_if_cancelled(session, generation_id)
+
+                # Determine upscale model config
+                topaz_config = None
+                if upscale_model_id:
+                    topaz_config = crud.get_topaz_upscale_model(session, upscale_model_id)
+                if not topaz_config:
+                    topaz_config = crud.get_default_topaz_upscale_model(session)
+
+                if not topaz_config:
+                    raise ProviderError(
+                        "No upscale model configured. Please configure an upscale model in Admin -> Upscaling."
+                    )
+                if not topaz_config.is_enabled:
+                    raise ProviderError(
+                        f"Upscale model '{topaz_config.name}' is disabled."
+                    )
+
+                fal_api_key = (
+                    self.model_config_service.get_default_api_key("fal")
+                    if self.model_config_service
+                    else None
+                ) or ""
+                if not fal_api_key:
+                    raise ProviderError(
+                        "FAL.ai API key is not configured. Please add your FAL API key under Admin -> API Keys."
+                    )
+
+                # Read source image bytes
+                source_abs_path = self.storage_service.resolve_managed_path(
+                    base_dir, source_asset.file_path
+                )
+                if not source_abs_path.exists():
+                    raise ProviderError(f"Source asset file not found on disk: {source_asset.file_path}")
+                source_bytes = source_abs_path.read_bytes()
+
+                output_format = (
+                    str(generation.request_snapshot_json.get("output_format", "png"))
+                    .lower()
+                    .lstrip(".")
+                )
+                topaz_params = dict(topaz_config.params_json) if isinstance(topaz_config.params_json, dict) else {}
+
+                self._raise_if_cancelled(session, generation_id)
+
+                (
+                    image_data,
+                    image_width,
+                    image_height,
+                    image_mime,
+                ) = await self.fal_upscale_service.upscale_bytes(
+                    source_bytes,
+                    output_format,
+                    fal_api_key,
+                    model_identifier=topaz_config.model_identifier,
+                    model_params=topaz_params,
+                )
+
+                (
+                    image_data,
+                    image_width,
+                    image_height,
+                    image_mime,
+                ) = self._normalize_image_for_output(
+                    data=image_data,
+                    output_format=output_format,
+                    fallback_mime=image_mime,
+                    fallback_width=image_width,
+                    fallback_height=image_height,
+                )
+
+                storage_template = str(
+                    generation.storage_template_snapshot_json.get(
+                        "template", self.settings.default_storage_template
+                    )
+                )
+
+                rendered_rel_path = self.storage_service.render_relative_path(
+                    template=storage_template,
+                    profile_name=generation.profile_name,
+                    prompt_user=generation.prompt_user,
+                    generation_id=generation.id,
+                    idx=1,
+                    ext=output_format,
+                )
+                abs_path = self.storage_service.resolve_managed_path(
+                    base_dir, rendered_rel_path
+                )
+                self.storage_service.write_bytes_atomic(abs_path, image_data)
+
+                thumb_rel = self.thumbnail_service.create_thumbnail(
+                    base_dir, rendered_rel_path
+                )
+                upscale_meta = {
+                    "model": topaz_config.model_identifier,
+                    "tool": "fal",
+                    "topaz_model_id": topaz_config.id,
+                    "topaz_model_name": topaz_config.name,
+                    "topaz_params": topaz_params,
+                    "source_asset_id": source_asset.id,
+                }
+                sidecar_payload = self._build_asset_sidecar_payload(
+                    generation=generation,
+                    asset_index=1,
+                    image_rel=rendered_rel_path.as_posix(),
+                    thumbnail_rel=thumb_rel.as_posix(),
+                    provider_meta={},
+                    raw_meta={"upscale": upscale_meta},
+                    image_width=image_width,
+                    image_height=image_height,
+                    image_mime=image_mime,
+                )
+                sidecar_rel = self.sidecar_service.write_asset_sidecar(
+                    base_dir, rendered_rel_path, sidecar_payload
+                )
+
+                categories = list(source_asset.categories) if hasattr(source_asset, "categories") else []
+
+                session.add(
+                    Asset(
+                        generation_id=generation.id,
+                        file_path=rendered_rel_path.as_posix(),
+                        sidecar_path=sidecar_rel.as_posix(),
+                        thumbnail_path=thumb_rel.as_posix(),
+                        width=image_width,
+                        height=image_height,
+                        mime=image_mime,
+                        categories=categories,
+                        meta_json={
+                            "prompt": generation.prompt_user,
+                            "prompt_final": generation.prompt_final,
+                            "upscale": upscale_meta,
+                            "source_asset_id": source_asset.id,
+                        },
+                    )
+                )
+
+                self._raise_if_cancelled(session, generation_id)
+                session.refresh(generation)
+                if generation.status == "cancelled":
+                    raise GenerationCancelledError("Canceled by user during finalization.")
+
+                generation.status = "succeeded"
+                generation.error = None
+                generation.failure_sidecar_path = None
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
+
+            except GenerationCancelledError as exc:
+                generation.status = "cancelled"
+                generation.error = str(exc)
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
+            except Exception as exc:
+                _logger.exception("Upscale job %d failed: %s", generation_id, exc)
+                generation.status = "failed"
+                generation.error = str(exc)
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
 
     async def _execute_generation_job(self, generation_id: int) -> None:
         """Internal execution of a generation job after acquiring the queue semaphore."""
