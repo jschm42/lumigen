@@ -101,7 +101,7 @@ async def test_provider_connection(
 ) -> dict[str, Any]:
     """Test API connection to provider."""
     # Simple ping/test
-    return {"success": True, "message": f"Verbindung zu {provider.upper()} erfolgreich getestet."}
+    return {"success": True, "message": f"Connection to {provider.upper()} tested successfully."}
 
 
 @router.get("/providers/{provider}/discover-models")
@@ -307,33 +307,33 @@ async def save_admin_style(
                 pass
 
     if not name:
-        raise HTTPException(status_code=400, detail="Style-Name ist erforderlich.")
+        raise HTTPException(status_code=400, detail="Style name is required.")
     if len(name) > 30:
         raise HTTPException(
-            status_code=400, detail="Style-Name darf maximal 30 Zeichen lang sein."
+            status_code=400, detail="Style name must not exceed 30 characters."
         )
     if len(description) > 120:
         raise HTTPException(
-            status_code=400, detail="Beschreibung darf maximal 120 Zeichen lang sein."
+            status_code=400, detail="Description must not exceed 120 characters."
         )
     if not prompt:
         raise HTTPException(
-            status_code=400, detail="Prompt-Template ist erforderlich."
+            status_code=400, detail="Prompt template is required."
         )
     if len(prompt) > 1000:
         raise HTTPException(
-            status_code=400, detail="Prompt darf maximal 1000 Zeichen lang sein."
+            status_code=400, detail="Prompt must not exceed 1000 characters."
         )
 
     if style_id:
         style = crud.get_style(session, style_id)
         if not style:
-            raise HTTPException(status_code=404, detail="Style nicht gefunden.")
+            raise HTTPException(status_code=404, detail="Style not found.")
         existing = crud.get_style_by_name(session, name)
         if existing and existing.id != style.id:
             raise HTTPException(
                 status_code=400,
-                detail=f"Ein Style mit dem Namen '{name}' existiert bereits.",
+                detail=f"A style named '{name}' already exists.",
             )
         style = crud.update_style(
             session, style, name=name, description=description, prompt=prompt
@@ -343,7 +343,7 @@ async def save_admin_style(
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Ein Style mit dem Namen '{name}' existiert bereits.",
+                detail=f"A style named '{name}' already exists.",
             )
         style = crud.create_style(
             session,
@@ -358,7 +358,7 @@ async def save_admin_style(
         if image_data:
             if len(image_data) > 5 * 1024 * 1024:
                 raise HTTPException(
-                    status_code=400, detail="Bild darf maximal 5 MB groß sein."
+                    status_code=400, detail="Image must not exceed 5 MB."
                 )
             img_dir = settings.data_dir / "styles"
             ensure_dir(img_dir)
@@ -378,7 +378,7 @@ async def save_admin_style(
                 )
             except Exception as exc:
                 raise HTTPException(
-                    status_code=400, detail=f"Fehler bei der Bildverarbeitung: {exc}"
+                    status_code=400, detail=f"Image processing error: {exc}"
                 )
 
     return _serialize_style(style)
@@ -448,11 +448,11 @@ def update_style_preview_settings(
     """Update the default model configuration used for style preview generation."""
     model_config_id = payload.get("model_config_id")
     if not model_config_id:
-        raise HTTPException(status_code=400, detail="model_config_id ist erforderlich.")
+        raise HTTPException(status_code=400, detail="model_config_id is required.")
 
     cfg = crud.get_model_config(session, int(model_config_id))
     if not cfg:
-        raise HTTPException(status_code=404, detail="Modell-Konfiguration nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Model configuration not found.")
 
     _set_preview_model_config_id(cfg.id)
     return {"success": True, "model_config_id": cfg.id, "name": cfg.name}
@@ -470,7 +470,7 @@ def generate_style_preview(
 
     style = crud.get_style(session, style_id)
     if not style:
-        raise HTTPException(status_code=404, detail="Style nicht gefunden.")
+        raise HTTPException(status_code=404, detail="Style not found.")
 
     model_config_id = (payload or {}).get("model_config_id") if payload else None
     if not model_config_id:
@@ -484,7 +484,7 @@ def generate_style_preview(
 
     if not model_config:
         raise HTTPException(
-            status_code=400, detail="Keine Modell-Konfiguration verfügbar."
+            status_code=400, detail="No model configuration available."
         )
 
     user_prompt = ((payload or {}).get("prompt") if payload else "") or style.prompt
@@ -502,8 +502,8 @@ def restore_styles_defaults(session: Session = Depends(get_session)) -> dict[str
     return {
         "success": True,
         "message": (
-            f"{result['created']} neu erstellt, {result['updated']} aktualisiert "
-            f"({result['total']} Gesamt)."
+            f"{result['created']} created, {result['updated']} updated "
+            f"({result['total']} total)."
         ),
         **result,
     }
@@ -663,7 +663,7 @@ async def import_data(
     try:
         data = json.loads(content.decode("utf-8"))
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Ungültiges JSON: {exc}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc}")
 
     imported_counts: dict[str, int] = {}
 

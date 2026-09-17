@@ -19,17 +19,17 @@ const errorMessage = ref('')
 
 async function handleSetup() {
   if (!username.value.trim() || !password.value) {
-    errorMessage.value = 'Bitte alle Felder ausfüllen.'
+    errorMessage.value = 'Please fill in all fields.'
     return
   }
 
   if (password.value !== confirmPassword.value) {
-    errorMessage.value = 'Die Passwörter stimmen nicht überein.'
+    errorMessage.value = 'Passwords do not match.'
     return
   }
 
   if (password.value.length < 6) {
-    errorMessage.value = 'Das Passwort muss mindestens 6 Zeichen lang sein.'
+    errorMessage.value = 'Password must be at least 6 characters.'
     return
   }
 
@@ -43,13 +43,13 @@ async function handleSetup() {
     })
 
     if (res.success) {
-      toastStore.success('Admin-Konto erfolgreich eingerichtet!')
+      toastStore.success('Admin account successfully created!')
       router.push('/')
     } else {
-      errorMessage.value = res.message || 'Einrichtung fehlgeschlagen.'
+      errorMessage.value = res.message || 'Setup failed.'
     }
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.detail || 'Fehler bei der Initialisierung.'
+    errorMessage.value = error?.response?.data?.detail || 'Error during initialization.'
   } finally {
     isLoading.value = false
   }
@@ -64,8 +64,8 @@ async function handleSetup() {
         <div class="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-sky-400/40 bg-slate-200/80 dark:border-sky-300/30 dark:bg-slate-900/70 shadow-lg">
           <img src="/app-logo.svg" alt="Lumigen" class="h-12 w-12 rounded-xl invert dark:invert-0" />
         </div>
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Willkommen bei Lumigen</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400">Erstelle das primäre Administrator-Konto für dein lokales Studio</p>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Welcome to Lumigen</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Create the primary administrator account for your local studio</p>
       </div>
 
       <Card padding="lg">
@@ -76,7 +76,7 @@ async function handleSetup() {
 
           <Input
             id="admin-username"
-            label="Admin Benutzername"
+            label="Admin Username"
             placeholder="admin"
             v-model="username"
             :disabled="isLoading"
@@ -86,7 +86,7 @@ async function handleSetup() {
           <Input
             id="admin-password"
             type="password"
-            label="Passwort (min. 6 Zeichen)"
+            label="Password (min. 6 characters)"
             placeholder="••••••••"
             v-model="password"
             :disabled="isLoading"
@@ -95,7 +95,7 @@ async function handleSetup() {
           <Input
             id="admin-confirm-password"
             type="password"
-            label="Passwort bestätigen"
+            label="Confirm Password"
             placeholder="••••••••"
             v-model="confirmPassword"
             :disabled="isLoading"
@@ -109,7 +109,7 @@ async function handleSetup() {
               fullWidth
               :loading="isLoading"
             >
-              Studio einrichten
+              Set up Studio
             </Button>
           </div>
         </form>

@@ -59,15 +59,15 @@ export const useProfilesStore = defineStore('profiles', () => {
         const updated = await profilesApi.updateProfile(data.id, data)
         const index = profiles.value.findIndex((p) => p.id === data.id)
         if (index !== -1) profiles.value[index] = updated
-        toastStore.success('Profil aktualisiert.')
+        toastStore.success('Profile updated.')
       } else {
         const created = await profilesApi.createProfile(data)
         profiles.value.push(created)
-        toastStore.success('Profil erstellt.')
+        toastStore.success('Profile created.')
       }
       closeEditorModal()
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Speichern des Profils.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to save profile.')
     }
   }
 
@@ -75,9 +75,9 @@ export const useProfilesStore = defineStore('profiles', () => {
     try {
       await profilesApi.deleteProfile(id)
       profiles.value = profiles.value.filter((p) => p.id !== id)
-      toastStore.success('Profil gelöscht.')
+      toastStore.success('Profile deleted.')
     } catch (_error) {
-      toastStore.error('Fehler beim Löschen des Profils.')
+      toastStore.error('Failed to delete profile.')
     }
   }
 

@@ -40,9 +40,9 @@ async function handleTestKey(provider: string) {
 <template>
   <div class="space-y-4 text-xs">
     <div class="space-y-1">
-      <h3 class="text-sm font-bold text-slate-900 dark:text-white">Provider API-Keys</h3>
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white">Provider API Keys</h3>
       <p class="text-slate-500">
-        Hinterlege deine API-Schlüssel für die Bildgenerierungs-Provider. Alle Schlüssel werden sicher verschlüsselt gespeichert.
+        Store your API keys for image generation providers. All keys are encrypted securely at rest.
       </p>
     </div>
 
@@ -66,7 +66,7 @@ async function handleTestKey(provider: string) {
                   : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
               ]"
             >
-              {{ provider.has_key ? 'Schlüssel konfiguriert' : 'Nicht konfiguriert' }}
+              {{ provider.has_key ? 'Key configured' : 'Not configured' }}
             </span>
           </div>
 
@@ -77,7 +77,7 @@ async function handleTestKey(provider: string) {
             :loading="testingProvider === provider.provider"
             @click="handleTestKey(provider.provider)"
           >
-            Verbindung testen
+            Test Connection
           </Button>
         </div>
 
@@ -85,7 +85,7 @@ async function handleTestKey(provider: string) {
         <div class="flex gap-2">
           <Input
             type="password"
-            :placeholder="provider.has_key ? '•••••••••••••••• (Neu setzen)' : 'API Key eingeben...'"
+            :placeholder="provider.has_key ? '•••••••••••••••• (Set new key)' : 'Enter API key...'"
             v-model="inputKeys[provider.provider]"
             class="flex-1"
           />
@@ -96,7 +96,7 @@ async function handleTestKey(provider: string) {
             :loading="savingProvider === provider.provider"
             @click="handleSaveKey(provider.provider)"
           >
-            Speichern
+            Save
           </Button>
         </div>
       </Card>

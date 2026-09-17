@@ -88,7 +88,7 @@ onUnmounted(() => {
         </router-link>
 
         <!-- Main Navigation -->
-        <nav aria-label="Hauptnavigation" class="hidden md:flex items-center gap-1">
+        <nav aria-label="Main navigation" class="hidden md:flex items-center gap-1">
           <router-link
             v-for="link in navLinks"
             :key="link.path"
@@ -113,7 +113,7 @@ onUnmounted(() => {
                 ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 ring-1 ring-sky-500/30'
                 : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
             ]"
-            title="Warteschlange öffnen (Fortschritt & Steuerung)"
+            title="Open queue (Progress & controls)"
           >
             <span class="text-xs">⏳</span>
             <span>Queue</span>
@@ -134,7 +134,7 @@ onUnmounted(() => {
           type="button"
           @click="queueStore.toggleQueue"
           class="md:hidden relative inline-flex items-center justify-center p-2 rounded-xl border border-slate-300/60 bg-white/70 text-slate-800 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200"
-          title="Warteschlange"
+          title="Queue"
         >
           <span class="text-sm leading-none">⏳</span>
           <span
@@ -167,7 +167,7 @@ onUnmounted(() => {
             class="absolute right-0 mt-2 w-48 rounded-2xl border border-slate-200 bg-white/95 p-1.5 text-xs shadow-xl backdrop-blur-md dark:border-white/10 dark:bg-slate-900/95 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
           >
             <div class="px-3 py-2 border-b border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400">
-              Angemeldet als <strong class="text-slate-800 dark:text-slate-200">{{ authStore.user.username }}</strong>
+              Signed in as <strong class="text-slate-800 dark:text-slate-200">{{ authStore.user.username }}</strong>
             </div>
 
             <router-link
@@ -176,7 +176,7 @@ onUnmounted(() => {
               @click="isUserMenuOpen = false"
               class="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10 transition-colors"
             >
-              ⚙️ Studio Einstellungen
+              ⚙️ Studio Settings
             </router-link>
 
             <button
@@ -192,7 +192,7 @@ onUnmounted(() => {
               @click="handleLogout"
               class="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
             >
-              🚪 Abmelden
+              🚪 Sign out
             </button>
           </div>
         </div>
@@ -202,7 +202,7 @@ onUnmounted(() => {
           to="/login"
           class="inline-flex items-center rounded-xl bg-sky-500 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-sky-600 shadow-sm transition-all"
         >
-          Anmelden
+          Sign in
         </router-link>
       </div>
     </div>

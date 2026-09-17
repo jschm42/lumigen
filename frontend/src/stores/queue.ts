@@ -60,13 +60,13 @@ export const useQueueStore = defineStore('queue', () => {
     try {
       const res = await generationApi.cancelJob(jobId)
       if (res.success) {
-        toastStore.info('Generierung wurde abgebrochen.')
+        toastStore.info('Generation was cancelled.')
         await fetchQueue()
       } else {
-        toastStore.warning(res.message || 'Konnte nicht abgebrochen werden.')
+        toastStore.warning(res.message || 'Could not be cancelled.')
       }
     } catch (err: any) {
-      toastStore.error(err?.response?.data?.detail || 'Fehler beim Abbrechen.')
+      toastStore.error(err?.response?.data?.detail || 'Failed to cancel generation.')
     } finally {
       actionLoading.value[jobId] = false
     }
@@ -76,10 +76,10 @@ export const useQueueStore = defineStore('queue', () => {
     actionLoading.value[jobId] = true
     try {
       const res = await generationApi.retryJob(jobId)
-      toastStore.success(`Generierung #${res.job_id} erneut in Warteschlange eingereiht.`)
+      toastStore.success(`Generation #${res.job_id} queued again.`)
       await fetchQueue()
     } catch (err: any) {
-      toastStore.error(err?.response?.data?.detail || 'Fehler beim erneuten Starten.')
+      toastStore.error(err?.response?.data?.detail || 'Failed to restart generation.')
     } finally {
       actionLoading.value[jobId] = false
     }

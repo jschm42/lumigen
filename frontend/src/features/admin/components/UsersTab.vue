@@ -29,26 +29,26 @@ async function handleCreateUser() {
       password: newPassword.value,
       role: newRole.value,
     })
-    toastStore.success('Benutzer erfolgreich angelegt!')
+    toastStore.success('User successfully created!')
     adminStore.fetchUsers()
     isCreateOpen.value = false
     newUsername.value = ''
     newPassword.value = ''
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Fehler beim Erstellen des Benutzers.')
+    toastStore.error(error?.response?.data?.detail || 'Failed to create user.')
   } finally {
     isSaving.value = false
   }
 }
 
 async function handleDeleteUser(userId: number, username: string) {
-  if (confirm(`Möchtest du den Benutzer "${username}" wirklich löschen?`)) {
+  if (confirm(`Do you really want to delete user "${username}"?`)) {
     try {
       await adminApi.deleteUser(userId)
-      toastStore.success('Benutzer gelöscht.')
+      toastStore.success('User deleted.')
       adminStore.fetchUsers()
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Löschen fehlgeschlagen.')
+      toastStore.error(error?.response?.data?.detail || 'Deletion failed.')
     }
   }
 }
@@ -58,13 +58,13 @@ async function handleDeleteUser(userId: number, username: string) {
   <div class="space-y-6 text-xs">
     <div class="flex items-center justify-between">
       <div class="space-y-0.5">
-        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Benutzerverwaltung</h3>
-        <p class="text-slate-500">Verwalte Konten und Zugriffsrollen für dein Studio.</p>
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white">User Management</h3>
+        <p class="text-slate-500">Manage accounts and access roles for your studio.</p>
       </div>
 
       <Button variant="primary" size="sm" @click="isCreateOpen = true">
         <template #icon>+</template>
-        Benutzer anlegen
+        Add User
       </Button>
     </div>
 
@@ -74,9 +74,9 @@ async function handleDeleteUser(userId: number, username: string) {
         <thead>
           <tr class="border-b border-slate-200 dark:border-white/10 text-slate-500 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-950/40">
             <th class="p-3.5">ID</th>
-            <th class="p-3.5">Benutzername</th>
-            <th class="p-3.5">Rolle</th>
-            <th class="p-3.5 text-right">Aktionen</th>
+            <th class="p-3.5">Username</th>
+            <th class="p-3.5">Role</th>
+            <th class="p-3.5 text-right">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200/60 dark:divide-white/10">
@@ -105,7 +105,7 @@ async function handleDeleteUser(userId: number, username: string) {
                 @click="handleDeleteUser(u.id, u.username)"
                 class="text-rose-500 hover:text-rose-400 font-semibold"
               >
-                Löschen
+                Delete
               </button>
             </td>
           </tr>
@@ -116,39 +116,39 @@ async function handleDeleteUser(userId: number, username: string) {
     <!-- Create User Modal -->
     <Modal
       :open="isCreateOpen"
-      title="Neuen Benutzer anlegen"
+      title="Create New User"
       size="sm"
       @update:open="isCreateOpen = $event"
     >
       <form @submit.prevent="handleCreateUser" class="space-y-4">
         <Input
-          label="Benutzername"
+          label="Username"
           v-model="newUsername"
           required
         />
         <Input
-          label="Passwort"
+          label="Password"
           type="password"
           v-model="newPassword"
           required
         />
         <div>
           <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-            Rolle
+            Role
           </label>
           <select
             v-model="newRole"
             class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
           >
-            <option value="user">Benutzer (Standard)</option>
+            <option value="user">User (Standard)</option>
             <option value="admin">Administrator</option>
           </select>
         </div>
       </form>
 
       <template #footer>
-        <Button variant="secondary" size="sm" @click="isCreateOpen = false">Abbrechen</Button>
-        <Button variant="primary" size="sm" :loading="isSaving" @click="handleCreateUser">Erstellen</Button>
+        <Button variant="secondary" size="sm" @click="isCreateOpen = false">Cancel</Button>
+        <Button variant="primary" size="sm" :loading="isSaving" @click="handleCreateUser">Create</Button>
       </template>
     </Modal>
   </div>

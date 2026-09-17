@@ -66,11 +66,11 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (res.success) {
         sessions.value = []
         createNewSession()
-        toastStore.success('Alle Sessions wurden gelöscht.')
+        toastStore.success('All sessions were deleted.')
       }
       return res
     } catch (_error) {
-      toastStore.error('Fehler beim Löschen der Sessions.')
+      toastStore.error('Failed to delete sessions.')
       throw _error
     }
   }

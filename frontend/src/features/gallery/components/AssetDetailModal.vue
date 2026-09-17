@@ -6,6 +6,7 @@ import { useGalleryStore } from '@/stores/gallery'
 import { useGenerateStore } from '@/stores/generate'
 import { useToastStore } from '@/stores/toast'
 import { useImageViewerStore } from '@/stores/imageViewer'
+import { downloadFile } from '@/utils/download'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
@@ -20,6 +21,7 @@ const isDeleteConfirmOpen = ref(false)
 const isAddCatOpen = ref(false)
 const newCatName = ref('')
 const isCreatingCat = ref(false)
+const isDownloading = ref(false)
 
 const assignedCategories = computed(() => {
   if (!galleryStore.activeAsset) return []
@@ -63,7 +65,6 @@ async function createAndAddCategory() {
   }
 }
 
-
 function openImageViewer() {
   if (!galleryStore.activeAsset) return
   imageViewerStore.openViewer({
@@ -76,9 +77,9 @@ function openImageViewer() {
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    toastStore.success('In die Zwischenablage kopiert!')
+    toastStore.success('Copied to clipboard!')
   } catch (_e) {
-    toastStore.error('Kopieren fehlgeschlagen.')
+    toastStore.error('Copy failed.')
   }
 }
 
@@ -97,7 +98,7 @@ function handleRemix() {
   }
   galleryStore.closeDetailModal()
   router.push('/')
-  toastStore.info('Prompt & Einstellungen in Studio geladen!')
+  toastStore.info('Prompt & settings loaded into Studio!')
 }
 
 function handleUseAsInputImage() {
@@ -105,6 +106,17 @@ function handleUseAsInputImage() {
   generateStore.attachAssetAsImage(galleryStore.activeAsset)
   galleryStore.closeDetailModal()
   router.push('/')
+}
+
+async function handleDownload() {
+  const url = galleryStore.activeAsset?.download_url || galleryStore.activeAsset?.image_url
+  if (!url) return
+  isDownloading.value = true
+  try {
+    await downloadFile(url)
+  } finally {
+    isDownloading.value = false
+  }
 }
 
 async function handleDelete() {
@@ -140,7 +152,7 @@ function handleRateAsset(star: number) {
             type="button"
             @click="handleRateAsset(star)"
             class="text-base text-amber-400 hover:scale-110 transition-transform"
-            :title="galleryStore.activeAsset.rating === star ? 'Bewertung aufheben' : `${star} Sterne`"
+            :title="galleryStore.activeAsset.rating === star ? 'Clear rating' : `${star} stars`"
           >
             {{ (galleryStore.activeAsset.rating || 0) >= star ? '★' : '☆' }}
           </button>
@@ -153,7 +165,7 @@ function handleRateAsset(star: number) {
       <div
         @click="openImageViewer"
         class="lg:col-span-7 group relative flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-200/60 dark:border-white/10 overflow-hidden min-h-[350px] cursor-pointer hover:border-sky-500/50 transition-colors"
-        title="In Vollbild & Zoom-Viewer öffnen"
+        title="Open in fullscreen & zoom viewer"
       >
         <img
           :src="galleryStore.activeAsset.image_url || galleryStore.activeAsset.thumbnail_url"
@@ -164,7 +176,7 @@ function handleRateAsset(star: number) {
           <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
           </svg>
-          <span>Vollbild & Zoom</span>
+          <span>Fullscreen & Zoom</span>
         </div>
       </div>
 
@@ -179,7 +191,7 @@ function handleRateAsset(star: number) {
               @click="copyText(galleryStore.activeAsset.prompt)"
               class="text-sky-500 hover:text-sky-400 font-bold"
             >
-              Kopieren
+              Copy
             </button>
           </div>
           <p class="text-xs text-slate-900 dark:text-slate-100 leading-relaxed break-words font-medium">
@@ -192,7 +204,7 @@ function handleRateAsset(star: number) {
           v-if="galleryStore.activeAsset.negative_prompt"
           class="space-y-1.5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300"
         >
-          <div class="text-[11px] font-semibold uppercase tracking-wider">Negativer Prompt</div>
+          <div class="text-[11px] font-semibold uppercase tracking-wider">Negative Prompt</div>
           <p class="text-xs leading-relaxed break-words">
             {{ galleryStore.activeAsset.negative_prompt }}
           </p>
@@ -201,7 +213,7 @@ function handleRateAsset(star: number) {
         <!-- Technical Parameters Grid -->
         <div class="grid grid-cols-2 gap-2 text-[11px]">
           <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10">
-            <span class="text-slate-500 block">Modell</span>
+            <span class="text-slate-500 block">Model</span>
             <span class="font-semibold text-slate-900 dark:text-white truncate block">
               {{ galleryStore.activeAsset.model || 'N/A' }}
             </span>
@@ -231,10 +243,9 @@ function handleRateAsset(star: number) {
 
         <!-- Categories Management Section -->
         <div class="space-y-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-white/10">
-
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Kategorien ({{ assignedCategories.length }})
+              Categories ({{ assignedCategories.length }})
             </span>
             <div class="relative">
               <button
@@ -242,7 +253,7 @@ function handleRateAsset(star: number) {
                 @click="isAddCatOpen = !isAddCatOpen"
                 class="text-[11px] text-sky-600 dark:text-sky-400 font-bold hover:underline"
               >
-                + Kategorie zuweisen
+                + Assign Category
               </button>
 
               <!-- Category Picker Popover -->
@@ -251,12 +262,12 @@ function handleRateAsset(star: number) {
                 class="absolute right-0 top-full mt-1.5 w-56 rounded-xl bg-white dark:bg-slate-900 border border-slate-300/80 dark:border-white/15 shadow-xl p-2 z-50 text-xs space-y-2 animate-in fade-in zoom-in-95 duration-150"
               >
                 <div class="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-white/10">
-                  <span class="font-bold text-[11px]">Kategorie wählen</span>
+                  <span class="font-bold text-[11px]">Select Category</span>
                   <button type="button" @click="isAddCatOpen = false" class="text-slate-400 hover:text-white">✕</button>
                 </div>
 
                 <div v-if="availableCategoriesToAdd.length === 0" class="py-2 text-center text-slate-400 text-[11px]">
-                  Keine weiteren Kategorien verfügbar
+                  No additional categories available
                 </div>
                 <div v-else class="max-h-36 overflow-y-auto space-y-1">
                   <button
@@ -274,7 +285,7 @@ function handleRateAsset(star: number) {
                 <div class="pt-1.5 border-t border-slate-200 dark:border-white/10 flex items-center gap-1">
                   <input
                     v-model="newCatName"
-                    placeholder="Neu anlegen..."
+                    placeholder="New category..."
                     @keydown.enter.prevent="createAndAddCategory"
                     class="w-full rounded-lg bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[11px] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
                   />
@@ -303,38 +314,38 @@ function handleRateAsset(star: number) {
                 type="button"
                 @click="removeCategory(cat.id)"
                 class="hover:text-rose-500 font-bold ml-0.5"
-                title="Kategorie entfernen"
+                title="Remove category"
               >
                 ✕
               </button>
             </span>
           </div>
           <p v-else class="text-[11px] text-slate-400 italic">
-            Keine Kategorien zugewiesen.
+            No categories assigned.
           </p>
         </div>
 
         <!-- Action Buttons -->
-
         <div class="pt-2 border-t border-slate-200 dark:border-white/10 flex flex-wrap gap-2">
           <Button variant="primary" size="sm" @click="handleRemix">
             🔁 Remix in Studio
           </Button>
 
           <Button variant="surface" size="sm" @click="handleUseAsInputImage">
-            🖼️ Als Eingabebild nutzen
+            🖼️ Use as Input Image
           </Button>
 
-          <a
-            :href="galleryStore.activeAsset.download_url || galleryStore.activeAsset.image_url"
-            download
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white/70 dark:bg-slate-800 hover:bg-slate-100 text-slate-800 dark:text-white font-semibold transition-colors"
+          <Button
+            variant="surface"
+            size="sm"
+            :disabled="isDownloading"
+            @click="handleDownload"
           >
-            ⬇️ Download
-          </a>
+            ⬇️ {{ isDownloading ? 'Downloading...' : 'Download' }}
+          </Button>
 
           <Button variant="danger" size="sm" @click="isDeleteConfirmOpen = true">
-            🗑️ Löschen
+            🗑️ Delete
           </Button>
         </div>
       </div>
@@ -343,7 +354,7 @@ function handleRateAsset(star: number) {
     <!-- Confirm Delete Dialog -->
     <ConfirmDialog
       :open="isDeleteConfirmOpen"
-      message="Möchtest du dieses Bild unwiderruflich löschen?"
+      message="Do you really want to permanently delete this image?"
       @update:open="isDeleteConfirmOpen = $event"
       @confirm="handleDelete"
     />

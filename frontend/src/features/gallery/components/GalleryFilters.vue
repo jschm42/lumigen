@@ -31,11 +31,11 @@ onUnmounted(() => {
 })
 
 const timePresets = [
-  { value: '', label: 'Gesamte Zeit' },
-  { value: 'today', label: 'Heute' },
-  { value: 'yesterday', label: 'Gestern' },
-  { value: 'last_7_days', label: 'Letzte 7 Tage' },
-  { value: 'last_30_days', label: 'Letzte 30 Tage' },
+  { value: '', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: 'last_7_days', label: 'Last 7 days' },
+  { value: 'last_30_days', label: 'Last 30 days' },
 ]
 
 function toggleCategory(catId: number) {
@@ -61,7 +61,7 @@ function toggleCategory(catId: number) {
           type="text"
           v-model="galleryStore.filters.q"
           @input="galleryStore.fetchAssets(true)"
-          placeholder="Suchbegriff im Prompt..."
+          placeholder="Search prompt..."
           class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
       </div>
@@ -84,11 +84,11 @@ function toggleCategory(catId: number) {
           @change="galleryStore.fetchAssets(true)"
           class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
-          <option :value="null">Alle Bewertungen</option>
-          <option :value="5">⭐⭐⭐⭐⭐ (5 Sterne)</option>
-          <option :value="4">⭐⭐⭐⭐ (min. 4 Sterne)</option>
-          <option :value="3">⭐⭐⭐ (min. 3 Sterne)</option>
-          <option :value="1">⭐ (min. 1 Stern)</option>
+          <option :value="null">All ratings</option>
+          <option :value="5">⭐⭐⭐⭐⭐ (5 stars)</option>
+          <option :value="4">⭐⭐⭐⭐ (min. 4 stars)</option>
+          <option :value="3">⭐⭐⭐ (min. 3 stars)</option>
+          <option :value="1">⭐ (min. 1 star)</option>
         </select>
       </div>
 
@@ -99,7 +99,7 @@ function toggleCategory(catId: number) {
           @click="isCategoryPopoverOpen = !isCategoryPopoverOpen"
           class="w-full flex items-center justify-between rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
         >
-          <span>Kategorien ({{ galleryStore.filters.category_ids.length }})</span>
+          <span>Categories ({{ galleryStore.filters.category_ids.length }})</span>
           <span>🏷️</span>
         </button>
 
@@ -123,7 +123,7 @@ function toggleCategory(catId: number) {
             <span class="truncate">{{ cat.name }}</span>
           </div>
           <div v-if="galleryStore.categories.length === 0" class="p-2 text-slate-400 text-center">
-            Keine Kategorien angelegt
+            No categories created
           </div>
         </div>
       </div>
@@ -151,7 +151,7 @@ function toggleCategory(catId: number) {
           type="button"
           @click="galleryStore.resetFilters"
           class="p-2 rounded-xl border border-slate-200 bg-white/80 hover:bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-400 dark:hover:bg-white/10"
-          title="Filter zurücksetzen"
+          title="Reset filters"
         >
           🔄
         </button>

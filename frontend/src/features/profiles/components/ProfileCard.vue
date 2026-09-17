@@ -17,7 +17,7 @@ function handleEdit() {
 }
 
 function handleDelete() {
-  if (confirm(`Möchtest du das Profil "${props.profile.name}" wirklich löschen?`)) {
+  if (confirm(`Do you really want to delete profile "${props.profile.name}"?`)) {
     profilesStore.deleteProfile(props.profile.id)
   }
 }
@@ -51,7 +51,7 @@ function handleDelete() {
       </div>
 
       <div v-if="profile.negative_prompt" class="space-y-0.5">
-        <span class="text-[10px] font-semibold uppercase text-rose-400">Negativ Prompt</span>
+        <span class="text-[10px] font-semibold uppercase text-rose-400">Negative Prompt</span>
         <p class="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-1 bg-rose-50/50 dark:bg-rose-950/20 p-2 rounded-lg font-mono">
           {{ profile.negative_prompt }}
         </p>
@@ -59,7 +59,7 @@ function handleDelete() {
 
       <!-- Categories preview -->
       <div v-if="profile.categories && profile.categories.length > 0" class="pt-1.5 space-y-1">
-        <span class="text-[10px] font-semibold uppercase text-slate-400 block">Kategorien</span>
+        <span class="text-[10px] font-semibold uppercase text-slate-400 block">Categories</span>
         <div class="flex flex-wrap gap-1">
           <Badge
             v-for="cat in profile.categories"
@@ -76,7 +76,7 @@ function handleDelete() {
     <!-- Footer Actions -->
     <div class="flex items-center justify-end gap-2 pt-1">
       <Button variant="secondary" size="xs" @click="handleEdit">
-        ✏️ Bearbeiten
+        ✏️ Edit
       </Button>
       <Button variant="danger" size="xs" @click="handleDelete">
         🗑️

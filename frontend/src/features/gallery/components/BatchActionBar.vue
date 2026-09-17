@@ -25,7 +25,7 @@ async function confirmDelete() {
     class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 text-white shadow-2xl border border-white/15 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-200 text-xs"
   >
     <div class="font-semibold pr-2 border-r border-white/20">
-      {{ galleryStore.selectedAssetIds.length }} gewählt
+      {{ galleryStore.selectedAssetIds.length }} selected
     </div>
 
     <!-- Clear selection -->
@@ -33,9 +33,9 @@ async function confirmDelete() {
       type="button"
       @click="galleryStore.clearSelection"
       class="text-slate-400 hover:text-white transition-colors"
-      title="Auswahl aufheben (Esc)"
+      title="Clear selection (Esc)"
     >
-      Abwählen (Esc)
+      Deselect (Esc)
     </button>
 
     <!-- Bulk Categorize Button -->
@@ -44,7 +44,7 @@ async function confirmDelete() {
       size="xs"
       @click="isCategorizeModalOpen = true"
     >
-      🏷️ Kategorien
+      🏷️ Categories
     </Button>
 
     <!-- Bulk Delete Button -->
@@ -53,12 +53,12 @@ async function confirmDelete() {
       size="xs"
       @click="handleBulkDelete"
     >
-      🗑️ Löschen
+      🗑️ Delete
     </Button>
 
     <ConfirmDialog
       :open="isDeleteConfirmOpen"
-      :message="`Möchtest du wirklich alle ${galleryStore.selectedAssetIds.length} ausgewählten Bilder löschen?`"
+      :message="`Do you really want to delete all ${galleryStore.selectedAssetIds.length} selected images?`"
       @update:open="isDeleteConfirmOpen = $event"
       @confirm="confirmDelete"
     />

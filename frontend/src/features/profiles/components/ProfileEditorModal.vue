@@ -118,41 +118,41 @@ async function handleSubmit() {
 <template>
   <Modal
     :open="profilesStore.isEditorOpen"
-    :title="profilesStore.isEditing ? 'Profil bearbeiten' : 'Neues Profil erstellen'"
+    :title="profilesStore.isEditing ? 'Edit Profile' : 'Create New Profile'"
     size="lg"
     @update:open="profilesStore.closeEditorModal"
   >
     <form @submit.prevent="handleSubmit" class="space-y-4 text-xs">
       <Input
-        label="Profil Name"
-        placeholder="z.B. Cinematic Portrait"
+        label="Profile Name"
+        placeholder="e.g. Cinematic Portrait"
         v-model="formData.name"
         required
       />
 
       <Input
-        label="Beschreibung"
-        placeholder="Kurze Beschreibung des Profils..."
+        label="Description"
+        placeholder="Short description of the profile..."
         v-model="formData.description"
       />
 
       <Textarea
-        label="System Prompt / Basis-Stil"
-        placeholder="Wird automatisch jedem Prompt vorangestellt..."
+        label="System Prompt / Base Style"
+        placeholder="Automatically prepended to every prompt..."
         v-model="formData.system_prompt"
         :rows="3"
       />
 
       <Textarea
-        label="Standard Negativer Prompt"
-        placeholder="Standardmäßig zu vermeidende Begriffe..."
+        label="Default Negative Prompt"
+        placeholder="Default terms to avoid..."
         v-model="formData.negative_prompt"
         :rows="2"
       />
 
       <div>
         <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-          Standard Format (Seitenverhältnis)
+          Default Format (Aspect Ratio)
         </label>
         <select
           v-model="formData.default_aspect_ratio"
@@ -166,19 +166,19 @@ async function handleSubmit() {
       <div class="space-y-2 pt-2 border-t border-slate-200/80 dark:border-white/10">
         <div class="flex items-center justify-between">
           <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500">
-            Kategorien
+            Categories
           </label>
           <span v-if="formData.category_ids.length > 0" class="text-[10px] font-medium text-sky-600 dark:text-sky-400">
-            {{ formData.category_ids.length }} ausgewählt
+            {{ formData.category_ids.length }} selected
           </span>
         </div>
         <p class="text-[11px] text-slate-500 dark:text-slate-400">
-          Bilder, die mit diesem Profil generiert werden, werden automatisch diesen Kategorien zugewiesen.
+          Images generated with this profile will be automatically assigned to these categories.
         </p>
 
         <!-- Category Chips -->
         <div v-if="isLoadingCategories" class="py-2 text-slate-400">
-          Kategorien werden geladen...
+          Loading categories...
         </div>
         <div v-else class="flex flex-wrap gap-2 max-h-40 overflow-y-auto py-1">
           <button
@@ -198,7 +198,7 @@ async function handleSubmit() {
             <span v-if="formData.category_ids.includes(cat.id)" class="text-[10px] font-bold">✓</span>
           </button>
           <div v-if="availableCategories.length === 0" class="text-slate-400 italic py-1">
-            Noch keine Kategorien vorhanden.
+            No categories available yet.
           </div>
         </div>
 
@@ -207,7 +207,7 @@ async function handleSubmit() {
           <input
             v-model="newCategoryName"
             type="text"
-            placeholder="Neue Kategorie hinzufügen..."
+            placeholder="Add new category..."
             class="flex-1 rounded-xl border border-slate-300/80 bg-white/80 px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
             @keydown.enter.prevent="handleQuickCreateCategory"
           />
@@ -219,7 +219,7 @@ async function handleSubmit() {
             :disabled="!newCategoryName.trim()"
             @click="handleQuickCreateCategory"
           >
-            + Hinzufügen
+            + Add
           </Button>
         </div>
       </div>
@@ -227,7 +227,7 @@ async function handleSubmit() {
 
     <template #footer>
       <Button variant="secondary" size="sm" @click="profilesStore.closeEditorModal">
-        Abbrechen
+        Cancel
       </Button>
       <Button
         variant="primary"
@@ -235,7 +235,7 @@ async function handleSubmit() {
         :loading="isSubmitting"
         @click="handleSubmit"
       >
-        Speichern
+        Save
       </Button>
     </template>
   </Modal>

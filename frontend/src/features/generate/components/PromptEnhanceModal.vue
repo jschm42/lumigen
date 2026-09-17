@@ -26,7 +26,7 @@ const selectedLlm = ref('gemini-2.5-flash')
 
 async function runEnhancement() {
   if (!generateStore.prompt.trim()) {
-    toastStore.warning('Bitte zuerst einen Ausgangs-Prompt eingeben.')
+    toastStore.warning('Please enter an initial prompt first.')
     return
   }
 
@@ -39,7 +39,7 @@ async function runEnhancement() {
     })
     enhancedPrompt.value = res.enhanced_prompt
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Fehler bei der Prompt-Optimierung.')
+    toastStore.error(error?.response?.data?.detail || 'Failed to optimize prompt.')
   } finally {
     isEnhancing.value = false
   }
@@ -48,7 +48,7 @@ async function runEnhancement() {
 function applyEnhanced() {
   if (enhancedPrompt.value.trim()) {
     generateStore.prompt = enhancedPrompt.value.trim()
-    toastStore.success('Optimierter Prompt übernommen!')
+    toastStore.success('Optimized prompt applied!')
     emit('update:open', false)
   }
 }
@@ -59,7 +59,7 @@ function applyEnhanced() {
     <div class="space-y-4 text-xs">
       <!-- LLM Model Selection -->
       <div class="flex items-center justify-between">
-        <span class="text-slate-600 dark:text-slate-400 font-medium">KI Modell für Prompt-Erweiterung:</span>
+        <span class="text-slate-600 dark:text-slate-400 font-medium">AI model for prompt enhancement:</span>
         <select
           v-model="selectedLlm"
           class="rounded-xl border border-slate-300/80 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
@@ -76,7 +76,7 @@ function applyEnhanced() {
           Original Prompt
         </label>
         <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200">
-          {{ generateStore.prompt || '(Kein Prompt eingegeben)' }}
+          {{ generateStore.prompt || '(No prompt entered)' }}
         </div>
       </div>
 
@@ -88,26 +88,26 @@ function applyEnhanced() {
           :loading="isEnhancing"
           @click="runEnhancement"
         >
-          ✨ Prompt jetzt optimieren
+          ✨ Optimize prompt now
         </Button>
       </div>
 
       <!-- Enhanced Result Preview -->
       <div v-if="enhancedPrompt" class="space-y-2 pt-2 border-t border-slate-200 dark:border-white/10">
         <label class="font-semibold uppercase tracking-wider text-[11px] text-sky-500">
-          Vorschlag des Modells
+          Model suggestion
         </label>
         <Textarea
           v-model="enhancedPrompt"
           :rows="4"
-          placeholder="Optimierter Prompt..."
+          placeholder="Optimized prompt..."
         />
       </div>
     </div>
 
     <template #footer>
       <Button variant="secondary" size="sm" @click="emit('update:open', false)">
-        Abbrechen
+        Cancel
       </Button>
       <Button
         v-if="enhancedPrompt"
@@ -115,7 +115,7 @@ function applyEnhanced() {
         size="sm"
         @click="applyEnhanced"
       >
-        Prompt übernehmen
+        Apply prompt
       </Button>
     </template>
   </Modal>

@@ -38,14 +38,14 @@ function selectStyle(style: StylePreset | null) {
 </script>
 
 <template>
-  <Modal :open="open" title="Style Preset wählen" size="xl" @update:open="emit('update:open', $event)">
+  <Modal :open="open" title="Select Style Preset" size="xl" @update:open="emit('update:open', $event)">
     <div class="space-y-4">
       <!-- Search & Filter bar -->
       <div class="flex items-center gap-3">
         <input
           type="text"
           v-model="searchQuery"
-          placeholder="Styles durchsuchen..."
+          placeholder="Search styles..."
           class="flex-1 rounded-xl border border-slate-300/80 bg-white/70 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
         />
         <Button
@@ -54,7 +54,7 @@ function selectStyle(style: StylePreset | null) {
           @click="selectStyle(null)"
           :class="generateStore.selectedStyleId === null ? 'ring-2 ring-sky-500' : ''"
         >
-          Kein Style (Standard)
+          No Style (Default)
         </Button>
       </div>
 
@@ -91,7 +91,7 @@ function selectStyle(style: StylePreset | null) {
               v-if="String(generateStore.selectedStyleId) === String(style.id)"
               class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500 text-white shadow-md"
             >
-              Aktiv
+              Active
             </div>
           </div>
 

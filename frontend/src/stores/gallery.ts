@@ -127,7 +127,7 @@ export const useGalleryStore = defineStore('gallery', () => {
         activeAsset.value.rating = res.rating
       }
     } catch (_error) {
-      toastStore.error('Bewertung konnte nicht gespeichert werden.')
+      toastStore.error('Failed to save rating.')
     }
   }
 
@@ -139,7 +139,7 @@ export const useGalleryStore = defineStore('gallery', () => {
         activeAsset.value.is_favorite = res.is_favorite
       }
     } catch (_error) {
-      toastStore.error('Favorit konnte nicht aktualisiert werden.')
+      toastStore.error('Failed to update favorite.')
     }
   }
 
@@ -151,9 +151,9 @@ export const useGalleryStore = defineStore('gallery', () => {
       if (activeAsset.value?.id === id) {
         closeDetailModal()
       }
-      toastStore.success('Bild gelöscht.')
+      toastStore.success('Image deleted.')
     } catch (_error) {
-      toastStore.error('Bild konnte nicht gelöscht werden.')
+      toastStore.error('Could not delete image.')
     }
   }
 
@@ -162,10 +162,10 @@ export const useGalleryStore = defineStore('gallery', () => {
     try {
       const res = await galleryApi.bulkDelete(selectedAssetIds.value)
       assets.value = assets.value.filter((a) => !selectedAssetIds.value.includes(a.id))
-      toastStore.success(`${res.deleted_count} Bilder gelöscht.`)
+      toastStore.success(`${res.deleted_count} images deleted.`)
       clearSelection()
     } catch (_error) {
-      toastStore.error('Fehler beim Löschen der Bilder.')
+      toastStore.error('Failed to delete images.')
     }
   }
 
@@ -174,10 +174,10 @@ export const useGalleryStore = defineStore('gallery', () => {
       const newCat = await galleryApi.createCategory(name, color)
       categories.value.push(newCat)
       categories.value.sort((a, b) => a.name.localeCompare(b.name))
-      toastStore.success(`Kategorie "${newCat.name}" erstellt.`)
+      toastStore.success(`Category "${newCat.name}" created.`)
       return newCat
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Erstellen der Kategorie.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to create category.')
       throw error
     }
   }
@@ -189,10 +189,10 @@ export const useGalleryStore = defineStore('gallery', () => {
       if (index !== -1) {
         categories.value[index] = { ...categories.value[index], ...updated }
       }
-      toastStore.success('Kategorie aktualisiert.')
+      toastStore.success('Category updated.')
       return updated
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Aktualisieren der Kategorie.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to update category.')
       throw error
     }
   }
@@ -209,9 +209,9 @@ export const useGalleryStore = defineStore('gallery', () => {
       if (activeAsset.value?.category_ids) {
         activeAsset.value.category_ids = activeAsset.value.category_ids.filter((cid) => cid !== id)
       }
-      toastStore.success('Kategorie gelöscht.')
+      toastStore.success('Category deleted.')
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Löschen der Kategorie.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to delete category.')
       throw error
     }
   }
@@ -226,10 +226,10 @@ export const useGalleryStore = defineStore('gallery', () => {
       if (activeAsset.value && activeAsset.value.id === assetId) {
         activeAsset.value.category_ids = categoryIds
       }
-      toastStore.success('Kategorien aktualisiert.')
+      toastStore.success('Categories updated.')
       return res
     } catch (_error) {
-      toastStore.error('Fehler beim Aktualisieren der Kategorien.')
+      toastStore.error('Failed to update categories.')
     }
   }
 
@@ -247,10 +247,10 @@ export const useGalleryStore = defineStore('gallery', () => {
           }
         }
       })
-      toastStore.success(`${selectedAssetIds.value.length} Bilder aktualisiert.`)
+      toastStore.success(`${selectedAssetIds.value.length} images updated.`)
       loadCategories()
     } catch (_error) {
-      toastStore.error('Fehler bei der Batch-Kategorisierung.')
+      toastStore.error('Failed to batch categorize.')
     }
   }
 

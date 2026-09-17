@@ -505,10 +505,10 @@ def is_spa_request(request: Request) -> bool:
 def spa_fallback_response() -> HTMLResponse:
     """Fallback response when the Vue SPA distribution has not been built yet and Jinja templates are absent."""
     html_content = """<!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Lumigen - Frontend nicht gebaut</title>
+  <title>Lumigen - Frontend Not Built</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background: #0b0f19; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
     .card { max-width: 520px; padding: 2.5rem; background: #111827; border-radius: 1.25rem; border: 1px solid rgba(255,255,255,0.1); text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
@@ -519,13 +519,13 @@ def spa_fallback_response() -> HTMLResponse:
 </head>
 <body>
   <div class="card">
-    <h2>Lumigen Frontend nicht gebaut</h2>
-    <p>Die kompilierten Frontend-Dateien unter <code>app/web/dist/index.html</code> wurden nicht gefunden.</p>
-    <p>Bitte baue das Frontend oder erstelle das Docker-Image neu:</p>
-    <pre># Docker Image neu bauen:
+    <h2>Lumigen Frontend Not Built</h2>
+    <p>The compiled frontend files at <code>app/web/dist/index.html</code> were not found.</p>
+    <p>Please build the frontend or rebuild the Docker image:</p>
+    <pre># Rebuild Docker image:
 docker compose build --no-cache
 
-# Oder lokal bauen:
+# Or build locally:
 cd frontend && npm install && npm run build</pre>
   </div>
 </body>

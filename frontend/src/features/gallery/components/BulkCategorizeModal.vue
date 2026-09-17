@@ -73,7 +73,7 @@ async function handleSave() {
     await galleryStore.bulkCategorize(selectedCategoryIds.value, mode.value)
     emit('update:open', false)
   } catch (_error) {
-    toastStore.error('Fehler beim Zuweisen der Kategorien.')
+    toastStore.error('Failed to assign categories.')
   } finally {
     isSubmitting.value = false
   }
@@ -90,26 +90,25 @@ async function handleSave() {
       <div class="flex items-center gap-2">
         <span class="text-base">🏷️</span>
         <h3 class="text-sm font-bold text-slate-900 dark:text-white">
-          Kategorien zuweisen
+          Assign Categories
         </h3>
       </div>
     </template>
 
     <div class="space-y-4 text-xs">
       <div class="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900/40 text-sky-800 dark:text-sky-300 font-medium">
-        <span>Für </span>
-        <span class="font-bold underline">{{ galleryStore.selectedAssetIds.length }} ausgewählte Bilder</span>
-        <span> Kategorien festlegen:</span>
+        <span>Set categories for </span>
+        <span class="font-bold underline">{{ galleryStore.selectedAssetIds.length }} selected images</span>:
       </div>
 
       <!-- Categories Picker Pills -->
       <div>
         <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
-          Kategorien auswählen
+          Select Categories
         </label>
 
         <div v-if="galleryStore.categories.length === 0" class="py-4 text-center text-slate-400">
-          Noch keine Kategorien vorhanden. Erstelle unten eine neue!
+          No categories available yet. Create a new one below!
         </div>
 
         <div v-else class="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1">
@@ -135,12 +134,12 @@ async function handleSave() {
       <!-- Quick create new category input -->
       <div class="pt-2 border-t border-slate-200 dark:border-white/10">
         <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-          Neue Kategorie schnell anlegen
+          Quickly create new category
         </label>
         <div class="flex items-center gap-2">
           <Input
             v-model="newCategoryName"
-            placeholder="Kategoriename..."
+            placeholder="Category name..."
             @keydown.enter.prevent="handleQuickCreate"
             class="flex-1"
           />
@@ -152,7 +151,7 @@ async function handleSave() {
             :disabled="!newCategoryName.trim()"
             @click="handleQuickCreate"
           >
-            + Hinzufügen
+            + Add
           </Button>
         </div>
       </div>
@@ -160,7 +159,7 @@ async function handleSave() {
       <!-- Mode selection (replace vs append) -->
       <div class="pt-3 border-t border-slate-200 dark:border-white/10 space-y-2">
         <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          Zuweisungsmodus
+          Assignment Mode
         </label>
         <div class="grid grid-cols-2 gap-2">
           <label
@@ -177,7 +176,7 @@ async function handleSave() {
               value="replace"
               class="text-sky-500 focus:ring-sky-500"
             />
-            <span>Ersetzen (exakt diese)</span>
+            <span>Replace (exact match)</span>
           </label>
 
           <label
@@ -194,7 +193,7 @@ async function handleSave() {
               value="append"
               class="text-sky-500 focus:ring-sky-500"
             />
-            <span>Zu bestehenden addieren</span>
+            <span>Add to existing</span>
           </label>
         </div>
       </div>
@@ -207,7 +206,7 @@ async function handleSave() {
           size="sm"
           @click="emit('update:open', false)"
         >
-          Abbrechen
+          Cancel
         </Button>
         <Button
           type="button"
@@ -216,7 +215,7 @@ async function handleSave() {
           :loading="isSubmitting"
           @click="handleSave"
         >
-          Zuweisen
+          Assign
         </Button>
       </div>
     </div>

@@ -46,9 +46,9 @@ const selectedProfile = computed(() => {
 })
 
 const selectedStyleName = computed(() => {
-  if (!generateStore.selectedStyleId) return 'Kein Style'
+  if (!generateStore.selectedStyleId) return 'No Style'
   const style = generateStore.styles.find((s) => String(s.id) === String(generateStore.selectedStyleId))
-  return style ? style.name : 'Style aktiv'
+  return style ? style.name : 'Style active'
 })
 </script>
 
@@ -62,7 +62,7 @@ const selectedStyleName = computed(() => {
           v-model.number="generateStore.selectedModelConfigId"
           class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
         >
-          <option :value="null">Modell wählen...</option>
+          <option :value="null">Select model...</option>
           <option
             v-for="model in generateStore.activeModels"
             :key="model.id"
@@ -78,9 +78,9 @@ const selectedStyleName = computed(() => {
         <select
           v-model.number="generateStore.selectedProfileId"
           class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
-          title="Profil wählen (Optional)"
+          title="Select profile (Optional)"
         >
-          <option :value="null">Kein Profil (Standard)</option>
+          <option :value="null">No profile (Default)</option>
           <option
             v-for="profile in profilesStore.profiles"
             :key="profile.id"
@@ -97,7 +97,7 @@ const selectedStyleName = computed(() => {
             v-for="cat in selectedProfile.categories"
             :key="cat.id"
             class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 font-medium border border-indigo-200/60 dark:border-indigo-800/40"
-            :title="`Bilder werden automatisch '${cat.name}' zugeordnet`"
+            :title="`Images are automatically assigned to '${cat.name}'`"
           >
             🏷️ {{ cat.name }}
           </span>
@@ -158,7 +158,7 @@ const selectedStyleName = computed(() => {
         type="button"
         @click="isStyleModalOpen = true"
         class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-300/80 bg-white/80 text-slate-700 hover:bg-white dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors shadow-sm cursor-pointer"
-        title="Style-Vorlage wählen"
+        title="Select style preset"
       >
         <span class="text-xs text-sky-500">🎨</span>
         <span class="truncate max-w-[100px] text-[11px] font-medium">{{ selectedStyleName }}</span>

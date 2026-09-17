@@ -34,13 +34,13 @@ function selectAsset(asset: Asset) {
 <template>
   <Modal
     :open="open"
-    title="Eingabebild aus Galerie wählen"
+    title="Choose Input Image from Gallery"
     size="xl"
     @update:open="emit('update:open', $event)"
   >
     <div class="space-y-4">
       <p class="text-xs text-slate-500 dark:text-slate-400">
-        Klicke auf ein Bild aus deiner Galerie, um es als Referenz- bzw. Eingabebild für den nächsten Prompt zu verwenden.
+        Click an image from your gallery to use it as a reference or input image for your next prompt.
       </p>
 
       <!-- Loading spinner -->
@@ -53,7 +53,7 @@ function selectAsset(asset: Asset) {
         v-else-if="galleryStore.assets.length === 0"
         class="py-12 text-center text-xs text-slate-500 dark:text-slate-400"
       >
-        Noch keine Galerie-Bilder vorhanden.
+        No gallery images available yet.
       </div>
 
       <!-- Gallery Grid for selection -->
@@ -75,7 +75,7 @@ function selectAsset(asset: Asset) {
           />
           <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 text-white">
             <span class="text-[10px] line-clamp-2 leading-tight">{{ asset.prompt }}</span>
-            <span class="text-[9px] text-sky-300 mt-1 font-semibold">Als Eingabebild wählen ➔</span>
+            <span class="text-[9px] text-sky-300 mt-1 font-semibold">Select as input image ➔</span>
           </div>
         </div>
       </div>

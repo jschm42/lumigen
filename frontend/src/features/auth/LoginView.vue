@@ -18,7 +18,7 @@ const errorMessage = ref('')
 
 async function handleSubmit() {
   if (!username.value.trim() || !password.value) {
-    errorMessage.value = 'Bitte Benutzername und Passwort eingeben.'
+    errorMessage.value = 'Please enter username and password.'
     return
   }
 
@@ -32,13 +32,13 @@ async function handleSubmit() {
     })
 
     if (res.success) {
-      toastStore.success('Erfolgreich angemeldet!')
+      toastStore.success('Successfully logged in!')
       router.push('/')
     } else {
-      errorMessage.value = res.message || 'Ungültige Anmeldedaten.'
+      errorMessage.value = res.message || 'Invalid credentials.'
     }
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.detail || 'Anmeldung fehlgeschlagen.'
+    errorMessage.value = error?.response?.data?.detail || 'Login failed.'
   } finally {
     isLoading.value = false
   }
@@ -54,7 +54,7 @@ async function handleSubmit() {
           <img src="/app-logo.svg" alt="Lumigen" class="h-12 w-12 rounded-xl invert dark:invert-0" />
         </div>
         <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Lumigen Studio</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400">Melde dich an, um auf dein Studio zuzugreifen</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Log in to access your studio</p>
       </div>
 
       <!-- Login Form -->
@@ -66,7 +66,7 @@ async function handleSubmit() {
 
           <Input
             id="username"
-            label="Benutzername"
+            label="Username"
             placeholder="admin"
             v-model="username"
             :disabled="isLoading"
@@ -76,7 +76,7 @@ async function handleSubmit() {
           <Input
             id="password"
             type="password"
-            label="Passwort"
+            label="Password"
             placeholder="••••••••"
             v-model="password"
             :disabled="isLoading"
@@ -90,7 +90,7 @@ async function handleSubmit() {
               fullWidth
               :loading="isLoading"
             >
-              Anmelden
+              Log in
             </Button>
           </div>
         </form>

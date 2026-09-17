@@ -4,6 +4,7 @@ import { generationApi } from '@/api/generation'
 import { useGenerateStore } from '@/stores/generate'
 import { useGalleryStore } from '@/stores/gallery'
 import { useToastStore } from '@/stores/toast'
+import { downloadFile } from '@/utils/download'
 import type { Asset, Generation } from '@/types'
 import ExpandCanvasModal from './ExpandCanvasModal.vue'
 
@@ -19,16 +20,17 @@ const galleryStore = useGalleryStore()
 const toastStore = useToastStore()
 
 const isUpscaling = ref(false)
+const isDownloading = ref(false)
 const isExpandModalOpen = ref(false)
 
 async function handleUpscale() {
   isUpscaling.value = true
   try {
     const res = await generationApi.upscale(props.asset.id)
-    toastStore.success('Upscaling gestartet!')
+    toastStore.success('Upscaling started!')
     generateStore.pollJob(res.job_id)
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Upscaling fehlgeschlagen.')
+    toastStore.error(error?.response?.data?.detail || 'Upscaling failed.')
   } finally {
     isUpscaling.value = false
   }
@@ -44,16 +46,27 @@ function handleRemix() {
       generateStore.showNegativePrompt = true
     }
     if (props.asset.aspect_ratio) generateStore.aspectRatio = props.asset.aspect_ratio
-    toastStore.info('Prompt übernommen!')
+    toastStore.info('Prompt applied!')
   }
 }
 
 async function copyPrompt() {
   try {
     await navigator.clipboard.writeText(props.asset.prompt)
-    toastStore.success('Prompt in die Zwischenablage kopiert!')
+    toastStore.success('Prompt copied to clipboard!')
   } catch (_e) {
-    toastStore.error('Kopieren fehlgeschlagen.')
+    toastStore.error('Copy failed.')
+  }
+}
+
+async function handleDownload() {
+  const url = props.asset.download_url || props.asset.image_url
+  if (!url) return
+  isDownloading.value = true
+  try {
+    await downloadFile(url)
+  } finally {
+    isDownloading.value = false
   }
 }
 
@@ -73,7 +86,7 @@ function handleExpandSubmitted(jobId: number) {
       type="button"
       @click="handleRemix"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-      title="Prompt & Parameter in Editor laden"
+      title="Load prompt & settings into editor"
     >
       <span>🔁</span> Remix
     </button>
@@ -84,9 +97,9 @@ function handleExpandSubmitted(jobId: number) {
       @click="handleUpscale"
       :disabled="isUpscaling"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 disabled:opacity-50"
-      title="Bild hochskalieren"
+      title="Upscale image"
     >
-      <span>✨</span> {{ isUpscaling ? 'Skaliere...' : 'Upscale' }}
+      <span>✨</span> {{ isUpscaling ? 'Upscaling...' : 'Upscale' }}
     </button>
 
     <!-- Expand / Outpaint -->
@@ -94,9 +107,9 @@ function handleExpandSubmitted(jobId: number) {
       type="button"
       @click="isExpandModalOpen = true"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-      title="Bild erweitern"
+      title="Expand image / Outpainting"
     >
-      <span>📐</span> Erweitern
+      <span>📐</span> Expand
     </button>
 
     <!-- Use as Input Image -->
@@ -104,9 +117,9 @@ function handleExpandSubmitted(jobId: number) {
       type="button"
       @click="generateStore.attachAssetAsImage(asset)"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-      title="Als Eingabebild in den Prompt-Composer laden"
+      title="Load as input image in prompt composer"
     >
-      <span>🖼️</span> Als Eingabebild
+      <span>🖼️</span> As Input Image
     </button>
 
     <!-- Copy Prompt -->
@@ -114,27 +127,28 @@ function handleExpandSubmitted(jobId: number) {
       type="button"
       @click="copyPrompt"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-      title="Prompt kopieren"
+      title="Copy prompt"
     >
-      <span>📋</span> Kopieren
+      <span>📋</span> Copy
     </button>
 
-    <!-- Download link -->
-    <a
-      :href="asset.download_url || asset.image_url"
-      download
-      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-      title="Bild herunterladen"
+    <!-- Download button -->
+    <button
+      type="button"
+      @click="handleDownload"
+      :disabled="isDownloading"
+      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 disabled:opacity-50"
+      title="Download image"
     >
-      <span>⬇️</span> Download
-    </a>
+      <span>⬇️</span> {{ isDownloading ? 'Downloading...' : 'Download' }}
+    </button>
 
     <!-- Details View -->
     <button
       type="button"
       @click="openDetail"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 ml-auto"
-      title="Metadaten & Details anzeigen"
+      title="Show metadata & details"
     >
       <span>ℹ️</span> Details
     </button>

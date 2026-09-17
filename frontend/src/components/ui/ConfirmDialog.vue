@@ -13,9 +13,9 @@ interface Props {
 }
 
 withDefaults(defineProps<Props>(), {
-  title: 'Bestätigung erforderlich',
-  confirmText: 'Bestätigen',
-  cancelText: 'Abbrechen',
+  title: 'Confirmation required',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
   variant: 'danger',
   loading: false,
 })

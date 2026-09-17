@@ -34,14 +34,14 @@ const isPendingOrProcessing = computed(() => {
 
 const statusMessage = computed(() => {
   const s = props.generation.status
-  if (s === 'queued') return 'In der Warteschlange...'
+  if (s === 'queued') return 'In queue...'
   if (s === 'running') {
     if (props.generation.progress && props.generation.progress > 0 && props.generation.progress < 100) {
-      return `Bild wird generiert... (${props.generation.progress}%)`
+      return `Generating image... (${props.generation.progress}%)`
     }
-    return 'Bild wird generiert...'
+    return 'Generating image...'
   }
-  return 'Bild wird generiert...'
+  return 'Generating image...'
 })
 
 function handleImageClick(asset: Asset) {
@@ -62,7 +62,7 @@ function handleImageClick(asset: Asset) {
           {{ generation.prompt }}
         </p>
         <p v-if="generation.negative_prompt" class="text-[11px] text-slate-500 dark:text-slate-400">
-          <span class="font-semibold text-rose-500">Negativ:</span> {{ generation.negative_prompt }}
+          <span class="font-semibold text-rose-500">Negative:</span> {{ generation.negative_prompt }}
         </p>
       </div>
 
@@ -104,10 +104,10 @@ function handleImageClick(asset: Asset) {
     >
       <div class="space-y-1 min-w-0 flex-1">
         <div class="font-semibold flex items-center gap-1.5">
-          <span>{{ generation.status === 'cancelled' ? 'Generierung abgebrochen' : 'Generierung fehlgeschlagen' }}</span>
+          <span>{{ generation.status === 'cancelled' ? 'Generation cancelled' : 'Generation failed' }}</span>
         </div>
         <p class="break-words text-rose-600 dark:text-rose-400">
-          {{ generation.error_message || (generation.status === 'cancelled' ? 'Der Auftrag wurde manuell abgebrochen.' : 'Unbekannter Fehler beim Generieren.') }}
+          {{ generation.error_message || (generation.status === 'cancelled' ? 'The job was cancelled manually.' : 'Unknown error during generation.') }}
         </p>
       </div>
 
@@ -116,10 +116,10 @@ function handleImageClick(asset: Asset) {
         @click="handleRetry"
         :disabled="isRetrying"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50 shrink-0 self-start sm:self-center"
-        title="Diesen Job erneut ausführen"
+        title="Retry this job"
       >
         <span :class="{ 'animate-spin': isRetrying }">🔄</span>
-        <span>{{ isRetrying ? 'Wird gestartet...' : 'Erneut versuchen' }}</span>
+        <span>{{ isRetrying ? 'Starting...' : 'Retry' }}</span>
       </button>
     </div>
 
@@ -134,7 +134,7 @@ function handleImageClick(asset: Asset) {
         <div
           @click="handleImageClick(asset)"
           class="relative group rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-300/60 dark:border-white/10 max-h-[380px] sm:max-h-[420px] cursor-pointer select-none transition-all duration-200 hover:border-sky-500/50 hover:shadow-lg"
-          title="Klicken zum Vergrößern (Vollbild & Zoom)"
+          title="Click to enlarge (Fullscreen & Zoom)"
         >
           <img
             :src="asset.image_url || asset.thumbnail_url"
@@ -151,7 +151,7 @@ function handleImageClick(asset: Asset) {
               <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
               </svg>
-              <span>Vollbild & Zoom</span>
+              <span>Fullscreen & Zoom</span>
             </span>
 
             <span v-if="asset.aspect_ratio" class="px-2 py-0.5 rounded bg-black/60 text-slate-300 text-[11px] font-mono border border-white/5">

@@ -13,10 +13,10 @@ const activeTab = ref('apikeys')
 
 const tabs: TabItem[] = [
   { id: 'apikeys', label: 'API Keys' },
-  { id: 'models', label: 'Modelle' },
+  { id: 'models', label: 'Models' },
   { id: 'styles', label: 'Styles' },
-  { id: 'categories', label: 'Kategorien' },
-  { id: 'users', label: 'Benutzer' },
+  { id: 'categories', label: 'Categories' },
+  { id: 'users', label: 'Users' },
   { id: 'transfer', label: 'Transfer & Backup' },
   { id: 'system', label: 'System Info' },
 ]
@@ -28,7 +28,7 @@ const tabs: TabItem[] = [
     <div class="space-y-4">
       <div class="space-y-0.5">
         <h2 class="text-base font-bold text-slate-900 dark:text-white">Studio Administration</h2>
-        <p class="text-xs text-slate-500">Konfiguration für Provider, Modelle, Styles, Kategorien und Zugriffsrechte.</p>
+        <p class="text-xs text-slate-500">Configuration for providers, models, styles, categories, and access rights.</p>
       </div>
 
       <Tabs :tabs="tabs" v-model="activeTab" variant="pills" />

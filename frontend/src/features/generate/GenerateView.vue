@@ -44,10 +44,10 @@ onMounted(async () => {
               ? 'border-slate-300/80 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200'
               : 'border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-950/60 dark:text-sky-300',
           ]"
-          :title="isSidebarOpen ? 'Artbooks-Sidebar einklappen (für maximale Bildansicht)' : 'Artbooks-Sidebar anzeigen'"
+          :title="isSidebarOpen ? 'Collapse artbook sidebar (for maximum image display)' : 'Show artbook sidebar'"
         >
           <span class="text-xs">{{ isSidebarOpen ? '◀' : '▶' }}</span>
-          <span class="hidden md:inline">{{ isSidebarOpen ? 'Sidebar verbergen' : 'Artbooks' }}</span>
+          <span class="hidden md:inline">{{ isSidebarOpen ? 'Hide Sidebar' : 'Artbooks' }}</span>
         </button>
 
         <!-- Generation Controls Bar -->

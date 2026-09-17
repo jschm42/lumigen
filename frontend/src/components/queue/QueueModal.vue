@@ -110,17 +110,17 @@ onUnmounted(() => {
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
-                  Generierungs-Queue
+                  Generation Queue
                 </h3>
                 <span
                   v-if="queueStore.totalActive > 0"
                   class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-500 text-white shadow-sm"
                 >
-                  {{ queueStore.totalActive }} aktiv
+                  {{ queueStore.totalActive }} active
                 </span>
               </div>
               <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                Fortschritt & Auftragssteuerung
+                Progress & Job Management
               </p>
             </div>
           </div>
@@ -130,7 +130,7 @@ onUnmounted(() => {
               type="button"
               @click="queueStore.fetchQueue"
               class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-              title="Aktualisieren"
+              title="Refresh"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -140,7 +140,7 @@ onUnmounted(() => {
               type="button"
               @click="queueStore.closeQueue"
               class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-              title="Schließen (Esc)"
+              title="Close (Esc)"
             >
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -161,7 +161,7 @@ onUnmounted(() => {
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
             ]"
           >
-            <span>Aktive Jobs</span>
+            <span>Active Jobs</span>
             <span
               :class="[
                 'px-1.5 py-0.2 rounded-full text-[10px] font-mono leading-none',
@@ -182,7 +182,7 @@ onUnmounted(() => {
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
             ]"
           >
-            <span>Verlauf</span>
+            <span>History</span>
             <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono leading-none bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
               {{ queueStore.recentJobs.length }}
             </span>
@@ -198,10 +198,10 @@ onUnmounted(() => {
           >
             <span class="text-3xl mb-2">📥</span>
             <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              {{ activeTab === 'active' ? 'Keine aktiven Generierungen' : 'Keine kürzlichen Aufträge' }}
+              {{ activeTab === 'active' ? 'No active generations' : 'No recent jobs' }}
             </p>
             <p class="text-xs mt-1 max-w-xs">
-              {{ activeTab === 'active' ? 'Starte eine oder mehrere Generierungen im Prompt-Editor, um sie hier zu verfolgen.' : 'Sobald Generierungen abgeschlossen sind oder fehlschlagen, erscheinen sie hier.' }}
+              {{ activeTab === 'active' ? 'Start one or more generations in the prompt editor to track them here.' : 'Completed or failed generations will appear here.' }}
             </p>
           </div>
 
@@ -225,35 +225,35 @@ onUnmounted(() => {
                   size="xs"
                   class="animate-pulse"
                 >
-                  ⚡ Läuft...
+                  ⚡ Running...
                 </Badge>
                 <Badge
                   v-else-if="job.status === 'queued'"
                   variant="amber"
                   size="xs"
                 >
-                  ⏳ In Warteschlange
+                  ⏳ Queued
                 </Badge>
                 <Badge
                   v-else-if="job.status === 'succeeded'"
                   variant="emerald"
                   size="xs"
                 >
-                  ✓ Abgeschlossen
+                  ✓ Completed
                 </Badge>
                 <Badge
                   v-else-if="job.status === 'failed'"
                   variant="rose"
                   size="xs"
                 >
-                  ✕ Fehler
+                  ✕ Failed
                 </Badge>
                 <Badge
                   v-else-if="job.status === 'cancelled'"
                   variant="slate"
                   size="xs"
                 >
-                  ✕ Abgebrochen
+                  ✕ Cancelled
                 </Badge>
 
                 <!-- Model Badge -->
@@ -276,7 +276,7 @@ onUnmounted(() => {
             <!-- Progress Bar (for running / queued jobs) -->
             <div v-if="job.status === 'running' || job.status === 'queued'" class="space-y-1">
               <div class="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                <span>{{ job.status === 'running' ? 'Wird verarbeitet' : 'Wartet auf Ausführung' }}</span>
+                <span>{{ job.status === 'running' ? 'Processing' : 'Waiting in queue' }}</span>
                 <span>{{ job.progress ?? (job.status === 'running' ? 50 : 0) }}%</span>
               </div>
               <div class="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -314,11 +314,11 @@ onUnmounted(() => {
                   @click="queueStore.cancelJob(job.id)"
                   :disabled="queueStore.actionLoading[job.id]"
                   class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 text-[11px] font-semibold transition disabled:opacity-50"
-                  title="Auftrag abbrechen"
+                  title="Cancel job"
                 >
                   <Spinner v-if="queueStore.actionLoading[job.id]" size="xs" />
                   <span v-else>✕</span>
-                  <span>Abbrechen</span>
+                  <span>Cancel</span>
                 </button>
 
                 <!-- Retry Button for Failed or Cancelled Jobs -->
@@ -328,11 +328,11 @@ onUnmounted(() => {
                   @click="queueStore.retryJob(job.id)"
                   :disabled="queueStore.actionLoading[job.id]"
                   class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-600 text-white text-[11px] font-semibold transition shadow-sm disabled:opacity-50"
-                  title="Auftrag wiederholen"
+                  title="Retry job"
                 >
                   <Spinner v-if="queueStore.actionLoading[job.id]" size="xs" class="text-white" />
                   <span v-else>🔄</span>
-                  <span>Wiederholen</span>
+                  <span>Retry</span>
                 </button>
 
                 <!-- View Asset Button for Succeeded Jobs -->
@@ -341,10 +341,10 @@ onUnmounted(() => {
                   type="button"
                   @click="viewAsset(job)"
                   class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-slate-200 text-[11px] font-semibold transition"
-                  title="Bild ansehen"
+                  title="View image"
                 >
                   <span>🖼️</span>
-                  <span>Ansehen</span>
+                  <span>View</span>
                 </button>
               </div>
             </div>
@@ -353,13 +353,13 @@ onUnmounted(() => {
 
         <!-- Footer -->
         <div class="px-5 py-3 border-t border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-slate-950/40 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
-          <span>Backend-gesteuerte Pipeline</span>
+          <span>Backend-driven pipeline</span>
           <button
             type="button"
             @click="queueStore.closeQueue"
             class="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:underline"
           >
-            Schließen
+            Close
           </button>
         </div>
       </aside>

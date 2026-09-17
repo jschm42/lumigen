@@ -22,7 +22,7 @@ export interface DimensionPresetOption {
 }
 
 export const DIMENSION_PRESETS: DimensionPresetOption[] = [
-  { label: 'Benutzerdefiniert', value: '' },
+  { label: 'Custom', value: '' },
   { label: '512 × 512 (1:1)', value: '512x512', ratio: '1:1' },
   { label: '768 × 768 (1:1)', value: '768x768', ratio: '1:1' },
   { label: '1024 × 1024 (1:1)', value: '1024x1024', ratio: '1:1' },
@@ -67,9 +67,9 @@ export const useGenerateStore = defineStore('generate', () => {
   const googleResolution = ref<string>('')
   const upscaleModel = ref<string>('__profile__')
   const availableUpscaleModels = ref<{ value: string; label: string }[]>([
-    { value: '__none__', label: 'Kein Upscaling' },
+    { value: '__none__', label: 'No Upscaling' },
     { value: 'fal', label: 'FAL.ai Standard' },
-    { value: 'local:RealESRGAN_x4plus', label: 'Real-ESRGAN x4plus (Lokal)' },
+    { value: 'local:RealESRGAN_x4plus', label: 'Real-ESRGAN x4plus (Local)' },
   ])
 
   // Available options
@@ -92,7 +92,7 @@ export const useGenerateStore = defineStore('generate', () => {
 
   function addAttachedImage(file: File) {
     if (attachedImages.value.length >= 5) {
-      toastStore.warning('Maximal 5 Referenzbilder erlaubt.')
+      toastStore.warning('Maximum 5 reference images allowed.')
       return
     }
     const previewUrl = URL.createObjectURL(file)
@@ -106,12 +106,12 @@ export const useGenerateStore = defineStore('generate', () => {
 
   function attachAssetAsImage(asset: Asset) {
     if (attachedImages.value.length >= 5) {
-      toastStore.warning('Maximal 5 Referenzbilder erlaubt.')
+      toastStore.warning('Maximum 5 reference images allowed.')
       return
     }
     const alreadyExists = attachedImages.value.some((img) => img.assetId === asset.id)
     if (alreadyExists) {
-      toastStore.info('Dieses Bild ist bereits ausgewählt.')
+      toastStore.info('This image is already selected.')
       return
     }
     attachedImages.value.push({
@@ -120,7 +120,7 @@ export const useGenerateStore = defineStore('generate', () => {
       previewUrl: asset.thumbnail_url || asset.image_url,
       name: `Asset #${asset.id}`,
     })
-    toastStore.success(`Asset #${asset.id} als Eingabebild hinzugefügt!`)
+    toastStore.success(`Asset #${asset.id} added as input image!`)
   }
 
   function removeAttachedImage(id: string) {
@@ -315,12 +315,12 @@ export const useGenerateStore = defineStore('generate', () => {
         if (gen.status === 'succeeded') {
           clearInterval(interval)
           activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
-          toastStore.success('Bild erfolgreich generiert!')
+          toastStore.success('Image successfully generated!')
           sessionsStore.fetchSessions()
         } else if (gen.status === 'failed' || gen.status === 'cancelled') {
           clearInterval(interval)
           activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
-          toastStore.error(gen.error_message || 'Generierung fehlgeschlagen.')
+          toastStore.error(gen.error_message || 'Generation failed.')
         }
       } catch (_error) {
         clearInterval(interval)
@@ -331,7 +331,7 @@ export const useGenerateStore = defineStore('generate', () => {
 
   async function submit() {
     if (!prompt.value.trim()) {
-      toastStore.warning('Bitte gib einen Prompt ein.')
+      toastStore.warning('Please enter a prompt.')
       return
     }
 
@@ -393,7 +393,7 @@ export const useGenerateStore = defineStore('generate', () => {
       // Clear input images but keep prompt for quick iterations
       clearAttachedImages()
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Starten der Generierung.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to start generation.')
     } finally {
       isSubmitting.value = false
     }
@@ -419,9 +419,9 @@ export const useGenerateStore = defineStore('generate', () => {
       generations.value.push(optimisticGen)
       pollJob(res.job_id)
       queueStore.fetchQueue()
-      toastStore.info(`Generierung #${res.job_id} erneut eingereiht!`)
+      toastStore.info(`Generation #${res.job_id} queued again!`)
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim erneuten Starten.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to restart generation.')
     } finally {
       isSubmitting.value = false
     }
@@ -436,7 +436,7 @@ export const useGenerateStore = defineStore('generate', () => {
     if (gen.aspect_ratio) aspectRatio.value = gen.aspect_ratio
     if (gen.resolution) resolution.value = gen.resolution
     if (gen.seed !== undefined && gen.seed !== null) seed.value = String(gen.seed)
-    toastStore.info('Prompt & Einstellungen übernommen!')
+    toastStore.info('Prompt & settings applied!')
   }
 
   return {

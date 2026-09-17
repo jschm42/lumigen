@@ -62,9 +62,9 @@ async function handleDiscover() {
   try {
     const res = await adminApi.discoverModels(selectedProvider.value)
     discoveredModels.value = res.models
-    toastStore.success(`${res.count} Modelle vom Provider gefunden.`)
+    toastStore.success(`Found ${res.count} models from provider.`)
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Modell-Erkennung fehlgeschlagen.')
+    toastStore.error(error?.response?.data?.detail || 'Model discovery failed.')
   } finally {
     isDiscovering.value = false
   }
@@ -76,13 +76,13 @@ async function handleDiscover() {
     <!-- Top Action Row -->
     <div class="flex items-center justify-between">
       <div class="space-y-0.5">
-        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Modell-Konfigurationen</h3>
-        <p class="text-slate-500">Definiere, welche Modelle im Studio zur Verfügung stehen.</p>
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Model Configurations</h3>
+        <p class="text-slate-500">Define which models are available in the studio.</p>
       </div>
 
       <Button variant="primary" size="sm" @click="openNew">
         <template #icon>+</template>
-        Modell hinzufügen
+        Add Model
       </Button>
     </div>
 
@@ -94,9 +94,9 @@ async function handleDiscover() {
             <th class="p-3.5">Name</th>
             <th class="p-3.5">Provider</th>
             <th class="p-3.5">Identifier</th>
-            <th class="p-3.5">Aktiv</th>
-            <th class="p-3.5">Standard</th>
-            <th class="p-3.5 text-right">Aktionen</th>
+            <th class="p-3.5">Active</th>
+            <th class="p-3.5">Default</th>
+            <th class="p-3.5 text-right">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200/60 dark:divide-white/10">
@@ -110,7 +110,7 @@ async function handleDiscover() {
             <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">{{ model.model_identifier }}</td>
             <td class="p-3.5">
               <span :class="model.is_active ? 'text-emerald-500 font-bold' : 'text-slate-400'">
-                {{ model.is_active ? 'Ja' : 'Nein' }}
+                {{ model.is_active ? 'Yes' : 'No' }}
               </span>
             </td>
             <td class="p-3.5">
@@ -124,14 +124,14 @@ async function handleDiscover() {
                 @click="openEdit(model)"
                 class="text-sky-500 hover:text-sky-400 font-semibold"
               >
-                Bearbeiten
+                Edit
               </button>
               <button
                 type="button"
                 @click="adminStore.deleteModelConfig(model.id)"
                 class="text-rose-500 hover:text-rose-400 font-semibold"
               >
-                Löschen
+                Delete
               </button>
             </td>
           </tr>
@@ -141,7 +141,7 @@ async function handleDiscover() {
 
     <!-- Provider Model Discovery Box -->
     <div class="p-4 rounded-2xl border border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-slate-900/70 space-y-3">
-      <h4 class="font-bold text-slate-900 dark:text-white">Modelle vom Provider abfragen</h4>
+      <h4 class="font-bold text-slate-900 dark:text-white">Discover Models from Provider</h4>
       <div class="flex items-center gap-3">
         <select
           v-model="selectedProvider"
@@ -158,7 +158,7 @@ async function handleDiscover() {
           :loading="isDiscovering"
           @click="handleDiscover"
         >
-          Verfügbare Modelle suchen
+          Search Available Models
         </Button>
       </div>
 
@@ -170,7 +170,7 @@ async function handleDiscover() {
           @click="editingConfig.model_identifier = m; editingConfig.name = m; isEditorOpen = true"
         >
           <span class="font-mono">{{ m }}</span>
-          <span class="text-sky-500 font-semibold text-[10px]">+ Als Konfiguration anlegen</span>
+          <span class="text-sky-500 font-semibold text-[10px]">+ Add as configuration</span>
         </div>
       </div>
     </div>
@@ -178,21 +178,21 @@ async function handleDiscover() {
     <!-- Model Config Edit Modal -->
     <Modal
       :open="isEditorOpen"
-      :title="editingConfig.id ? 'Modell bearbeiten' : 'Neues Modell anlegen'"
+      :title="editingConfig.id ? 'Edit Model' : 'Add New Model'"
       size="md"
       @update:open="isEditorOpen = $event"
     >
       <form @submit.prevent="handleSave" class="space-y-4">
         <Input
-          label="Anzeigename"
-          placeholder="z.B. FLUX.1 Schnell"
+          label="Display Name"
+          placeholder="e.g. FLUX.1 Schnell"
           v-model="editingConfig.name"
           required
         />
 
         <Input
-          label="Modell Identifier"
-          placeholder="z.B. fal-ai/flux/schnell"
+          label="Model Identifier"
+          placeholder="e.g. fal-ai/flux/schnell"
           v-model="editingConfig.model_identifier"
           required
         />
@@ -215,21 +215,21 @@ async function handleDiscover() {
 
         <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-white/10">
           <Switch
-            label="Modell ist aktiv"
-            description="Steht in der Modellauswahl zur Verfügung"
+            label="Model is active"
+            description="Available in model selector"
             v-model="editingConfig.is_active"
           />
           <Switch
-            label="Standard-Modell"
-            description="Wird standardmäßig für neue Sessions ausgewählt"
+            label="Default Model"
+            description="Selected by default for new sessions"
             v-model="editingConfig.is_default"
           />
         </div>
       </form>
 
       <template #footer>
-        <Button variant="secondary" size="sm" @click="isEditorOpen = false">Abbrechen</Button>
-        <Button variant="primary" size="sm" @click="handleSave">Speichern</Button>
+        <Button variant="secondary" size="sm" @click="isEditorOpen = false">Cancel</Button>
+        <Button variant="primary" size="sm" @click="handleSave">Save</Button>
       </template>
     </Modal>
   </div>

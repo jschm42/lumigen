@@ -47,10 +47,10 @@ onMounted(() => {
       </div>
       <div class="space-y-1 max-w-sm">
         <h3 class="text-base font-bold text-slate-800 dark:text-white">
-          Bereit für deine Kreationen
+          Ready for your creations
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400">
-          Wähle dein bevorzugtes Modell, passe das Seitenverhältnis an und starte mit deinem ersten Prompt.
+          Choose your preferred model, adjust the aspect ratio, and start with your first prompt.
         </p>
       </div>
     </div>

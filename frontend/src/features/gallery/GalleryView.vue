@@ -74,9 +74,9 @@ const gridColsClass = computed(() => {
       class="py-20 text-center space-y-3"
     >
       <div class="text-4xl">🖼️</div>
-      <h3 class="text-base font-bold text-slate-800 dark:text-white">Keine Bilder gefunden</h3>
+      <h3 class="text-base font-bold text-slate-800 dark:text-white">No images found</h3>
       <p class="text-xs text-slate-500 max-w-sm mx-auto">
-        Passe deine Filter an oder generiere neue Bilder im Studio.
+        Adjust your filters or generate new images in the studio.
       </p>
     </div>
 

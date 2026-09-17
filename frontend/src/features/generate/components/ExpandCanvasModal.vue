@@ -38,11 +38,11 @@ async function handleSubmit() {
       aspect_ratio: selectedAspectRatio.value,
     })
 
-    toastStore.success('Outpainting gestartet!')
+    toastStore.success('Outpainting started!')
     emit('submitted', res.job_id)
     emit('update:open', false)
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Fehler beim Starten von Outpainting.')
+    toastStore.error(error?.response?.data?.detail || 'Failed to start outpainting.')
   } finally {
     isSubmitting.value = false
   }
@@ -50,7 +50,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <Modal :open="open" title="Bild erweitern / Outpainting" size="lg" @update:open="emit('update:open', $event)">
+  <Modal :open="open" title="Expand Image / Outpainting" size="lg" @update:open="emit('update:open', $event)">
     <div v-if="asset" class="space-y-4 text-xs">
       <!-- Preview Image -->
       <div class="flex justify-center bg-slate-900/80 rounded-2xl p-4 border border-slate-200 dark:border-white/10">
@@ -60,7 +60,7 @@ async function handleSubmit() {
       <!-- Target Aspect Ratio -->
       <div>
         <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-          Ziel-Seitenverhältnis
+          Target Aspect Ratio
         </label>
         <div class="flex flex-wrap gap-1.5">
           <button
@@ -82,15 +82,15 @@ async function handleSubmit() {
 
       <!-- Expansion prompt -->
       <Input
-        label="Prompt für die Erweiterung (Optional)"
-        placeholder="Beschreibung für den hinzugefügten Bereich..."
+        label="Prompt for expansion (Optional)"
+        placeholder="Description for the added area..."
         v-model="prompt"
       />
     </div>
 
     <template #footer>
       <Button variant="secondary" size="sm" @click="emit('update:open', false)">
-        Abbrechen
+        Cancel
       </Button>
       <Button
         variant="primary"
@@ -98,7 +98,7 @@ async function handleSubmit() {
         :loading="isSubmitting"
         @click="handleSubmit"
       >
-        Erweitern
+        Expand
       </Button>
     </template>
   </Modal>

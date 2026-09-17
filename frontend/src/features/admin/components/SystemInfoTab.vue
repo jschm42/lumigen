@@ -26,8 +26,8 @@ function formatBytes(bytes?: number): string {
 <template>
   <div class="space-y-6 text-xs">
     <div class="space-y-0.5">
-      <h3 class="text-sm font-bold text-slate-900 dark:text-white">System & Diagnose</h3>
-      <p class="text-slate-500">Übersicht über Speicherplatz, Dateisystem und Versionsinformationen.</p>
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white">System & Diagnostics</h3>
+      <p class="text-slate-500">Overview of disk usage, file system, and version information.</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -39,14 +39,14 @@ function formatBytes(bytes?: number): string {
       </Card>
 
       <Card padding="md" class="space-y-1">
-        <span class="text-[11px] text-slate-500 font-semibold uppercase">Generierte Assets</span>
+        <span class="text-[11px] text-slate-500 font-semibold uppercase">Generated Assets</span>
         <div class="text-lg font-bold text-slate-900 dark:text-white">
           {{ adminStore.systemInfo?.total_assets || 0 }}
         </div>
       </Card>
 
       <Card padding="md" class="space-y-1">
-        <span class="text-[11px] text-slate-500 font-semibold uppercase">Speicherplatz belegt</span>
+        <span class="text-[11px] text-slate-500 font-semibold uppercase">Storage Used</span>
         <div class="text-lg font-bold text-slate-900 dark:text-white">
           {{ formatBytes(adminStore.systemInfo?.storage_used_bytes) }}
         </div>
@@ -54,10 +54,10 @@ function formatBytes(bytes?: number): string {
     </div>
 
     <Card padding="md" class="space-y-3">
-      <h4 class="font-bold text-slate-900 dark:text-white">Umgebungsdetails</h4>
+      <h4 class="font-bold text-slate-900 dark:text-white">Environment Details</h4>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
         <div>
-          <span class="text-slate-500 block">Speicherort:</span>
+          <span class="text-slate-500 block">Storage Directory:</span>
           <span class="font-mono text-slate-700 dark:text-slate-300">{{ adminStore.systemInfo?.storage_dir || './data' }}</span>
         </div>
         <div>

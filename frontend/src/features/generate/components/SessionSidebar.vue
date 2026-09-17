@@ -88,7 +88,7 @@ async function handleDeleteAll() {
         <template #icon>
           <span class="text-base leading-none text-sky-500 font-bold">+</span>
         </template>
-        Neue Session / Artbook
+        New Session / Artbook
       </Button>
     </div>
 
@@ -98,7 +98,7 @@ async function handleDeleteAll() {
         type="button"
         @click="queueStore.openQueue"
         class="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 hover:bg-sky-50/60 hover:border-sky-400/50 dark:border-white/10 dark:bg-slate-950/50 dark:hover:bg-sky-950/30 dark:hover:border-sky-500/40 transition-all text-left group cursor-pointer shadow-xs"
-        title="Warteschlange öffnen"
+        title="Open Queue"
       >
         <div class="flex items-center gap-2 min-w-0">
           <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300 text-xs">
@@ -106,7 +106,7 @@ async function handleDeleteAll() {
           </span>
           <div class="min-w-0">
             <div class="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 flex items-center gap-1.5">
-              <span>Warteschlange</span>
+              <span>Queue</span>
               <span
                 v-if="queueStore.totalActive > 0"
                 class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-sky-500 text-white"
@@ -115,7 +115,7 @@ async function handleDeleteAll() {
               </span>
             </div>
             <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-              {{ queueStore.totalActive > 0 ? `${queueStore.totalActive} Auftrag in Arbeit` : 'Alle Aufträge fertig' }}
+              {{ queueStore.totalActive > 0 ? (queueStore.totalActive === 1 ? '1 job in progress' : `${queueStore.totalActive} jobs in progress`) : 'All jobs completed' }}
             </p>
           </div>
         </div>
@@ -132,7 +132,7 @@ async function handleDeleteAll() {
         type="text"
         v-model="sessionsStore.searchQuery"
         @input="sessionsStore.fetchSessions"
-        placeholder="Sessions durchsuchen..."
+        placeholder="Search sessions..."
         class="w-full rounded-xl border border-slate-200 bg-white/60 px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-200 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
       />
     </div>
@@ -140,7 +140,7 @@ async function handleDeleteAll() {
     <!-- Sessions List -->
     <div class="flex-1 overflow-y-auto space-y-1 pr-1">
       <div v-if="sessionsStore.sessions.length === 0" class="py-8 text-center text-xs text-slate-400">
-        Keine Sessions gefunden
+        No sessions found
       </div>
 
       <div
@@ -169,7 +169,7 @@ async function handleDeleteAll() {
           <div class="truncate text-left flex-1">
             <div class="truncate">{{ session.title }}</div>
             <div class="text-[10px] text-slate-400 font-normal">
-              {{ session.generation_count || 0 }} Bilder
+              {{ session.generation_count || 0 }} {{ (session.generation_count === 1) ? 'image' : 'images' }}
             </div>
           </div>
         </div>
@@ -180,7 +180,7 @@ async function handleDeleteAll() {
             type="button"
             @click.stop="openRename(session)"
             class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
-            title="Umbenennen"
+            title="Rename"
           >
             ✏️
           </button>
@@ -188,7 +188,7 @@ async function handleDeleteAll() {
             type="button"
             @click.stop="openDelete(session)"
             class="p-1 text-slate-400 hover:text-rose-500 rounded"
-            title="Löschen"
+            title="Delete"
           >
             🗑️
           </button>
@@ -208,30 +208,30 @@ async function handleDeleteAll() {
         <template #icon>
           <span class="text-xs">🗑️</span>
         </template>
-        Alle Sessions löschen
+        Delete all sessions
       </Button>
     </div>
 
     <!-- Rename Modal -->
-    <Modal :open="isRenameOpen" title="Session umbenennen" size="sm" @update:open="isRenameOpen = $event">
+    <Modal :open="isRenameOpen" title="Rename Session" size="sm" @update:open="isRenameOpen = $event">
       <div class="space-y-4">
         <Input
-          label="Titel"
+          label="Title"
           v-model="renameTitle"
           autofocus
           @keydown.enter="handleRename"
         />
       </div>
       <template #footer>
-        <Button variant="secondary" size="sm" @click="isRenameOpen = false">Abbrechen</Button>
-        <Button variant="primary" size="sm" @click="handleRename">Speichern</Button>
+        <Button variant="secondary" size="sm" @click="isRenameOpen = false">Cancel</Button>
+        <Button variant="primary" size="sm" @click="handleRename">Save</Button>
       </template>
     </Modal>
 
     <!-- Delete Confirm Dialog -->
     <ConfirmDialog
       :open="isDeleteOpen"
-      message="Möchtest du diese Session und ihren Verlauf wirklich löschen?"
+      message="Do you really want to delete this session and its history?"
       @update:open="isDeleteOpen = $event"
       @confirm="handleDelete"
     />
@@ -239,9 +239,9 @@ async function handleDeleteAll() {
     <!-- Delete All Confirm Dialog -->
     <ConfirmDialog
       :open="isDeleteAllOpen"
-      title="Alle Sessions löschen"
-      message="Möchtest du wirklich alle Sessions und deren Verläufe unwiderruflich löschen? Die generierten Bilder in der Galerie bleiben erhalten."
-      confirmText="Alle löschen"
+      title="Delete all sessions"
+      message="Do you really want to permanently delete all sessions and their history? Generated images in the gallery will be preserved."
+      confirmText="Delete all"
       variant="danger"
       :loading="isDeletingAll"
       @update:open="isDeleteAllOpen = $event"

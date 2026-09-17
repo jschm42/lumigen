@@ -27,9 +27,9 @@ const filteredProfiles = computed(() => {
     <!-- Top Action Bar -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 shadow-sm">
       <div class="space-y-0.5">
-        <h2 class="text-base font-bold text-slate-900 dark:text-white">Profile</h2>
+        <h2 class="text-base font-bold text-slate-900 dark:text-white">Profiles</h2>
         <p class="text-xs text-slate-500">
-          Definiere Voreinstellungen, System-Prompts und Modelle für verschiedene Bildstile.
+          Define presets, system prompts, and default parameters for different creative workflows.
         </p>
       </div>
 
@@ -37,13 +37,13 @@ const filteredProfiles = computed(() => {
         <input
           type="text"
           v-model="searchQuery"
-          placeholder="Profile filtern..."
+          placeholder="Filter profiles..."
           class="w-full sm:w-48 rounded-xl border border-slate-300/80 bg-white/80 px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
         />
 
         <Button variant="primary" size="sm" @click="profilesStore.openCreateModal" class="shrink-0">
           <template #icon>+</template>
-          Neues Profil
+          New Profile
         </Button>
       </div>
     </div>
@@ -59,12 +59,12 @@ const filteredProfiles = computed(() => {
       class="py-20 text-center space-y-3"
     >
       <div class="text-4xl">🎭</div>
-      <h3 class="text-base font-bold text-slate-800 dark:text-white">Keine Profile gefunden</h3>
+      <h3 class="text-base font-bold text-slate-800 dark:text-white">No profiles found</h3>
       <p class="text-xs text-slate-500 max-w-sm mx-auto">
-        Erstelle dein erstes Profil, um Workflows und Standardparameter zu speichern.
+        Create your first profile to save workflows and default parameters.
       </p>
       <Button variant="primary" size="sm" @click="profilesStore.openCreateModal">
-        Profil anlegen
+        Create Profile
       </Button>
     </div>
 

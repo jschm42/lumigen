@@ -64,7 +64,7 @@ async def auth_login(
 
     user = crud.get_user_by_username(session, username)
     if not user or not user.is_active or not auth_service.verify_password(password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Ungültige Anmeldedaten")
+        raise HTTPException(status_code=400, detail="Invalid credentials")
 
     request.session["user_id"] = user.id
     request.session["user_role"] = user.role

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useImageViewerStore } from '@/stores/imageViewer'
 import { useGenerateStore } from '@/stores/generate'
 import { useToastStore } from '@/stores/toast'
+import { downloadFile } from '@/utils/download'
 
 const router = useRouter()
 const imageViewerStore = useImageViewerStore()
@@ -23,6 +24,7 @@ const initialTranslateY = ref<number>(0)
 
 const imgRef = ref<HTMLImageElement | null>(null)
 const isCopied = ref<boolean>(false)
+const isDownloading = ref<boolean>(false)
 
 // Reset transformations whenever a new image opens
 watch(
@@ -132,12 +134,12 @@ async function copyPrompt(text: string) {
   try {
     await navigator.clipboard.writeText(text)
     isCopied.value = true
-    toastStore.success('Prompt in die Zwischenablage kopiert!')
+    toastStore.success('Prompt copied to clipboard!')
     setTimeout(() => {
       isCopied.value = false
     }, 2000)
   } catch (_e) {
-    toastStore.error('Kopieren fehlgeschlagen.')
+    toastStore.error('Copy failed.')
   }
 }
 
@@ -161,7 +163,18 @@ function handleRemix() {
 
   imageViewerStore.closeViewer()
   router.push('/')
-  toastStore.info('Prompt & Parameter in Studio geladen!')
+  toastStore.info('Prompt & settings loaded into Studio!')
+}
+
+async function handleDownload() {
+  const url = imageViewerStore.imageUrl
+  if (!url) return
+  isDownloading.value = true
+  try {
+    await downloadFile(url)
+  } finally {
+    isDownloading.value = false
+  }
 }
 
 // Fullscreen toggle
@@ -195,7 +208,7 @@ const modelName = computed(() => {
   return (
     imageViewerStore.activeAsset?.model ||
     imageViewerStore.activeGeneration?.model_name ||
-    'Unbekannt'
+    'Unknown'
   )
 })
 
@@ -288,7 +301,7 @@ onUnmounted(() => {
               class="px-3 py-1.5 rounded-full bg-slate-900/80 border border-white/10 text-white/90 text-xs font-semibold backdrop-blur-md shadow-lg flex items-center gap-2"
             >
               <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
-              <span>Bild-Viewer</span>
+              <span>Image Viewer</span>
               <span v-if="imageViewerStore.naturalWidth && imageViewerStore.naturalHeight" class="text-slate-400 font-mono text-[11px]">
                 {{ imageViewerStore.naturalWidth }} × {{ imageViewerStore.naturalHeight }}
               </span>
@@ -305,7 +318,7 @@ onUnmounted(() => {
               @click="zoomOut"
               :disabled="scale <= 0.25"
               class="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
-              title="Verkleinern (-)"
+              title="Zoom out (-)"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
@@ -317,7 +330,7 @@ onUnmounted(() => {
               type="button"
               @click="setZoom100"
               class="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg hover:bg-white/10 transition-colors min-w-[56px] text-center"
-              title="100% / Fit Umschalten"
+              title="Toggle 100% / Fit"
             >
               {{ Math.round(scale * 100) }}%
             </button>
@@ -328,7 +341,7 @@ onUnmounted(() => {
               @click="zoomIn"
               :disabled="scale >= 5"
               class="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
-              title="Vergrößern (+)"
+              title="Zoom in (+)"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -340,7 +353,7 @@ onUnmounted(() => {
               type="button"
               @click="resetZoom"
               class="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-              title="Zoom zurücksetzen (0)"
+              title="Reset zoom (0)"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -354,7 +367,7 @@ onUnmounted(() => {
               type="button"
               @click="toggleFullscreen"
               class="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors hidden sm:inline-flex"
-              title="Vollbild umschalten"
+              title="Toggle fullscreen"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6M4 4v6M20 4h-6M20 4v6M4 20h6M4 20v-6M20 20h-6M20 20v-6" />
@@ -371,7 +384,7 @@ onUnmounted(() => {
                   ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20'
                   : 'text-slate-300 hover:text-white hover:bg-white/10',
               ]"
-              title="Metainformationen ein-/ausblenden (i)"
+              title="Toggle metadata (i)"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -388,30 +401,31 @@ onUnmounted(() => {
               type="button"
               @click="handleRemix"
               class="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-white text-xs font-semibold backdrop-blur-md shadow-lg transition-colors"
-              title="In Studio laden"
+              title="Load in Studio"
             >
               <span>🔁</span> Remix
             </button>
 
             <!-- Download button -->
-            <a
-              :href="imageViewerStore.imageUrl"
-              download
-              class="p-2 sm:px-3 sm:py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-white text-xs font-semibold backdrop-blur-md shadow-lg transition-colors flex items-center gap-1.5"
-              title="Bild herunterladen"
+            <button
+              type="button"
+              @click="handleDownload"
+              :disabled="isDownloading"
+              class="p-2 sm:px-3 sm:py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-white text-xs font-semibold backdrop-blur-md shadow-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              title="Download image"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              <span class="hidden sm:inline">Download</span>
-            </a>
+              <span class="hidden sm:inline">{{ isDownloading ? 'Downloading...' : 'Download' }}</span>
+            </button>
 
             <!-- Close Button -->
             <button
               type="button"
               @click="imageViewerStore.closeViewer"
               class="p-2 rounded-full bg-slate-900/80 hover:bg-rose-600/90 border border-white/10 text-slate-300 hover:text-white backdrop-blur-md shadow-lg transition-all"
-              title="Schließen (Esc)"
+              title="Close (Esc)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -452,13 +466,13 @@ onUnmounted(() => {
           <div
             class="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none px-3 py-1 rounded-full bg-slate-900/60 border border-white/5 backdrop-blur-md text-[11px] text-slate-400 hidden sm:flex items-center gap-3 shadow-lg"
           >
-            <span>Mausrad: Zoom</span>
+            <span>Scroll: Zoom</span>
             <span class="w-1 h-1 rounded-full bg-slate-600"></span>
-            <span>Klick + Ziehen: Verschieben</span>
+            <span>Drag: Pan</span>
             <span class="w-1 h-1 rounded-full bg-slate-600"></span>
-            <span>Doppelklick: 100% / Fit</span>
+            <span>Double click: 100% / Fit</span>
             <span class="w-1 h-1 rounded-full bg-slate-600"></span>
-            <span>'i': Metadaten</span>
+            <span>'i': Metadata</span>
           </div>
         </main>
 
@@ -481,14 +495,14 @@ onUnmounted(() => {
               <div class="flex items-center gap-2">
                 <span class="text-sky-400">ℹ️</span>
                 <h3 class="font-semibold text-sm text-white tracking-wide">
-                  Metainformationen
+                  Metadata
                 </h3>
               </div>
               <button
                 type="button"
                 @click="imageViewerStore.showMetadata = false"
                 class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-                title="Panel schließen"
+                title="Close panel"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -501,20 +515,20 @@ onUnmounted(() => {
               <!-- Dimensions / Size card -->
               <div class="p-3.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
                 <div class="text-[11px] uppercase tracking-wider font-semibold text-slate-400 flex items-center justify-between">
-                  <span>Größe & Auflösung</span>
+                  <span>Size & Resolution</span>
                   <span v-if="resolution" class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px]">
                     {{ resolution }}
                   </span>
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span class="text-slate-500 text-[10px] block">Abmessungen</span>
+                    <span class="text-slate-500 text-[10px] block">Dimensions</span>
                     <span class="font-mono font-semibold text-white">
-                      {{ imageViewerStore.naturalWidth ? `${imageViewerStore.naturalWidth} × ${imageViewerStore.naturalHeight} px` : 'Wird ermittelt...' }}
+                      {{ imageViewerStore.naturalWidth ? `${imageViewerStore.naturalWidth} × ${imageViewerStore.naturalHeight} px` : 'Calculating...' }}
                     </span>
                   </div>
                   <div>
-                    <span class="text-slate-500 text-[10px] block">Seitenverhältnis</span>
+                    <span class="text-slate-500 text-[10px] block">Aspect Ratio</span>
                     <span class="font-mono font-semibold text-white">
                       {{ aspectRatio }}
                     </span>
@@ -525,11 +539,11 @@ onUnmounted(() => {
               <!-- Model & Provider card -->
               <div class="p-3.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-2">
                 <div class="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
-                  Modell & Engine
+                  Model & Engine
                 </div>
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-500 text-[11px]">Modell:</span>
+                    <span class="text-slate-500 text-[11px]">Model:</span>
                     <span class="font-semibold text-sky-400 text-right truncate max-w-[180px]" :title="modelName">
                       {{ modelName }}
                     </span>
@@ -564,11 +578,11 @@ onUnmounted(() => {
                     @click="copyPrompt(promptText)"
                     class="text-sky-400 hover:text-sky-300 font-semibold normal-case text-xs transition-colors flex items-center gap-1"
                   >
-                    <span>{{ isCopied ? '✓ Kopiert' : '📋 Kopieren' }}</span>
+                    <span>{{ isCopied ? '✓ Copied' : '📋 Copy' }}</span>
                   </button>
                 </div>
                 <p class="text-slate-200 leading-relaxed font-normal select-text break-words">
-                  {{ promptText || 'Kein Prompt hinterlegt.' }}
+                  {{ promptText || 'No prompt specified.' }}
                 </p>
               </div>
 
@@ -578,7 +592,7 @@ onUnmounted(() => {
                 class="p-3.5 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-1.5"
               >
                 <div class="text-[11px] uppercase tracking-wider font-semibold text-rose-400">
-                  Negativer Prompt
+                  Negative Prompt
                 </div>
                 <p class="text-slate-300 leading-relaxed select-text break-words">
                   {{ negativePromptText }}
@@ -592,16 +606,17 @@ onUnmounted(() => {
                   @click="handleRemix"
                   class="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 font-semibold text-white text-xs shadow-lg shadow-sky-600/30 transition-all flex items-center justify-center gap-2"
                 >
-                  <span>🔁</span> In Studio Remixen
+                  <span>🔁</span> Remix in Studio
                 </button>
 
-                <a
-                  :href="imageViewerStore.imageUrl"
-                  download
-                  class="w-full py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-2"
+                <button
+                  type="button"
+                  @click="handleDownload"
+                  :disabled="isDownloading"
+                  class="w-full py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <span>⬇️</span> Bild herunterladen
-                </a>
+                  <span>⬇️</span> {{ isDownloading ? 'Downloading...' : 'Download Image' }}
+                </button>
               </div>
             </div>
           </aside>

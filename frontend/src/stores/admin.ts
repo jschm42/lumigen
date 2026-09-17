@@ -25,11 +25,11 @@ export const useAdminStore = defineStore('admin', () => {
   async function updateProviderKey(provider: string, apiKey: string) {
     try {
       const res = await adminApi.updateProviderKey(provider, apiKey)
-      toastStore.success(`API-Key für ${provider.toUpperCase()} gespeichert.`)
+      toastStore.success(`API key for ${provider.toUpperCase()} saved.`)
       fetchProviderKeys()
       return res
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Speichern des API-Keys.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to save API key.')
       throw error
     }
   }
@@ -37,10 +37,10 @@ export const useAdminStore = defineStore('admin', () => {
   async function testProvider(provider: string) {
     try {
       const res = await adminApi.testProvider(provider)
-      toastStore.success(res.message || 'Verbindung erfolgreich!')
+      toastStore.success(res.message || 'Connection successful!')
       return res
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Verbindungstest fehlgeschlagen.')
+      toastStore.error(error?.response?.data?.detail || 'Connection test failed.')
       throw error
     }
   }
@@ -62,10 +62,10 @@ export const useAdminStore = defineStore('admin', () => {
       } else {
         modelConfigs.value.push(saved)
       }
-      toastStore.success('Modell-Konfiguration gespeichert.')
+      toastStore.success('Model configuration saved.')
       return saved
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Speichern der Modell-Konfiguration.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to save model configuration.')
       throw error
     }
   }
@@ -74,9 +74,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       await adminApi.deleteModelConfig(id)
       modelConfigs.value = modelConfigs.value.filter((m) => m.id !== id)
-      toastStore.success('Modell-Konfiguration gelöscht.')
+      toastStore.success('Model configuration deleted.')
     } catch (_error) {
-      toastStore.error('Fehler beim Löschen.')
+      toastStore.error('Failed to delete.')
     }
   }
 
@@ -92,20 +92,20 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       await adminApi.deleteStyle(styleId)
       styles.value = styles.value.filter((s) => s.id !== styleId)
-      toastStore.success('Style gelöscht.')
+      toastStore.success('Style deleted.')
     } catch (_error) {
-      toastStore.error('Fehler beim Löschen des Styles.')
+      toastStore.error('Failed to delete style.')
     }
   }
 
   async function restoreDefaultStyles() {
     try {
       const res = await adminApi.restoreDefaultStyles()
-      toastStore.success(res.message || 'Standard-Styles wiederhergestellt.')
+      toastStore.success(res.message || 'Default styles restored.')
       await fetchStyles()
       return res
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Fehler beim Wiederherstellen der Standard-Styles.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to restore default styles.')
       throw error
     }
   }

@@ -17,63 +17,63 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STYLES: list[dict[str, str]] = [
     {
-        "name": "Fotorealistisch",
-        "description": "Gestochen scharfe, naturgetreue Fotografie mit realistischer Beleuchtung.",
+        "name": "Photorealistic",
+        "description": "Crisp, lifelike photography with natural lighting and fine detail.",
         "prompt": "hyperrealistic photograph, 35mm lens, sharp focus, natural soft lighting, detailed texture, 8k resolution, master photography",
     },
     {
         "name": "Cinematic",
-        "description": "Dramatischer Film-Look mit intensiver Lichtstimmung und Tiefenschärfe.",
+        "description": "Dramatic movie look with intense lighting atmosphere and depth of field.",
         "prompt": "cinematic still, 35mm film, anamorphic lens, dramatic lighting, depth of field, blockbuster movie aesthetic, color graded, highly detailed",
     },
     {
         "name": "Anime / Manga",
-        "description": "Klassischer japanischer Anime- und Manga-Zeichenstil mit lebendigen Farben.",
+        "description": "Classic Japanese anime and manga art style with vivid colors.",
         "prompt": "anime aesthetic, detailed linework, vibrant rich colors, makoto shinkai style, studio ghibli inspired, high quality 2D art",
     },
     {
         "name": "Digital Art",
-        "description": "Moderner digitaler Konzeptkunst-Stil mit dynamischer Komposition.",
+        "description": "Modern digital concept art style with dynamic composition.",
         "prompt": "digital concept art, trending on artstation, smooth gradients, sharp details, fantasy art, masterpiece, vibrant composition",
     },
     {
-        "name": "Ölgemälde",
-        "description": "Traditionelle Malerei auf Leinwand mit sichtbaren Pinselstrichen.",
+        "name": "Oil Painting",
+        "description": "Traditional painting on canvas with visible brushstrokes and rich pigments.",
         "prompt": "oil on canvas painting, visible textured brushstrokes, classical composition, rich pigments, fine art masterpiece, impasto technique",
     },
     {
-        "name": "Aquarell",
-        "description": "Zarte Wasserfarben mit weichen Verläufen und Papiertextur.",
+        "name": "Watercolor",
+        "description": "Delicate watercolours with soft washes and visible paper texture.",
         "prompt": "watercolor painting, wet-on-wet technique, soft pastel washes, paper texture, elegant artistic splatters, fluid brushwork",
     },
     {
         "name": "Cyberpunk",
-        "description": "Futuristisch, Neon-Beleuchtung und düstere High-Tech-Atmosphäre.",
+        "description": "Futuristic neon lighting and moody high-tech dystopian atmosphere.",
         "prompt": "cyberpunk aesthetic, neon lights, dark moody atmosphere, futuristic cityscape, volumetric fog, reflection, high tech gritty detail",
     },
     {
         "name": "Vintage / Retro",
-        "description": "Nostalgischer 70er/80er-Jahre Foto-Look mit Filmkorn und warmen Farben.",
+        "description": "Nostalgic 70s/80s photo look with authentic film grain and warm tones.",
         "prompt": "vintage 1970s photograph, authentic film grain, warm nostalgic tones, kodachrome style, muted retro colors, analog camera",
     },
     {
-        "name": "Minimalistisch",
-        "description": "Klare Formen, viel Negativraum und moderne Zurückhaltung.",
+        "name": "Minimalist",
+        "description": "Clean lines, ample negative space, and modern understated aesthetics.",
         "prompt": "minimalist composition, clean lines, negative space, simple elegant shapes, modern flat aesthetic, balanced design",
     },
     {
         "name": "Dark Fantasy",
-        "description": "Düster-mystische Fantasy-Atmosphäre mit gotischen Akzenten.",
+        "description": "Dark mystical fantasy atmosphere with gothic accents.",
         "prompt": "dark fantasy aesthetic, gothic atmosphere, ominous lighting, intricate dark details, epic scale, moody concept art, ethereal",
     },
     {
         "name": "3D Render",
-        "description": "Sauberes 3D-Modell mit weichem Studio-Licht und Octane-Render-Look.",
+        "description": "Clean 3D render with soft studio lighting and Octane render look.",
         "prompt": "3d render, octane render, smooth surfaces, subsurface scattering, studio lighting, blender 3d, clean materials, ultra-detailed",
     },
     {
         "name": "Pop Art",
-        "description": "Bunter Retro-Comic-Stil mit Halbtönen und kühnen Konturen.",
+        "description": "Colorful retro comic style with bold outlines and halftone screen print.",
         "prompt": "pop art style, andy warhol and roy lichtenstein inspired, bold outlines, vibrant saturated colors, halftone dots, screen print texture",
     },
 ]

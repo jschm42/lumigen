@@ -4,6 +4,7 @@ import { useAdminStore } from '@/stores/admin'
 import { adminApi } from '@/api/admin'
 import { generationApi } from '@/api/generation'
 import { useToastStore } from '@/stores/toast'
+import { downloadFile } from '@/utils/download'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
@@ -53,9 +54,9 @@ async function handleModelChange() {
   if (!previewModelId.value) return
   try {
     const res = await adminApi.updateStylePreviewSettings(previewModelId.value)
-    toastStore.success(`Preview-Modell auf "${res.name}" gesetzt.`)
+    toastStore.success(`Preview model set to "${res.name}".`)
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Fehler beim Speichern des Preview-Modells.')
+    toastStore.error(error?.response?.data?.detail || 'Failed to save preview model.')
   }
 }
 
@@ -106,16 +107,16 @@ async function handleSave() {
 
   try {
     await adminApi.saveStyle(formData)
-    toastStore.success('Style gespeichert!')
+    toastStore.success('Style saved!')
     adminStore.fetchStyles()
     isEditorOpen.value = false
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Fehler beim Speichern des Styles.')
+    toastStore.error(error?.response?.data?.detail || 'Failed to save style.')
   }
 }
 
 async function handleRestoreDefaults() {
-  if (!confirm('Möchtest du die Standard-Styles wiederherstellen? Bestehende Standard-Styles werden auf ihre Standardwerte aktualisiert.')) {
+  if (!confirm('Do you want to restore the default styles? Existing default styles will be updated to their default values.')) {
     return
   }
   isRestoring.value = true
@@ -137,10 +138,10 @@ async function handleImportFile(e: Event) {
   isImporting.value = true
   try {
     await adminApi.importData(formData)
-    toastStore.success('Styles erfolgreich importiert!')
+    toastStore.success('Styles successfully imported!')
     await adminStore.fetchStyles()
   } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Import fehlgeschlagen.')
+    toastStore.error(error?.response?.data?.detail || 'Import failed.')
   } finally {
     isImporting.value = false
     target.value = ''
@@ -157,7 +158,7 @@ async function generateAiPreview(style: StylePreset) {
       previewModelId.value || undefined,
     )
     const modelLabel = res.model_name ? ` (${res.model_name})` : ''
-    toastStore.info(`AI Preview für "${style.name}" wird generiert${modelLabel}...`)
+    toastStore.info(`Generating AI preview for "${style.name}"${modelLabel}...`)
     const jobId = res.job_id
 
     const pollInterval = setInterval(async () => {
@@ -165,12 +166,12 @@ async function generateAiPreview(style: StylePreset) {
         const job = await generationApi.getJobStatus(jobId)
         if (job.status === 'succeeded') {
           clearInterval(pollInterval)
-          toastStore.success(`Vorschaubild für "${style.name}" erfolgreich erstellt!`)
+          toastStore.success(`Preview image for "${style.name}" created successfully!`)
           await adminStore.fetchStyles()
           isGeneratingPreview.value = null
         } else if (job.status === 'failed' || job.status === 'cancelled') {
           clearInterval(pollInterval)
-          toastStore.error(job.error_message || 'Preview-Generierung fehlgeschlagen.')
+          toastStore.error(job.error_message || 'Preview generation failed.')
           isGeneratingPreview.value = null
         }
       } catch (_err) {
@@ -180,7 +181,7 @@ async function generateAiPreview(style: StylePreset) {
     }, 1500)
   } catch (error: any) {
     isGeneratingPreview.value = null
-    toastStore.error(error?.response?.data?.detail || 'Preview-Generierung fehlgeschlagen.')
+    toastStore.error(error?.response?.data?.detail || 'Preview generation failed.')
   }
 }
 </script>
@@ -191,7 +192,7 @@ async function generateAiPreview(style: StylePreset) {
     <div class="flex items-center justify-between flex-wrap gap-3">
       <div class="space-y-0.5">
         <h3 class="text-sm font-bold text-slate-900 dark:text-white">Style Presets</h3>
-        <p class="text-slate-500">Verwalte Voreinstellungen für visuelle Stile mit Prompt-Templates und Vorschaubildern.</p>
+        <p class="text-slate-500">Manage presets for visual styles with prompt templates and preview images.</p>
       </div>
 
       <div class="flex items-center gap-2 flex-wrap">
@@ -200,7 +201,7 @@ async function generateAiPreview(style: StylePreset) {
           v-if="adminStore.modelConfigs.length > 0"
           class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-white/10 shadow-sm"
         >
-          <span class="font-semibold text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">✨ Preview-Modell:</span>
+          <span class="font-semibold text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">✨ Preview Model:</span>
           <select
             v-model="previewModelId"
             @change="handleModelChange"
@@ -230,42 +231,42 @@ async function generateAiPreview(style: StylePreset) {
           size="sm"
           :loading="isRestoring"
           @click="handleRestoreDefaults"
-          title="Stellt die 12 offiziellen Standard-Styles wieder her"
+          title="Restores the 12 official default styles"
         >
-          <span>🔄</span> Defaults wiederherstellen
+          <span>🔄</span> Restore Defaults
         </Button>
 
-        <a
-          href="/api/admin/export/styles-zip"
-          download="lumigen_styles.zip"
-          class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm"
-          title="Alle Styles inklusive Vorschaubilder als ZIP exportieren"
+        <button
+          type="button"
+          @click="downloadFile('/api/admin/export/styles-zip', 'lumigen_styles.zip')"
+          class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+          title="Export all styles including preview images as ZIP"
         >
-          <span>📦</span> ZIP-Export
-        </a>
+          <span>📦</span> ZIP Export
+        </button>
 
-        <a
-          href="/api/admin/export/styles"
-          download="lumigen_styles.json"
-          class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm"
-          title="Styles als JSON-Datei exportieren"
+        <button
+          type="button"
+          @click="downloadFile('/api/admin/export/styles', 'lumigen_styles.json')"
+          class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+          title="Export styles as JSON file"
         >
-          <span>📄</span> JSON-Export
-        </a>
+          <span>📄</span> JSON Export
+        </button>
 
         <Button
           variant="secondary"
           size="sm"
           :loading="isImporting"
           @click="styleFileInput?.click()"
-          title="Styles aus einer JSON- oder ZIP-Datei importieren"
+          title="Import styles from a JSON or ZIP file"
         >
-          <span>📥</span> Importieren
+          <span>📥</span> Import
         </Button>
 
         <Button variant="primary" size="sm" @click="openNew">
           <template #icon>+</template>
-          Style erstellen
+          Create Style
         </Button>
       </div>
     </div>
@@ -281,7 +282,7 @@ async function generateAiPreview(style: StylePreset) {
         <div class="aspect-video w-full bg-slate-900 relative overflow-hidden flex items-center justify-center">
           <div v-if="isGeneratingPreview === style.id" class="flex flex-col items-center gap-2 text-sky-400">
             <div class="w-6 h-6 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-[11px] font-medium text-slate-300 animate-pulse">Generiere Preview...</span>
+            <span class="text-[11px] font-medium text-slate-300 animate-pulse">Generating preview...</span>
           </div>
           <img
             v-else-if="style.image_url"
@@ -308,7 +309,7 @@ async function generateAiPreview(style: StylePreset) {
             size="xs"
             :loading="isGeneratingPreview === style.id"
             @click="generateAiPreview(style)"
-            title="Generiert ein AI Vorschaubild für diesen Style"
+            title="Generate AI preview image for this style"
           >
             ✨ AI Preview
           </Button>
@@ -318,7 +319,7 @@ async function generateAiPreview(style: StylePreset) {
               variant="secondary"
               size="xs"
               @click="openEdit(style)"
-              title="Style bearbeiten"
+              title="Edit style"
             >
               ✏️
             </Button>
@@ -326,7 +327,7 @@ async function generateAiPreview(style: StylePreset) {
               variant="danger"
               size="xs"
               @click="adminStore.deleteStyle(style.id)"
-              title="Style löschen"
+              title="Delete style"
             >
               🗑️
             </Button>
@@ -338,26 +339,26 @@ async function generateAiPreview(style: StylePreset) {
     <!-- Style Editor Modal -->
     <Modal
       :open="isEditorOpen"
-      :title="editingStyle.id ? 'Style bearbeiten' : 'Neuen Style erstellen'"
+      :title="editingStyle.id ? 'Edit Style' : 'Create New Style'"
       size="md"
       @update:open="isEditorOpen = $event"
     >
       <form @submit.prevent="handleSave" class="space-y-4">
         <Input
           label="Style Name"
-          placeholder="z.B. Cyberpunk Neon"
+          placeholder="e.g. Cyberpunk Neon"
           v-model="editingStyle.name"
           required
         />
 
         <Input
-          label="Beschreibung"
-          placeholder="Kurze visuelle Beschreibung..."
+          label="Description"
+          placeholder="Short visual description..."
           v-model="editingStyle.description"
         />
 
         <Textarea
-          label="Prompt Template (Verwende {prompt})"
+          label="Prompt Template (Use {prompt})"
           placeholder="{prompt}, cyberpunk style, neon lights, 8k"
           v-model="editingStyle.prompt_template"
           :rows="3"
@@ -366,7 +367,7 @@ async function generateAiPreview(style: StylePreset) {
 
         <div>
           <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-            Vorschaubild hochladen (Optional)
+            Upload Preview Image (Optional)
           </label>
           <input
             type="file"
@@ -378,8 +379,8 @@ async function generateAiPreview(style: StylePreset) {
       </form>
 
       <template #footer>
-        <Button variant="secondary" size="sm" @click="isEditorOpen = false">Abbrechen</Button>
-        <Button variant="primary" size="sm" @click="handleSave">Speichern</Button>
+        <Button variant="secondary" size="sm" @click="isEditorOpen = false">Cancel</Button>
+        <Button variant="primary" size="sm" @click="handleSave">Save</Button>
       </template>
     </Modal>
   </div>

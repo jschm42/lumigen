@@ -177,7 +177,7 @@ def test_restore_styles_defaults_api(db_session: Session):
     res = admin_api.restore_styles_defaults(session=db_session)
     assert res["success"] is True
     assert res["created"] == len(style_service.DEFAULT_STYLES)
-    assert "Gesamt" in res["message"]
+    assert "total" in res["message"].lower()
 
 
 def test_export_endpoints(db_session: Session):

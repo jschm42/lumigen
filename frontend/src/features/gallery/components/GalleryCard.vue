@@ -75,7 +75,7 @@ onUnmounted(() => {
 <template>
   <div
     @click="handleCardClick"
-    :title="galleryStore.selectedAssetIds.includes(asset.id) ? 'Ausgewählt (Strg+Klick zum Abwählen)' : 'Klicken zum Öffnen (Strg+Klick zur Schnellauswahl)'"
+    :title="galleryStore.selectedAssetIds.includes(asset.id) ? 'Selected (Ctrl+Click to deselect)' : 'Click to open (Ctrl+Click for quick select)'"
     :class="[
       'group relative rounded-2xl border bg-slate-900 shadow-sm transition-all duration-200 cursor-pointer select-none',
       isRatingOpen ? 'z-30 overflow-visible' : 'overflow-hidden z-10',
@@ -108,7 +108,7 @@ onUnmounted(() => {
             ? 'bg-sky-500 border-sky-500 text-white shadow-sky-500/50 opacity-100'
             : 'bg-black/60 border-white/30 text-white hover:bg-black/80 opacity-0 group-hover:opacity-100',
         ]"
-        title="Auswählen (oder Strg + Klick auf das Bild)"
+        title="Select (or Ctrl + Click on image)"
       >
         <span v-if="galleryStore.selectedAssetIds.includes(asset.id)" class="text-xs font-bold">✓</span>
       </button>
@@ -135,8 +135,8 @@ onUnmounted(() => {
           ]"
           :title="
             asset.rating && asset.rating > 0
-              ? `Bewertung: ${asset.rating} ${asset.rating === 1 ? 'Stern' : 'Sterne'} (Klicken zum Ändern)`
-              : 'Bewerten (0–5 Sterne)'
+              ? `Rating: ${asset.rating} ${asset.rating === 1 ? 'star' : 'stars'} (Click to change)`
+              : 'Rate (0–5 stars)'
           "
         >
           <span class="text-xs leading-none">{{ asset.rating && asset.rating > 0 ? '★' : '☆' }}</span>
@@ -166,7 +166,7 @@ onUnmounted(() => {
                 ? 'bg-white/20 text-white font-bold'
                 : 'text-slate-400 hover:text-white hover:bg-white/10',
             ]"
-            title="0 Sterne (Keine Bewertung)"
+            title="0 Stars (No rating)"
           >
             <span>0</span>
             <span class="text-xs leading-none">☆</span>
@@ -191,7 +191,7 @@ onUnmounted(() => {
                     ? 'text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]'
                     : 'text-slate-500 hover:text-amber-300'
               "
-              :title="`${star} ${star === 1 ? 'Stern' : 'Sterne'}`"
+              :title="`${star} ${star === 1 ? 'star' : 'stars'}`"
             >
               ★
             </button>
