@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useAdminStore } from '@/stores/admin'
+import { useAuthStore } from '@/stores/auth'
 import Card from '@/components/ui/Card.vue'
 
 const adminStore = useAdminStore()
+const authStore = useAuthStore()
 
 onMounted(() => {
   adminStore.fetchSystemInfo()
@@ -29,7 +31,7 @@ function formatBytes(bytes?: number): string {
       <Card padding="md" class="space-y-1">
         <span class="text-[11px] text-slate-500 font-semibold uppercase">Version</span>
         <div class="text-lg font-bold text-slate-900 dark:text-white">
-          {{ adminStore.systemInfo?.app_version || '0.1.0' }}
+          {{ adminStore.systemInfo?.app_version || authStore.appVersion }}
         </div>
       </Card>
 

@@ -11,6 +11,12 @@ const queueStore = useQueueStore()
 
 const isUserMenuOpen = ref(false)
 
+const versionDisplay = computed(() => {
+  const ver = authStore.appVersion
+  if (!ver) return ''
+  return ver.startsWith('v') ? ver : `v${ver}`
+})
+
 const navLinks = computed(() => {
   const links = [
     { name: 'Generate', path: '/', exact: true },
@@ -55,13 +61,23 @@ onUnmounted(() => {
       <div class="flex items-center gap-6">
         <router-link
           to="/"
-          class="inline-flex items-center gap-3 rounded-2xl border border-slate-300/60 bg-white/70 px-3 py-2 transition hover:border-sky-400/60 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-sky-300/50 dark:hover:bg-white/10"
+          class="group inline-flex items-center gap-3 transition-opacity hover:opacity-85"
         >
-          <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-400/40 bg-slate-200/80 dark:border-sky-300/30 dark:bg-slate-900/70">
-            <img src="/app-logo.svg" alt="Lumigen" class="h-8 w-8 rounded-lg invert dark:invert-0" />
-          </span>
+          <img
+            src="/app-logo.svg"
+            alt="Lumigen"
+            class="h-10 w-10 sm:h-11 sm:w-11 shrink-0 invert dark:invert-0 transition-transform duration-200 group-hover:scale-105"
+          />
           <span class="grid min-w-0 gap-0.5 text-left">
-            <strong class="text-sm font-bold tracking-tight text-slate-900 dark:text-white">Lumigen</strong>
+            <span class="flex items-center gap-2">
+              <strong class="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">Lumigen</strong>
+              <span
+                v-if="versionDisplay"
+                class="rounded-md bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600 dark:bg-white/10 dark:text-slate-300"
+              >
+                {{ versionDisplay }}
+              </span>
+            </span>
             <small class="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">AI Image Studio</small>
           </span>
         </router-link>

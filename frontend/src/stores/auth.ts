@@ -3,12 +3,15 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import type { User } from '@/types'
 
+declare const __APP_VERSION__: string | undefined
+
 export const useAuthStore = defineStore('auth', () => {
+  const defaultVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.4.0-beta'
   const user = ref<User | null>(null)
   const isAuthenticated = ref<boolean>(false)
   const needsOnboarding = ref<boolean>(false)
   const isLoading = ref<boolean>(true)
-  const appVersion = ref<string>('0.1.0')
+  const appVersion = ref<string>(defaultVersion)
 
   const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -19,7 +22,7 @@ export const useAuthStore = defineStore('auth', () => {
       isAuthenticated.value = status.authenticated
       user.value = status.user
       needsOnboarding.value = status.needs_onboarding
-      appVersion.value = status.app_version || '0.1.0'
+      appVersion.value = status.app_version || defaultVersion
     } catch (_error) {
       isAuthenticated.value = false
       user.value = null
