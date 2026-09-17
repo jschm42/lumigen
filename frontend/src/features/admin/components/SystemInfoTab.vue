@@ -72,14 +72,14 @@ function formatBytes(bytes?: number): string {
       <div class="space-y-1">
         <div class="flex items-center gap-2">
           <span class="text-base">📜</span>
-          <h4 class="font-bold text-slate-900 dark:text-white">Credits, Danksagungen & Lizenzen</h4>
+          <h4 class="font-bold text-slate-900 dark:text-white">Credits, Attributions & Licenses</h4>
         </div>
         <p class="text-[11px] text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
-          Übersicht aller angebundenen KI-Provider (Black Forest Labs, OpenAI, Google Imagen, fal.ai, MiniMax etc.), deren Attributionsbestimmungen sowie genutzter Open-Source-Lizenzen und Schriftarten.
+          Overview of integrated AI providers (Black Forest Labs, OpenAI, Google Imagen, fal.ai, MiniMax, etc.), attribution requirements, open-source licenses, and typography.
         </p>
       </div>
       <Button variant="secondary" size="sm" class="shrink-0 cursor-pointer" @click="creditsStore.open">
-        Credits & Lizenzen anzeigen
+        View Credits & Licenses
       </Button>
     </Card>
   </div>

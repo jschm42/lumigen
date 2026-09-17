@@ -118,6 +118,7 @@ npx.cmd stylelint "app/web/static/css/app.css"     # CSS lint
 - No inline JS or CSS in templates; use `app/web/static/js/*` and `app/web/static/css/app.css`.
 - Add/adjust tests for every backend or UI behavior change.
 - Tailwind theming: use class-based dark mode only. Do not introduce custom light/dark override systems. Follow [Tailwind theme customization](https://tailwindcss.com/docs/theme#customizing-your-theme).
+- Keep credits & third-party licenses up to date: when adding, updating, or removing dependencies (`requirements.txt`, `frontend/package.json`), AI provider integrations (`app/providers/*`), or redistributed assets (fonts, icons), update `THIRD_PARTY_LICENSES.md` and `frontend/src/components/ui/CreditsModal.vue` to maintain accurate attribution notices and license compliance.
 
 ## Release preparation
 

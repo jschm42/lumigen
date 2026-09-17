@@ -28,7 +28,7 @@ const providers: ProviderCredit[] = [
     models: 'FLUX.1 [dev], FLUX.1 [schnell], FLUX.1 [pro]',
     licenseType: 'BFL Non-Commercial (dev) / Apache 2.0 (schnell) / Commercial API (pro)',
     attributionText: 'FLUX.1 [dev] is licensed by Black Forest Labs under the Non-Commercial License.',
-    notes: 'Gemäß Lizenzbestimmungen von Black Forest Labs ist bei Veröffentlichung oder Weitergabe von mit FLUX.1 [dev] generierten Bildern ein Urhebernachweis anzubringen.',
+    notes: 'Per Black Forest Labs license terms (Section 2b), explicit attribution is required when distributing or publishing assets created with FLUX.1 [dev].',
     website: 'https://blackforestlabs.ai',
     docsUrl: 'https://docs.bfl.ai',
   },
@@ -39,7 +39,7 @@ const providers: ProviderCredit[] = [
     models: 'DALL·E 3, DALL·E 2, GPT Vision Models',
     licenseType: 'OpenAI Commercial API License',
     attributionText: 'Images generated with OpenAI API / Powered by OpenAI.',
-    notes: 'Gemäß den OpenAI Terms of Service & Brand Guidelines wird bei Veröffentlichung von KI-generierten Bildern Transparenz über den Einsatz von OpenAI-Modellen empfohlen/gefordert.',
+    notes: 'Per OpenAI Terms of Service & Brand Guidelines, user transparency regarding the use of OpenAI models is required when publishing AI-generated images.',
     website: 'https://openai.com',
     docsUrl: 'https://platform.openai.com/docs/guides/images',
   },
@@ -49,8 +49,8 @@ const providers: ProviderCredit[] = [
     badgeVariant: 'blue',
     models: 'Imagen 3 (imagen-3.0-generate-002), Gemini 2.0 / 1.5 Flash',
     licenseType: 'Google Generative AI Terms of Service',
-    attributionText: 'Generiert mit Google Imagen / Powered by Google Generative AI.',
-    notes: 'Unterliegt den Google Terms of Service und der Generative AI Prohibited Use Policy (Kennzeichnungspflicht von synthetischen Inhalten bei Veröffentlichung).',
+    attributionText: 'Generated with Google Imagen / Powered by Google Generative AI.',
+    notes: 'Subject to Google Terms of Service and Generative AI Prohibited Use Policy (transparency required when publishing synthetic media).',
     website: 'https://ai.google.dev',
     docsUrl: 'https://ai.google.dev/gemini-api/docs/image-generation',
   },
@@ -58,10 +58,10 @@ const providers: ProviderCredit[] = [
     name: 'fal.ai',
     badgeText: 'Cloud Inference',
     badgeVariant: 'amber',
-    models: 'Serverless FLUX Inferenz, Nano Banana 2, Upscaling (AuraSR, CCSR)',
+    models: 'Serverless FLUX Inference, Nano Banana 2, Upscaling (AuraSR, CCSR)',
     licenseType: 'fal.ai Platform Terms of Service',
-    attributionText: 'Inferenz & Upscaling powered by fal.ai.',
-    notes: 'Schnelle Serverless-GPU-Infrastruktur für Bildgenerierung und hochauflösendes Upscaling.',
+    attributionText: 'Inference & upscaling powered by fal.ai.',
+    notes: 'High-performance serverless GPU infrastructure for low-latency generation and super-resolution upscaling.',
     website: 'https://fal.ai',
     docsUrl: 'https://fal.ai/docs',
   },
@@ -72,17 +72,17 @@ const providers: ProviderCredit[] = [
     models: 'MiniMax Image-01',
     licenseType: 'MiniMax Open Platform Terms',
     attributionText: 'Powered by MiniMax Image Generation API.',
-    notes: 'Fortschrittliches multimodales Bildgenerierungsmodell via MiniMax Open Platform.',
+    notes: 'Advanced multimodal image generation models accessible via the MiniMax Open Platform.',
     website: 'https://www.minimaxi.com',
   },
   {
     name: 'OpenRouter',
     badgeText: 'API Gateway',
     badgeVariant: 'indigo',
-    models: 'Multimodale Bild- und Vision-Modelle verschiedener Provider',
+    models: 'Multimodal vision and diffusion models across multiple providers',
     licenseType: 'OpenRouter Terms of Service',
     attributionText: 'Unified model routing powered by OpenRouter.',
-    notes: 'Zentrales Gateway für den Zugriff auf diverse Open-Source- und proprietäre Bildmodelle.',
+    notes: 'Central gateway for accessing diverse open-weight and proprietary image generation models.',
     website: 'https://openrouter.ai',
     docsUrl: 'https://openrouter.ai/docs',
   },
@@ -92,8 +92,8 @@ const providers: ProviderCredit[] = [
     badgeVariant: 'slate',
     models: 'huggingface_hub Client & Model Repository',
     licenseType: 'Apache License 2.0',
-    attributionText: 'Model discovery & assets powered by Hugging Face Hub.',
-    notes: 'Open-Source-Ökosystem und Python-Client für vortrainierte Gewichte und Modell-Metadaten.',
+    attributionText: 'Model discovery and assets powered by Hugging Face Hub.',
+    notes: 'Open-source ecosystem and Python client for pre-trained weights, architectures, and model metadata.',
     website: 'https://huggingface.co',
   },
 ]
@@ -113,7 +113,7 @@ const fontsAndIcons: FontCredit[] = [
     author: 'JetBrains s.r.o. (Philipp Nurullin, Konstantin Bulenkov)',
     license: 'SIL Open Font License 1.1',
     licenseFile: 'licenses/OFL-1.1.txt',
-    usage: 'Monospace-Schrift für Metadaten, Prompts, Seeds und Code-Ansichten.',
+    usage: 'Monospace typeface for metadata, prompt inspection, seeds, and code display.',
     url: 'https://github.com/JetBrains/JetBrainsMono',
   },
   {
@@ -121,7 +121,7 @@ const fontsAndIcons: FontCredit[] = [
     author: 'Florian Karsten',
     license: 'SIL Open Font License 1.1',
     licenseFile: 'licenses/OFL-1.1.txt',
-    usage: 'Primäre Schriftart für Überschriften, Brand-Elemente und UI-Typografie.',
+    usage: 'Primary display font for headings, brand identity, and UI typography.',
     url: 'https://github.com/floriankarsten/space-grotesk',
   },
   {
@@ -129,7 +129,7 @@ const fontsAndIcons: FontCredit[] = [
     author: 'The Bootstrap Authors (Mark Otto & Contributors)',
     license: 'MIT License',
     licenseFile: 'licenses/bootstrap-icons-MIT.txt',
-    usage: 'Redistribuierte Web-Fonts (WOFF/WOFF2) für System- und Bedienelemente.',
+    usage: 'Redistributed web fonts (WOFF/WOFF2) for system and control elements.',
     url: 'https://github.com/twbs/icons',
   },
   {
@@ -137,7 +137,7 @@ const fontsAndIcons: FontCredit[] = [
     author: 'Lucide Contributors & Cole Bemis',
     license: 'ISC License',
     licenseFile: 'https://lucide.dev/license',
-    usage: 'Moderne SVG-Icons für die Vue-Benutzeroberfläche.',
+    usage: 'Modern, consistent vector SVG icons for the Vue user interface.',
     url: 'https://lucide.dev',
   },
 ]
@@ -158,7 +158,7 @@ const openSourceSoftware: SoftwareCredit[] = [
     license: 'MIT',
     author: 'Sebastián Ramírez & Encode',
     url: 'https://fastapi.tiangolo.com',
-    description: 'Hochmodernes, asynchrones Web-Framework für Python 3.12+.',
+    description: 'High-performance, async Python web framework and ASGI server for Python 3.12+.',
   },
   {
     name: 'Vue.js & Pinia',
@@ -166,7 +166,7 @@ const openSourceSoftware: SoftwareCredit[] = [
     license: 'MIT',
     author: 'Evan You & Vue Community',
     url: 'https://vuejs.org',
-    description: 'Reaktives Frontend-Framework und modernes State Management.',
+    description: 'Progressive reactive UI framework and intuitive centralized state management.',
   },
   {
     name: 'Tailwind CSS',
@@ -174,39 +174,39 @@ const openSourceSoftware: SoftwareCredit[] = [
     license: 'MIT',
     author: 'Tailwind Labs Inc.',
     url: 'https://tailwindcss.com',
-    description: 'Utility-First CSS-Framework für das Lumigen Studio UI.',
+    description: 'Utility-first styling system powering Lumigen Studio dark & light interfaces.',
   },
   {
     name: 'SQLAlchemy & Alembic',
-    category: 'Datenbank',
+    category: 'Database',
     license: 'MIT',
     author: 'Mike Bayer & Contributors',
     url: 'https://www.sqlalchemy.org',
-    description: 'Robuste Datenbank-Abstraktionsschicht und Schema-Migrationen.',
+    description: 'Database ORM, atomic transactions, and automated schema migration management.',
   },
   {
     name: 'Pillow (PIL)',
-    category: 'Bildverarbeitung',
+    category: 'Image Processing',
     license: 'HPND / Historical Permission',
     author: 'Alex Clark & Pillow Contributors',
     url: 'https://python-pillow.org',
-    description: 'Bildmanipulation, Farbkorrekturen, Exif-Handling und Thumbnail-Generierung.',
+    description: 'Image operations, format conversion, thumbnail rendering, and metadata extraction.',
   },
   {
     name: 'HTTPX',
-    category: 'Netzwerk',
+    category: 'Networking',
     license: 'BSD-3-Clause',
     author: 'Encode (Tom Christie & Contributors)',
     url: 'https://www.encode.io/httpx',
-    description: 'Asynchroner HTTP-Client für schnelle Kommunikation mit allen Provider-APIs.',
+    description: 'Async HTTP client for secure, low-latency communication with external provider APIs.',
   },
   {
     name: 'Cryptography',
-    category: 'Sicherheit',
+    category: 'Security',
     license: 'Apache 2.0 / BSD',
     author: 'Python Cryptographic Authority (PyCA)',
     url: 'https://cryptography.io',
-    description: 'Verschlüsselung sensibler Provider-API-Keys in der lokalen Datenbank.',
+    description: 'Cryptographic primitives for securing sensitive API keys in the local database.',
   },
 ]
 </script>
@@ -214,7 +214,7 @@ const openSourceSoftware: SoftwareCredit[] = [
 <template>
   <Modal
     :open="creditsStore.isOpen"
-    title="Credits, Danksagungen & Lizenzen"
+    title="Credits, Attributions & Licenses"
     size="xl"
     @close="creditsStore.close"
   >
@@ -225,12 +225,12 @@ const openSourceSoftware: SoftwareCredit[] = [
           <span class="text-xl leading-none">✨</span>
           <div class="space-y-1">
             <h4 class="text-sm font-semibold text-sky-950 dark:text-sky-200">
-              Verwendete APIs, Bibliotheken und Schriften
+              Integrated APIs, Open-Source Libraries & Typography
             </h4>
             <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Lumigen ist ein lokales KI-Bildstudio, das auf fortschrittlichen Bildmodellen und Open-Source-Software aufbaut.
-              Hier findest du die Übersicht aller angebundenen KI-APIs mit ihren jeweiligen Lizenz- und Attributionsbestimmungen
-              sowie die Danksagungen an beteiligte Open-Source-Projekte.
+              Lumigen is a local-first AI image studio built upon state-of-the-art generative models and foundational
+              open-source software. Below is a comprehensive overview of integrated AI providers, their required attribution
+              notices, and credits to the open-source projects and fonts that make this studio possible.
             </p>
           </div>
         </div>
@@ -249,7 +249,7 @@ const openSourceSoftware: SoftwareCredit[] = [
           ]"
         >
           <span>🤖</span>
-          <span>KI-APIs & Provider ({{ providers.length }})</span>
+          <span>AI APIs & Providers ({{ providers.length }})</span>
         </button>
         <button
           type="button"
@@ -262,7 +262,7 @@ const openSourceSoftware: SoftwareCredit[] = [
           ]"
         >
           <span>🖋️</span>
-          <span>Schriften & Icons ({{ fontsAndIcons.length }})</span>
+          <span>Fonts & Icons ({{ fontsAndIcons.length }})</span>
         </button>
         <button
           type="button"
@@ -279,7 +279,7 @@ const openSourceSoftware: SoftwareCredit[] = [
         </button>
       </div>
 
-      <!-- TAB 1: KI Provider & APIs -->
+      <!-- TAB 1: AI Provider & APIs -->
       <div v-if="activeCategory === 'providers'" class="space-y-4">
         <div class="grid grid-cols-1 gap-4">
           <div
@@ -309,18 +309,18 @@ const openSourceSoftware: SoftwareCredit[] = [
                   rel="noopener noreferrer"
                   class="text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
                 >
-                  Dokumentation ↗
+                  Documentation ↗
                 </a>
               </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
               <div>
-                <span class="text-slate-500 block">Modelle / Einsatz:</span>
+                <span class="text-slate-500 block">Models / Usage:</span>
                 <span class="font-medium text-slate-800 dark:text-slate-200">{{ provider.models }}</span>
               </div>
               <div>
-                <span class="text-slate-500 block">Lizenzbasis:</span>
+                <span class="text-slate-500 block">License Basis:</span>
                 <span class="font-medium text-slate-800 dark:text-slate-200">{{ provider.licenseType }}</span>
               </div>
             </div>
@@ -328,7 +328,7 @@ const openSourceSoftware: SoftwareCredit[] = [
             <!-- Attribution Note -->
             <div class="rounded-lg bg-white/80 p-2.5 border border-slate-200/80 dark:bg-slate-950/60 dark:border-white/5 space-y-1">
               <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Erforderlicher / Empfohlener Urhebernachweis (Attribution):
+                Required / Recommended Attribution:
               </span>
               <p class="font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 select-all">
                 "{{ provider.attributionText }}"
@@ -342,10 +342,10 @@ const openSourceSoftware: SoftwareCredit[] = [
 
         <!-- General Disclaimer -->
         <div class="rounded-xl border border-amber-200/80 bg-amber-50/60 p-3.5 dark:border-amber-900/60 dark:bg-amber-950/30 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
-          <strong>Wichtiger Hinweis zur Veröffentlichung von KI-Inhalten:</strong>
-          Modelle wie <em>FLUX.1 [dev]</em> von Black Forest Labs sind für nicht-kommerzielle Zwecke lizenziert und verlangen
-          bei Veröffentlichung oder Weitergabe zwingend die Namensnennung. Überprüfe bei kommerzieller Nutzung die Nutzungsbedingungen
-          des jeweiligen Anbieters und deiner individuellen API-Schlüssel.
+          <strong>Important Notice on Distributing AI-Generated Content:</strong>
+          Models such as <em>FLUX.1 [dev]</em> by Black Forest Labs are licensed for non-commercial use and strictly require
+          attribution upon public distribution. When utilizing models for commercial purposes, please check the respective provider
+          terms and conditions as well as your individual API tier agreements.
         </div>
       </div>
 
@@ -363,7 +363,7 @@ const openSourceSoftware: SoftwareCredit[] = [
                 <Badge variant="indigo" size="xs">{{ font.license }}</Badge>
               </div>
               <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                Urheber: <span class="font-medium text-slate-700 dark:text-slate-300">{{ font.author }}</span>
+                Author: <span class="font-medium text-slate-700 dark:text-slate-300">{{ font.author }}</span>
               </p>
               <p class="text-[11px] text-slate-600 dark:text-slate-300 pt-1">
                 {{ font.usage }}
@@ -378,7 +378,7 @@ const openSourceSoftware: SoftwareCredit[] = [
                 rel="noopener noreferrer"
                 class="text-sky-600 hover:underline dark:text-sky-400 font-medium"
               >
-                Projektseite ↗
+                Project Website ↗
               </a>
             </div>
           </div>
@@ -408,7 +408,7 @@ const openSourceSoftware: SoftwareCredit[] = [
               </a>
             </div>
             <p class="text-[10px] text-slate-500 dark:text-slate-400">
-              Kategorie: {{ sw.category }} · {{ sw.author }}
+              Category: {{ sw.category }} · {{ sw.author }}
             </p>
             <p class="text-[11px] text-slate-600 dark:text-slate-300">
               {{ sw.description }}
@@ -425,7 +425,7 @@ const openSourceSoftware: SoftwareCredit[] = [
           Lumigen AI Image Studio · Open-Source & Multi-Provider Architecture
         </div>
         <Button variant="secondary" size="sm" @click="creditsStore.close">
-          Schließen
+          Close
         </Button>
       </div>
     </template>

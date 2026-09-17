@@ -77,7 +77,7 @@ onUnmounted(() => {
                 v-if="versionDisplay"
                 type="button"
                 @click.prevent.stop="creditsStore.open"
-                title="Credits, Lizenzen & Versionsdetails anzeigen"
+                title="View credits, licenses & version details"
                 class="rounded-md bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600 dark:bg-white/10 dark:text-slate-300 hover:bg-sky-100 hover:text-sky-600 dark:hover:bg-sky-950/60 dark:hover:text-sky-300 transition-colors cursor-pointer"
               >
                 {{ versionDisplay }}
@@ -184,7 +184,7 @@ onUnmounted(() => {
               @click="isUserMenuOpen = false; creditsStore.open()"
               class="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
             >
-              📜 Credits & Lizenzen
+              📜 Credits & Licenses
             </button>
 
             <button
