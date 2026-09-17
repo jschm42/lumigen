@@ -17,19 +17,23 @@ Lumigen gives you a single, clean workspace to generate,
 compare, and organize AI images — across all major providers.
 
 - 🔀 **One app, many providers**: FAL, OpenAI, OpenRouter, Google, BFL — switch in seconds
+- ⏳ **Generation queue**: start multiple jobs consecutively without waiting; backend FIFO semaphore prevents provider overloads
+- 🔄 **One-click retry**: instantly re-run failed or cancelled generations with identical settings
+- 🎯 **Decoupled workflow**: switch models and profiles freely without unintentional parameter/model overrides
 - 🏡 **Your data, your machine**: images and history stay under `./data`, always
 - ⚡ **Fast creative loop**: generate, tweak, rerun, and compare without leaving the app
-- 📤 **Data portability**: Import/export profiles, models, and styles via JSON
-- 📦 **Complete archiving**: Export full sessions as ZIP with prompts and metadata
+- 📤 **Data portability**: import/export profiles, models, and styles via JSON
+- 📦 **Complete archiving**: export full sessions as ZIP with prompts and metadata
 - 🗂️ **Stay organized**: profiles, categories, and a full gallery workflow built in
 - 🔍 **Full history**: every image is reproducible, metadata and all
-- 🚀 **Optional upscaling**: Real-ESRGAN support built in
+- 🚀 **Optional upscaling**: Real-ESRGAN and FAL Topaz upscaling built in
 
 ## Getting started
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.12+
+- Node.js 20+ and npm (for building the frontend SPA)
 - pip
 - Optional: Docker
 
@@ -58,8 +62,14 @@ source .venv/bin/activate
 
 ### 3) Install dependencies
 
+Python packages:
 ```bash
 pip install -r requirements.txt
+```
+
+Frontend Node packages:
+```bash
+npm install
 ```
 
 ### 4) Configure environment
@@ -84,7 +94,15 @@ For a local-only first run, the default `.env` values are enough.
 alembic upgrade head
 ```
 
-### 6) Start the app
+### 6) Build the frontend SPA
+
+```bash
+npm run build
+```
+
+> **Tip:** For interactive frontend development with Hot Module Replacement (HMR), run `npm run dev` in parallel and visit Vite's dev server.
+
+### 7) Start the app
 
 ```bash
 python -m app.main
@@ -105,6 +123,19 @@ Open: `http://127.0.0.1:8010`
    - any cloud provider if API keys are configured
 3. Go to **Generate**, enter a prompt, submit.
 4. Check **Gallery** for generated assets and metadata.
+
+## Generation Queue & Workflow
+
+Lumigen features a dedicated background generation queue with intelligent job management:
+
+- **Continuous Submissions**: Submit multiple prompts and settings consecutively. The Generate button remains active and shows a queued counter (e.g. `+2`), so you never have to wait for one job to finish before queuing the next.
+- **Backend Concurrency Control**: A server-side semaphore orchestrates generation runs sequentially. Jobs wait in the database with status `queued` until the lock is acquired, protecting against rate limit hits and GPU resource contention.
+- **Slide-Over Queue Drawer**: Click the **Queue** button in the top navigation bar or the **Warteschlange** tile in the left studio sidebar to slide open the queue panel.
+  - **Live Progress**: See real-time progress bars, processing percentages, prompt snippets, and active models.
+  - **Direct Cancellation**: Cancel any pending or running job instantly (`✕ Cancel`).
+  - **History & Instant Retry**: View recently finished, failed, or cancelled jobs.
+- **Failed Job Recovery**: Every failed or cancelled generation card includes an immediate **"🔄 Retry"** button that clones and re-enqueues the exact parameters without manual re-entry.
+- **Persistent Across All Pages**: The queue runs in the background and is accessible from any view (Generate Studio, Gallery, Profiles, Admin Settings). Navigation never interrupts ongoing jobs.
 
 ## Auth rollout checklist
 
@@ -183,6 +214,14 @@ Set provider API keys in `.env` for default usage:
 - `GOOGLE_API_KEY`
 - `BFL_API_KEY`
 - `FAL_API_KEY`
+
+### OpenRouter
+
+Lumigen connects to OpenRouter with automatic API route detection:
+
+- Set `OPENROUTER_API_KEY` in `.env`.
+- **Multimodal LLMs**: Models generating images via chat completions are handled seamlessly.
+- **Dedicated Image Models (`/api/v1/images`)**: Models requiring OpenRouter's dedicated images endpoint (e.g. OpenAI DALL-E models, Imagen 3, etc.) are automatically routed to `/api/v1/images` with aspect ratio mapping and error resilience.
 
 ### FAL.ai
 
@@ -356,13 +395,13 @@ If you want hardware Vulkan acceleration from host GPU, ensure your Docker runti
 
 ## Development notes
 
-- Migrations are required for schema changes: add Alembic migration under `alembic/versions/`.
-- The app also calls `Base.metadata.create_all()` during startup for local bootstrap, but Alembic remains the source of schema evolution.
-- Backend tests run with `pytest`.
-- Run all backend tests: `pytest -q`
-- Run focused suites: `pytest -q tests/unit` and `pytest -q tests/routes`
-- UI route/template tests (server-rendered Jinja + HTMX): `pytest -q tests/ui_routes`
-- Coverage baseline (terminal report): `pytest --cov=app --cov-report=term-missing -q`
+- **Frontend Architecture**: Vue 3 Single-Page Application (SPA) located in `frontend/` powered by Vite, Pinia, Vue Router, and Tailwind CSS.
+- **Frontend Dev Server**: Run `npm run dev` in the project root for fast Vite HMR.
+- **Frontend Production Build**: Run `npm run build` to compile assets into `app/web/dist/`.
+- **Database Migrations**: Add Alembic migrations under `alembic/versions/` for schema changes. Apply with `alembic upgrade head`.
+- **Python Linting**: Run `python -m ruff check app/`.
+- **Unit Tests**: Run unit tests with `pytest -q tests/unit`.
+- **End-to-End Tests**: Run Playwright tests with `npm run test:e2e` (or `npm run test:e2e:ui`).
 
 ## Theme stylesheet structure
 
