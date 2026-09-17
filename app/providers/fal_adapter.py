@@ -51,6 +51,46 @@ class FalAdapter(ProviderAdapter):
     MAX_POLL_ATTEMPTS = 90
     POLL_INTERVAL = 2.0  # seconds
     _logger = logging.getLogger(__name__)
+    _internal_param_keys = {
+        "description",
+        "resolution",
+        "default_resolution",
+        "aspect_ratio",
+        "default_aspect_ratio",
+        "negative_prompt",
+        "system_prompt",
+        "base_prompt",
+        "fal_aspect_ratio",
+        "fal_resolution",
+        "fal_image_size",
+        "openrouter_aspect_ratio",
+        "openrouter_image_size",
+        "google_aspect_ratio",
+        "google_resolution",
+        "image_config",
+        "category_ids",
+        "categories",
+        "selected_style_ids",
+        "selected_style_names",
+        "upscale_provider",
+        "upscale_model",
+        "upscale_topaz_model_id",
+        "upscaling_active",
+        "chat_session_id",
+        "chat_session_title",
+        "conversation",
+        "mode",
+        "expand",
+        "source_asset_id",
+        "continuation_prompt",
+        "width",
+        "height",
+        "seed",
+        "input_images",
+        "is_style_generation",
+        "style_id",
+        "overrides",
+    }
 
     async def list_models(self, settings: Settings) -> list[str]:
         """Return a curated list of popular FAL.ai image-generation model IDs."""
@@ -315,6 +355,7 @@ class FalAdapter(ProviderAdapter):
             for key, value in request.params.items():
                 if (
                     key not in payload
+                    and key not in self._internal_param_keys
                     and key not in {"fal_aspect_ratio", "fal_resolution", "fal_image_size"}
                     and value is not None
                 ):

@@ -29,6 +29,44 @@ class OpenAIAdapter(ProviderAdapter):
     homepage_url = "https://platform.openai.com/api-keys"
     _logger = logging.getLogger(__name__)
     _internal_param_keys = {
+        "description",
+        "resolution",
+        "default_resolution",
+        "aspect_ratio",
+        "default_aspect_ratio",
+        "negative_prompt",
+        "system_prompt",
+        "base_prompt",
+        "fal_aspect_ratio",
+        "fal_resolution",
+        "fal_image_size",
+        "openrouter_aspect_ratio",
+        "openrouter_image_size",
+        "google_aspect_ratio",
+        "google_resolution",
+        "image_config",
+        "category_ids",
+        "categories",
+        "selected_style_ids",
+        "selected_style_names",
+        "upscale_provider",
+        "upscale_model",
+        "upscale_topaz_model_id",
+        "upscaling_active",
+        "chat_session_id",
+        "chat_session_title",
+        "conversation",
+        "mode",
+        "expand",
+        "source_asset_id",
+        "continuation_prompt",
+        "width",
+        "height",
+        "seed",
+        "input_images",
+        "is_style_generation",
+        "style_id",
+        "overrides",
         "padded_image",
         "padded_width",
         "padded_height",
@@ -37,6 +75,15 @@ class OpenAIAdapter(ProviderAdapter):
         "mask",
         "target_width",
         "target_height",
+    }
+    _allowed_param_keys = {
+        "quality",
+        "style",
+        "user",
+        "background",
+        "output_format",
+        "response_format",
+        "moderation",
     }
 
     async def list_models(self, settings: Settings) -> list[str]:
@@ -143,10 +190,15 @@ class OpenAIAdapter(ProviderAdapter):
         else:
             payload["output_format"] = output_format
 
-        # Keep adapter forward-compatible with extra provider-specific knobs.
+        # Pass only recognized OpenAI parameters, filtering out internal/profile metadata keys.
         if isinstance(request.params, dict):
             for key, value in request.params.items():
-                if key not in payload and value is not None:
+                if (
+                    key in self._allowed_param_keys
+                    and key not in payload
+                    and key not in self._internal_param_keys
+                    and value is not None
+                ):
                     payload[key] = value
 
         return payload
@@ -231,6 +283,7 @@ class OpenAIAdapter(ProviderAdapter):
                     key in data
                     or value is None
                     or key in self._internal_param_keys
+                    or key not in self._allowed_param_keys
                     or isinstance(value, (bytes, bytearray, memoryview))
                 ):
                     continue
