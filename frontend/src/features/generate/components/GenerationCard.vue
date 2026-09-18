@@ -47,6 +47,18 @@ const isPendingOrProcessing = computed(() => {
   return true
 })
 
+const dimensions = computed(() => {
+  if (props.generation.assets && props.generation.assets.length > 0) {
+    const first = props.generation.assets[0]
+    const w = first.width || first.metadata?.width
+    const h = first.height || first.metadata?.height
+    if (w && h) {
+      return `${w}×${h}`
+    }
+  }
+  return null
+})
+
 const statusMessage = computed(() => {
   const s = props.generation.status
   if (s === 'queued') return 'In queue...'
@@ -83,6 +95,9 @@ function handleImageClick(asset: Asset) {
 
       <!-- Badges & Actions -->
       <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+        <Badge v-if="dimensions" variant="slate" size="xs" class="font-mono" title="Pixel dimensions">
+          {{ dimensions }}
+        </Badge>
         <Badge v-if="generation.model_name" variant="sky" size="xs">
           {{ generation.model_name }}
         </Badge>

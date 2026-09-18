@@ -235,9 +235,9 @@ function handleRateAsset(star: number) {
           </div>
 
           <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10">
-            <span class="text-slate-500 block">Format / Ratio</span>
+            <span class="text-slate-500 block">Dimensions / Ratio</span>
             <span class="font-semibold text-slate-900 dark:text-white">
-              {{ galleryStore.activeAsset.aspect_ratio || '1:1' }}
+              {{ (galleryStore.activeAsset.width && galleryStore.activeAsset.height) ? `${galleryStore.activeAsset.width} × ${galleryStore.activeAsset.height} (${galleryStore.activeAsset.aspect_ratio || '1:1'})` : (galleryStore.activeAsset.aspect_ratio || '1:1') }}
             </span>
           </div>
 
