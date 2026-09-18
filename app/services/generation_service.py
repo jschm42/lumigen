@@ -958,7 +958,7 @@ class GenerationService:
         generation = session.scalar(
             select(Generation).where(Generation.id == generation_id)
         )
-        if generation and generation.status == "cancelled":
+        if not generation or generation.status == "cancelled":
             raise GenerationCancelledError("Generation was cancelled by user")
 
     def _provider_request_from_generation(self, generation: Generation) -> ProviderGenerationRequest:

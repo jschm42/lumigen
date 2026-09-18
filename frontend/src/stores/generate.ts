@@ -269,7 +269,25 @@ export const useGenerateStore = defineStore('generate', () => {
   }
 
 
+  const pollingIntervals = new Map<number, ReturnType<typeof setInterval>>()
+
+  function stopPolling(jobId: number) {
+    const timer = pollingIntervals.get(jobId)
+    if (timer) {
+      clearInterval(timer)
+      pollingIntervals.delete(jobId)
+    }
+    activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
+  }
+
+  function clearAllPolling() {
+    pollingIntervals.forEach((timer) => clearInterval(timer))
+    pollingIntervals.clear()
+    activeJobIds.value = []
+  }
+
   async function loadSessionHistory(sessionToken: string) {
+    clearAllPolling()
     if (!sessionToken) {
       generations.value = []
       return
@@ -296,6 +314,10 @@ export const useGenerateStore = defineStore('generate', () => {
       activeJobIds.value.push(jobId)
     }
 
+    if (pollingIntervals.has(jobId)) {
+      clearInterval(pollingIntervals.get(jobId))
+    }
+
     const interval = setInterval(async () => {
       try {
         const gen = await generationApi.getJobStatus(jobId)
@@ -313,20 +335,34 @@ export const useGenerateStore = defineStore('generate', () => {
         }
 
         if (gen.status === 'succeeded') {
-          clearInterval(interval)
-          activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
+          stopPolling(jobId)
           toastStore.success('Image successfully generated!')
           sessionsStore.fetchSessions()
         } else if (gen.status === 'failed' || gen.status === 'cancelled') {
-          clearInterval(interval)
-          activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
+          stopPolling(jobId)
           toastStore.error(gen.error_message || 'Generation failed.')
         }
       } catch (_error) {
-        clearInterval(interval)
-        activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
+        stopPolling(jobId)
       }
     }, 2000)
+
+    pollingIntervals.set(jobId, interval)
+  }
+
+  async function deleteGeneration(jobId: number) {
+    stopPolling(jobId)
+    generations.value = generations.value.filter((g) => g.id !== jobId)
+
+    try {
+      await generationApi.deleteGeneration(jobId)
+      toastStore.success('Generation deleted.')
+    } catch (_error) {
+      toastStore.info('Generation removed from view.')
+    } finally {
+      sessionsStore.fetchSessions()
+      queueStore.fetchQueue()
+    }
   }
 
   async function submit() {
@@ -482,6 +518,9 @@ export const useGenerateStore = defineStore('generate', () => {
     loadModelsAndStyles,
     loadSessionHistory,
     pollJob,
+    stopPolling,
+    clearAllPolling,
+    deleteGeneration,
     submit,
     retryGeneration,
     remixGeneration,

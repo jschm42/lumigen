@@ -14,6 +14,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'delete'): void
+}>()
 
 const generateStore = useGenerateStore()
 const galleryStore = useGalleryStore()
@@ -151,6 +154,17 @@ function handleExpandSubmitted(jobId: number) {
       title="Show metadata & details"
     >
       <span>ℹ️</span> Details
+    </button>
+
+    <!-- Delete Generation -->
+    <button
+      v-if="generation"
+      type="button"
+      @click="emit('delete')"
+      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1"
+      title="Delete generation from session"
+    >
+      <span>🗑️</span> Delete
     </button>
 
     <!-- Outpaint / Expand Modal -->

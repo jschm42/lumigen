@@ -97,6 +97,11 @@ export const generationApi = {
     return res.data
   },
 
+  async deleteGeneration(jobId: number): Promise<{ success: boolean; job_id?: number; message?: string }> {
+    const res = await apiClient.delete<{ success: boolean; job_id?: number; message?: string }>(`/api/generations/${jobId}`)
+    return res.data
+  },
+
   async retryJob(jobId: number): Promise<{ job_id: number; status: string }> {
     const res = await apiClient.post(`/api/jobs/${jobId}/retry`)
     return res.data

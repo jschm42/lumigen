@@ -448,6 +448,31 @@ def cancel_job(
     }
 
 
+@router.delete("/jobs/{generation_id}")
+@router.delete("/generations/{generation_id}")
+def delete_generation(
+    generation_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Delete a generation job, its assets, and associated files.
+
+    Cancels the job first if it is still queued or running, then removes
+    the generation record and any on-disk files.
+    """
+    generation = crud.get_generation(session, generation_id)
+    if not generation:
+        return {"success": True, "job_id": generation_id, "message": "Generation not found or already deleted."}
+
+    if generation.status in {"queued", "running"}:
+        generation_service.cancel_generation(session, generation_id)
+
+    deleted = generation_service.delete_generation(session, generation_id)
+    return {
+        "success": deleted,
+        "job_id": generation_id,
+    }
+
+
 @router.post("/jobs/{generation_id}/retry")
 def retry_job(
     generation_id: int,

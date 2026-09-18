@@ -5,6 +5,7 @@ import { useImageViewerStore } from '@/stores/imageViewer'
 import { useGenerateStore } from '@/stores/generate'
 import Spinner from '@/components/ui/Spinner.vue'
 import Badge from '@/components/ui/Badge.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import GenerationActions from './GenerationActions.vue'
 
 interface Props {
@@ -15,6 +16,10 @@ const props = defineProps<Props>()
 const imageViewerStore = useImageViewerStore()
 const generateStore = useGenerateStore()
 const isRetrying = ref(false)
+const isDeleteOpen = ref(false)
+const isDeleting = ref(false)
+
+const hasAssets = computed(() => !!(props.generation.assets && props.generation.assets.length > 0))
 
 async function handleRetry() {
   isRetrying.value = true
@@ -22,6 +27,16 @@ async function handleRetry() {
     await generateStore.retryGeneration(props.generation)
   } finally {
     isRetrying.value = false
+  }
+}
+
+async function handleDelete() {
+  isDeleting.value = true
+  try {
+    await generateStore.deleteGeneration(props.generation.id)
+    isDeleteOpen.value = false
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -66,7 +81,7 @@ function handleImageClick(asset: Asset) {
         </p>
       </div>
 
-      <!-- Badges -->
+      <!-- Badges & Actions -->
       <div class="flex flex-wrap items-center gap-1.5 shrink-0">
         <Badge v-if="generation.model_name" variant="sky" size="xs">
           {{ generation.model_name }}
@@ -74,6 +89,19 @@ function handleImageClick(asset: Asset) {
         <Badge v-if="generation.aspect_ratio" variant="slate" size="xs">
           {{ generation.aspect_ratio }}
         </Badge>
+
+        <!-- Delete button in card header (always accessible) -->
+        <button
+          type="button"
+          @click="isDeleteOpen = true"
+          class="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 transition-colors ml-1"
+          title="Delete generation"
+          aria-label="Delete generation"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -95,9 +123,22 @@ function handleImageClick(asset: Asset) {
           :style="{ width: `${generation.progress}%` }"
         />
       </div>
+
+      <!-- Cancel / Remove button specifically for pending or stuck jobs -->
+      <button
+        type="button"
+        @click="isDeleteOpen = true"
+        class="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-500/10 border border-slate-200 dark:border-white/10 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-rose-950/30 transition-colors shadow-sm"
+        title="Cancel or remove this generation"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        <span>Cancel / Remove</span>
+      </button>
     </div>
 
-    <!-- Failed or Cancelled State with Retry Button -->
+    <!-- Failed or Cancelled State with Retry and Delete Buttons -->
     <div
       v-else-if="generation.status === 'failed' || generation.status === 'cancelled'"
       class="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-700 dark:text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
@@ -111,16 +152,30 @@ function handleImageClick(asset: Asset) {
         </p>
       </div>
 
-      <button
-        type="button"
-        @click="handleRetry"
-        :disabled="isRetrying"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50 shrink-0 self-start sm:self-center"
-        title="Retry this job"
-      >
-        <span :class="{ 'animate-spin': isRetrying }">🔄</span>
-        <span>{{ isRetrying ? 'Starting...' : 'Retry' }}</span>
-      </button>
+      <div class="flex items-center gap-2 shrink-0 self-start sm:self-center">
+        <button
+          type="button"
+          @click="isDeleteOpen = true"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-medium text-xs shadow-sm transition"
+          title="Delete this failed generation"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          <span>Delete</span>
+        </button>
+
+        <button
+          type="button"
+          @click="handleRetry"
+          :disabled="isRetrying"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50"
+          title="Retry this job"
+        >
+          <span :class="{ 'animate-spin': isRetrying }">🔄</span>
+          <span>{{ isRetrying ? 'Starting...' : 'Retry' }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Succeeded State (Image Results) -->
@@ -161,8 +216,24 @@ function handleImageClick(asset: Asset) {
         </div>
 
         <!-- Action bar -->
-        <GenerationActions :asset="asset" :generation="generation" />
+        <GenerationActions
+          :asset="asset"
+          :generation="generation"
+          @delete="isDeleteOpen = true"
+        />
       </div>
     </div>
+
+    <!-- Delete Confirm Dialog -->
+    <ConfirmDialog
+      :open="isDeleteOpen"
+      :title="hasAssets ? 'Delete Generation' : 'Remove Generation'"
+      :message="hasAssets ? 'Do you really want to delete this generation and its generated images?' : 'Do you want to remove this generation from the session?'"
+      confirmText="Delete"
+      variant="danger"
+      :loading="isDeleting"
+      @update:open="isDeleteOpen = $event"
+      @confirm="handleDelete"
+    />
   </div>
 </template>

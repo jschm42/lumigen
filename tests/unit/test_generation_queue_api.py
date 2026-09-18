@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.api.generation import cancel_job, get_queue, retry_job
+from app.api.generation import cancel_job, delete_generation, get_queue, retry_job
 
 
 @pytest.mark.asyncio
@@ -141,3 +141,51 @@ async def test_retry_job_not_found():
                 session=mock_session,
             )
         assert exc_info.value.status_code == 404
+
+
+def test_delete_generation_success():
+    """Test delete_generation successfully deletes an existing completed generation."""
+    mock_gen = MagicMock()
+    mock_gen.id = 42
+    mock_gen.status = "succeeded"
+    mock_session = MagicMock()
+
+    with patch("app.api.generation.crud.get_generation", return_value=mock_gen), \
+         patch("app.api.generation.generation_service.delete_generation", return_value=True) as mock_delete:
+
+        res = delete_generation(generation_id=42, session=mock_session)
+
+        assert res["success"] is True
+        assert res["job_id"] == 42
+        mock_delete.assert_called_once_with(mock_session, 42)
+
+
+def test_delete_generation_cancels_running_job():
+    """Test delete_generation cancels an active job before deleting it."""
+    mock_gen = MagicMock()
+    mock_gen.id = 43
+    mock_gen.status = "running"
+    mock_session = MagicMock()
+
+    with patch("app.api.generation.crud.get_generation", return_value=mock_gen), \
+         patch("app.api.generation.generation_service.cancel_generation") as mock_cancel, \
+         patch("app.api.generation.generation_service.delete_generation", return_value=True) as mock_delete:
+
+        res = delete_generation(generation_id=43, session=mock_session)
+
+        assert res["success"] is True
+        assert res["job_id"] == 43
+        mock_cancel.assert_called_once_with(mock_session, 43)
+        mock_delete.assert_called_once_with(mock_session, 43)
+
+
+def test_delete_generation_not_found():
+    """Test delete_generation returns graceful success response when generation is not in DB."""
+    mock_session = MagicMock()
+
+    with patch("app.api.generation.crud.get_generation", return_value=None):
+        res = delete_generation(generation_id=999, session=mock_session)
+
+        assert res["success"] is True
+        assert res["job_id"] == 999
+
