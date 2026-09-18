@@ -33,15 +33,6 @@ export interface EnhancePromptPayload {
   image?: File
 }
 
-export interface ExpandPayload {
-  asset_id: number
-  prompt: string
-  aspect_ratio: string
-  expand_left?: number
-  expand_right?: number
-  expand_top?: number
-  expand_bottom?: number
-}
 
 export const generationApi = {
   async submitGeneration(payload: SubmitGenerationPayload): Promise<{ job_id: number; status: string; session_token?: string }> {
@@ -107,7 +98,10 @@ export const generationApi = {
     return res.data
   },
 
-  async upscale(assetId: number, options?: { provider?: string; model?: string; factor?: number }): Promise<{ job_id: number; status: string }> {
+  async upscale(
+    assetId: number,
+    options?: { provider?: string; model?: string; factor?: number; topaz_model_id?: number; model_id?: number }
+  ): Promise<{ job_id: number; status: string }> {
     const res = await apiClient.post(`/api/assets/${assetId}/upscale`, options || {})
     return res.data
   },
@@ -125,11 +119,6 @@ export const generationApi = {
     return res.data
   },
 
-  async expandImage(payload: ExpandPayload): Promise<{ job_id: number; status: string }> {
-    const res = await apiClient.post(`/api/assets/${payload.asset_id}/expand`, payload)
-    return res.data
-  },
-
   async getActiveModelConfigs(): Promise<ModelConfig[]> {
     const res = await apiClient.get<ModelConfig[]>('/api/models/active')
     return res.data
@@ -140,8 +129,24 @@ export const generationApi = {
     return res.data
   },
 
-  async getUpscaleModels(): Promise<{ value: string; label: string }[]> {
-    const res = await apiClient.get<{ value: string; label: string }[]>('/api/upscale-models')
+  async getUpscaleModels(): Promise<{
+    value: string
+    label: string
+    id?: number
+    name?: string
+    model_identifier?: string
+    is_default?: boolean
+  }[]> {
+    const res = await apiClient.get<
+      {
+        value: string
+        label: string
+        id?: number
+        name?: string
+        model_identifier?: string
+        is_default?: boolean
+      }[]
+    >('/api/upscale-models')
     return res.data
   },
 }

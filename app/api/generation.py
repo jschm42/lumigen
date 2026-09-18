@@ -535,10 +535,10 @@ async def api_enhance_prompt(
 @router.get("/upscale-models")
 def list_upscale_models(
     session: Session = Depends(get_session),
-) -> list[dict[str, str]]:
-    """Return list of all available upscale models for overrides dropdown."""
-    results: list[dict[str, str]] = [
-        {"value": "__none__", "label": "Kein Upscaling"},
+) -> list[dict[str, Any]]:
+    """Return list of all available upscale models for overrides and upscaling dialogs."""
+    results: list[dict[str, Any]] = [
+        {"value": "__none__", "label": "No upscaling"},
         {"value": "fal", "label": "FAL.ai Standard"},
     ]
     # Enabled Topaz/FAL models
@@ -547,6 +547,10 @@ def list_upscale_models(
         results.append({
             "value": f"falm:{m.id}",
             "label": f"{m.name} (FAL)",
+            "id": m.id,
+            "name": m.name,
+            "model_identifier": m.model_identifier,
+            "is_default": bool(getattr(m, "is_default", False)),
         })
     # Local models
     local_models = upscale_service.list_available_models()
@@ -554,12 +558,12 @@ def list_upscale_models(
         for m in local_models:
             results.append({
                 "value": f"local:{m}",
-                "label": f"{m} (Lokal)",
+                "label": f"{m} (Local)",
             })
     else:
         results.append({
             "value": "local:RealESRGAN_x4plus",
-            "label": "Real-ESRGAN x4plus (Lokal)",
+            "label": "Real-ESRGAN x4plus (Local)",
         })
     return results
 

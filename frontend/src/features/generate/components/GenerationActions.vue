@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { generationApi } from '@/api/generation'
 import { useGenerateStore } from '@/stores/generate'
 import { useGalleryStore } from '@/stores/gallery'
 import { useToastStore } from '@/stores/toast'
 import { downloadFile } from '@/utils/download'
 import type { Asset, Generation } from '@/types'
-import ExpandCanvasModal from './ExpandCanvasModal.vue'
+import UpscaleModal from './UpscaleModal.vue'
 
 interface Props {
   asset: Asset
@@ -22,22 +21,8 @@ const generateStore = useGenerateStore()
 const galleryStore = useGalleryStore()
 const toastStore = useToastStore()
 
-const isUpscaling = ref(false)
 const isDownloading = ref(false)
-const isExpandModalOpen = ref(false)
-
-async function handleUpscale() {
-  isUpscaling.value = true
-  try {
-    const res = await generationApi.upscale(props.asset.id)
-    toastStore.success('Upscaling started!')
-    generateStore.pollJob(res.job_id)
-  } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Upscaling failed.')
-  } finally {
-    isUpscaling.value = false
-  }
-}
+const isUpscaleModalOpen = ref(false)
 
 function handleRemix() {
   if (props.generation) {
@@ -77,7 +62,7 @@ function openDetail() {
   galleryStore.openDetailModal(props.asset)
 }
 
-function handleExpandSubmitted(jobId: number) {
+function handleUpscaleSubmitted(jobId: number) {
   generateStore.pollJob(jobId)
 }
 </script>
@@ -97,22 +82,11 @@ function handleExpandSubmitted(jobId: number) {
     <!-- Upscale -->
     <button
       type="button"
-      @click="handleUpscale"
-      :disabled="isUpscaling"
-      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 disabled:opacity-50"
+      @click="isUpscaleModalOpen = true"
+      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
       title="Upscale image"
     >
-      <span>✨</span> {{ isUpscaling ? 'Upscaling...' : 'Upscale' }}
-    </button>
-
-    <!-- Expand / Outpaint -->
-    <button
-      type="button"
-      @click="isExpandModalOpen = true"
-      class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-      title="Expand image / Outpainting"
-    >
-      <span>📐</span> Expand
+      <span>✨</span> Upscale
     </button>
 
     <!-- Use as Input Image -->
@@ -167,12 +141,12 @@ function handleExpandSubmitted(jobId: number) {
       <span>🗑️</span> Delete
     </button>
 
-    <!-- Outpaint / Expand Modal -->
-    <ExpandCanvasModal
-      :open="isExpandModalOpen"
+    <!-- Upscale Modal -->
+    <UpscaleModal
+      :open="isUpscaleModalOpen"
       :asset="asset"
-      @update:open="isExpandModalOpen = $event"
-      @submitted="handleExpandSubmitted"
+      @update:open="isUpscaleModalOpen = $event"
+      @submitted="handleUpscaleSubmitted"
     />
   </div>
 </template>

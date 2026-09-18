@@ -299,11 +299,13 @@ def upscale_asset(
 
     # 1. Check upscale model configuration
     req_model_id = None
-    if payload and payload.get("topaz_model_id"):
-        try:
-            req_model_id = int(payload["topaz_model_id"])
-        except (ValueError, TypeError):
-            req_model_id = None
+    if payload:
+        raw_id = payload.get("topaz_model_id") or payload.get("model_id")
+        if raw_id is not None:
+            try:
+                req_model_id = int(raw_id)
+            except (ValueError, TypeError):
+                req_model_id = None
 
     topaz_config = None
     if req_model_id:

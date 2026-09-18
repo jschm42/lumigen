@@ -96,6 +96,8 @@ export interface Asset {
   thumbnail_url: string
   image_url: string
   download_url: string
+  width?: number
+  height?: number
   metadata?: AssetMetadata
   categories?: Category[]
   category_ids?: number[]

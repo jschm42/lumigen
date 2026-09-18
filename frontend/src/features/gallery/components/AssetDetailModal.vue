@@ -10,6 +10,7 @@ import { downloadFile } from '@/utils/download'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import UpscaleModal from '@/features/generate/components/UpscaleModal.vue'
 
 const router = useRouter()
 const galleryStore = useGalleryStore()
@@ -18,10 +19,17 @@ const toastStore = useToastStore()
 const imageViewerStore = useImageViewerStore()
 
 const isDeleteConfirmOpen = ref(false)
+const isUpscaleModalOpen = ref(false)
 const isAddCatOpen = ref(false)
 const newCatName = ref('')
 const isCreatingCat = ref(false)
 const isDownloading = ref(false)
+
+function handleUpscaleSubmitted(jobId: number) {
+  generateStore.pollJob(jobId)
+  galleryStore.closeDetailModal()
+  router.push('/')
+}
 
 const assignedCategories = computed(() => {
   if (!galleryStore.activeAsset) return []
@@ -331,6 +339,10 @@ function handleRateAsset(star: number) {
             🔁 Remix in Studio
           </Button>
 
+          <Button variant="surface" size="sm" @click="isUpscaleModalOpen = true">
+            ✨ Upscale
+          </Button>
+
           <Button variant="surface" size="sm" @click="handleUseAsInputImage">
             🖼️ Use as Input Image
           </Button>
@@ -357,6 +369,14 @@ function handleRateAsset(star: number) {
       message="Do you really want to permanently delete this image?"
       @update:open="isDeleteConfirmOpen = $event"
       @confirm="handleDelete"
+    />
+
+    <!-- Upscale Modal -->
+    <UpscaleModal
+      :open="isUpscaleModalOpen"
+      :asset="galleryStore.activeAsset"
+      @update:open="isUpscaleModalOpen = $event"
+      @submitted="handleUpscaleSubmitted"
     />
   </Modal>
 </template>

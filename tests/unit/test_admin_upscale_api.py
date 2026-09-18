@@ -223,3 +223,78 @@ async def test_asset_upscale_models_exist_but_no_default_raises_400(
         )
     assert exc.value.status_code == 400
     assert "No upscale model configured" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_asset_upscale_with_explicit_model_id_success(db_session: Session):
+    """Test that upscale uses the explicitly requested model from payload."""
+    from unittest.mock import MagicMock
+
+    from fastapi import BackgroundTasks
+
+    from app.api import generation as gen_api
+
+    asset = _create_dummy_asset(db_session)
+
+    # Default model
+    crud.create_topaz_upscale_model(
+        db_session,
+        name="Default ESRGAN",
+        model_identifier="fal-ai/esrgan",
+        is_default=True,
+    )
+    # Custom model
+    custom_model = crud.create_topaz_upscale_model(
+        db_session,
+        name="Custom Clarity",
+        model_identifier="fal-ai/clarity-upscaler",
+        is_default=False,
+    )
+
+    # Configure mock FAL key
+    mock_config_svc = MagicMock()
+    mock_config_svc.get_default_api_key.return_value = "fake-fal-key"
+
+    mock_gen_svc = MagicMock()
+
+    with patch.object(gen_api, "model_config_service", mock_config_svc), \
+         patch.object(gen_api, "generation_service", mock_gen_svc):
+        res = assets_api.upscale_asset(
+            asset_id=asset.id,
+            background_tasks=BackgroundTasks(),
+            payload={"topaz_model_id": custom_model.id},
+            session=db_session,
+        )
+
+        assert "job_id" in res
+        assert res["status"] == "queued"
+
+        # Verify generation record used custom model
+        gen = crud.get_generation(db_session, res["job_id"])
+        assert gen is not None
+        assert gen.model == "fal-ai/clarity-upscaler"
+        assert gen.request_snapshot_json["upscale_topaz_model_id"] == custom_model.id
+
+
+def test_list_upscale_models_returns_enriched_metadata(db_session: Session):
+    """Test that list_upscale_models returns English labels and model metadata."""
+    from app.api import generation as gen_api
+
+    m1 = crud.create_topaz_upscale_model(
+        db_session,
+        name="Topaz Test",
+        model_identifier="fal-ai/topaz",
+        is_default=True,
+        is_enabled=True,
+    )
+
+    models = gen_api.list_upscale_models(session=db_session)
+    assert any(m.get("label") == "No upscaling" for m in models)
+    assert not any("Kein" in str(m.get("label")) for m in models)
+
+    topaz_entry = next((m for m in models if m.get("id") == m1.id), None)
+    assert topaz_entry is not None
+    assert topaz_entry["name"] == "Topaz Test"
+    assert topaz_entry["model_identifier"] == "fal-ai/topaz"
+    assert topaz_entry["is_default"] is True
+
