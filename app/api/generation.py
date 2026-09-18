@@ -106,13 +106,19 @@ async def api_generate_submit(
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt is required")
 
+    overrides: dict[str, Any] = {}
+
     if style_id:
         try:
             s_obj = crud.get_style(session, int(style_id))
             if s_obj and s_obj.prompt:
                 prompt = s_obj.prompt.replace("{prompt}", prompt) if "{prompt}" in s_obj.prompt else f"{prompt}, {s_obj.prompt}"
-            if s_obj and s_obj.negative_prompt:
-                negative_prompt = f"{negative_prompt or ''}, {s_obj.negative_prompt}".strip(", ")
+            if s_obj and getattr(s_obj, "negative_prompt", None):
+                negative_prompt = f"{negative_prompt or ''}, {getattr(s_obj, 'negative_prompt')}".strip(", ")
+            if s_obj:
+                overrides["style_id"] = s_obj.id
+                overrides["selected_style_ids"] = [s_obj.id]
+                overrides["selected_style_names"] = [s_obj.name]
         except (ValueError, TypeError):
             pass
 
@@ -124,14 +130,15 @@ async def api_generate_submit(
         profile = profiles[0] if profiles else None
 
     if not profile:
+        storage_templates = crud.list_storage_templates(session)
+        tmpl_id = storage_templates[0].id if storage_templates else 1
         profile = crud.create_profile(
             session,
             name="Default",
             aspect_ratio="1:1",
-            resolution="1K",
+            storage_template_id=tmpl_id,
         )
 
-    overrides: dict[str, Any] = {}
     import base64
 
     from sqlalchemy import select

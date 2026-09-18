@@ -5831,11 +5831,19 @@ def asset_thumbnail(
                 )
                 thumbnail_service.create_thumbnail(base_dir, asset.file_path)
                 if absolute_path.exists():
-                    return FileResponse(path=absolute_path, media_type="image/webp")
+                    return FileResponse(
+                        path=absolute_path,
+                        media_type="image/webp",
+                        headers={"Cache-Control": "public, max-age=604800, immutable"},
+                    )
         except Exception as exc:
             logger.error(f"Failed to automatically generate missing asset thumbnail: {exc}")
         raise HTTPException(status_code=404, detail="Thumbnail missing")
-    return FileResponse(path=absolute_path, media_type="image/webp")
+    return FileResponse(
+        path=absolute_path,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=604800, immutable"},
+    )
 
 
 @app.get("/generations/{generation_id}/input-images/{image_index}")

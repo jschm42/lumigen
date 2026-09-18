@@ -821,6 +821,40 @@ class GenerationService:
                         fallback_width=image_width,
                         fallback_height=image_height,
                     )
+
+                    # If this is a style generation, save directly to the style directory
+                    # and do not add to the gallery (skip base_dir, thumbnails, sidecars, and Asset records).
+                    if generation.request_snapshot_json and generation.request_snapshot_json.get(
+                        "is_style_generation"
+                    ):
+                        style_id = generation.request_snapshot_json.get("style_id")
+                        if style_id:
+                            style = crud.get_style(session, style_id)
+                            if style:
+                                style_dir = self.settings.data_dir / "styles"
+                                ensure_dir(style_dir)
+                                style_image_path = style_dir / f"{style_id}.webp"
+                                self.storage_service.write_bytes_atomic(
+                                    style_image_path, image_data
+                                )
+                                crud.update_style(
+                                    session, style, image_path=f"styles/{style_id}.webp"
+                                )
+
+                        self._raise_if_cancelled(session, generation_id)
+                        session.refresh(generation)
+                        if generation.status == "cancelled":
+                            raise GenerationCancelledError(
+                                "Canceled by user during finalization."
+                            )
+
+                        generation.status = "succeeded"
+                        generation.error = None
+                        generation.failure_sidecar_path = None
+                        generation.finished_at = datetime.now(UTC)
+                        session.commit()
+                        return
+
                     rendered_rel_path = self.storage_service.render_relative_path(
                         template=storage_template,
                         profile_name=generation.profile_name,
@@ -835,19 +869,6 @@ class GenerationService:
                     )
                     self.storage_service.write_bytes_atomic(abs_path, image_data)
                     created_files.append(rel_path.as_posix())
-
-                    # If this is a style generation, copy to style path
-                    if idx == 1 and generation.request_snapshot_json.get("is_style_generation"):
-                        style_id = generation.request_snapshot_json.get("style_id")
-                        if style_id:
-                            style = crud.get_style(session, style_id)
-                            if style:
-                                style_dir = self.settings.data_dir / "styles"
-                                ensure_dir(style_dir)
-                                style_image_path = style_dir / f"{style_id}.webp"
-                                # We can reuse image_data directly or write from file
-                                self.storage_service.write_bytes_atomic(style_image_path, image_data)
-                                crud.update_style(session, style, image_path=f"styles/{style_id}.webp")
 
                     thumb_rel = self.thumbnail_service.create_thumbnail(
                         base_dir, rel_path

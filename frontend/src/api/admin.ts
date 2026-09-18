@@ -86,6 +86,15 @@ export const adminApi = {
     return res.data
   },
 
+  async generateMissingStylePreviews(
+    modelConfigId?: number,
+  ): Promise<{ success: boolean; count: number; job_ids: number[]; model_name?: string; message?: string }> {
+    const res = await apiClient.post('/api/admin/styles/generate-missing-previews', {
+      model_config_id: modelConfigId,
+    })
+    return res.data
+  },
+
   async getStylePreviewSettings(): Promise<{
     model_config_id: number | null
     models: { id: number; name: string; provider: string; model: string }[]

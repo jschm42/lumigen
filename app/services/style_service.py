@@ -76,6 +76,106 @@ DEFAULT_STYLES: list[dict[str, str]] = [
         "description": "Colorful retro comic style with bold outlines and halftone screen print.",
         "prompt": "pop art style, andy warhol and roy lichtenstein inspired, bold outlines, vibrant saturated colors, halftone dots, screen print texture",
     },
+    {
+        "name": "Studio Portrait",
+        "description": "High-end editorial studio photography with soft Rembrandt lighting and sharp focus.",
+        "prompt": "professional studio portrait photograph, 85mm lens, f/1.4 aperture, rembrandt lighting, sharp facial details, seamless backdrop, Hasselblad photography, elegant magazine editorial",
+    },
+    {
+        "name": "Steampunk",
+        "description": "Victorian era aesthetic fused with brass gears, steam machinery, and copper details.",
+        "prompt": "steampunk aesthetic, intricate brass gears, polished copper pipes, ornate victorian details, steam-powered machinery, sepia and bronze tones, detailed mechanical craftsmanship",
+    },
+    {
+        "name": "Surrealism",
+        "description": "Dreamlike, illogical scenes with floating elements and impossible geometry.",
+        "prompt": "surrealist masterpiece, dreamlike impossible geometry, salvador dali and rene magritte inspired, enigmatic symbolism, ethereal lighting, uncanny and bizarre juxtapositions",
+    },
+    {
+        "name": "Claymation",
+        "description": "Stop-motion plasticine clay look with handcrafted textures and miniature studio lighting.",
+        "prompt": "claymation stop-motion aesthetic, handcrafted plasticine clay textures, subtle fingerprint details, studio miniature lighting, aardman and laika animation style, tactile depth",
+    },
+    {
+        "name": "Synthwave / Vaporwave",
+        "description": "1980s retro-futurism with neon grids, glowing horizons, and chrome reflections.",
+        "prompt": "vaporwave synthwave aesthetic, 1980s retro-futurism, glowing neon grid, magenta and cyan color palette, chrome reflections, outrun sunset, nostalgic glow",
+    },
+    {
+        "name": "Pixel Art",
+        "description": "Nostalgic 16-bit video game pixel art with crisp clusters and vibrant palettes.",
+        "prompt": "detailed 16-bit pixel art, isometric retro video game graphics, crisp pixel clusters, carefully limited vibrant palette, nostalgic arcade aesthetic",
+    },
+    {
+        "name": "Papercraft / Origami",
+        "description": "Layered dimensional paper cutouts with delicate shadows and tactile paper texture.",
+        "prompt": "layered papercraft art, intricate paper cutouts, dimensional cardstock layers, origami folds, delicate drop shadows, craft studio lighting, tactile paper texture",
+    },
+    {
+        "name": "Isometric 3D",
+        "description": "Charming miniature diorama with tilt-shift perspective and detailed stylized models.",
+        "prompt": "isometric 3d diorama, miniature voxel world, tilt-shift depth of field, orthographic projection, cute stylized micro details, vibrant lighting, octane render",
+    },
+    {
+        "name": "Gothic Noir",
+        "description": "High-contrast black and white ink style with dramatic shadows and graphic novel grit.",
+        "prompt": "gritty noir comic book style, high-contrast black and white, dramatic chiaroscuro shadows, stark ink hatching, graphic novel aesthetic, cinematic silhouettes, sin city inspired",
+    },
+    {
+        "name": "Art Nouveau",
+        "description": "Ornate organic curves, flowing floral motifs, and elegant decorative borders.",
+        "prompt": "art nouveau illustration, alphonse mucha inspired, flowing sinuous lines, organic floral motifs, elegant decorative borders, pastel and gold foil accents, intricate stained glass aesthetic",
+    },
+    {
+        "name": "Pencil & Charcoal",
+        "description": "Hand-drawn graphite and charcoal sketch with visible cross-hatching and paper grain.",
+        "prompt": "detailed graphite and charcoal drawing, traditional hand-drawn sketch, cross-hatching, fine smudged textures, textured drawing paper, expressive fine art study",
+    },
+    {
+        "name": "Double Exposure",
+        "description": "Poetic blend of silhouettes with natural landscapes, starfields, and cityscapes.",
+        "prompt": "artistic double exposure photography, seamless blend of silhouette and natural landscape, ethereal exposure layering, poetic fine art photography, delicate transparency",
+    },
+    {
+        "name": "Stained Glass",
+        "description": "Luminous leaded glass window with jewel tones and radiant streaming sunlight.",
+        "prompt": "luminous stained glass window, intricate black leaded seams, vibrant jewel-tone colored glass, radiant sunlight streaming through, medieval cathedral rose window aesthetic",
+    },
+    {
+        "name": "Baroque Painting",
+        "description": "Opulent classical European fine art with dramatic chiaroscuro and deep emotional intensity.",
+        "prompt": "baroque fine art painting, caravaggio chiaroscuro, dramatic tenebrism, rich deep shadows, luminous golden highlights, classical oil on canvas, majestic emotional intensity",
+    },
+    {
+        "name": "Ukiyo-e Woodblock",
+        "description": "Traditional Japanese Edo-period woodblock print with flowing lines and mineral washes.",
+        "prompt": "traditional ukiyo-e woodblock print, hokusai and hiroshige style, washi paper texture, bold ink outlines, flat mineral pigment washes, japanese traditional art",
+    },
+    {
+        "name": "Glitch Art",
+        "description": "Digital distortion with chromatic aberration, VHS scanlines, and RGB shifts.",
+        "prompt": "glitch art aesthetic, chromatic aberration, digital artifacting, RGB channel shift, VHS CRT scanlines, datamosh distortion, futuristic cyber malfunction",
+    },
+    {
+        "name": "Neon Tokyo",
+        "description": "Rain-slicked night streets reflecting vibrant neon signs in a Blade Runner haze.",
+        "prompt": "cyberpunk tokyo street at night, rain-slicked reflective asphalt, glowing neon signage, volumetric mist and neon glow, moody cinematic atmosphere, blade runner urban vibe",
+    },
+    {
+        "name": "Low Poly",
+        "description": "Geometric faceted 3D art with flat-shaded colorful polygon meshes and studio lighting.",
+        "prompt": "low poly 3d art, stylized faceted geometry, flat-shaded colorful polygon meshes, ambient occlusion, clean minimalist isometric, indie game aesthetic",
+    },
+    {
+        "name": "Fantasy Concept Art",
+        "description": "Grand scale epic fantasy landscape with ancient overgrown ruins and mystical lighting.",
+        "prompt": "epic fantasy concept art, sweeping mystical landscape, floating islands, ancient overgrown ruins, magical ambient glow, vast sense of scale, artstation featured",
+    },
+    {
+        "name": "Risograph Print",
+        "description": "Textured indie riso print with subtle misregistration, halftone dots, and soy inks.",
+        "prompt": "risograph print, tactile rough paper grain, two-color overlay with subtle misregistration, vibrant fluorescent soy inks, halftone dot pattern, indie zine aesthetic",
+    },
 ]
 
 

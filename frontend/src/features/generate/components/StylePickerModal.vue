@@ -59,48 +59,49 @@ function selectStyle(style: StylePreset | null) {
       </div>
 
       <!-- Styles Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+      <div
+        class="grid gap-2 max-h-[65vh] overflow-y-auto pr-1"
+        style="grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));"
+      >
         <div
           v-for="style in filteredStyles"
           :key="style.id"
           @click="selectStyle(style)"
           :class="[
-            'group relative rounded-2xl border overflow-hidden transition-all duration-150 cursor-pointer text-left',
+            'group relative aspect-square rounded-lg border overflow-hidden transition-all duration-150 cursor-pointer text-left bg-slate-900',
             String(generateStore.selectedStyleId) === String(style.id)
               ? 'border-sky-500 ring-2 ring-sky-500/50 shadow-lg shadow-sky-500/20'
               : 'border-slate-300/60 dark:border-white/10 hover:border-sky-400 dark:hover:border-sky-400',
           ]"
         >
-          <!-- Style Thumbnail or Gradient -->
-          <div class="aspect-square w-full bg-slate-800 overflow-hidden relative">
-            <img
-              v-if="style.image_url"
-              :src="style.image_url"
-              :alt="style.name"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-            <div
-              v-else
-              class="w-full h-full bg-gradient-to-tr from-slate-800 to-slate-900 flex items-center justify-center text-2xl text-slate-500"
-            >
-              🎨
-            </div>
-
-            <!-- Overlay Badge when active -->
-            <div
-              v-if="String(generateStore.selectedStyleId) === String(style.id)"
-              class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500 text-white shadow-md"
-            >
-              Active
-            </div>
+          <!-- Style Thumbnail or Gradient (Flush with top edge) -->
+          <img
+            v-if="style.image_url"
+            :src="style.image_url"
+            :alt="style.name"
+            class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div
+            v-else
+            class="absolute inset-0 w-full h-full bg-gradient-to-tr from-slate-800 to-slate-900 flex items-center justify-center text-base text-slate-500"
+          >
+            🎨
           </div>
 
-          <!-- Style Info -->
-          <div class="p-3 bg-white/90 dark:bg-slate-900/90">
-            <h4 class="font-semibold text-xs text-slate-900 dark:text-white truncate">
+          <!-- Overlay Badge when active -->
+          <div
+            v-if="String(generateStore.selectedStyleId) === String(style.id)"
+            class="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-sky-500 text-white shadow-sm z-10"
+          >
+            ✓
+          </div>
+
+          <!-- Bottom Gradient Overlay & Style Info -->
+          <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/95 via-slate-950/70 to-transparent pt-4 pb-1 px-1.5 flex flex-col justify-end z-10 pointer-events-none">
+            <h4 class="font-semibold text-[10px] leading-tight text-white truncate drop-shadow-sm" :title="style.name">
               {{ style.name }}
             </h4>
-            <p v-if="style.description" class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
+            <p v-if="style.description" class="text-[8.5px] text-slate-300 line-clamp-1 mt-0.5 drop-shadow-sm leading-none" :title="style.description">
               {{ style.description }}
             </p>
           </div>

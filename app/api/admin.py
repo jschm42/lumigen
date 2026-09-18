@@ -473,6 +473,70 @@ def update_style_preview_settings(
     return {"success": True, "model_config_id": cfg.id, "name": cfg.name}
 
 
+def _format_style_preview_prompt(style: crud.Style, custom_prompt: str | None = None) -> str:
+    """Format prompt for style preview generation, resolving {prompt} placeholder."""
+    base = (custom_prompt or "").strip() or style.prompt
+    if "{prompt}" in base:
+        return base.replace("{prompt}", "a scenic landscape with mountains and a lake").strip(", ")
+    return base.strip()
+
+
+@router.post("/styles/generate-missing-previews")
+def generate_missing_style_previews(
+    background_tasks: BackgroundTasks,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Trigger background generation for preview thumbnails of all styles missing an image."""
+    from app.api.generation import generation_service
+
+    styles = crud.list_styles(session)
+    missing_styles: list[crud.Style] = []
+    for style in styles:
+        img_path = settings.data_dir / "styles" / f"{style.id}.webp"
+        if not style.image_path or not img_path.exists():
+            missing_styles.append(style)
+
+    if not missing_styles:
+        return {
+            "success": True,
+            "count": 0,
+            "job_ids": [],
+            "message": "All styles already have preview images.",
+        }
+
+    model_config_id = (payload or {}).get("model_config_id") if payload else None
+    if not model_config_id:
+        model_config_id = _get_preview_model_config_id()
+
+    if model_config_id:
+        model_config = crud.get_model_config(session, int(model_config_id))
+    else:
+        model_configs = crud.list_model_configs(session)
+        model_config = model_configs[0] if model_configs else None
+
+    if not model_config:
+        raise HTTPException(
+            status_code=400, detail="No model configuration available."
+        )
+
+    job_ids: list[int] = []
+    for style in missing_styles:
+        user_prompt = _format_style_preview_prompt(style)
+        generation = generation_service.create_generation_for_style(
+            session, style, model_config, user_prompt
+        )
+        generation_service.enqueue(background_tasks, generation.id)
+        job_ids.append(generation.id)
+
+    return {
+        "success": True,
+        "count": len(job_ids),
+        "job_ids": job_ids,
+        "model_name": model_config.name,
+    }
+
+
 @router.post("/styles/{style_id}/generate-preview")
 def generate_style_preview(
     style_id: int,
@@ -502,9 +566,11 @@ def generate_style_preview(
             status_code=400, detail="No model configuration available."
         )
 
-    user_prompt = ((payload or {}).get("prompt") if payload else "") or style.prompt
+    user_prompt = _format_style_preview_prompt(
+        style, (payload or {}).get("prompt") if payload else None
+    )
     generation = generation_service.create_generation_for_style(
-        session, style, model_config, user_prompt.strip()
+        session, style, model_config, user_prompt
     )
     generation_service.enqueue(background_tasks, generation.id)
     return {"job_id": generation.id, "model_name": model_config.name}

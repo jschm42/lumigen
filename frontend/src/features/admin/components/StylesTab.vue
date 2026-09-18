@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAdminStore } from '@/stores/admin'
 import { adminApi } from '@/api/admin'
 import { generationApi } from '@/api/generation'
@@ -16,11 +16,16 @@ const toastStore = useToastStore()
 
 const isEditorOpen = ref(false)
 const isGeneratingPreview = ref<string | number | null>(null)
+const isGeneratingAllMissing = ref(false)
 const previewImageFile = ref<File | null>(null)
 const isRestoring = ref(false)
 const isImporting = ref(false)
 const styleFileInput = ref<HTMLInputElement | null>(null)
 const previewModelId = ref<number | null>(null)
+
+const missingPreviewCount = computed(() => {
+  return adminStore.styles.filter(s => !s.image_url).length
+})
 
 const editingStyle = ref<Partial<StylePreset>>({
   id: undefined,
@@ -148,6 +153,48 @@ async function handleImportFile(e: Event) {
   }
 }
 
+async function generateAllMissingPreviews() {
+  if (missingPreviewCount.value === 0 || isGeneratingAllMissing.value) return
+  isGeneratingAllMissing.value = true
+  try {
+    const res = await adminApi.generateMissingStylePreviews(previewModelId.value || undefined)
+    if (!res.count || res.count === 0) {
+      toastStore.info(res.message || 'All styles already have preview images.')
+      isGeneratingAllMissing.value = false
+      return
+    }
+
+    const modelLabel = res.model_name ? ` (${res.model_name})` : ''
+    toastStore.info(`Generating ${res.count} missing preview images${modelLabel}...`)
+
+    const activeJobIds = new Set(res.job_ids)
+    const pollInterval = setInterval(async () => {
+      try {
+        for (const jobId of Array.from(activeJobIds)) {
+          const job = await generationApi.getJobStatus(jobId)
+          if (job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled') {
+            activeJobIds.delete(jobId)
+          }
+        }
+        await adminStore.fetchStyles()
+
+        if (activeJobIds.size === 0) {
+          clearInterval(pollInterval)
+          isGeneratingAllMissing.value = false
+          toastStore.success('All missing style preview images generated successfully!')
+        }
+      } catch (_err) {
+        clearInterval(pollInterval)
+        isGeneratingAllMissing.value = false
+        await adminStore.fetchStyles()
+      }
+    }, 1500)
+  } catch (error: any) {
+    isGeneratingAllMissing.value = false
+    toastStore.error(error?.response?.data?.detail || 'Failed to trigger preview generation.')
+  }
+}
+
 async function generateAiPreview(style: StylePreset) {
   if (!style.id) return
   isGeneratingPreview.value = style.id
@@ -218,6 +265,18 @@ async function generateAiPreview(style: StylePreset) {
           </select>
         </div>
 
+        <!-- Generate Missing Previews Button -->
+        <Button
+          variant="secondary"
+          size="sm"
+          :loading="isGeneratingAllMissing"
+          :disabled="missingPreviewCount === 0 || isGeneratingAllMissing"
+          @click="generateAllMissingPreviews"
+          :title="missingPreviewCount > 0 ? `Generate preview images for ${missingPreviewCount} styles without an image` : 'All styles already have preview images'"
+        >
+          <span>✨</span> Generate Missing Previews ({{ missingPreviewCount }})
+        </Button>
+
         <input
           ref="styleFileInput"
           type="file"
@@ -231,7 +290,7 @@ async function generateAiPreview(style: StylePreset) {
           size="sm"
           :loading="isRestoring"
           @click="handleRestoreDefaults"
-          title="Restores the 12 official default styles"
+          title="Restores the official default styles"
         >
           <span>🔄</span> Restore Defaults
         </Button>
@@ -272,17 +331,20 @@ async function generateAiPreview(style: StylePreset) {
     </div>
 
     <!-- Styles Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div
+      class="grid gap-2.5"
+      style="grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));"
+    >
       <div
         v-for="style in adminStore.styles"
         :key="style.id"
-        class="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 overflow-hidden shadow-sm flex flex-col justify-between"
+        class="rounded-xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 overflow-hidden shadow-sm flex flex-col justify-between"
       >
         <!-- Thumbnail -->
-        <div class="aspect-video w-full bg-slate-900 relative overflow-hidden flex items-center justify-center">
-          <div v-if="isGeneratingPreview === style.id" class="flex flex-col items-center gap-2 text-sky-400">
-            <div class="w-6 h-6 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-[11px] font-medium text-slate-300 animate-pulse">Generating preview...</span>
+        <div class="aspect-square w-full bg-slate-900 relative overflow-hidden flex items-center justify-center">
+          <div v-if="isGeneratingPreview === style.id || (isGeneratingAllMissing && !style.image_url)" class="flex flex-col items-center gap-1.5 text-sky-400">
+            <div class="w-5 h-5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-[10px] font-medium text-slate-300 animate-pulse">Generating...</span>
           </div>
           <img
             v-else-if="style.image_url"
@@ -290,34 +352,33 @@ async function generateAiPreview(style: StylePreset) {
             :alt="style.name"
             class="w-full h-full object-cover transition-opacity duration-300"
           />
-          <div v-else class="text-3xl text-slate-600">🎨</div>
+          <div v-else class="text-2xl text-slate-600">🎨</div>
         </div>
 
         <!-- Body -->
-        <div class="p-4 space-y-2 flex-1">
-          <h4 class="font-bold text-sm text-slate-900 dark:text-white truncate">{{ style.name }}</h4>
-          <p v-if="style.description" class="text-slate-500 line-clamp-2">{{ style.description }}</p>
-          <div class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800/80 font-mono text-[10px] text-slate-700 dark:text-slate-300 break-words">
-            {{ style.prompt_template }}
-          </div>
+        <div class="p-2 space-y-1 flex-1">
+          <h4 class="font-bold text-xs text-slate-900 dark:text-white truncate" :title="style.name">{{ style.name }}</h4>
+          <p v-if="style.description" class="text-[10px] text-slate-500 line-clamp-2" :title="style.description">{{ style.description }}</p>
         </div>
 
         <!-- Footer -->
-        <div class="p-3 border-t border-slate-200/60 dark:border-white/10 flex items-center justify-between gap-2">
+        <div class="p-2 border-t border-slate-200/60 dark:border-white/10 flex items-center justify-between gap-1">
           <Button
             variant="secondary"
             size="xs"
+            class="!px-2 !py-0.5 text-[10px]"
             :loading="isGeneratingPreview === style.id"
             @click="generateAiPreview(style)"
             title="Generate AI preview image for this style"
           >
-            ✨ AI Preview
+            ✨ Preview
           </Button>
 
           <div class="flex items-center gap-1">
             <Button
               variant="secondary"
               size="xs"
+              class="!p-1 text-[11px]"
               @click="openEdit(style)"
               title="Edit style"
             >
@@ -326,6 +387,7 @@ async function generateAiPreview(style: StylePreset) {
             <Button
               variant="danger"
               size="xs"
+              class="!p-1 text-[11px]"
               @click="adminStore.deleteStyle(style.id)"
               title="Delete style"
             >
