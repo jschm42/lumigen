@@ -203,7 +203,12 @@ function handleRateAsset(star: number) {
       <div class="lg:col-span-7 flex flex-col gap-3">
         <div
           @click="openImageViewer"
-          class="group relative flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-200/60 dark:border-white/10 overflow-hidden min-h-[320px] cursor-pointer hover:border-sky-500/50 transition-colors"
+          :class="[
+            'group relative flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 overflow-hidden min-h-[320px] cursor-pointer transition-colors',
+            galleryStore.activeAsset.stack_id
+              ? 'border-2 border-indigo-500/80 dark:border-indigo-400/80 ring-2 ring-indigo-500/20 shadow-lg shadow-indigo-950/30'
+              : 'border border-slate-200/60 dark:border-white/10 hover:border-sky-500/50',
+          ]"
           title="Open in fullscreen & zoom viewer"
         >
           <img

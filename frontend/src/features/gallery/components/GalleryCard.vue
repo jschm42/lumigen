@@ -87,80 +87,93 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    @click="handleCardClick"
-    :title="galleryStore.selectedAssetIds.includes(asset.id) ? 'Selected (Ctrl+Click to deselect)' : 'Click to open (Ctrl+Click for quick select)'"
-    :class="[
-      'group relative rounded-2xl border bg-slate-900 shadow-sm transition-all duration-200 cursor-pointer select-none',
-      isRatingOpen ? 'z-30 overflow-visible' : 'overflow-hidden z-10',
-      galleryStore.selectedAssetIds.includes(asset.id)
-        ? 'border-sky-500 ring-2 ring-sky-500/50 shadow-lg'
-        : asset.stack_id && galleryStore.isStackExpanded(asset.stack_id)
-          ? 'border-indigo-500/70 ring-1 ring-indigo-500/40'
-          : 'border-slate-200/80 hover:border-sky-400 dark:border-white/10 dark:hover:border-white/30',
-      asset.stack_id && !galleryStore.isStackExpanded(asset.stack_id)
-        ? 'shadow-[3px_-3px_0px_rgba(255,255,255,0.08),_6px_-6px_0px_rgba(255,255,255,0.04)] dark:shadow-[3px_-3px_0px_rgba(51,65,85,0.8),_6px_-6px_0px_rgba(30,41,59,0.7)]'
-        : '',
-    ]"
-  >
-    <!-- Thumbnail Image with aspect ratio placeholder -->
-    <div class="w-full aspect-square overflow-hidden rounded-2xl bg-slate-950 flex items-center justify-center">
-      <img
-        :src="asset.thumbnail_url || asset.image_url"
-        :alt="asset.prompt"
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        loading="lazy"
+  <div class="relative group/stack">
+    <!-- Physical Stack Backplates (Shown for collapsed stack) -->
+    <template v-if="asset.stack_id && !galleryStore.isStackExpanded(asset.stack_id)">
+      <!-- Backmost Layer 2 -->
+      <div
+        class="absolute inset-0 translate-x-2 -translate-y-2 rounded-2xl border-2 border-indigo-400/50 bg-slate-800/90 dark:border-indigo-400/40 dark:bg-slate-900/90 pointer-events-none transition-transform duration-300 group-hover/stack:translate-x-2.5 group-hover/stack:-translate-y-2.5 shadow-sm"
       />
-    </div>
+      <!-- Middle Layer 1 -->
+      <div
+        class="absolute inset-0 translate-x-1 -translate-y-1 rounded-2xl border-2 border-indigo-400/75 bg-slate-800/95 dark:border-indigo-400/65 dark:bg-slate-900/95 pointer-events-none transition-transform duration-300 group-hover/stack:translate-x-1.5 group-hover/stack:-translate-y-1.5 shadow-sm"
+      />
+    </template>
 
-    <!-- Top Overlay (Select checkbox, Stack badge & Rating button) -->
+    <!-- Main Front Card -->
     <div
-      class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none"
+      @click="handleCardClick"
+      :title="galleryStore.selectedAssetIds.includes(asset.id) ? 'Selected (Ctrl+Click to deselect)' : 'Click to open (Ctrl+Click for quick select)'"
+      :class="[
+        'group relative rounded-2xl bg-slate-900 shadow-sm transition-all duration-200 cursor-pointer select-none',
+        isRatingOpen ? 'z-30 overflow-visible' : 'overflow-hidden z-10',
+        galleryStore.selectedAssetIds.includes(asset.id)
+          ? 'border-2 border-sky-500 ring-2 ring-sky-500/50 shadow-lg'
+          : asset.stack_id && !galleryStore.isStackExpanded(asset.stack_id)
+            ? 'border-2 border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/25 shadow-lg shadow-indigo-950/40 hover:border-indigo-400 hover:ring-indigo-400/50'
+            : asset.stack_id && galleryStore.isStackExpanded(asset.stack_id)
+              ? 'border-2 border-indigo-500/90 dark:border-indigo-400/90 ring-2 ring-indigo-500/30 bg-indigo-950/20'
+              : 'border border-slate-200/80 hover:border-sky-400 dark:border-white/10 dark:hover:border-white/30',
+      ]"
     >
-      <!-- Left side: Checkbox & Stack Badge -->
-      <div class="flex items-center gap-1.5 pointer-events-auto">
-        <!-- Select Checkbox -->
-        <button
-          type="button"
-          @click="toggleSelect"
-          :class="[
-            'w-6 h-6 rounded-lg flex items-center justify-center pointer-events-auto transition-all border shadow-sm',
-            galleryStore.selectedAssetIds.includes(asset.id)
-              ? 'bg-sky-500 border-sky-500 text-white shadow-sky-500/50 opacity-100'
-              : 'bg-black/60 border-white/30 text-white hover:bg-black/80 opacity-0 group-hover:opacity-100',
-          ]"
-          title="Select (or Ctrl + Click on image)"
-        >
-          <span v-if="galleryStore.selectedAssetIds.includes(asset.id)" class="text-xs font-bold">✓</span>
-        </button>
-
-        <!-- Stack Badge -->
-        <button
-          v-if="asset.stack_id"
-          type="button"
-          @click="toggleStack"
-          :class="[
-            'h-6 px-1.5 rounded-lg flex items-center gap-1 pointer-events-auto transition-all text-[11px] font-semibold border shadow-md',
-            galleryStore.isStackExpanded(asset.stack_id)
-              ? 'bg-indigo-600/90 hover:bg-indigo-500 border-indigo-400 text-white'
-              : 'bg-black/75 hover:bg-black/90 hover:border-sky-400 border-white/30 text-white',
-          ]"
-          :title="
-            galleryStore.isStackExpanded(asset.stack_id)
-              ? `Stack of ${asset.stack_count || asset.stack_items?.length || 1} images (${(asset.stack_order || 0) + 1}/${asset.stack_count || asset.stack_items?.length || 1}) • Click to collapse`
-              : `Photo Stack (${asset.stack_count || asset.stack_items?.length || 1} images) • Click to expand`
-          "
-        >
-          <span>🥞</span>
-          <span v-if="!galleryStore.isStackExpanded(asset.stack_id)">
-            {{ asset.stack_count || asset.stack_items?.length || 1 }}
-          </span>
-          <span v-else class="flex items-center gap-0.5">
-            <span>{{ (asset.stack_order || 0) + 1 }}/{{ asset.stack_count || asset.stack_items?.length || 1 }}</span>
-            <span class="text-[9px] opacity-80 font-bold">◀</span>
-          </span>
-        </button>
+      <!-- Thumbnail Image with aspect ratio placeholder -->
+      <div class="w-full aspect-square overflow-hidden rounded-2xl bg-slate-950 flex items-center justify-center">
+        <img
+          :src="asset.thumbnail_url || asset.image_url"
+          :alt="asset.prompt"
+          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+        />
       </div>
+
+      <!-- Top Overlay (Select checkbox, Stack badge & Rating button) -->
+      <div
+        class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none"
+      >
+        <!-- Left side: Checkbox & Stack Badge -->
+        <div class="flex items-center gap-1.5 pointer-events-auto">
+          <!-- Select Checkbox -->
+          <button
+            type="button"
+            @click="toggleSelect"
+            :class="[
+              'w-6 h-6 rounded-lg flex items-center justify-center pointer-events-auto transition-all border shadow-sm',
+              galleryStore.selectedAssetIds.includes(asset.id)
+                ? 'bg-sky-500 border-sky-500 text-white shadow-sky-500/50 opacity-100'
+                : 'bg-black/60 border-white/30 text-white hover:bg-black/80 opacity-0 group-hover:opacity-100',
+            ]"
+            title="Select (or Ctrl + Click on image)"
+          >
+            <span v-if="galleryStore.selectedAssetIds.includes(asset.id)" class="text-xs font-bold">✓</span>
+          </button>
+
+          <!-- Stack Badge -->
+          <button
+            v-if="asset.stack_id"
+            type="button"
+            @click="toggleStack"
+            :class="[
+              'h-6 px-2 rounded-lg flex items-center gap-1.5 pointer-events-auto transition-all text-[11px] font-semibold border shadow-md',
+              'bg-indigo-600/95 hover:bg-indigo-500 border-indigo-400 text-white shadow-indigo-950/60',
+            ]"
+            :title="
+              galleryStore.isStackExpanded(asset.stack_id)
+                ? `Stack of ${asset.stack_count || asset.stack_items?.length || 1} images (${(asset.stack_order || 0) + 1}/${asset.stack_count || asset.stack_items?.length || 1}) • Click to collapse`
+                : `Photo Stack (${asset.stack_count || asset.stack_items?.length || 1} images) • Click to expand`
+            "
+          >
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span v-if="!galleryStore.isStackExpanded(asset.stack_id)" class="font-bold font-mono">
+              {{ asset.stack_count || asset.stack_items?.length || 1 }}
+            </span>
+            <span v-else class="flex items-center gap-0.5">
+              <span class="font-bold font-mono">{{ (asset.stack_order || 0) + 1 }}/{{ asset.stack_count || asset.stack_items?.length || 1 }}</span>
+              <span class="text-[9px] opacity-80 font-bold">◀</span>
+            </span>
+          </button>
+        </div>
 
       <!-- Rating Button & Popup -->
       <div
@@ -271,4 +284,5 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+</div>
 </template>
