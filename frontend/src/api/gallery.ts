@@ -19,6 +19,7 @@ export interface GalleryFilterParams {
   date_to?: string
   category_ids?: number[]
   artbook_token?: string
+  collapse_stacks?: boolean
   page?: number
   page_size?: number
 }
@@ -90,6 +91,29 @@ export const galleryApi = {
 
   async deleteCategory(id: number): Promise<{ success: boolean }> {
     const res = await apiClient.delete<{ success: boolean }>(`/api/categories/${id}`)
+    return res.data
+  },
+
+  async stackAssets(assetIds: number[]): Promise<{ success: boolean; stack_id: string; count: number }> {
+    const res = await apiClient.post('/api/assets/stack', { asset_ids: assetIds })
+    return res.data
+  },
+
+  async unstackAssets(params: { assetIds?: number[]; stackId?: string }): Promise<{ success: boolean }> {
+    const res = await apiClient.post('/api/assets/unstack', {
+      asset_ids: params.assetIds,
+      stack_id: params.stackId,
+    })
+    return res.data
+  },
+
+  async setStackCover(assetId: number): Promise<{ success: boolean; asset_id: number }> {
+    const res = await apiClient.post(`/api/assets/${assetId}/stack-cover`)
+    return res.data
+  },
+
+  async getStackAssets(stackId: string): Promise<{ stack_id: string; count: number; assets: Asset[] }> {
+    const res = await apiClient.get(`/api/assets/stacks/${stackId}`)
     return res.data
   },
 }

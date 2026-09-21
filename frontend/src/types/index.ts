@@ -101,6 +101,10 @@ export interface Asset {
   metadata?: AssetMetadata
   categories?: Category[]
   category_ids?: number[]
+  stack_id?: string | null
+  stack_order?: number
+  stack_count?: number
+  stack_items?: Asset[]
 }
 
 export interface Generation {
@@ -176,6 +180,7 @@ export interface GalleryFilterState {
   category_ids: number[]
   thumb_size: 'sm' | 'md' | 'lg'
   artbook_token?: string
+  collapse_stacks?: boolean
 }
 
 export interface UpscaleModel {

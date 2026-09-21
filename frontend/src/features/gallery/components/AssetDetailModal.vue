@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
+import type { Asset } from '@/types'
 import { useGalleryStore } from '@/stores/gallery'
 import { useGenerateStore } from '@/stores/generate'
 import { useToastStore } from '@/stores/toast'
@@ -17,6 +18,35 @@ const galleryStore = useGalleryStore()
 const generateStore = useGenerateStore()
 const toastStore = useToastStore()
 const imageViewerStore = useImageViewerStore()
+
+const stackItems = computed<Asset[]>(() => {
+  if (!galleryStore.activeAsset?.stack_id) return []
+  if (galleryStore.activeAsset.stack_items && galleryStore.activeAsset.stack_items.length > 0) {
+    return galleryStore.activeAsset.stack_items
+  }
+  const cover = galleryStore.assets.find((a) => a.stack_id === galleryStore.activeAsset?.stack_id)
+  return cover?.stack_items || []
+})
+
+function switchStackAsset(asset: Asset) {
+  const items = stackItems.value
+  galleryStore.activeAsset = { ...asset, stack_items: items }
+}
+
+async function handleSetStackCover() {
+  if (!galleryStore.activeAsset) return
+  await galleryStore.setStackCover(galleryStore.activeAsset.id)
+}
+
+async function handleRemoveFromStack() {
+  if (!galleryStore.activeAsset) return
+  await galleryStore.removeAssetFromStack(galleryStore.activeAsset.id)
+}
+
+async function handleDissolveStack() {
+  if (!galleryStore.activeAsset?.stack_id) return
+  await galleryStore.unstackById(galleryStore.activeAsset.stack_id)
+}
 
 const isDeleteConfirmOpen = ref(false)
 const isUpscaleModalOpen = ref(false)
@@ -169,22 +199,94 @@ function handleRateAsset(star: number) {
     </template>
 
     <div v-if="galleryStore.activeAsset" class="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
-      <!-- Left: High-Res Image Display with Zoom Trigger -->
-      <div
-        @click="openImageViewer"
-        class="lg:col-span-7 group relative flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-200/60 dark:border-white/10 overflow-hidden min-h-[350px] cursor-pointer hover:border-sky-500/50 transition-colors"
-        title="Open in fullscreen & zoom viewer"
-      >
-        <img
-          :src="galleryStore.activeAsset.image_url || galleryStore.activeAsset.thumbnail_url"
-          :alt="galleryStore.activeAsset.prompt"
-          class="max-h-[65vh] w-auto object-contain rounded-xl shadow-2xl transition-transform duration-200 group-hover:scale-[1.01]"
-        />
-        <div class="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-white text-xs flex items-center gap-1.5 border border-white/10 shadow-lg pointer-events-none">
-          <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-          </svg>
-          <span>Fullscreen & Zoom</span>
+      <!-- Left: High-Res Image Display & Stack Filmstrip -->
+      <div class="lg:col-span-7 flex flex-col gap-3">
+        <div
+          @click="openImageViewer"
+          class="group relative flex flex-col items-center justify-center bg-slate-950 rounded-2xl p-2 border border-slate-200/60 dark:border-white/10 overflow-hidden min-h-[320px] cursor-pointer hover:border-sky-500/50 transition-colors"
+          title="Open in fullscreen & zoom viewer"
+        >
+          <img
+            :src="galleryStore.activeAsset.image_url || galleryStore.activeAsset.thumbnail_url"
+            :alt="galleryStore.activeAsset.prompt"
+            class="max-h-[52vh] w-auto object-contain rounded-xl shadow-2xl transition-transform duration-200 group-hover:scale-[1.01]"
+          />
+          <div class="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-white text-xs flex items-center gap-1.5 border border-white/10 shadow-lg pointer-events-none">
+            <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+            </svg>
+            <span>Fullscreen & Zoom</span>
+          </div>
+        </div>
+
+        <!-- Stack Filmstrip Panel (if asset belongs to a stack) -->
+        <div
+          v-if="galleryStore.activeAsset.stack_id"
+          class="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-white/10 space-y-2.5"
+        >
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+              <span>🥞</span>
+              <span>Photo Stack ({{ stackItems.length || galleryStore.activeAsset.stack_count || 1 }} images)</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button
+                v-if="galleryStore.activeAsset.stack_order !== 0"
+                type="button"
+                @click="handleSetStackCover"
+                class="px-2 py-1 rounded-lg border border-sky-400/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 font-medium text-[11px] transition-colors"
+                title="Make this image the cover of the stack"
+              >
+                ★ Set as Cover
+              </button>
+              <button
+                type="button"
+                @click="handleRemoveFromStack"
+                class="px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 text-[11px] transition-colors"
+                title="Remove this image from the stack"
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                @click="handleDissolveStack"
+                class="px-2 py-1 rounded-lg border border-rose-400/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 text-[11px] transition-colors"
+                title="Dissolve this stack into individual images"
+              >
+                Dissolve
+              </button>
+            </div>
+          </div>
+
+          <!-- Thumbnails Strip -->
+          <div class="flex items-center gap-2 overflow-x-auto py-1 pr-1">
+            <div
+              v-for="(item, idx) in stackItems"
+              :key="item.id"
+              @click="switchStackAsset(item)"
+              :class="[
+                'relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden cursor-pointer transition-all border-2',
+                item.id === galleryStore.activeAsset.id
+                  ? 'border-sky-500 ring-2 ring-sky-500/40 scale-105 shadow-md'
+                  : 'border-slate-300 dark:border-white/15 opacity-70 hover:opacity-100 hover:scale-100',
+              ]"
+              :title="`Image #${item.id} (Stack item ${idx + 1}/${stackItems.length})`"
+            >
+              <img
+                :src="item.thumbnail_url || item.image_url"
+                :alt="item.prompt"
+                class="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <span
+                v-if="item.stack_order === 0"
+                class="absolute top-0.5 left-0.5 px-1 rounded bg-amber-500/90 text-black text-[9px] font-bold leading-tight"
+                title="Cover photo"
+              >
+                ★
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

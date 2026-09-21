@@ -1,5 +1,6 @@
 <script setup lang="ts">
 interface Props {
+  id?: string
   modelValue?: boolean
   label?: string
   value?: string | number
@@ -21,6 +22,7 @@ function handleChange(event: Event) {
 <template>
   <label :class="['inline-flex items-center gap-2.5 cursor-pointer select-none', disabled ? 'opacity-50 cursor-not-allowed' : '']">
     <input
+      :id="id"
       type="checkbox"
       :checked="modelValue"
       :disabled="disabled"

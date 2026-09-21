@@ -369,6 +369,12 @@ class Asset(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+    stack_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    stack_order: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
 
     generation: Mapped[Generation] = relationship(back_populates="assets")
     categories: Mapped[list[Category]] = relationship(

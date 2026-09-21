@@ -36,7 +36,43 @@ const timePresets = [
   { value: 'yesterday', label: 'Yesterday' },
   { value: 'last_7_days', label: 'Last 7 days' },
   { value: 'last_30_days', label: 'Last 30 days' },
+  { value: 'custom', label: 'Custom range...' },
 ]
+
+function handleTimePresetChange() {
+  if (galleryStore.filters.time_preset !== 'custom') {
+    galleryStore.filters.date_from = ''
+    galleryStore.filters.date_to = ''
+  }
+  galleryStore.fetchAssets(true)
+}
+
+function setDateRangePreset(days: number) {
+  const end = new Date()
+  const start = new Date()
+  if (days > 0) {
+    start.setDate(start.getDate() - days)
+  }
+  galleryStore.filters.date_from = start.toISOString().split('T')[0]
+  galleryStore.filters.date_to = end.toISOString().split('T')[0]
+  galleryStore.fetchAssets(true)
+}
+
+function clearDateRange() {
+  galleryStore.filters.date_from = ''
+  galleryStore.filters.date_to = ''
+  galleryStore.fetchAssets(true)
+}
+
+function toggleStacksCollapse() {
+  galleryStore.filters.collapse_stacks = !galleryStore.filters.collapse_stacks
+  if (galleryStore.filters.collapse_stacks) {
+    galleryStore.collapseAllStacks()
+  } else {
+    galleryStore.expandAllStacks()
+  }
+  galleryStore.fetchAssets(true)
+}
 
 function toggleCategory(catId: number) {
   const current = [...galleryStore.filters.category_ids]
@@ -70,7 +106,7 @@ function toggleCategory(catId: number) {
       <div>
         <select
           v-model="galleryStore.filters.time_preset"
-          @change="galleryStore.fetchAssets(true)"
+          @change="handleTimePresetChange"
           class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
         >
           <option v-for="t in timePresets" :key="t.value" :value="t.value">{{ t.label }}</option>
@@ -128,8 +164,24 @@ function toggleCategory(catId: number) {
         </div>
       </div>
 
-      <!-- Thumbnail Size & Reset -->
+      <!-- Stacks, Thumbnail Size & Reset -->
       <div class="flex items-center gap-2 justify-end">
+        <!-- Stacks Collapse/Expand Toggle -->
+        <button
+          type="button"
+          @click="toggleStacksCollapse"
+          :class="[
+            'px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors',
+            galleryStore.filters.collapse_stacks
+              ? 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300'
+              : 'border-slate-300/80 bg-white/80 text-slate-600 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:text-white',
+          ]"
+          :title="galleryStore.filters.collapse_stacks ? 'Stacks collapsed into covers (Click to expand all)' : 'Stacks expanded (Click to collapse)'"
+        >
+          <span>🥞</span>
+          <span class="hidden sm:inline">{{ galleryStore.filters.collapse_stacks ? 'Stacked' : 'Expanded' }}</span>
+        </button>
+
         <div class="inline-flex rounded-xl border border-slate-300/80 p-0.5 bg-white/80 dark:border-white/10 dark:bg-slate-900/80">
           <button
             v-for="size in (['sm', 'md', 'lg'] as const)"
@@ -154,6 +206,69 @@ function toggleCategory(catId: number) {
           title="Reset filters"
         >
           🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- Custom Date Range Panel -->
+    <div
+      v-if="galleryStore.filters.time_preset === 'custom'"
+      class="pt-2 border-t border-slate-200/60 dark:border-white/10 flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-150"
+    >
+      <div class="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
+        <span>📅</span>
+        <span>Date Range:</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label class="text-slate-500 dark:text-slate-400">From</label>
+        <input
+          type="date"
+          v-model="galleryStore.filters.date_from"
+          @change="galleryStore.fetchAssets(true)"
+          class="rounded-xl border border-slate-300/80 bg-white/90 px-2.5 py-1 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label class="text-slate-500 dark:text-slate-400">To</label>
+        <input
+          type="date"
+          v-model="galleryStore.filters.date_to"
+          @change="galleryStore.fetchAssets(true)"
+          class="rounded-xl border border-slate-300/80 bg-white/90 px-2.5 py-1 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        />
+      </div>
+
+      <div class="flex items-center gap-1.5 ml-auto">
+        <button
+          type="button"
+          @click="setDateRangePreset(0)"
+          class="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] text-slate-600 dark:text-slate-300 transition-colors"
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          @click="setDateRangePreset(7)"
+          class="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] text-slate-600 dark:text-slate-300 transition-colors"
+        >
+          Last 7d
+        </button>
+        <button
+          type="button"
+          @click="setDateRangePreset(30)"
+          class="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] text-slate-600 dark:text-slate-300 transition-colors"
+        >
+          Last 30d
+        </button>
+        <button
+          v-if="galleryStore.filters.date_from || galleryStore.filters.date_to"
+          type="button"
+          @click="clearDateRange"
+          class="px-2 py-0.5 rounded-lg border border-rose-400/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 text-[11px] transition-colors"
+        >
+          Clear
         </button>
       </div>
     </div>

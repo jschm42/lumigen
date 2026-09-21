@@ -56,6 +56,26 @@ const gridColsClass = computed(() => {
       return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-3.5'
   }
 })
+
+const displayedAssets = computed(() => {
+  if (!galleryStore.filters.collapse_stacks) {
+    return galleryStore.assets
+  }
+  const result = []
+  for (const asset of galleryStore.assets) {
+    if (
+      asset.stack_id &&
+      galleryStore.isStackExpanded(asset.stack_id) &&
+      asset.stack_items &&
+      asset.stack_items.length > 0
+    ) {
+      result.push(...asset.stack_items)
+    } else {
+      result.push(asset)
+    }
+  }
+  return result
+})
 </script>
 
 <template>
@@ -83,7 +103,7 @@ const gridColsClass = computed(() => {
     <!-- Gallery Grid -->
     <div v-else :class="['grid', gridColsClass]">
       <GalleryCard
-        v-for="asset in galleryStore.assets"
+        v-for="asset in displayedAssets"
         :key="asset.id"
         :asset="asset"
       />

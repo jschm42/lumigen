@@ -33,7 +33,38 @@ export const useGalleryStore = defineStore('gallery', () => {
     date_to: '',
     category_ids: [],
     thumb_size: 'md',
+    collapse_stacks: true,
   })
+
+  // Stack expansion state
+  const expandedStackIds = ref<Set<string>>(new Set())
+
+  function isStackExpanded(stackId?: string | null): boolean {
+    if (!stackId) return false
+    return expandedStackIds.value.has(stackId)
+  }
+
+  function toggleStackExpanded(stackId: string) {
+    const next = new Set(expandedStackIds.value)
+    if (next.has(stackId)) {
+      next.delete(stackId)
+    } else {
+      next.add(stackId)
+    }
+    expandedStackIds.value = next
+  }
+
+  function expandAllStacks() {
+    const next = new Set<string>()
+    assets.value.forEach((a) => {
+      if (a.stack_id) next.add(a.stack_id)
+    })
+    expandedStackIds.value = next
+  }
+
+  function collapseAllStacks() {
+    expandedStackIds.value = new Set()
+  }
 
   async function loadCategories() {
     try {
@@ -60,6 +91,7 @@ export const useGalleryStore = defineStore('gallery', () => {
         date_to: filters.value.date_to || undefined,
         category_ids: filters.value.category_ids.length > 0 ? filters.value.category_ids : undefined,
         artbook_token: filters.value.artbook_token || undefined,
+        collapse_stacks: filters.value.collapse_stacks,
         page: page.value,
         page_size: 40,
       }
@@ -254,6 +286,78 @@ export const useGalleryStore = defineStore('gallery', () => {
     }
   }
 
+  async function stackSelected() {
+    if (selectedAssetIds.value.length < 2) return
+    try {
+      const res = await galleryApi.stackAssets(selectedAssetIds.value)
+      toastStore.success(`Created stack with ${res.count} images.`)
+      clearSelection()
+      await fetchAssets()
+    } catch (_error) {
+      toastStore.error('Failed to create stack.')
+    }
+  }
+
+  async function unstackSelected() {
+    if (selectedAssetIds.value.length === 0) return
+    try {
+      await galleryApi.unstackAssets({ assetIds: selectedAssetIds.value })
+      toastStore.success('Unstacked selected images.')
+      clearSelection()
+      await fetchAssets()
+    } catch (_error) {
+      toastStore.error('Failed to unstack images.')
+    }
+  }
+
+  async function unstackById(stackId: string) {
+    try {
+      await galleryApi.unstackAssets({ stackId })
+      expandedStackIds.value.delete(stackId)
+      toastStore.success('Stack dissolved.')
+      if (activeAsset.value?.stack_id === stackId) {
+        activeAsset.value.stack_id = null
+        activeAsset.value.stack_count = 1
+        activeAsset.value.stack_items = []
+      }
+      await fetchAssets()
+    } catch (_error) {
+      toastStore.error('Failed to dissolve stack.')
+    }
+  }
+
+  async function removeAssetFromStack(assetId: number) {
+    try {
+      await galleryApi.unstackAssets({ assetIds: [assetId] })
+      toastStore.success('Removed from stack.')
+      if (activeAsset.value?.id === assetId) {
+        activeAsset.value.stack_id = null
+        activeAsset.value.stack_count = 1
+        activeAsset.value.stack_items = []
+      } else if (activeAsset.value?.stack_items) {
+        activeAsset.value.stack_items = activeAsset.value.stack_items.filter((item) => item.id !== assetId)
+        activeAsset.value.stack_count = activeAsset.value.stack_items.length
+      }
+      await fetchAssets()
+    } catch (_error) {
+      toastStore.error('Failed to remove from stack.')
+    }
+  }
+
+  async function setStackCover(assetId: number) {
+    try {
+      await galleryApi.setStackCover(assetId)
+      toastStore.success('Set as stack cover.')
+      if (activeAsset.value) {
+        const fresh = await galleryApi.getAsset(assetId)
+        activeAsset.value = fresh
+      }
+      await fetchAssets()
+    } catch (_error) {
+      toastStore.error('Failed to set stack cover.')
+    }
+  }
+
   function resetFilters() {
     filters.value = {
       q: '',
@@ -266,6 +370,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       date_to: '',
       category_ids: [],
       thumb_size: 'md',
+      collapse_stacks: true,
     }
     fetchAssets(true)
   }
@@ -281,6 +386,16 @@ export const useGalleryStore = defineStore('gallery', () => {
     activeAsset,
     isDetailModalOpen,
     filters,
+    expandedStackIds,
+    isStackExpanded,
+    toggleStackExpanded,
+    expandAllStacks,
+    collapseAllStacks,
+    stackSelected,
+    unstackSelected,
+    unstackById,
+    removeAssetFromStack,
+    setStackCover,
     loadCategories,
     fetchAssets,
     toggleSelectAsset,

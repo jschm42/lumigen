@@ -54,10 +54,13 @@ async def auth_login(
         payload = await request.json()
         username = payload.get("username", "").strip()
         password = payload.get("password", "")
+        remember_me = bool(payload.get("remember_me", False))
     else:
         form = await request.form()
         username = str(form.get("username", "")).strip()
         password = str(form.get("password", ""))
+        remember_raw = form.get("remember_me")
+        remember_me = remember_raw in (True, "true", "1", "on")
 
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password are required")
@@ -68,6 +71,7 @@ async def auth_login(
 
     request.session["user_id"] = user.id
     request.session["user_role"] = user.role
+    request.session["remember_me"] = remember_me
     return {
         "success": True,
         "user": {

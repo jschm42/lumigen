@@ -51,8 +51,13 @@ class GalleryService:
         unrated_only: bool = False,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
+        collapse_stacks: bool = True,
     ) -> GalleryPage:
-        """Return a paginated, optionally filtered page of assets ordered newest-first."""
+        """Return a paginated, optionally filtered page of assets ordered newest-first.
+
+        :param collapse_stacks: When True, only unstacked assets and stack cover assets
+            (stack_order == 0) are returned, with sibling items preloaded on covers.
+        """
         safe_page_size = max(1, min(200, page_size or self.default_page_size))
         safe_page = max(1, page)
 
@@ -75,6 +80,8 @@ class GalleryService:
             filters.append(Asset.created_at >= created_after)
         if created_before is not None:
             filters.append(Asset.created_at <= created_before)
+        if collapse_stacks:
+            filters.append(or_(Asset.stack_id.is_(None), Asset.stack_order == 0))
 
         count_stmt = select(func.count()).select_from(Asset).join(Generation)
         if filters:
@@ -93,6 +100,27 @@ class GalleryService:
             stmt = stmt.where(*filters)
 
         items = list(session.scalars(stmt).all())
+
+        # Preload stack siblings for items with a stack_id
+        stack_ids = {a.stack_id for a in items if a.stack_id}
+        if stack_ids:
+            sibling_stmt = (
+                select(Asset)
+                .where(Asset.stack_id.in_(stack_ids))
+                .options(selectinload(Asset.generation), selectinload(Asset.categories))
+                .order_by(Asset.stack_order.asc(), Asset.created_at.desc())
+            )
+            sibling_items = list(session.scalars(sibling_stmt).all())
+            stack_map: dict[str, list[Asset]] = {}
+            for sib in sibling_items:
+                if sib.stack_id:
+                    stack_map.setdefault(sib.stack_id, []).append(sib)
+
+            for item in items:
+                if item.stack_id and item.stack_id in stack_map:
+                    setattr(item, "_stack_items", stack_map[item.stack_id])
+                    setattr(item, "_stack_count", len(stack_map[item.stack_id]))
+
         pages = max(1, math.ceil(total / safe_page_size))
         return GalleryPage(items=items, page=safe_page, page_size=safe_page_size, total=total, pages=pages)
 

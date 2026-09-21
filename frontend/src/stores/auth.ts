@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { authApi } from '@/api/auth'
+import { authApi, type LoginPayload } from '@/api/auth'
 import type { User } from '@/types'
 
 declare const __APP_VERSION__: string | undefined
@@ -31,7 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(formData: FormData | Record<string, string>) {
+  async function login(formData: FormData | LoginPayload | Record<string, any>) {
     const res = await authApi.login(formData)
     if (res.success && res.user) {
       user.value = res.user

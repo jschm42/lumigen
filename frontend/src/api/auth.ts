@@ -8,13 +8,19 @@ export interface AuthStatusResponse {
   app_version: string
 }
 
+export interface LoginPayload {
+  username: string
+  password: string
+  remember_me?: boolean
+}
+
 export const authApi = {
   async getStatus(): Promise<AuthStatusResponse> {
     const res = await apiClient.get<AuthStatusResponse>('/api/auth/status')
     return res.data
   },
 
-  async login(formData: FormData | Record<string, string>): Promise<{ success: boolean; user?: User; message?: string }> {
+  async login(formData: FormData | LoginPayload | Record<string, any>): Promise<{ success: boolean; user?: User; message?: string }> {
     const res = await apiClient.post('/api/auth/login', formData)
     return res.data
   },
