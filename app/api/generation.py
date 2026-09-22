@@ -74,6 +74,7 @@ async def api_generate_submit(
         style_id = payload.get("style_id")
         upscale_model = payload.get("upscale_model", "__profile__")
         input_image_asset_id = payload.get("asset_id") or payload.get("input_image_asset_id")
+        raw_category_ids = payload.get("category_ids")
     else:
         form = await request.form()
         prompt = str(form.get("prompt", "")).strip()
@@ -95,6 +96,7 @@ async def api_generate_submit(
         style_id = str(form.get("style_id")) if form.get("style_id") else None
         upscale_model = str(form.get("upscale_model", "__profile__"))
         input_image_asset_id = form.get("asset_id") or form.get("input_image_asset_id")
+        raw_category_ids = form.getlist("category_ids") or form.getlist("category_ids[]") or None
 
         # Collect uploaded image files from form
         for key in ("images", "input_images"):
@@ -105,6 +107,15 @@ async def api_generate_submit(
 
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt is required")
+
+    category_ids: list[int] | None = None
+    if raw_category_ids is not None:
+        category_ids = []
+        for item in raw_category_ids:
+            if isinstance(item, int):
+                category_ids.append(item)
+            elif isinstance(item, str) and item.strip().isdigit():
+                category_ids.append(int(item.strip()))
 
     overrides: dict[str, Any] = {}
 
@@ -348,6 +359,9 @@ async def api_generate_submit(
         if upscale_service.is_available():
             overrides["upscale_provider"] = "local"
             overrides["upscale_model"] = local_model
+
+    if category_ids is not None:
+        overrides["category_ids"] = category_ids
 
     generation = generation_service.create_generation_from_profile(
         session,

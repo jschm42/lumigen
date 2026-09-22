@@ -1,18 +1,37 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useGenerateStore } from '@/stores/generate'
 import { useProfilesStore } from '@/stores/profiles'
-import StylePickerModal from './StylePickerModal.vue'
+import { galleryApi } from '@/api/gallery'
+import type { Category } from '@/types'
 
 const generateStore = useGenerateStore()
 const profilesStore = useProfilesStore()
 
-const isStyleModalOpen = ref(false)
+const availableCategories = ref<Category[]>([])
+const isCategoryDropdownOpen = ref(false)
+const categoryDropdownRef = ref<HTMLElement | null>(null)
+
+async function loadCategories() {
+  try {
+    availableCategories.value = await galleryApi.listCategories()
+  } catch (_e) {
+    availableCategories.value = []
+  }
+}
+
+function handleClickOutside(e: MouseEvent) {
+  if (categoryDropdownRef.value && !categoryDropdownRef.value.contains(e.target as Node)) {
+    isCategoryDropdownOpen.value = false
+  }
+}
 
 onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
   await Promise.all([
     generateStore.loadModelsAndStyles(),
     profilesStore.fetchProfiles(),
+    loadCategories(),
   ])
   if (generateStore.selectedProfileId) {
     const profile = profilesStore.profiles.find((p) => p.id === Number(generateStore.selectedProfileId))
@@ -20,6 +39,10 @@ onMounted(async () => {
       generateStore.applyProfileDefaults(profile)
     }
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 watch(
@@ -36,139 +59,143 @@ watch(
   }
 )
 
+function isLockedCategory(catId: number): boolean {
+  return generateStore.profileLockedCategoryIds.includes(catId)
+}
 
-const aspectRatios = ['1:1', '16:9', '9:16', '4:3', '3:4', '21:9']
-const resolutions = ['0.5K', '1K', '2K', '4K']
+function isCategorySelected(catId: number): boolean {
+  return generateStore.selectedCategoryIds.includes(catId)
+}
 
-const selectedProfile = computed(() => {
-  if (!generateStore.selectedProfileId) return null
-  return profilesStore.profiles.find((p) => p.id === Number(generateStore.selectedProfileId)) || null
+function toggleCategory(catId: number) {
+  if (isLockedCategory(catId)) return
+  if (generateStore.selectedCategoryIds.includes(catId)) {
+    generateStore.selectedCategoryIds = generateStore.selectedCategoryIds.filter((id) => id !== catId)
+  } else {
+    generateStore.selectedCategoryIds.push(catId)
+  }
+}
+
+function handleCategoryItemClick(catId: number) {
+  if (isLockedCategory(catId)) return
+  toggleCategory(catId)
+}
+
+const selectedCategorySummaryText = computed(() => {
+  const count = generateStore.selectedCategoryIds.length
+  if (count === 0) return 'Categories (0)'
+  if (count === 1) {
+    const cat = availableCategories.value.find((c) => c.id === generateStore.selectedCategoryIds[0])
+    return cat ? cat.name : '1 category'
+  }
+  return `Categories (${count})`
 })
 
-const selectedStyleName = computed(() => {
-  if (!generateStore.selectedStyleId) return 'No Style'
-  const style = generateStore.styles.find((s) => String(s.id) === String(generateStore.selectedStyleId))
-  return style ? style.name : 'Style active'
+const selectedCategorySummaryTitle = computed(() => {
+  if (generateStore.selectedCategoryIds.length === 0) return 'No categories selected'
+  const names = generateStore.selectedCategoryIds
+    .map((id) => availableCategories.value.find((c) => c.id === id)?.name)
+    .filter(Boolean)
+  return `Selected categories: ${names.join(', ')}`
 })
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center justify-between gap-2.5 text-xs">
-    <!-- Left: Model & Profile selection -->
-    <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
-      <!-- Model Config Selector -->
-      <div class="min-w-[160px] flex-1 max-w-xs">
-        <select
-          v-model.number="generateStore.selectedModelConfigId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    <!-- Model Config Selector -->
+    <div class="min-w-[160px] flex-1 max-w-xs">
+      <select
+        v-model.number="generateStore.selectedModelConfigId"
+        class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
+      >
+        <option :value="null">Select model...</option>
+        <option
+          v-for="model in generateStore.activeModels"
+          :key="model.id"
+          :value="model.id"
         >
-          <option :value="null">Select model...</option>
-          <option
-            v-for="model in generateStore.activeModels"
-            :key="model.id"
-            :value="model.id"
-          >
-            {{ model.name }} ({{ model.provider.toUpperCase() }})
-          </option>
-        </select>
-      </div>
+          {{ model.name }} ({{ model.provider.toUpperCase() }})
+        </option>
+      </select>
+    </div>
 
-      <!-- Profile Selector -->
-      <div class="min-w-[140px] flex-1 max-w-xs">
-        <select
-          v-model.number="generateStore.selectedProfileId"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
-          title="Select profile (Optional)"
+    <!-- Profile Selector -->
+    <div class="min-w-[140px] flex-1 max-w-xs">
+      <select
+        v-model.number="generateStore.selectedProfileId"
+        class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
+        title="Select profile (Optional)"
+      >
+        <option :value="null">No profile (Default)</option>
+        <option
+          v-for="profile in profilesStore.profiles"
+          :key="profile.id"
+          :value="profile.id"
         >
-          <option :value="null">No profile (Default)</option>
-          <option
-            v-for="profile in profilesStore.profiles"
-            :key="profile.id"
-            :value="profile.id"
-          >
-            {{ profile.name }}
-          </option>
-        </select>
+          {{ profile.name }}
+        </option>
+      </select>
+    </div>
+
+    <!-- Category Multi-Select Combobox -->
+    <div class="min-w-[140px] flex-1 max-w-xs relative" ref="categoryDropdownRef">
+      <button
+        type="button"
+        @click="isCategoryDropdownOpen = !isCategoryDropdownOpen"
+        class="w-full flex items-center justify-between rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
+        :title="selectedCategorySummaryTitle"
+      >
+        <span class="truncate flex items-center gap-1.5 min-w-0">
+          <span class="text-xs">🏷️</span>
+          <span class="truncate font-medium">{{ selectedCategorySummaryText }}</span>
+        </span>
+        <span class="text-[10px] text-slate-400 shrink-0 ml-1">▼</span>
+      </button>
+
+      <!-- Dropdown Popover -->
+      <div
+        v-if="isCategoryDropdownOpen"
+        class="absolute left-0 top-full mt-1.5 w-64 max-h-60 overflow-y-auto p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-slate-900 z-50 space-y-0.5 text-xs"
+      >
         <div
-          v-if="selectedProfile && selectedProfile.categories && selectedProfile.categories.length > 0"
-          class="flex flex-wrap items-center gap-1 mt-1"
+          v-for="cat in availableCategories"
+          :key="cat.id"
+          @click="handleCategoryItemClick(cat.id)"
+          :class="[
+            'flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg transition-colors select-none',
+            isLockedCategory(cat.id)
+              ? 'bg-slate-50 dark:bg-slate-800/40 cursor-not-allowed text-slate-500 dark:text-slate-400'
+              : 'hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200',
+          ]"
+          :title="isLockedCategory(cat.id) ? 'Configured in active profile (cannot be deselected)' : ''"
         >
+          <div class="flex items-center gap-2 min-w-0">
+            <input
+              type="checkbox"
+              :checked="isCategorySelected(cat.id)"
+              :disabled="isLockedCategory(cat.id)"
+              class="rounded border-slate-300 text-sky-500 focus:ring-sky-400 cursor-pointer disabled:cursor-not-allowed"
+              @click.stop
+              @change="toggleCategory(cat.id)"
+            />
+            <span class="truncate text-xs font-medium">{{ cat.name }}</span>
+          </div>
           <span
-            v-for="cat in selectedProfile.categories"
-            :key="cat.id"
-            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 font-medium border border-indigo-200/60 dark:border-indigo-800/40"
-            :title="`Images are automatically assigned to '${cat.name}'`"
+            v-if="isLockedCategory(cat.id)"
+            class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 font-medium shrink-0"
+            title="Fixed by active profile"
           >
-            🏷️ {{ cat.name }}
+            🔒 Profile
           </span>
+        </div>
+
+        <div
+          v-if="availableCategories.length === 0"
+          class="p-2.5 text-center text-slate-400 text-xs italic"
+        >
+          No categories available
         </div>
       </div>
     </div>
-
-    <!-- Center/Right: Aspect Ratio, Resolution & Style Trigger -->
-    <div class="flex flex-wrap items-center gap-2 shrink-0">
-      <!-- Aspect Ratio Pills -->
-      <div class="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-white/10">
-        <button
-          v-for="ar in aspectRatios"
-          :key="ar"
-          type="button"
-          @click="generateStore.aspectRatio = ar"
-          :class="[
-            'px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer',
-            generateStore.aspectRatio === ar
-              ? 'bg-sky-500 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white',
-          ]"
-        >
-          {{ ar }}
-        </button>
-      </div>
-
-      <!-- Fallback Ratio Select for narrow screens -->
-      <div class="sm:hidden">
-        <select
-          v-model="generateStore.aspectRatio"
-          class="rounded-xl border border-slate-300/80 bg-white/80 px-2 py-1.5 text-xs text-slate-800 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200"
-        >
-          <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
-        </select>
-      </div>
-
-      <!-- Resolution Pills -->
-      <div class="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-white/10">
-        <button
-          v-for="res in resolutions"
-          :key="res"
-          type="button"
-          @click="generateStore.resolution = res"
-          :class="[
-            'px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer',
-            generateStore.resolution === res
-              ? 'bg-sky-500 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white',
-          ]"
-        >
-          {{ res }}
-        </button>
-      </div>
-
-      <!-- Style Preset Trigger -->
-      <button
-        type="button"
-        @click="isStyleModalOpen = true"
-        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-300/80 bg-white/80 text-slate-700 hover:bg-white dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors shadow-sm cursor-pointer"
-        title="Select style preset"
-      >
-        <span class="text-xs text-sky-500">🎨</span>
-        <span class="truncate max-w-[100px] text-[11px] font-medium">{{ selectedStyleName }}</span>
-      </button>
-    </div>
-
-    <!-- Style Picker Modal -->
-    <StylePickerModal
-      :open="isStyleModalOpen"
-      @update:open="isStyleModalOpen = $event"
-    />
   </div>
 </template>

@@ -171,6 +171,7 @@ def _make_profile(name="P", provider="openai", model="dall-e-3"):
         upscale_provider=None,
         upscale_model=None,
         params_json={},
+        categories=[SimpleNamespace(id=1, name="TestCat")],
     )
 
 
@@ -216,6 +217,7 @@ def test_export_profiles_structure() -> None:
     assert p["name"] == "P"
     assert p["model_config_name"] is None
     assert "params_json" in p
+    assert p["category_names"] == ["TestCat"]
 
 
 def test_export_all_structure() -> None:
@@ -572,6 +574,41 @@ def test_import_profiles_name_too_long() -> None:
         )
 
     assert result.failed == 1
+
+
+def test_import_profiles_with_categories() -> None:
+    session = MagicMock()
+    storage_template = SimpleNamespace(id=1, name="default")
+    cat_mock = SimpleNamespace(id=10, name="Cyberpunk")
+    created = []
+
+    def fake_create(s, **kwargs):
+        created.append(kwargs)
+        return SimpleNamespace(name=kwargs["name"])
+
+    with patch("app.services.import_export_service.crud") as mock_crud:
+        mock_crud.list_profiles.return_value = []
+        mock_crud.list_model_configs.return_value = []
+        mock_crud.ensure_default_storage_template.return_value = storage_template
+        mock_crud.get_category_by_name.return_value = cat_mock
+        mock_crud.create_profile.side_effect = fake_create
+
+        result = import_profiles(
+            session,
+            [
+                {
+                    "name": "CategorizedProfile",
+                    "provider": "openai",
+                    "model": "dall-e-3",
+                    "category_names": ["Cyberpunk"],
+                }
+            ],
+            "skip",
+        )
+
+    assert result.created == 1
+    assert len(created) == 1
+    assert created[0]["categories"] == [cat_mock]
 
 
 # ---------------------------------------------------------------------------

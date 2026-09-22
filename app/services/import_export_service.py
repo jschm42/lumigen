@@ -194,6 +194,7 @@ def export_profiles(session: Session) -> dict[str, Any]:
                 "upscale_provider": p.upscale_provider,
                 "upscale_model": p.upscale_model,
                 "params_json": dict(p.params_json or {}),
+                "category_names": [c.name for c in p.categories] if hasattr(p, "categories") and p.categories else [],
             }
             for p in profiles
         ],
@@ -730,6 +731,21 @@ def import_profiles(
         if not isinstance(params_json, dict):
             params_json = {}
 
+        # Resolve optional categories
+        profile_categories = []
+        raw_cat_names = raw.get("category_names")
+        if isinstance(raw_cat_names, list):
+            for c_name in raw_cat_names:
+                if isinstance(c_name, str) and c_name.strip():
+                    cat_obj = crud.get_category_by_name(session, c_name.strip())
+                    if not cat_obj and not dry_run:
+                        try:
+                            cat_obj = crud.create_category(session, name=c_name.strip()[:30])
+                        except Exception:
+                            cat_obj = None
+                    if cat_obj:
+                        profile_categories.append(cat_obj)
+
         existing = existing_by_name.get(name)
 
         if existing:
@@ -739,24 +755,29 @@ def import_profiles(
             elif conflict_strategy == "overwrite":
                 if not dry_run:
                     try:
+                        update_kwargs: dict[str, Any] = {
+                            "name": name,
+                            "provider": provider,
+                            "model": model,
+                            "model_config_id": model_config_id,
+                            "base_prompt": base_prompt,
+                            "negative_prompt": negative_prompt,
+                            "width": width,
+                            "height": height,
+                            "aspect_ratio": aspect_ratio,
+                            "n_images": n_images,
+                            "seed": seed,
+                            "output_format": output_format,
+                            "upscale_provider": upscale_provider,
+                            "upscale_model": upscale_model,
+                            "params_json": params_json,
+                        }
+                        if "category_names" in raw:
+                            update_kwargs["categories"] = profile_categories
                         crud.update_profile(
                             session,
                             existing,
-                            name=name,
-                            provider=provider,
-                            model=model,
-                            model_config_id=model_config_id,
-                            base_prompt=base_prompt,
-                            negative_prompt=negative_prompt,
-                            width=width,
-                            height=height,
-                            aspect_ratio=aspect_ratio,
-                            n_images=n_images,
-                            seed=seed,
-                            output_format=output_format,
-                            upscale_provider=upscale_provider,
-                            upscale_model=upscale_model,
-                            params_json=params_json,
+                            **update_kwargs,
                         )
                     except (ValueError, IntegrityError) as exc:
                         result.records.append(RecordResult(name=name, outcome="failed", reason=str(exc)))
@@ -786,7 +807,7 @@ def import_profiles(
                     upscale_model=upscale_model,
                     upscale_topaz_model_id=None,
                     params_json=params_json,
-                    categories=[],
+                    categories=profile_categories,
                     storage_template_id=storage_template.id,
                 )
                 existing_by_name[name] = new_row

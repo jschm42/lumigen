@@ -268,6 +268,12 @@ def get_category(session: Session, category_id: int) -> Category | None:
     return session.scalar(stmt)
 
 
+def get_category_by_name(session: Session, name: str) -> Category | None:
+    """Return a category by exact name, or ``None`` if not found."""
+    stmt = select(Category).where(Category.name == name)
+    return session.scalar(stmt)
+
+
 def create_category(session: Session, **fields) -> Category:
     """Create a new category from the given field values and return it."""
     row = Category(**fields)

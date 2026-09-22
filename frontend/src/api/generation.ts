@@ -22,6 +22,7 @@ export interface SubmitGenerationPayload {
   input_images?: File[]
   asset_id?: number | null
   style_id?: string | number | null
+  category_ids?: number[]
   fal_params?: Record<string, any>
   generic_params?: Record<string, any>
 }
@@ -58,6 +59,9 @@ export const generationApi = {
     }
     if (payload.session_token) formData.append('conversation', payload.session_token)
     if (payload.style_id) formData.append('style_id', String(payload.style_id))
+    if (payload.category_ids && payload.category_ids.length > 0) {
+      payload.category_ids.forEach((id) => formData.append('category_ids', String(id)))
+    }
     if (payload.fal_params) formData.append('fal_params_json', JSON.stringify(payload.fal_params))
     if (payload.generic_params) formData.append('generic_params_json', JSON.stringify(payload.generic_params))
 

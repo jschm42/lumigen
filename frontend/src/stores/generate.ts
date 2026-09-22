@@ -52,6 +52,8 @@ export const useGenerateStore = defineStore('generate', () => {
   const seed = ref<string>('')
   const selectedStyleId = ref<string | number | null>(null)
   const attachedImages = ref<AttachedImage[]>([])
+  const selectedCategoryIds = ref<number[]>([])
+  const profileLockedCategoryIds = ref<number[]>([])
 
   // Advanced Overrides (from old prompt panel)
   const isAdvancedOpen = ref<boolean>(false)
@@ -217,6 +219,17 @@ export const useGenerateStore = defineStore('generate', () => {
     } else {
       upscaleModel.value = '__none__'
     }
+
+    // Categories: Lock profile categories and merge with custom selected categories
+    const oldLocked = profileLockedCategoryIds.value
+    const profileCatIds: number[] = Array.isArray(profile.categories)
+      ? profile.categories.map((c: any) => c.id)
+      : Array.isArray(profile.category_ids)
+        ? profile.category_ids
+        : []
+    profileLockedCategoryIds.value = profileCatIds
+    const userCategories = selectedCategoryIds.value.filter((id) => !oldLocked.includes(id))
+    selectedCategoryIds.value = Array.from(new Set([...userCategories, ...profileCatIds]))
   }
 
   function clearProfileDefaults() {
@@ -234,6 +247,12 @@ export const useGenerateStore = defineStore('generate', () => {
     upscaleModel.value = '__none__'
     aspectRatio.value = '1:1'
     resolution.value = '1K'
+
+    // Remove previously locked profile categories, preserve user-selected ones
+    selectedCategoryIds.value = selectedCategoryIds.value.filter(
+      (id) => !profileLockedCategoryIds.value.includes(id)
+    )
+    profileLockedCategoryIds.value = []
   }
 
   async function loadModelsAndStyles() {
@@ -397,6 +416,7 @@ export const useGenerateStore = defineStore('generate', () => {
         upscale_model: upscaleModel.value !== '__profile__' ? upscaleModel.value : undefined,
         session_token: sessionsStore.activeSessionToken || undefined,
         style_id: selectedStyleId.value,
+        category_ids: selectedCategoryIds.value.length > 0 ? selectedCategoryIds.value : undefined,
         input_images: inputFiles.length > 0 ? inputFiles : undefined,
         asset_id: firstAsset ? firstAsset.assetId : undefined,
       }
@@ -507,6 +527,8 @@ export const useGenerateStore = defineStore('generate', () => {
     isGenerating,
     isLoadingHistory,
     selectedModel,
+    selectedCategoryIds,
+    profileLockedCategoryIds,
     addAttachedImage,
     attachAssetAsImage,
     removeAttachedImage,

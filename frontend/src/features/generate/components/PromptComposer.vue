@@ -158,124 +158,105 @@ function handleKeydown(e: KeyboardEvent) {
       </div>
     </div>
 
-    <!-- Main Prompt Textarea Row with Quick Action Buttons -->
-    <div class="flex items-end gap-2">
-      <!-- Advanced Overrides Toggle Button (+) -->
-      <button
-        type="button"
-        @click="generateStore.isAdvancedOpen = !generateStore.isAdvancedOpen"
-        :class="[
-          'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-bold text-base transition-colors shadow-sm',
-          generateStore.isAdvancedOpen
-            ? 'border-sky-400 bg-sky-50 text-sky-600 dark:border-sky-500 dark:bg-sky-950/50 dark:text-sky-300'
-            : 'border-slate-300/80 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20',
-        ]"
-        :title="generateStore.isAdvancedOpen ? 'Close advanced options' : 'Open advanced override options'"
-        :aria-expanded="generateStore.isAdvancedOpen"
-      >
-        {{ generateStore.isAdvancedOpen ? '−' : '+' }}
-      </button>
-
-      <!-- Input Image Picker (Paperclip) -->
-      <button
-        type="button"
-        @click="triggerFileInput"
-        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300/80 bg-white text-base text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20"
-        title="Upload image file as reference"
-      >
-        📎
-      </button>
-
-      <!-- Pick from Gallery Button -->
-      <button
-        type="button"
-        @click="isGalleryPickerOpen = true"
-        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300/80 bg-white text-base text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20"
-        title="Choose input image from gallery"
-      >
-        🖼️
-      </button>
-
-      <!-- Style Picker Button -->
-      <button
-        type="button"
-        @click="isStyleModalOpen = true"
-        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300/80 bg-white text-base text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20"
-        title="Choose style preset"
-      >
-        🎨
-      </button>
-
-      <!-- Prompt Textarea -->
-      <div class="relative flex-1 min-w-0">
-        <textarea
-          v-model="generateStore.prompt"
-          @keydown="handleKeydown"
-          rows="2"
-          class="w-full min-h-[2.75rem] max-h-48 resize-y rounded-xl border border-slate-300/80 bg-slate-50 px-3 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none dark:border-white/15 dark:bg-slate-950/50 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-950/80"
-          placeholder="Describe your desired image... (Enter = Generate, Shift+Enter = New line)"
-        ></textarea>
-      </div>
-
-      <!-- Clear Button (if images or prompt) -->
-      <button
-        v-if="generateStore.prompt || generateStore.attachedImages.length > 0"
-        type="button"
-        @click="() => { generateStore.prompt = ''; generateStore.clearAttachedImages(); }"
-        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300/80 bg-white font-semibold text-slate-600 transition hover:bg-rose-100 hover:text-rose-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-rose-500/20 dark:hover:text-rose-200"
-        title="Clear input"
-      >
-        ✕
-      </button>
-
-      <!-- Submit / Generate Button -->
-      <Button
-        variant="primary"
-        size="md"
-        :loading="generateStore.isSubmitting"
-        :disabled="!generateStore.prompt.trim() || generateStore.isSubmitting"
-        @click="generateStore.submit"
-        class="h-10 px-4 shrink-0 rounded-xl font-semibold shadow-md"
-        title="Start generation or queue"
-      >
-        <template #icon>
-          <span class="text-sm">⚡</span>
-        </template>
-        <span v-if="generateStore.isSubmitting">Queuing...</span>
-        <span v-else-if="generateStore.activeJobIds.length > 0" class="inline-flex items-center gap-1.5">
-          <span>Generate</span>
-          <span class="px-1.5 py-0.5 rounded-full bg-white/25 dark:bg-sky-400/20 text-[10px] font-mono leading-none">
-            +{{ generateStore.activeJobIds.length }}
-          </span>
-        </span>
-        <span v-else>Generate</span>
-      </Button>
+    <!-- Main Full-Width Prompt Textarea -->
+    <div class="relative w-full">
+      <textarea
+        id="prompt_user"
+        v-model="generateStore.prompt"
+        @keydown="handleKeydown"
+        rows="3"
+        class="w-full min-h-[3.75rem] max-h-52 resize-none rounded-xl border border-slate-300/80 bg-slate-50/80 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 focus:outline-none dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-950/80 dark:focus:ring-sky-400/20 transition-all leading-relaxed"
+        placeholder="Describe your desired image..."
+      ></textarea>
     </div>
 
     <!-- Collapsible Negative Prompt -->
-    <div v-if="generateStore.showNegativePrompt" class="mt-2.5 pt-2 border-t border-slate-200/60 dark:border-white/10">
-      <div class="flex items-center gap-2">
-        <span class="text-[10px] uppercase font-bold text-rose-500 tracking-wider">Negative:</span>
-        <input
-          type="text"
-          v-model="generateStore.negativePrompt"
-          placeholder="What to avoid in the image (e.g. blur, text, artifacts)..."
-          class="flex-1 rounded-lg bg-slate-100/70 px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:bg-slate-800/70 dark:text-slate-200 dark:placeholder-slate-500"
-        />
+    <div
+      v-if="generateStore.showNegativePrompt"
+      class="mt-2 flex items-center gap-2 rounded-xl border border-rose-200/80 bg-rose-50/60 px-3 py-1.5 dark:border-rose-900/40 dark:bg-rose-950/25 transition-all"
+    >
+      <div class="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 shrink-0 select-none">
+        <span>🚫</span>
+        <span>Negative:</span>
       </div>
+      <input
+        type="text"
+        v-model="generateStore.negativePrompt"
+        placeholder="What to avoid (e.g. blurry, low quality, distorted, artifacts)..."
+        class="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:text-slate-200 dark:placeholder-slate-500"
+      />
+      <button
+        type="button"
+        @click="generateStore.showNegativePrompt = false"
+        class="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 text-xs px-1 cursor-pointer"
+        title="Close negative prompt"
+      >
+        ✕
+      </button>
     </div>
 
-    <!-- Secondary Utilities Row: Magic Prompt & Negative Toggle -->
-    <div class="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-      <div class="flex items-center gap-2">
-        <!-- Magic Prompt Button -->
+    <!-- Unified Bottom Action Toolbar -->
+    <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2 pt-0.5">
+      <!-- Left: Modifier and Creation Tools -->
+      <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+        <!-- Reference Image Upload (Paperclip) -->
+        <button
+          type="button"
+          @click="triggerFileInput"
+          :class="[
+            'inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border text-xs font-medium transition shadow-xs cursor-pointer',
+            generateStore.attachedImages.length > 0
+              ? 'border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-500/60 dark:bg-sky-950/50 dark:text-sky-300'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+          ]"
+          title="Upload reference image file"
+        >
+          <span>📎</span>
+          <span class="hidden sm:inline">Reference</span>
+          <span
+            v-if="generateStore.attachedImages.length > 0"
+            class="text-[10px] font-bold px-1 rounded-full bg-sky-200 dark:bg-sky-800 text-sky-800 dark:text-sky-200"
+          >
+            {{ generateStore.attachedImages.length }}
+          </span>
+        </button>
+
+        <!-- Pick from Gallery -->
+        <button
+          type="button"
+          @click="isGalleryPickerOpen = true"
+          class="inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white transition shadow-xs cursor-pointer"
+          title="Choose input image from gallery"
+        >
+          <span>🖼️</span>
+          <span class="hidden sm:inline">Gallery</span>
+        </button>
+
+        <!-- Style Preset Picker -->
+        <button
+          type="button"
+          @click="isStyleModalOpen = true"
+          :class="[
+            'inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border text-xs font-medium transition shadow-xs cursor-pointer',
+            selectedStyle
+              ? 'border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-500/60 dark:bg-sky-950/50 dark:text-sky-300'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+          ]"
+          title="Choose style preset"
+        >
+          <span>🎨</span>
+          <span>Style</span>
+        </button>
+
+        <!-- Magic Prompt (AI Enhance) -->
         <button
           type="button"
           @click="isEnhanceModalOpen = true"
-          class="inline-flex items-center gap-1 hover:text-sky-500 transition-colors"
+          class="inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:text-sky-600 hover:border-sky-300 hover:bg-sky-50/50 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:text-sky-300 dark:hover:border-sky-700 dark:hover:bg-sky-950/40 transition shadow-xs cursor-pointer"
           title="Enhance prompt with AI"
         >
-          <span>✨</span> Magic Prompt
+          <span>✨</span>
+          <span class="hidden sm:inline">Magic Prompt</span>
         </button>
 
         <!-- Negative Prompt Toggle -->
@@ -283,16 +264,80 @@ function handleKeydown(e: KeyboardEvent) {
           type="button"
           @click="generateStore.showNegativePrompt = !generateStore.showNegativePrompt"
           :class="[
-            'inline-flex items-center gap-1 transition-colors',
-            generateStore.showNegativePrompt ? 'text-rose-500 font-semibold' : 'hover:text-slate-800 dark:hover:text-slate-200',
+            'inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border text-xs font-medium transition shadow-xs cursor-pointer',
+            generateStore.showNegativePrompt
+              ? 'border-rose-400 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
           ]"
+          title="Toggle negative prompt field"
         >
-          <span>🚫</span> Negative Prompt
+          <span>🚫</span>
+          <span class="hidden sm:inline">Negative</span>
+        </button>
+
+        <!-- Advanced Overrides Toggle -->
+        <button
+          type="button"
+          @click="generateStore.isAdvancedOpen = !generateStore.isAdvancedOpen"
+          :class="[
+            'inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border text-xs font-medium transition shadow-xs cursor-pointer',
+            generateStore.isAdvancedOpen
+              ? 'border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-500 dark:bg-sky-950/50 dark:text-sky-300'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+          ]"
+          :title="generateStore.isAdvancedOpen ? 'Close advanced options' : 'Open advanced options'"
+          :aria-expanded="generateStore.isAdvancedOpen"
+        >
+          <span>⚙️</span>
+          <span>Advanced</span>
         </button>
       </div>
 
-      <div class="text-[10px] hidden sm:block">
-        Tip: Shift+Enter for line break
+      <!-- Right: Clear, Keyboard hint, and Submit Button -->
+      <div class="flex items-center gap-2.5 ml-auto">
+        <!-- Clear Button -->
+        <button
+          v-if="generateStore.prompt || generateStore.attachedImages.length > 0"
+          type="button"
+          @click="() => { generateStore.prompt = ''; generateStore.clearAttachedImages(); }"
+          class="inline-flex h-8 items-center gap-1 px-2 rounded-lg text-xs text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-300 dark:hover:bg-rose-950/40 transition cursor-pointer"
+          title="Clear prompt and attachments"
+        >
+          <span class="text-sm leading-none">✕</span>
+          <span class="hidden md:inline">Clear</span>
+        </button>
+
+        <!-- Keyboard Shortcut Hint -->
+        <div class="hidden lg:flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500 select-none">
+          <kbd class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px]">Enter</kbd>
+          <span>generate</span>
+          <span class="mx-0.5">·</span>
+          <kbd class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px]">Shift+Enter</kbd>
+          <span>line</span>
+        </div>
+
+        <!-- Submit / Generate Button -->
+        <Button
+          variant="primary"
+          size="md"
+          :loading="generateStore.isSubmitting"
+          :disabled="!generateStore.prompt.trim() || generateStore.isSubmitting"
+          @click="generateStore.submit"
+          class="h-9 px-4.5 rounded-xl font-semibold shadow-md shrink-0 cursor-pointer"
+          title="Start generation (Enter)"
+        >
+          <template #icon>
+            <span class="text-sm">⚡</span>
+          </template>
+          <span v-if="generateStore.isSubmitting">Queuing...</span>
+          <span v-else-if="generateStore.activeJobIds.length > 0" class="inline-flex items-center gap-1.5">
+            <span>Generate</span>
+            <span class="px-1.5 py-0.5 rounded-full bg-white/25 dark:bg-sky-400/20 text-[10px] font-mono leading-none">
+              +{{ generateStore.activeJobIds.length }}
+            </span>
+          </span>
+          <span v-else>Generate</span>
+        </Button>
       </div>
     </div>
 
