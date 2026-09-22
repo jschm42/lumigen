@@ -115,7 +115,6 @@ onUnmounted(() => {
             ]"
             title="Open queue (Progress & controls)"
           >
-            <span class="text-xs">⏳</span>
             <span>Queue</span>
             <span
               v-if="queueStore.totalActive > 0"
@@ -133,10 +132,12 @@ onUnmounted(() => {
         <button
           type="button"
           @click="queueStore.toggleQueue"
-          class="md:hidden relative inline-flex items-center justify-center p-2 rounded-xl border border-slate-300/60 bg-white/70 text-slate-800 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200"
+          class="md:hidden relative inline-flex items-center justify-center p-2 rounded-xl border border-slate-300/60 bg-white/70 text-slate-800 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200 cursor-pointer"
           title="Queue"
         >
-          <span class="text-sm leading-none">⏳</span>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+          </svg>
           <span
             v-if="queueStore.totalActive > 0"
             class="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[9px] font-bold text-white shadow-sm"
