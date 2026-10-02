@@ -37,6 +37,8 @@ class BFLAdapter(ProviderAdapter):
         "default_resolution",
         "aspect_ratio",
         "default_aspect_ratio",
+        "bfl_aspect_ratio",
+        "bfl_resolution",
         "negative_prompt",
         "system_prompt",
         "base_prompt",
@@ -72,16 +74,89 @@ class BFLAdapter(ProviderAdapter):
         "overrides",
     }
 
-    async def list_models(self, settings: Settings) -> list[str]:
-        """BFL does not have a public model listing endpoint.
+    FLUX3_ALLOWED_ASPECT_RATIOS: tuple[str, ...] = (
+        "21:9",
+        "2:1",
+        "16:9",
+        "3:2",
+        "7:5",
+        "4:3",
+        "5:4",
+        "1:1",
+        "4:5",
+        "3:4",
+        "5:7",
+        "2:3",
+        "9:16",
+        "1:2",
+        "9:21",
+    )
 
-        Users must enter model names manually. This method returns an empty list.
-        """
-        return []
+    FLUX3_ALLOWED_RESOLUTIONS: tuple[str, ...] = (
+        "768sq",
+        "1k",
+        "1.5k",
+        "2k",
+        "4k",
+    )
+
+    def _resolve_model_name(self, model: str) -> str:
+        """Resolve a model identifier or alias to the expected BFL endpoint path."""
+        cleaned = (model or "").strip()
+        lower = cleaned.lower()
+        if "/" in lower:
+            lower = lower.split("/")[-1]
+        if lower in {"flux-3", "flux3", "flux-3-image", "flux3-image"}:
+            return "flux-3-image"
+        return cleaned
+
+    def _is_flux3_image(self, model: str) -> bool:
+        """Check whether the model targets the FLUX 3 image generation endpoint."""
+        return self._resolve_model_name(model) == "flux-3-image"
+
+    async def list_models(self, settings: Settings) -> list[str]:
+        """List available BFL models by querying the models endpoint."""
+        api_key = settings.bfl_api_key
+        if not api_key:
+            raise ProviderConfigError("BFL adapter requires BFL_API_KEY in .env.")
+
+        url = f"{self.BASE_URL}/models"
+        headers = {"x-key": api_key}
+        timeout = httpx.Timeout(
+            settings.llm_models_timeout_seconds,
+            connect=settings.llm_models_connect_timeout_seconds,
+        )
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, headers=headers)
+
+        if response.status_code >= 400:
+            message = self._extract_error_message(response)
+            raise ProviderError(
+                f"BFL models request failed ({response.status_code}): {message}"
+            )
+
+        try:
+            body = response.json()
+        except Exception as exc:
+            raise ProviderError(
+                "BFL returned a non-JSON models response."
+            ) from exc
+
+        models: list[str] = []
+        data = body.get("data") or body.get("models") or []
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    model_id = item.get("id") or item.get("name")
+                    if isinstance(model_id, str) and model_id.strip():
+                        models.append(model_id.strip())
+        return models
 
     async def generate(
         self, request: ProviderGenerationRequest, settings: Settings
     ) -> ProviderGenerationResult:
+        """Submit an image generation task to BFL and poll for results."""
         # Use api_key from request (custom) or fall back to settings
         api_key = request.api_key or settings.bfl_api_key
         if not api_key:
@@ -90,7 +165,8 @@ class BFLAdapter(ProviderAdapter):
             )
 
         # Submit the generation request
-        submit_url = f"{self.BASE_URL}/{request.model}"
+        model_name = self._resolve_model_name(request.model)
+        submit_url = f"{self.BASE_URL}/{model_name}"
         headers = {
             "x-key": api_key,
             "accept": "application/json",
@@ -157,7 +233,7 @@ class BFLAdapter(ProviderAdapter):
         polling_url: str,
         request_id: str,
         request: ProviderGenerationRequest,
-        settings: Settings,
+        settings: Settings | None = None,
     ) -> list[ProviderImage]:
         """Poll the BFL API for the generation result."""
         headers = {"accept": "application/json"}
@@ -191,14 +267,25 @@ class BFLAdapter(ProviderAdapter):
                 # Extract the image
                 return self._extract_images_from_result(result, request, settings)
 
-            elif status == "failed":
-                error_msg = result.get("error", "Unknown error")
-                self._logger.error(f"BFL generation failed: {error_msg}, result={result}")
-                raise ProviderError(f"BFL generation failed: {error_msg}")
-
-            elif status == "pending":
+            elif status in {"pending", "reasoning", "generating"}:
                 # Still processing, continue polling
                 continue
+
+            elif status in {
+                "failed",
+                "error",
+                "request moderated",
+                "content moderated",
+                "task not found",
+            }:
+                error_msg = (
+                    result.get("error")
+                    or result.get("details")
+                    or result.get("message")
+                    or f"Task ended with status: {result.get('status')}"
+                )
+                self._logger.error(f"BFL generation failed: {error_msg}, result={result}")
+                raise ProviderError(f"BFL generation failed: {error_msg}")
 
             else:
                 # Unknown status, continue polling
@@ -217,7 +304,7 @@ class BFLAdapter(ProviderAdapter):
         self,
         result: dict[str, Any],
         request: ProviderGenerationRequest,
-        settings: Settings,
+        settings: Settings | None = None,
     ) -> list[ProviderImage]:
         """Extract images from the BFL result."""
         images: list[ProviderImage] = []
@@ -260,9 +347,19 @@ class BFLAdapter(ProviderAdapter):
             if sample.startswith("http://") or sample.startswith("https://"):
                 # It's a URL - fetch the image
                 try:
+                    download_timeout = (
+                        settings.provider_bfl_download_timeout_seconds
+                        if settings
+                        else 120.0
+                    )
+                    connect_timeout = (
+                        settings.provider_bfl_download_connect_timeout_seconds
+                        if settings
+                        else 10.0
+                    )
                     timeout = httpx.Timeout(
-                        settings.provider_bfl_download_timeout_seconds,
-                        connect=settings.provider_bfl_download_connect_timeout_seconds,
+                        download_timeout,
+                        connect=connect_timeout,
                     )
                     with httpx.Client(timeout=timeout) as client:
                         response = client.get(sample)
@@ -293,9 +390,11 @@ class BFLAdapter(ProviderAdapter):
         )
 
         # Validate image data is actually valid
+        detected_format = ""
         try:
             with Image.open(BytesIO(image_bytes)) as img:
                 img.verify()
+                detected_format = (img.format or "").lower()
         except Exception as exc:
             raise ProviderError(f"BFL returned invalid image data: {exc}")
 
@@ -306,9 +405,16 @@ class BFLAdapter(ProviderAdapter):
             image_bytes, fallback_width, fallback_height
         )
 
-        mime = self._mime_from_output_format(
-            self._normalize_output_format(request.output_format)
-        )
+        if detected_format in {"jpeg", "jpg"}:
+            mime = "image/jpeg"
+        elif detected_format == "webp":
+            mime = "image/webp"
+        elif detected_format == "png":
+            mime = "image/png"
+        else:
+            mime = self._mime_from_output_format(
+                self._normalize_output_format(request.output_format)
+            )
 
         images.append(
             ProviderImage(
@@ -322,7 +428,126 @@ class BFLAdapter(ProviderAdapter):
 
         return images
 
+    def _resolve_flux3_aspect_ratio(self, request: ProviderGenerationRequest) -> str:
+        """Return a valid aspect ratio string for FLUX 3 Image."""
+        if isinstance(request.params, dict):
+            raw = (
+                request.params.get("aspect_ratio")
+                or request.params.get("bfl_aspect_ratio")
+            )
+            if isinstance(raw, str):
+                cleaned = raw.strip().lower()
+                if cleaned in self.FLUX3_ALLOWED_ASPECT_RATIOS or cleaned == "auto":
+                    return cleaned
+
+        if request.width and request.height and request.width > 0 and request.height > 0:
+            target = float(request.width) / float(request.height)
+            best_ratio = "1:1"
+            best_diff = float("inf")
+            for ratio in self.FLUX3_ALLOWED_ASPECT_RATIOS:
+                w_str, h_str = ratio.split(":")
+                val = float(w_str) / float(h_str)
+                diff = abs(val - target)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_ratio = ratio
+            return best_ratio
+
+        if request.input_images:
+            return "auto"
+
+        return "1:1"
+
+    def _resolve_flux3_resolution(self, request: ProviderGenerationRequest) -> str:
+        """Return a valid resolution tier for FLUX 3 Image ('768sq', '1k', '1.5k', '2k', '4k')."""
+        raw = ""
+        if isinstance(request.params, dict):
+            raw = str(
+                request.params.get("resolution")
+                or request.params.get("bfl_resolution")
+                or ""
+            ).strip().lower()
+
+        if raw in {"768sq", "768", "768px"}:
+            return "768sq"
+        if raw in {"1k", "1.0k"}:
+            return "1k"
+        if raw in {"1.5k"}:
+            return "1.5k"
+        if raw in {"2k", "2.0k"}:
+            return "2k"
+        if raw in {"4k", "4.0k"}:
+            return "4k"
+
+        if request.width and request.height and request.width > 0 and request.height > 0:
+            pixels = request.width * request.height
+            if pixels >= 3500000:
+                return "4k"
+            if pixels >= 2500000:
+                return "2k"
+            if pixels >= 1800000:
+                return "1.5k"
+            if pixels <= 600000:
+                return "768sq"
+
+        return "1k"
+
+    def _build_flux3_payload(self, request: ProviderGenerationRequest) -> dict[str, Any]:
+        """Build request payload conforming strictly to the FLUX 3 Image schema."""
+        payload: dict[str, Any] = {
+            "prompt": request.prompt,
+        }
+
+        aspect_ratio = self._resolve_flux3_aspect_ratio(request)
+        if aspect_ratio:
+            payload["aspect_ratio"] = aspect_ratio
+
+        resolution = self._resolve_flux3_resolution(request)
+        if resolution:
+            payload["resolution"] = resolution
+
+        if request.input_images:
+            images = [
+                base64.b64encode(img.data).decode("ascii")
+                for img in request.input_images[:10]
+            ]
+            if images:
+                payload["images"] = images
+        elif isinstance(request.params, dict) and "images" in request.params:
+            param_images = request.params["images"]
+            if isinstance(param_images, list):
+                payload["images"] = param_images[:10]
+            elif isinstance(param_images, str):
+                payload["images"] = [param_images]
+
+        if isinstance(request.params, dict):
+            if "safety_tolerance" in request.params:
+                try:
+                    st = int(request.params["safety_tolerance"])
+                    if 0 <= st <= 4:
+                        payload["safety_tolerance"] = st
+                except (ValueError, TypeError):
+                    pass
+
+            if "grounding" in request.params:
+                val = request.params["grounding"]
+                if isinstance(val, bool):
+                    payload["grounding"] = val
+                elif isinstance(val, str):
+                    payload["grounding"] = val.lower() in {"true", "1", "yes"}
+
+            if "version" in request.params:
+                ver = str(request.params["version"]).strip()
+                if ver:
+                    payload["version"] = ver
+
+        return payload
+
     def _build_payload(self, request: ProviderGenerationRequest) -> dict[str, Any]:
+        """Build request payload for BFL API."""
+        if self._is_flux3_image(request.model):
+            return self._build_flux3_payload(request)
+
         payload: dict[str, Any] = {
             "prompt": request.prompt,
         }
@@ -392,21 +617,39 @@ class BFLAdapter(ProviderAdapter):
         return fallback_width, fallback_height
 
     def _extract_error_message(self, response: httpx.Response) -> str:
+        """Extract a readable error message from a BFL API response."""
         try:
             data = response.json()
         except Exception:
             text = response.text.strip()
             return text[:400] if text else "Unknown error"
 
-        error_obj = data.get("error")
-        if isinstance(error_obj, dict):
-            message = error_obj.get("message")
+        if isinstance(data, dict):
+            # Check FastAPI validation details
+            detail = data.get("detail")
+            if isinstance(detail, list):
+                errors = []
+                for item in detail:
+                    if isinstance(item, dict):
+                        loc = " -> ".join(str(x) for x in item.get("loc", []))
+                        msg = item.get("msg", "")
+                        errors.append(f"{loc}: {msg}" if loc else msg)
+                    else:
+                        errors.append(str(item))
+                if errors:
+                    return "; ".join(errors)
+            elif isinstance(detail, str) and detail.strip():
+                return detail.strip()
+
+            error_obj = data.get("error")
+            if isinstance(error_obj, dict):
+                message = error_obj.get("message")
+                if isinstance(message, str) and message.strip():
+                    return message.strip()
+
+            message = data.get("message")
             if isinstance(message, str) and message.strip():
                 return message.strip()
-
-        message = data.get("message")
-        if isinstance(message, str) and message.strip():
-            return message.strip()
 
         text = str(data)
         return text[:400]

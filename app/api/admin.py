@@ -146,6 +146,15 @@ async def discover_provider_models(
         "google": [
             "imagen-3.0-generate-002",
         ],
+        "bfl": [
+            "flux-3-image",
+            "flux-2-pro",
+            "flux-2-flex",
+            "flux-2-max",
+            "flux-2-klein-9b",
+            "flux-pro-1.1",
+            "flux-dev",
+        ],
     }
     models = default_discovery.get(provider.lower(), [])
     return {"models": models, "count": len(models)}

@@ -632,6 +632,97 @@ async def test_bfl_generate_calls_submit_and_polling_endpoints(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
+async def test_bfl_generate_flux3_image_payload_and_polling(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+    poll_statuses = ["Reasoning", "Generating", "Ready"]
+    sample_bytes = _png_bytes(18, 14)
+    sample_b64 = base64.b64encode(sample_bytes).decode("ascii")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "POST", "url": url, "headers": headers or {}, "json": json})
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {"id": "flux3-req-1", "polling_url": "https://poll.bfl.test/result/flux3-1"},
+            )
+
+        async def get(self, url, headers=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "GET", "url": url, "headers": headers or {}, "json": None})
+            status = poll_statuses.pop(0) if poll_statuses else "Ready"
+            resp: dict[str, object] = {"status": status}
+            if status == "Ready":
+                resp["result"] = {"sample": sample_b64}
+            return _json_response("GET", url, 200, resp)
+
+    async def fast_sleep(_duration: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.providers.bfl_adapter.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.providers.bfl_adapter.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr(BFLAdapter, "_write_debug_log", lambda self, prefix, data: None)
+
+    adapter = BFLAdapter()
+    settings = Settings(bfl_api_key="bfl-key")
+
+    # Test with model alias "flux-3", aspect ratio 16:9 via resolution 1920x1080 and params
+    request = ProviderGenerationRequest(
+        prompt="A rabbit riding a pumpkin",
+        width=1920,
+        height=1080,
+        n_images=1,
+        seed=42,  # Should be omitted for flux-3-image
+        output_format="png",  # Should be omitted for flux-3-image
+        model="flux-3",  # Should be normalized to flux-3-image
+        params={
+            "resolution": "2K",
+            "aspect_ratio": "16:9",
+            "safety_tolerance": 3,
+            "grounding": False,
+        },
+    )
+
+    result = await adapter.generate(request, settings)
+
+    assert len(calls) == 4  # 1 POST + 3 GETs (Reasoning, Generating, Ready)
+    submit_call = calls[0]
+
+    assert submit_call["method"] == "POST"
+    assert submit_call["url"] == "https://api.bfl.ai/v1/flux-3-image"
+    assert submit_call["headers"]["x-key"] == "bfl-key"
+
+    # Strictly forbidden extra fields MUST NOT be present
+    payload = submit_call["json"]
+    assert "width" not in payload
+    assert "height" not in payload
+    assert "seed" not in payload
+    assert "output_format" not in payload
+    assert "num_images" not in payload
+    assert "input_image" not in payload
+
+    # Allowed fields
+    assert payload["prompt"] == "A rabbit riding a pumpkin"
+    assert payload["aspect_ratio"] == "16:9"
+    assert payload["resolution"] == "2k"
+    assert payload["safety_tolerance"] == 3
+    assert payload["grounding"] is False
+
+    assert len(result.images) == 1
+    assert result.images[0].width == 18
+    assert result.images[0].height == 14
+
+
+@pytest.mark.asyncio
 async def test_openai_list_models_calls_models_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict] = []
 

@@ -161,6 +161,7 @@ def test_delete_asset_stack_cleanup(db_session: Session):
 
     stack_res = assets_api.stack_assets({"asset_ids": [a1.id, a2.id]}, session=db_session)
     stack_id = stack_res["stack_id"]
+    assert stack_id
 
     # Delete cover a1
     del_res = assets_api.delete_asset(a1.id, session=db_session)
