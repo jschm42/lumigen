@@ -131,11 +131,11 @@ Install linters if missing: `python -m pip install ruff djlint`
 
 ## Provider image request documentation
 
-For implementing or understanding image requests to various providers, refer to:
+For implementing or understanding image requests to various providers, use the `image-provider-api-docs` skill ([.agents/skills/image-provider-api-docs/SKILL.md](file:///d:/DEV/repositories/git/lumigen/.agents/skills/image-provider-api-docs/SKILL.md)) or refer to:
 
 - OpenRouter: https://openrouter.ai/docs/guides/overview/multimodal/image-generation
 - FAL.AI: https://fal.ai/models/fal-ai/nano-banana-2/api
-- BFL: https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint
+- BFL: https://docs.bfl.ai/flux_3/flux3_image_generate (and https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint)
 - OpenAI: https://developers.openai.com/api/docs/guides/image-generation
 - Google Gemini: https://ai.google.dev/gemini-api/docs/image-generation
 
