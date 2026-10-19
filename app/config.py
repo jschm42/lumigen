@@ -103,6 +103,23 @@ class Settings(BaseSettings):
     proxy_headers_trusted_hosts: str = "127.0.0.1"
     csrf_token_ttl_seconds: int = 60 * 60 * 8
     auth_allow_onboarding_reset: bool = False
+    password_min_length: int = 8
+    password_reset_token_ttl_minutes: int = 60
+    password_reset_request_cooldown_seconds: int = 60
+    # Public base URL used in password reset links (e.g. https://studio.example.com).
+    # Falls back to the request's base URL when unset.
+    public_base_url: str | None = None
+
+    # Optional SMTP delivery for password reset e-mails. Without SMTP the reset link
+    # is written to the server log and admins can hand out links from the Users tab.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_starttls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: float = 15.0
 
     upscaler_command: str | None = None
     upscaler_model_dir: Path = Path("./data/models/realesrgan")

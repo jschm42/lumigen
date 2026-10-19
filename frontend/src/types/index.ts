@@ -2,7 +2,23 @@ export interface User {
   id: number
   username: string
   role: 'admin' | 'user'
-  created_at?: string
+  email?: string | null
+  display_name?: string | null
+  is_active?: boolean
+  created_at?: string | null
+  last_login_at?: string | null
+}
+
+export interface UiSettings {
+  show_token_usage: boolean
+}
+
+export interface TokenUsage {
+  input_tokens: number | null
+  output_tokens: number | null
+  total_tokens: number | null
+  cost: number | null
+  cost_unit: 'usd' | 'credits' | 'mixed' | null
 }
 
 export interface ModelConfig {
@@ -122,6 +138,10 @@ export interface Generation {
   aspect_ratio?: string
   resolution?: string
   seed?: number | string
+  n_images?: number | null
+  profile_name?: string | null
+  duration_seconds?: number | null
+  usage?: TokenUsage | null
   assets: Asset[]
 }
 
@@ -179,6 +199,7 @@ export interface GalleryFilterState {
   date_to: string
   category_ids: number[]
   thumb_size: 'sm' | 'md' | 'lg'
+  thumb_fit?: 'cover' | 'contain'
   artbook_token?: string
   collapse_stacks?: boolean
 }

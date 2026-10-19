@@ -42,7 +42,7 @@ onMounted(() => {
 
 async function handleSubmit() {
   if (!username.value.trim() || !password.value) {
-    errorMessage.value = 'Please enter username and password.'
+    errorMessage.value = 'Please enter your username (or e-mail) and password.'
     return
   }
 
@@ -135,7 +135,7 @@ async function handleSubmit() {
           <!-- Username Input -->
           <Input
             id="username"
-            label="Username"
+            label="Username or e-mail"
             placeholder="admin"
             v-model="username"
             :disabled="isLoading"
@@ -173,6 +173,13 @@ async function handleSubmit() {
               label="Remember me"
               :disabled="isLoading"
             />
+            <router-link
+              to="/forgot-password"
+              class="text-xs font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300"
+              data-testid="forgot-password-link"
+            >
+              Forgot password?
+            </router-link>
           </div>
 
           <!-- Submit Button -->

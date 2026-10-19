@@ -1,5 +1,13 @@
 import apiClient from './client'
-import type { DiscoveredUpscaleModel, ModelConfig, ProviderApiKeyStatus, StylePreset, UpscaleModel, User } from '@/types'
+import type { DiscoveredUpscaleModel, ModelConfig, ProviderApiKeyStatus, StylePreset, UiSettings, UpscaleModel, User } from '@/types'
+
+export interface AdminUserPayload {
+  username?: string
+  email?: string | null
+  display_name?: string | null
+  role?: 'admin' | 'user'
+  is_active?: boolean
+}
 
 export interface SystemInfo {
   app_version: string
@@ -128,18 +136,33 @@ export const adminApi = {
     return res.data
   },
 
-  async createUser(data: { username: string; password: string; role: string }): Promise<User> {
+  async createUser(data: AdminUserPayload & { username: string; password: string }): Promise<User> {
     const res = await apiClient.post<User>('/api/admin/users', data)
     return res.data
   },
 
-  async updateUserRole(userId: number, role: string): Promise<User> {
-    const res = await apiClient.patch<User>(`/api/admin/users/${userId}/role`, { role })
+  async updateUser(userId: number, data: AdminUserPayload): Promise<User> {
+    const res = await apiClient.patch<User>(`/api/admin/users/${userId}`, data)
     return res.data
   },
 
-  async resetUserPassword(userId: number, password: string): Promise<{ success: boolean }> {
-    const res = await apiClient.post(`/api/admin/users/${userId}/reset-password`, { password })
+  async setUserPassword(userId: number, password: string): Promise<{ success: boolean }> {
+    const res = await apiClient.post(`/api/admin/users/${userId}/password`, { password })
+    return res.data
+  },
+
+  async createUserResetLink(userId: number): Promise<{ reset_url: string; expires_at: string }> {
+    const res = await apiClient.post(`/api/admin/users/${userId}/reset-link`)
+    return res.data
+  },
+
+  async getUiSettings(): Promise<UiSettings> {
+    const res = await apiClient.get<UiSettings>('/api/admin/settings')
+    return res.data
+  },
+
+  async updateUiSettings(data: Partial<UiSettings>): Promise<UiSettings> {
+    const res = await apiClient.put<UiSettings>('/api/admin/settings', data)
     return res.data
   },
 

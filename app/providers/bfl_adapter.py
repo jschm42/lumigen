@@ -223,6 +223,7 @@ class BFLAdapter(ProviderAdapter):
                 "provider": self.name,
                 "id": request_id,
                 "model": request.model,
+                "cost": submit_result.get("cost"),
                 "count": len(images),
             },
         )

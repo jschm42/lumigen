@@ -1,13 +1,32 @@
 from __future__ import annotations
 
 import importlib
+import os
 import re
+import tempfile
+from pathlib import Path
 from typing import Any
 
-import pytest
-from fastapi.testclient import TestClient
+# Point every module-level ``get_settings()`` call at a throw-away directory *before* any
+# ``app`` module is imported, so no test can ever read or wipe the developer's ./data/app.db.
+_TEST_DATA_DIR = Path(tempfile.mkdtemp(prefix="lumigen-tests-"))
+os.environ.setdefault("DATA_DIR", str(_TEST_DATA_DIR))
+os.environ.setdefault("DEFAULT_BASE_DIR", str(_TEST_DATA_DIR / "images"))
+os.environ.setdefault("SQLITE_PATH", str(_TEST_DATA_DIR / "app.db"))
 
-from app.config import get_settings
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.config import get_settings  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolated_test_database():
+    """Create the ORM schema in the throw-away test database once per session."""
+    from app.db.engine import init_db
+
+    init_db()
+    yield
 
 
 @pytest.fixture
@@ -23,6 +42,10 @@ def app_module(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("SESSION_SECRET_KEY", "test-session-secret")
 
     get_settings.cache_clear()
+
+    import app.db.engine as engine_module
+
+    importlib.reload(engine_module)
 
     import app.main as main_module
 

@@ -10,6 +10,7 @@ import UpscaleModal from './UpscaleModal.vue'
 interface Props {
   asset: Asset
   generation?: Generation
+  compact?: boolean
 }
 
 const props = defineProps<Props>()
@@ -68,7 +69,7 @@ function handleUpscaleSubmitted(jobId: number) {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-1.5 text-xs">
+  <div :class="['flex flex-wrap items-center text-xs', compact ? 'gap-1' : 'gap-1.5']">
     <!-- Remix / Re-use -->
     <button
       type="button"
@@ -76,7 +77,7 @@ function handleUpscaleSubmitted(jobId: number) {
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
       title="Load prompt & settings into editor"
     >
-      <span>🔁</span> Remix
+      <span>🔁</span><span v-if="!compact">Remix</span>
     </button>
 
     <!-- Upscale -->
@@ -86,7 +87,7 @@ function handleUpscaleSubmitted(jobId: number) {
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
       title="Upscale image"
     >
-      <span>✨</span> Upscale
+      <span>✨</span><span v-if="!compact">Upscale</span>
     </button>
 
     <!-- Use as Input Image -->
@@ -96,7 +97,7 @@ function handleUpscaleSubmitted(jobId: number) {
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
       title="Load as input image in prompt composer"
     >
-      <span>🖼️</span> As Input Image
+      <span>🖼️</span><span v-if="!compact">As Input</span>
     </button>
 
     <!-- Copy Prompt -->
@@ -106,7 +107,7 @@ function handleUpscaleSubmitted(jobId: number) {
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
       title="Copy prompt"
     >
-      <span>📋</span> Copy
+      <span>📋</span><span v-if="!compact">Copy</span>
     </button>
 
     <!-- Download button -->
@@ -117,7 +118,7 @@ function handleUpscaleSubmitted(jobId: number) {
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 disabled:opacity-50"
       title="Download image"
     >
-      <span>⬇️</span> {{ isDownloading ? 'Downloading...' : 'Download' }}
+      <span>⬇️</span><span v-if="!compact">{{ isDownloading ? 'Downloading...' : 'Download' }}</span>
     </button>
 
     <!-- Details View -->
@@ -127,18 +128,18 @@ function handleUpscaleSubmitted(jobId: number) {
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 ml-auto"
       title="Show metadata & details"
     >
-      <span>ℹ️</span> Details
+      <span>ℹ️</span><span v-if="!compact">Details</span>
     </button>
 
     <!-- Delete Generation -->
     <button
-      v-if="generation"
+      v-if="generation && !compact"
       type="button"
       @click="emit('delete')"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1"
       title="Delete generation from session"
     >
-      <span>🗑️</span> Delete
+      <span>🗑️</span><span v-if="!compact">Delete</span>
     </button>
 
     <!-- Upscale Modal -->

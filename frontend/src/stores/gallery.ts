@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { galleryApi, type GalleryFilterParams } from '@/api/gallery'
 import { useToastStore } from './toast'
 import type { Asset, Category, GalleryFilterState } from '@/types'
@@ -13,6 +13,8 @@ export const useGalleryStore = defineStore('gallery', () => {
   const page = ref<number>(1)
   const totalPages = ref<number>(1)
   const isLoading = ref<boolean>(false)
+  const isLoadingMore = ref<boolean>(false)
+  const hasLoadedOnce = ref<boolean>(false)
 
   // Selection state
   const selectedAssetIds = ref<number[]>([])
@@ -21,19 +23,63 @@ export const useGalleryStore = defineStore('gallery', () => {
   const activeAsset = ref<Asset | null>(null)
   const isDetailModalOpen = ref<boolean>(false)
 
+  // View preferences (thumbnail size / crop) persist per browser.
+  const VIEW_PREFS_KEY = 'lumigen_gallery_view'
+  const PAGE_SIZE = 40
+
+  function readViewPrefs(): Pick<GalleryFilterState, 'thumb_size' | 'thumb_fit'> {
+    try {
+      const raw = JSON.parse(localStorage.getItem(VIEW_PREFS_KEY) || '{}')
+      return {
+        thumb_size: ['sm', 'md', 'lg'].includes(raw.thumb_size) ? raw.thumb_size : 'md',
+        thumb_fit: raw.thumb_fit === 'contain' ? 'contain' : 'cover',
+      }
+    } catch (_e) {
+      return { thumb_size: 'md', thumb_fit: 'cover' }
+    }
+  }
+
+  function defaultFilters(): GalleryFilterState {
+    return {
+      q: '',
+      profile_name: '',
+      provider: '',
+      min_rating: null,
+      unrated: false,
+      time_preset: '',
+      date_from: '',
+      date_to: '',
+      category_ids: [],
+      collapse_stacks: true,
+      ...readViewPrefs(),
+    }
+  }
+
   // Filters
-  const filters = ref<GalleryFilterState>({
-    q: '',
-    profile_name: '',
-    provider: '',
-    min_rating: null,
-    unrated: false,
-    time_preset: '',
-    date_from: '',
-    date_to: '',
-    category_ids: [],
-    thumb_size: 'md',
-    collapse_stacks: true,
+  const filters = ref<GalleryFilterState>(defaultFilters())
+
+  watch(
+    () => [filters.value.thumb_size, filters.value.thumb_fit],
+    ([thumbSize, thumbFit]) => {
+      try {
+        localStorage.setItem(VIEW_PREFS_KEY, JSON.stringify({ thumb_size: thumbSize, thumb_fit: thumbFit }))
+      } catch (_e) {
+        // Storage unavailable: preferences simply do not persist.
+      }
+    }
+  )
+
+  const activeFilterCount = computed(() => {
+    const f = filters.value
+    let count = 0
+    if (f.q.trim()) count++
+    if (f.min_rating) count++
+    if (f.unrated) count++
+    if (f.time_preset) count++
+    if (f.category_ids.length) count++
+    if (f.profile_name) count++
+    if (f.provider) count++
+    return count
   })
 
   // Stack expansion state
@@ -74,36 +120,138 @@ export const useGalleryStore = defineStore('gallery', () => {
     }
   }
 
-  async function fetchAssets(resetPage = false) {
-    if (resetPage) {
-      page.value = 1
+  // Each fetch gets a sequence number; responses from superseded requests are dropped,
+  // so fast typing in the search box can never show results of an older query.
+  let requestSeq = 0
+  let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+  function buildParams(pageNo: number): GalleryFilterParams {
+    return {
+      q: filters.value.q || undefined,
+      profile_name: filters.value.profile_name || undefined,
+      provider: filters.value.provider || undefined,
+      min_rating: filters.value.min_rating || undefined,
+      unrated: filters.value.unrated || undefined,
+      time_preset: filters.value.time_preset || undefined,
+      date_from: filters.value.date_from || undefined,
+      date_to: filters.value.date_to || undefined,
+      category_ids: filters.value.category_ids.length > 0 ? filters.value.category_ids : undefined,
+      artbook_token: filters.value.artbook_token || undefined,
+      collapse_stacks: filters.value.collapse_stacks,
+      page: pageNo,
+      page_size: PAGE_SIZE,
     }
+  }
+
+  /**
+   * Load assets. With ``resetPage`` the list restarts at page 1 (filter change);
+   * otherwise every page loaded so far is refreshed (e.g. after stacking or deleting).
+   */
+  async function fetchAssets(resetPage = false) {
+    if (searchTimer) {
+      clearTimeout(searchTimer)
+      searchTimer = null
+    }
+    const seq = ++requestSeq
+    const pagesToLoad = resetPage ? 1 : Math.max(1, page.value)
     isLoading.value = true
     try {
-      const params: GalleryFilterParams = {
-        q: filters.value.q || undefined,
-        profile_name: filters.value.profile_name || undefined,
-        provider: filters.value.provider || undefined,
-        min_rating: filters.value.min_rating || undefined,
-        unrated: filters.value.unrated || undefined,
-        time_preset: filters.value.time_preset || undefined,
-        date_from: filters.value.date_from || undefined,
-        date_to: filters.value.date_to || undefined,
-        category_ids: filters.value.category_ids.length > 0 ? filters.value.category_ids : undefined,
-        artbook_token: filters.value.artbook_token || undefined,
-        collapse_stacks: filters.value.collapse_stacks,
-        page: page.value,
-        page_size: 40,
+      const collected: Asset[] = []
+      const seen = new Set<number>()
+      let lastTotal = 0
+      let lastTotalPages = 1
+      let loadedPages = 0
+      for (let pageNo = 1; pageNo <= pagesToLoad; pageNo++) {
+        const res = await galleryApi.listAssets(buildParams(pageNo))
+        if (seq !== requestSeq) return
+        res.assets.forEach((asset) => {
+          if (!seen.has(asset.id)) {
+            seen.add(asset.id)
+            collected.push(asset)
+          }
+        })
+        lastTotal = res.total
+        lastTotalPages = res.total_pages || 1
+        loadedPages = pageNo
+        if (pageNo >= lastTotalPages) break
       }
-
-      const res = await galleryApi.listAssets(params)
-      assets.value = res.assets
-      total.value = res.total
-      totalPages.value = res.total_pages
+      assets.value = collected
+      total.value = lastTotal
+      totalPages.value = lastTotalPages
+      page.value = Math.max(1, loadedPages)
+      hasLoadedOnce.value = true
     } catch (_error) {
-      assets.value = []
+      if (seq === requestSeq && resetPage) {
+        assets.value = []
+        total.value = 0
+      }
     } finally {
-      isLoading.value = false
+      if (seq === requestSeq) {
+        isLoading.value = false
+      }
+    }
+  }
+
+  const hasMore = computed(() => page.value < totalPages.value)
+
+  /** Append the next page (infinite scroll). */
+  async function loadMore() {
+    if (isLoading.value || isLoadingMore.value || !hasMore.value) return
+    const seq = requestSeq
+    isLoadingMore.value = true
+    try {
+      const res = await galleryApi.listAssets(buildParams(page.value + 1))
+      if (seq !== requestSeq) return
+      const known = new Set(assets.value.map((a) => a.id))
+      assets.value = [...assets.value, ...res.assets.filter((a) => !known.has(a.id))]
+      page.value += 1
+      total.value = res.total
+      totalPages.value = res.total_pages || page.value
+    } catch (_error) {
+      toastStore.error('Could not load more images.')
+    } finally {
+      isLoadingMore.value = false
+    }
+  }
+
+  /** Debounced reload for free-text search input. */
+  function searchDebounced(delayMs = 300) {
+    if (searchTimer) clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+      searchTimer = null
+      fetchAssets(true)
+    }, delayMs)
+  }
+
+  /** Assets in display order, with expanded stacks flattened into their items. */
+  const displayedAssets = computed<Asset[]>(() => {
+    if (!filters.value.collapse_stacks) {
+      return assets.value
+    }
+    const result: Asset[] = []
+    for (const asset of assets.value) {
+      if (asset.stack_id && isStackExpanded(asset.stack_id) && asset.stack_items && asset.stack_items.length > 0) {
+        result.push(...asset.stack_items)
+      } else {
+        result.push(asset)
+      }
+    }
+    return result
+  })
+
+  /** Move the detail modal to the previous/next asset; loads more pages at the end. */
+  async function openAdjacentAsset(delta: number) {
+    if (!activeAsset.value) return
+    const list = displayedAssets.value
+    const index = list.findIndex((a) => a.id === activeAsset.value?.id)
+    if (index === -1) return
+    if (index + delta >= list.length && hasMore.value) {
+      await loadMore()
+    }
+    const updated = displayedAssets.value
+    const target = Math.max(0, Math.min(updated.length - 1, index + delta))
+    if (updated[target] && updated[target].id !== activeAsset.value?.id) {
+      activeAsset.value = updated[target]
     }
   }
 
@@ -359,19 +507,9 @@ export const useGalleryStore = defineStore('gallery', () => {
   }
 
   function resetFilters() {
-    filters.value = {
-      q: '',
-      profile_name: '',
-      provider: '',
-      min_rating: null,
-      unrated: false,
-      time_preset: '',
-      date_from: '',
-      date_to: '',
-      category_ids: [],
-      thumb_size: 'md',
-      collapse_stacks: true,
-    }
+    // View preferences (size / crop) are not filters and survive a reset.
+    const { thumb_size, thumb_fit } = filters.value
+    filters.value = { ...defaultFilters(), thumb_size, thumb_fit }
     fetchAssets(true)
   }
 
@@ -382,6 +520,14 @@ export const useGalleryStore = defineStore('gallery', () => {
     page,
     totalPages,
     isLoading,
+    isLoadingMore,
+    hasLoadedOnce,
+    hasMore,
+    activeFilterCount,
+    displayedAssets,
+    loadMore,
+    searchDebounced,
+    openAdjacentAsset,
     selectedAssetIds,
     activeAsset,
     isDetailModalOpen,

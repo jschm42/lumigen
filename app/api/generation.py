@@ -1,6 +1,7 @@
 """Generation REST API routes."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -18,6 +19,7 @@ from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
+from app.services.usage_service import extract_usage
 
 router = APIRouter(tags=["generation"])
 settings = get_settings()
@@ -378,66 +380,111 @@ async def api_generate_submit(
     }
 
 
+def _generation_progress(status: str) -> int:
+    if status == "succeeded":
+        return 100
+    if status in {"failed", "cancelled", "queued"}:
+        return 0
+    return 50
+
+
+def _generation_usage(gen: Any) -> dict[str, Any] | None:
+    """Return normalized token/cost usage stored with the generation's first asset."""
+    for asset in gen.assets or []:
+        meta = asset.meta_json if isinstance(asset.meta_json, dict) else {}
+        usage = extract_usage(meta.get("raw_meta"))
+        if usage:
+            return usage
+    return None
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    """Return *value* as an aware UTC datetime (SQLite drops tzinfo on read)."""
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _duration_seconds(gen: Any) -> float | None:
+    created = _utc(gen.created_at)
+    finished = _utc(gen.finished_at)
+    if not created or not finished:
+        return None
+    return max(0.0, round((finished - created).total_seconds(), 1))
+
+
+def serialize_generation(gen: Any, session_token: str | None = None) -> dict[str, Any]:
+    """Serialize a Generation row for the generation feed, job polling and queue views."""
+    from app.api.assets import serialize_asset
+
+    req_snapshot = gen.request_snapshot_json or {}
+    token = session_token
+    if token is None:
+        token = req_snapshot.get("chat_session_id") or req_snapshot.get("conversation", "")
+    return {
+        "id": gen.id,
+        "status": gen.status,
+        "progress": _generation_progress(gen.status),
+        "error_message": gen.error,
+        "prompt": gen.prompt_user or gen.prompt_final or "",
+        "negative_prompt": req_snapshot.get("negative_prompt", ""),
+        "session_token": token,
+        "created_at": _utc(gen.created_at).isoformat() if gen.created_at else "",
+        "completed_at": _utc(gen.finished_at).isoformat() if gen.finished_at else None,
+        "duration_seconds": _duration_seconds(gen),
+        "model_name": gen.model,
+        "provider": gen.provider,
+        "profile_name": gen.profile_name,
+        "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
+        "resolution": req_snapshot.get("resolution", "1K"),
+        "seed": req_snapshot.get("seed"),
+        "n_images": req_snapshot.get("n_images"),
+        "usage": _generation_usage(gen),
+        "assets": [serialize_asset(a, gen) for a in gen.assets] if gen.assets else [],
+    }
+
+
 @router.get("/jobs/{generation_id}/status")
 def get_job_status(
     generation_id: int,
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Get the current status, progress, and assets for a generation job."""
-    from app.api.assets import serialize_asset
-
+    """Get the current status, progress, usage and assets for a generation job."""
     gen = crud.get_generation(session, generation_id)
     if not gen:
         raise HTTPException(status_code=404, detail="Generation job not found")
+    return serialize_generation(gen)
 
-    req_snapshot = gen.request_snapshot_json or {}
-    assets_list = [serialize_asset(a, gen) for a in gen.assets]
-    progress = 100 if gen.status == "succeeded" else (0 if gen.status == "failed" else 50)
 
-    return {
-        "id": gen.id,
-        "status": gen.status,
-        "progress": progress,
-        "error_message": gen.error,
-        "prompt": gen.prompt_user or gen.prompt_final,
-        "negative_prompt": req_snapshot.get("negative_prompt", ""),
-        "session_token": req_snapshot.get("chat_session_id") or req_snapshot.get("conversation", ""),
-        "created_at": gen.created_at.isoformat() if gen.created_at else "",
-        "completed_at": gen.finished_at.isoformat() if gen.finished_at else None,
-        "model_name": gen.model,
-        "provider": gen.provider,
-        "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
-        "resolution": req_snapshot.get("resolution", "1K"),
-        "seed": req_snapshot.get("seed"),
-        "assets": assets_list,
-    }
+@router.get("/jobs/status")
+def get_jobs_status(
+    ids: str = "",
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Return the status of several jobs at once (``ids`` is a comma-separated list).
+
+    Unknown ids are reported in ``missing`` so the client can stop polling them.
+    """
+    parsed: list[int] = []
+    for part in ids.split(","):
+        part = part.strip()
+        if part.isdigit():
+            parsed.append(int(part))
+    parsed = list(dict.fromkeys(parsed))[:50]
+    jobs: list[dict[str, Any]] = []
+    missing: list[int] = []
+    for generation_id in parsed:
+        gen = crud.get_generation(session, generation_id)
+        if gen is None:
+            missing.append(generation_id)
+        else:
+            jobs.append(serialize_generation(gen))
+    return {"jobs": jobs, "missing": missing}
 
 
 def serialize_queue_item(gen: Any) -> dict[str, Any]:
     """Serialize a Generation model for the queue overview."""
-    from app.api.assets import serialize_asset
-
-    req_snapshot = gen.request_snapshot_json or {}
-    assets_list = [serialize_asset(a, gen) for a in gen.assets] if gen.assets else []
-    progress = 100 if gen.status == "succeeded" else (0 if gen.status in {"failed", "queued", "cancelled"} else 50)
-
-    return {
-        "id": gen.id,
-        "status": gen.status,
-        "progress": progress,
-        "error_message": gen.error,
-        "prompt": gen.prompt_user or gen.prompt_final or "",
-        "negative_prompt": req_snapshot.get("negative_prompt", ""),
-        "session_token": req_snapshot.get("chat_session_id") or req_snapshot.get("conversation", ""),
-        "created_at": gen.created_at.isoformat() if gen.created_at else "",
-        "completed_at": gen.finished_at.isoformat() if gen.finished_at else None,
-        "model_name": gen.model,
-        "provider": gen.provider,
-        "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
-        "resolution": req_snapshot.get("resolution", "1K"),
-        "seed": req_snapshot.get("seed"),
-        "assets": assets_list,
-    }
+    return serialize_generation(gen)
 
 
 @router.get("/jobs/queue")

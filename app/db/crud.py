@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import Select, case, select
+from sqlalchemy import Select, case, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
+    AppSetting,
     Asset,
     Category,
     ChatSession,
@@ -13,6 +16,7 @@ from app.db.models import (
     EnhancementConfig,
     Generation,
     ModelConfig,
+    PasswordResetToken,
     Profile,
     ProviderApiKey,
     SessionInputImage,
@@ -112,6 +116,80 @@ def delete_user(session: Session, user: User) -> None:
 def delete_all_users(session: Session) -> None:
     """Delete every user row. Intended for testing and onboarding-reset scenarios only."""
     session.query(User).delete()
+    session.commit()
+
+
+def get_user_by_email(session: Session, email: str) -> User | None:
+    """Return a user by e-mail address (case-insensitive), or ``None`` if not found."""
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return None
+    stmt = select(User).where(func.lower(User.email) == normalized)
+    return session.scalar(stmt)
+
+
+def get_user_by_username_ci(session: Session, username: str) -> User | None:
+    """Return a user by username, ignoring case, or ``None`` if not found."""
+    normalized = (username or "").strip().lower()
+    if not normalized:
+        return None
+    stmt = select(User).where(func.lower(User.username) == normalized)
+    return session.scalar(stmt)
+
+
+def create_password_reset_token(
+    session: Session, *, user: User, token_hash: str, expires_at: datetime
+) -> PasswordResetToken:
+    """Persist a new reset token for *user*, invalidating any still-open tokens first."""
+    now = datetime.now(UTC)
+    open_tokens = session.scalars(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+    ).all()
+    for token in open_tokens:
+        token.used_at = now
+    row = PasswordResetToken(user_id=user.id, token_hash=token_hash, expires_at=expires_at)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def get_password_reset_token(session: Session, token_hash: str) -> PasswordResetToken | None:
+    """Return the reset token row matching *token_hash*, or ``None``."""
+    stmt = select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+    return session.scalar(stmt)
+
+
+def latest_password_reset_token(session: Session, user_id: int) -> PasswordResetToken | None:
+    """Return the most recently created reset token for a user, or ``None``."""
+    stmt = (
+        select(PasswordResetToken)
+        .where(PasswordResetToken.user_id == user_id)
+        .order_by(PasswordResetToken.created_at.desc(), PasswordResetToken.id.desc())
+        .limit(1)
+    )
+    return session.scalar(stmt)
+
+
+def get_app_setting(session: Session, key: str, default: Any = None) -> Any:
+    """Return the stored value for an app setting *key*, or *default* when unset."""
+    row = session.get(AppSetting, key)
+    if row is None:
+        return default
+    return row.value_json
+
+
+def set_app_setting(session: Session, key: str, value: Any) -> None:
+    """Create or update the app setting *key* with *value* and commit."""
+    row = session.get(AppSetting, key)
+    if row is None:
+        row = AppSetting(key=key, value_json=value)
+    else:
+        row.value_json = value
+    session.add(row)
     session.commit()
 
 

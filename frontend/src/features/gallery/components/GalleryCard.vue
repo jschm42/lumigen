@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useGalleryStore } from '@/stores/gallery'
 import type { Asset } from '@/types'
 
@@ -75,15 +75,25 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
+// Global listeners are only needed while the rating popup is open; registering them
+// per card permanently meant hundreds of document handlers on large galleries.
+function detachListeners() {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeydown)
+}
+
+watch(isRatingOpen, (open) => {
+  detachListeners()
+  if (open) {
+    document.addEventListener('click', handleClickOutside)
+    document.addEventListener('keydown', handleKeydown)
+  }
 })
+
+onUnmounted(detachListeners)
+
+const isSelected = computed(() => galleryStore.selectedAssetIds.includes(props.asset.id))
+const isContain = computed(() => galleryStore.filters.thumb_fit === 'contain')
 </script>
 
 <template>
@@ -103,11 +113,11 @@ onUnmounted(() => {
     <!-- Main Front Card -->
     <div
       @click="handleCardClick"
-      :title="galleryStore.selectedAssetIds.includes(asset.id) ? 'Selected (Ctrl+Click to deselect)' : 'Click to open (Ctrl+Click for quick select)'"
+      :title="isSelected ? 'Selected (Ctrl+Click to deselect)' : 'Click to open (Ctrl+Click for quick select)'"
       :class="[
         'group relative rounded-2xl bg-slate-900 shadow-sm transition-all duration-200 cursor-pointer select-none',
         isRatingOpen ? 'z-30 overflow-visible' : 'overflow-hidden z-10',
-        galleryStore.selectedAssetIds.includes(asset.id)
+        isSelected
           ? 'border-2 border-sky-500 ring-2 ring-sky-500/50 shadow-lg'
           : asset.stack_id && !galleryStore.isStackExpanded(asset.stack_id)
             ? 'border-2 border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/25 shadow-lg shadow-indigo-950/40 hover:border-indigo-400 hover:ring-indigo-400/50'
@@ -121,8 +131,12 @@ onUnmounted(() => {
         <img
           :src="asset.thumbnail_url || asset.image_url"
           :alt="asset.prompt"
-          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          :class="[
+            'w-full h-full transition-transform duration-300',
+            isContain ? 'object-contain' : 'object-cover group-hover:scale-105',
+          ]"
           loading="lazy"
+          decoding="async"
         />
       </div>
 
@@ -138,13 +152,13 @@ onUnmounted(() => {
             @click="toggleSelect"
             :class="[
               'w-6 h-6 rounded-lg flex items-center justify-center pointer-events-auto transition-all border shadow-sm',
-              galleryStore.selectedAssetIds.includes(asset.id)
+              isSelected
                 ? 'bg-sky-500 border-sky-500 text-white shadow-sky-500/50 opacity-100'
                 : 'bg-black/60 border-white/30 text-white hover:bg-black/80 opacity-0 group-hover:opacity-100',
             ]"
             title="Select (or Ctrl + Click on image)"
           >
-            <span v-if="galleryStore.selectedAssetIds.includes(asset.id)" class="text-xs font-bold">✓</span>
+            <span v-if="isSelected" class="text-xs font-bold">✓</span>
           </button>
 
           <!-- Stack Badge -->

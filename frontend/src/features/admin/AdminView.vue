@@ -7,6 +7,7 @@ import UpscalingTab from './components/UpscalingTab.vue'
 import StylesTab from './components/StylesTab.vue'
 import CategoriesTab from './components/CategoriesTab.vue'
 import UsersTab from './components/UsersTab.vue'
+import GeneralSettingsTab from './components/GeneralSettingsTab.vue'
 import DataTransferTab from './components/DataTransferTab.vue'
 import SystemInfoTab from './components/SystemInfoTab.vue'
 
@@ -19,6 +20,7 @@ const tabs: TabItem[] = [
   { id: 'styles', label: 'Styles' },
   { id: 'categories', label: 'Categories' },
   { id: 'users', label: 'Users' },
+  { id: 'general', label: 'General' },
   { id: 'transfer', label: 'Transfer & Backup' },
   { id: 'system', label: 'System Info' },
 ]
@@ -44,6 +46,7 @@ const tabs: TabItem[] = [
       <StylesTab v-else-if="activeTab === 'styles'" />
       <CategoriesTab v-else-if="activeTab === 'categories'" />
       <UsersTab v-else-if="activeTab === 'users'" />
+      <GeneralSettingsTab v-else-if="activeTab === 'general'" />
       <DataTransferTab v-else-if="activeTab === 'transfer'" />
       <SystemInfoTab v-else-if="activeTab === 'system'" />
     </div>

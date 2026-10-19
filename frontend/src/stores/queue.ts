@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { generationApi } from '@/api/generation'
 import { useToastStore } from './toast'
+import { useAuthStore } from './auth'
 import type { Generation } from '@/types'
 
 export const useQueueStore = defineStore('queue', () => {
@@ -17,6 +18,12 @@ export const useQueueStore = defineStore('queue', () => {
   let pollTimeout: any = null
 
   async function fetchQueue() {
+    // Never poll for guests (login / reset pages); the layout restarts polling after login.
+    if (!useAuthStore().isAuthenticated) {
+      clearTimeout(pollTimeout)
+      pollTimeout = null
+      return
+    }
     try {
       const data = await generationApi.getQueue()
       activeJobs.value = data.active || []

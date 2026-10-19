@@ -6,10 +6,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.assets import serialize_asset
+from app.api.generation import serialize_generation
 from app.db import crud
 from app.db.engine import get_session
 from app.db.models import Generation
+from app.services.usage_service import sum_usage
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -117,29 +118,8 @@ def get_session_history(
     )
     generations = [g for g in all_generations if generation_session_token(g) == session_token]
 
-    gen_list = []
-    for g in generations:
-        req_snapshot = g.request_snapshot_json or {}
-        progress = 100 if g.status == "succeeded" else (0 if g.status == "failed" else 50)
-        assets_list = [serialize_asset(a, g) for a in g.assets]
-
-        gen_list.append({
-            "id": g.id,
-            "status": g.status,
-            "progress": progress,
-            "error_message": g.error,
-            "prompt": g.prompt_user or g.prompt_final,
-            "negative_prompt": req_snapshot.get("negative_prompt", ""),
-            "session_token": session_token,
-            "created_at": g.created_at.isoformat() if g.created_at else "",
-            "completed_at": g.finished_at.isoformat() if g.finished_at else None,
-            "model_name": g.model,
-            "provider": g.provider,
-            "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
-            "resolution": req_snapshot.get("resolution", "1K"),
-            "seed": req_snapshot.get("seed"),
-            "assets": assets_list,
-        })
+    gen_list = [serialize_generation(g, session_token=session_token) for g in generations]
+    usage_total = sum_usage([g["usage"] for g in gen_list])
 
     return {
         "session": {
@@ -148,6 +128,7 @@ def get_session_history(
             "title": chat_session.title if chat_session else "Session",
         },
         "generations": gen_list,
+        "usage_total": usage_total,
     }
 
 

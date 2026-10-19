@@ -22,11 +22,13 @@ from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
+from app.api.deps import raise_http, require_admin, user_service
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import get_session
+from app.db.models import User
 from app.providers.fal_upscale_adapter import FalUpscaleService
-from app.services.auth_service import AuthService
+from app.services.app_settings_service import AppSettingsService
 from app.services.import_export_service import (
     export_all,
     export_styles,
@@ -39,11 +41,12 @@ from app.services.import_export_service import (
 )
 from app.services.model_config_service import ModelConfigService
 from app.services.style_service import restore_default_styles
+from app.services.user_service import UserServiceError
 from app.utils.paths import ensure_dir
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 settings = get_settings()
-auth_service = AuthService()
+app_settings_service = AppSettingsService()
 model_config_service = ModelConfigService(settings)
 fal_upscale_service = FalUpscaleService()
 
@@ -602,16 +605,7 @@ def restore_styles_defaults(session: Session = Depends(get_session)) -> dict[str
 @router.get("/users")
 def list_admin_users(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     """List all studio users."""
-    users = crud.list_users(session)
-    return [
-        {
-            "id": u.id,
-            "username": u.username,
-            "role": u.role,
-            "created_at": u.created_at.isoformat() if u.created_at else "",
-        }
-        for u in users
-    ]
+    return [user_service.serialize_user(u) for u in crud.list_users(session)]
 
 
 @router.post("/users")
@@ -619,26 +613,81 @@ def create_admin_user(
     payload: dict[str, Any],
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Create a new user account."""
-    username = payload.get("username", "").strip()
-    password = payload.get("password", "")
-    role = payload.get("role", "user")
+    """Create a new user account with validated username, password, role and e-mail."""
+    try:
+        user = user_service.create_user(
+            session,
+            username=str(payload.get("username", "")),
+            password=str(payload.get("password", "")),
+            role=str(payload.get("role", "user")),
+            email=payload.get("email") or None,
+            display_name=payload.get("display_name") or None,
+            is_active=bool(payload.get("is_active", True)),
+        )
+    except UserServiceError as exc:
+        raise raise_http(exc) from exc
+    return user_service.serialize_user(user)
 
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Username and password required")
 
-    password_hash = auth_service.hash_password(password)
-    user = crud.create_user(
-        session,
-        username=username,
-        password_hash=password_hash,
-        role=role,
-        is_active=True,
-    )
+def _get_user_or_404(session: Session, user_id: int) -> User:
+    user = crud.get_user(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.patch("/users/{user_id}")
+def update_admin_user(
+    user_id: int,
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+    acting_user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """Update a user's profile fields, role or active flag.
+
+    Guards prevent admins from locking themselves out or removing the last admin.
+    """
+    user = _get_user_or_404(session, user_id)
+    allowed = ("username", "email", "display_name", "role", "is_active")
+    fields = {key: payload[key] for key in allowed if key in payload}
+    try:
+        updated = user_service.admin_update_user(
+            session, acting_user=acting_user, user=user, fields=fields
+        )
+    except UserServiceError as exc:
+        raise raise_http(exc) from exc
+    return user_service.serialize_user(updated)
+
+
+@router.post("/users/{user_id}/password")
+def set_admin_user_password(
+    user_id: int,
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, bool]:
+    """Set a new password for a user and sign out all of their sessions."""
+    user = _get_user_or_404(session, user_id)
+    try:
+        user_service.set_password(session, user, str(payload.get("password", "")))
+    except UserServiceError as exc:
+        raise raise_http(exc) from exc
+    return {"success": True}
+
+
+@router.post("/users/{user_id}/reset-link")
+def create_admin_user_reset_link(
+    user_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Create a single-use password reset link the admin can hand over to the user."""
+    user = _get_user_or_404(session, user_id)
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Activate the account before creating a reset link.")
+    raw_token, expires_at = user_service.create_reset_token(session, user)
     return {
-        "id": user.id,
-        "username": user.username,
-        "role": user.role,
+        "reset_url": user_service.build_reset_url(str(request.base_url), raw_token),
+        "expires_at": expires_at.isoformat(),
     }
 
 
@@ -646,14 +695,33 @@ def create_admin_user(
 def delete_admin_user(
     user_id: int,
     session: Session = Depends(get_session),
+    acting_user: User = Depends(require_admin),
 ) -> dict[str, bool]:
-    """Delete a user account."""
-    u = crud.get_user(session, user_id)
-    if not u:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    crud.delete_user(session, u)
+    """Delete a user account (not yourself, never the last active admin)."""
+    user = _get_user_or_404(session, user_id)
+    try:
+        user_service.delete_user(session, acting_user=acting_user, user=user)
+    except UserServiceError as exc:
+        raise raise_http(exc) from exc
     return {"success": True}
+
+
+@router.get("/settings")
+def get_admin_settings(session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Return the studio-wide UI settings."""
+    return app_settings_service.get_ui_settings(session)
+
+
+@router.put("/settings")
+def update_admin_settings(
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Update studio-wide UI settings (e.g. ``show_token_usage``)."""
+    try:
+        return app_settings_service.update_ui_settings(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/system")

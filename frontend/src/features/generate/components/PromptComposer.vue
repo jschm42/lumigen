@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useGenerateStore, DIMENSION_PRESETS } from '@/stores/generate'
 import Button from '@/components/ui/Button.vue'
 import PromptEnhanceModal from './PromptEnhanceModal.vue'
@@ -12,6 +12,28 @@ const isEnhanceModalOpen = ref(false)
 const isStyleModalOpen = ref(false)
 const isGalleryPickerOpen = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const promptRef = ref<HTMLTextAreaElement | null>(null)
+
+// Grow the prompt field with its content (capped by max-h via CSS).
+function autosizePrompt() {
+  const el = promptRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
+watch(
+  () => generateStore.prompt,
+  (value, previous) => {
+    nextTick(autosizePrompt)
+    // Prompt filled from elsewhere (remix, prompt ideas): put the cursor into the field.
+    if (value && !previous && document.activeElement !== promptRef.value) {
+      nextTick(() => promptRef.value?.focus())
+    }
+  }
+)
+
+onMounted(autosizePrompt)
 
 const activeProvider = computed(() => {
   return (generateStore.selectedModel?.provider || '').toLowerCase()
@@ -162,10 +184,11 @@ function handleKeydown(e: KeyboardEvent) {
     <div class="relative w-full">
       <textarea
         id="prompt_user"
+        ref="promptRef"
         v-model="generateStore.prompt"
         @keydown="handleKeydown"
-        rows="3"
-        class="w-full min-h-[3.75rem] max-h-52 resize-none rounded-xl border border-slate-300/80 bg-slate-50/80 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 focus:outline-none dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-950/80 dark:focus:ring-sky-400/20 transition-all leading-relaxed"
+        rows="2"
+        class="w-full min-h-[3.25rem] max-h-52 overflow-y-auto resize-none rounded-xl border border-slate-300/80 bg-slate-50/80 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 focus:outline-none dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-950/80 dark:focus:ring-sky-400/20 transition-all leading-relaxed"
         placeholder="Describe your desired image..."
       ></textarea>
     </div>

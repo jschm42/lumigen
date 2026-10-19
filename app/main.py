@@ -83,6 +83,7 @@ from app.services.storage_service import StorageService
 from app.services.style_service import ensure_default_styles
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
+from app.services.user_service import UserService
 from app.utils.jsonutil import dumps_json
 from app.utils.paths import ensure_dir
 from app.utils.slugify import slugify
@@ -313,6 +314,8 @@ def get_current_user(request: Request, session: Session) -> User | None:
     user = crud.get_user(session, user_id)
     if not user or not user.is_active:
         return None
+    if not UserService.session_matches_user(request.session, user):
+        return None
     return user
 
 
@@ -320,12 +323,11 @@ def clear_auth_session(request: Request) -> None:
     request.session.pop("user_id", None)
     request.session.pop("user_role", None)
     request.session.pop("username", None)
+    request.session.pop("session_version", None)
 
 
 def start_auth_session(request: Request, user: User) -> None:
-    request.session["user_id"] = user.id
-    request.session["user_role"] = user.role
-    request.session["username"] = user.username
+    UserService.start_session(request.session, user)
 
 
 def ensure_csrf_token(request: Request) -> str:
@@ -546,6 +548,11 @@ def serve_spa_index() -> Response:
     return spa_fallback_response()
 
 
+# SPA-only client routes without a dedicated FastAPI handler.
+SPA_PUBLIC_PATHS = frozenset({"/forgot-password", "/reset-password"})
+SPA_PRIVATE_PATHS = frozenset({"/account"})
+
+
 @app.middleware("http")
 async def auth_guard_middleware(request: Request, call_next):
     path = request.url.path
@@ -568,21 +575,34 @@ async def auth_guard_middleware(request: Request, call_next):
         user = None
         if isinstance(session_user_id, int):
             candidate = crud.get_user(session, session_user_id)
-            if candidate and candidate.is_active:
+            if (
+                candidate
+                and candidate.is_active
+                and UserService.session_matches_user(session_payload, candidate)
+            ):
                 user = candidate
 
     public_paths = {
         "/login",
         "/onboarding",
+        "/forgot-password",
+        "/reset-password",
         "/api/auth/status",
         "/api/auth/login",
+        "/api/auth/logout",
         "/api/auth/setup",
+        "/api/auth/password/forgot",
+        "/api/auth/password/validate-token",
+        "/api/auth/password/reset",
     }
+    is_get = request.method.upper() == "GET"
     if path in public_paths:
-        if users_exist and user and request.method.upper() == "GET" and path == "/login":
+        if users_exist and user and is_get and path == "/login":
             if is_spa_request(request):
                 return serve_spa_index()
             return RedirectResponse(url="/", status_code=303)
+        if is_get and path in SPA_PUBLIC_PATHS:
+            return serve_spa_index()
         return await call_next(request)
 
     if not users_exist:
@@ -591,9 +611,14 @@ async def auth_guard_middleware(request: Request, call_next):
         return RedirectResponse(url="/login", status_code=303)
 
     if not user:
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "Authentication required"}, status_code=401)
         if is_spa_request(request):
             return serve_spa_index()
         return login_redirect(path)
+
+    if is_get and path in SPA_PRIVATE_PATHS:
+        return serve_spa_index()
 
     raw_cookie = request.cookies.get(settings.session_cookie_name)
     response = await call_next(request)

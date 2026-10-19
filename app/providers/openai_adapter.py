@@ -172,6 +172,7 @@ class OpenAIAdapter(ProviderAdapter):
                 "provider": self.name,
                 "created": body.get("created"),
                 "model": request.model,
+                "usage": body.get("usage"),
                 "count": len(images),
             },
         )

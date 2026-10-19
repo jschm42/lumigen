@@ -5,7 +5,7 @@ import { sessionsApi } from '@/api/sessions'
 import { useSessionsStore } from './sessions'
 import { useToastStore } from './toast'
 import { useQueueStore } from './queue'
-import type { Asset, Generation, ModelConfig, StylePreset } from '@/types'
+import type { Asset, Generation, ModelConfig, StylePreset, TokenUsage } from '@/types'
 
 export interface AttachedImage {
   id: string
@@ -83,6 +83,8 @@ export const useGenerateStore = defineStore('generate', () => {
   const activeJobIds = ref<number[]>([])
   const isSubmitting = ref<boolean>(false)
   const isLoadingHistory = ref<boolean>(false)
+  // Bumped on every submit so the feed can scroll the new job into view.
+  const lastSubmittedAt = ref<number>(0)
 
   const isGenerating = computed(() => {
     return isSubmitting.value || activeJobIds.value.length > 0
@@ -288,90 +290,192 @@ export const useGenerateStore = defineStore('generate', () => {
   }
 
 
-  const pollingIntervals = new Map<number, ReturnType<typeof setInterval>>()
+  // --- Job polling -------------------------------------------------------
+  // A single loop polls all tracked jobs with one batch request. The interval starts
+  // fast and backs off for long-running jobs; transient network errors are retried
+  // instead of silently abandoning the job (which left spinners hanging forever).
+  const POLL_FAST_MS = 1500
+  const POLL_SLOW_MS = 4000
+  const POLL_FAST_WINDOW_MS = 30000
+  const POLL_MAX_CONSECUTIVE_ERRORS = 8
+
+  const sessionUsageTotal = ref<TokenUsage | null>(null)
+  const jobStartedAt = new Map<number, number>()
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let pollInFlight = false
+  let consecutivePollErrors = 0
+
+  const isRunningStatus = (status: Generation['status']) =>
+    status === 'queued' || status === 'running' || status === 'pending' || status === 'processing'
 
   function stopPolling(jobId: number) {
-    const timer = pollingIntervals.get(jobId)
-    if (timer) {
-      clearInterval(timer)
-      pollingIntervals.delete(jobId)
-    }
+    jobStartedAt.delete(jobId)
     activeJobIds.value = activeJobIds.value.filter((id) => id !== jobId)
+    if (activeJobIds.value.length === 0 && pollTimer) {
+      clearTimeout(pollTimer)
+      pollTimer = null
+    }
   }
 
   function clearAllPolling() {
-    pollingIntervals.forEach((timer) => clearInterval(timer))
-    pollingIntervals.clear()
+    if (pollTimer) {
+      clearTimeout(pollTimer)
+      pollTimer = null
+    }
+    jobStartedAt.clear()
     activeJobIds.value = []
+    consecutivePollErrors = 0
+  }
+
+  function nextPollDelay(): number {
+    const now = Date.now()
+    const hasFreshJob = Array.from(jobStartedAt.values()).some((start) => now - start < POLL_FAST_WINDOW_MS)
+    const base = hasFreshJob ? POLL_FAST_MS : POLL_SLOW_MS
+    const backoff = Math.min(consecutivePollErrors, 4) * 1000
+    const hiddenPenalty = typeof document !== 'undefined' && document.hidden ? POLL_SLOW_MS : 0
+    return base + backoff + hiddenPenalty
+  }
+
+  function schedulePoll(delay = nextPollDelay()) {
+    if (pollTimer) clearTimeout(pollTimer)
+    if (activeJobIds.value.length === 0) {
+      pollTimer = null
+      return
+    }
+    pollTimer = setTimeout(runPollCycle, delay)
+  }
+
+  function upsertGeneration(gen: Generation) {
+    const index = generations.value.findIndex((g) => g.id === gen.id)
+    if (index !== -1) {
+      generations.value[index] = gen
+    } else if (!sessionsStore.activeSessionToken || gen.session_token === sessionsStore.activeSessionToken) {
+      generations.value.push(gen)
+    }
+  }
+
+  function handleFinishedJob(gen: Generation) {
+    stopPolling(gen.id)
+    if (gen.status === 'succeeded') {
+      const count = gen.assets?.length || 0
+      toastStore.success(count > 1 ? `${count} images generated!` : 'Image successfully generated!')
+      sessionsStore.fetchSessions()
+      recalcUsageTotal()
+    } else if (gen.status === 'failed') {
+      toastStore.error(gen.error_message || 'Generation failed.')
+    }
+    queueStore.fetchQueue()
+  }
+
+  async function runPollCycle() {
+    pollTimer = null
+    if (pollInFlight || activeJobIds.value.length === 0) return
+    pollInFlight = true
+    const ids = [...activeJobIds.value]
+    try {
+      const res = await generationApi.getJobsStatus(ids)
+      consecutivePollErrors = 0
+      res.missing.forEach((id) => {
+        stopPolling(id)
+        generations.value = generations.value.filter((g) => g.id !== id)
+      })
+      res.jobs.forEach((gen) => {
+        upsertGeneration(gen)
+        if (gen.session_token && !sessionsStore.activeSessionToken) {
+          sessionsStore.setActiveSessionToken(gen.session_token)
+        }
+        if (!isRunningStatus(gen.status)) {
+          handleFinishedJob(gen)
+        }
+      })
+    } catch (_error) {
+      consecutivePollErrors += 1
+      if (consecutivePollErrors >= POLL_MAX_CONSECUTIVE_ERRORS) {
+        toastStore.warning('Lost connection while tracking generations. Reload the session to refresh.')
+        clearAllPolling()
+      }
+    } finally {
+      pollInFlight = false
+      schedulePoll()
+    }
+  }
+
+  function pollJob(jobId: number) {
+    if (!activeJobIds.value.includes(jobId)) {
+      activeJobIds.value.push(jobId)
+    }
+    if (!jobStartedAt.has(jobId)) {
+      jobStartedAt.set(jobId, Date.now())
+    }
+    if (!pollTimer && !pollInFlight) {
+      schedulePoll(POLL_FAST_MS)
+    }
+  }
+
+  function recalcUsageTotal() {
+    const items = generations.value.map((g) => g.usage).filter((u): u is TokenUsage => !!u)
+    if (items.length === 0) {
+      sessionUsageTotal.value = null
+      return
+    }
+    const units = new Set(items.map((u) => u.cost_unit).filter(Boolean))
+    const unit = units.size === 1 ? (Array.from(units)[0] as TokenUsage['cost_unit']) : units.size > 1 ? 'mixed' : null
+    sessionUsageTotal.value = {
+      input_tokens: items.reduce((sum, u) => sum + (u.input_tokens || 0), 0),
+      output_tokens: items.reduce((sum, u) => sum + (u.output_tokens || 0), 0),
+      total_tokens: items.reduce((sum, u) => sum + (u.total_tokens || 0), 0),
+      cost: unit && unit !== 'mixed' ? items.reduce((sum, u) => sum + (u.cost || 0), 0) : null,
+      cost_unit: unit,
+    }
   }
 
   async function loadSessionHistory(sessionToken: string) {
     clearAllPolling()
     if (!sessionToken) {
       generations.value = []
+      sessionUsageTotal.value = null
       return
     }
     isLoadingHistory.value = true
     try {
       const res = await sessionsApi.getSessionHistory(sessionToken)
       generations.value = Array.isArray(res?.generations) ? res.generations : []
+      sessionUsageTotal.value = res?.usage_total || null
       generations.value.forEach((g) => {
-        const isStillRunning = (g.status === 'queued' || g.status === 'running' || g.status === 'pending' || g.status === 'processing') && (!g.assets || g.assets.length === 0)
-        if (isStillRunning && !activeJobIds.value.includes(g.id)) {
+        if (isRunningStatus(g.status) && (!g.assets || g.assets.length === 0)) {
           pollJob(g.id)
         }
       })
     } catch (_error) {
       generations.value = []
+      sessionUsageTotal.value = null
     } finally {
       isLoadingHistory.value = false
     }
   }
 
-  async function pollJob(jobId: number) {
-    if (!activeJobIds.value.includes(jobId)) {
-      activeJobIds.value.push(jobId)
-    }
-
-    if (pollingIntervals.has(jobId)) {
-      clearInterval(pollingIntervals.get(jobId))
-    }
-
-    const interval = setInterval(async () => {
-      try {
-        const gen = await generationApi.getJobStatus(jobId)
-        
-        // Update in generations array
-        const index = generations.value.findIndex((g) => g.id === jobId)
-        if (index !== -1) {
-          generations.value[index] = gen
-        } else {
-          generations.value.push(gen)
-        }
-
-        if (gen.session_token && !sessionsStore.activeSessionToken) {
-          sessionsStore.setActiveSessionToken(gen.session_token)
-        }
-
-        if (gen.status === 'succeeded') {
-          stopPolling(jobId)
-          toastStore.success('Image successfully generated!')
-          sessionsStore.fetchSessions()
-        } else if (gen.status === 'failed' || gen.status === 'cancelled') {
-          stopPolling(jobId)
-          toastStore.error(gen.error_message || 'Generation failed.')
-        }
-      } catch (_error) {
+  async function cancelGeneration(jobId: number) {
+    try {
+      const res = await generationApi.cancelJob(jobId)
+      if (res.success) {
+        const gen = generations.value.find((g) => g.id === jobId)
+        if (gen) gen.status = 'cancelled'
         stopPolling(jobId)
+        toastStore.info('Generation cancelled.')
+      } else {
+        toastStore.warning(res.message || 'Generation could not be cancelled.')
       }
-    }, 2000)
-
-    pollingIntervals.set(jobId, interval)
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to cancel generation.')
+    } finally {
+      queueStore.fetchQueue()
+    }
   }
 
   async function deleteGeneration(jobId: number) {
     stopPolling(jobId)
     generations.value = generations.value.filter((g) => g.id !== jobId)
+    recalcUsageTotal()
 
     try {
       await generationApi.deleteGeneration(jobId)
@@ -433,14 +537,20 @@ export const useGenerateStore = defineStore('generate', () => {
       const optimisticGen: Generation = {
         id: res.job_id,
         status: 'queued',
-        progress: 10,
-        prompt: prompt.value,
+        progress: 0,
+        prompt: payload.prompt,
         negative_prompt: payload.negative_prompt,
+        model_name: selectedModel.value?.name,
+        provider: selectedModel.value?.provider,
+        aspect_ratio: payload.aspect_ratio,
+        resolution: payload.resolution,
+        n_images: payload.n_images ?? null,
         created_at: new Date().toISOString(),
         session_token: res.session_token,
         assets: [],
       }
       generations.value.push(optimisticGen)
+      lastSubmittedAt.value = Date.now()
 
       // Start polling
       pollJob(res.job_id)
@@ -462,7 +572,7 @@ export const useGenerateStore = defineStore('generate', () => {
       const optimisticGen: Generation = {
         id: res.job_id,
         status: 'queued',
-        progress: 10,
+        progress: 0,
         prompt: gen.prompt,
         negative_prompt: gen.negative_prompt,
         model_name: gen.model_name,
@@ -473,6 +583,7 @@ export const useGenerateStore = defineStore('generate', () => {
         assets: [],
       }
       generations.value.push(optimisticGen)
+      lastSubmittedAt.value = Date.now()
       pollJob(res.job_id)
       queueStore.fetchQueue()
       toastStore.info(`Generation #${res.job_id} queued again!`)
@@ -526,6 +637,8 @@ export const useGenerateStore = defineStore('generate', () => {
     isSubmitting,
     isGenerating,
     isLoadingHistory,
+    lastSubmittedAt,
+    sessionUsageTotal,
     selectedModel,
     selectedCategoryIds,
     profileLockedCategoryIds,
@@ -543,6 +656,7 @@ export const useGenerateStore = defineStore('generate', () => {
     stopPolling,
     clearAllPolling,
     deleteGeneration,
+    cancelGeneration,
     submit,
     retryGeneration,
     remixGeneration,

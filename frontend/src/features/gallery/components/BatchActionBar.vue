@@ -49,6 +49,17 @@ async function confirmDelete() {
       Deselect (Esc)
     </button>
 
+    <!-- Select all loaded -->
+    <button
+      v-if="galleryStore.selectedAssetIds.length < galleryStore.assets.length"
+      type="button"
+      @click="galleryStore.selectAll"
+      class="text-slate-400 hover:text-white transition-colors"
+      title="Select every loaded image"
+    >
+      Select all ({{ galleryStore.assets.length }})
+    </button>
+
     <!-- Stack Button (if 2+ selected) -->
     <Button
       v-if="galleryStore.selectedAssetIds.length >= 2"

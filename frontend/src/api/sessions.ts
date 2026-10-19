@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ChatSession, Generation } from '@/types'
+import type { ChatSession, Generation, TokenUsage } from '@/types'
 
 export interface SessionListResponse {
   sessions: ChatSession[]
@@ -12,7 +12,7 @@ export const sessionsApi = {
     return res.data
   },
 
-  async getSessionHistory(sessionToken: string): Promise<{ session: ChatSession; generations: Generation[] }> {
+  async getSessionHistory(sessionToken: string): Promise<{ session: ChatSession; generations: Generation[]; usage_total?: TokenUsage | null }> {
     const res = await apiClient.get(`/api/sessions/${sessionToken}`)
     return res.data
   },

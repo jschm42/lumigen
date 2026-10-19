@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { Asset } from '@/types'
@@ -169,6 +169,36 @@ function handleRateAsset(star: number) {
   const next = current === star ? 0 : star
   galleryStore.rateAsset(galleryStore.activeAsset, next)
 }
+
+// --- Browse through the gallery without closing the dialog -------------------
+const position = computed(() => {
+  const list = galleryStore.displayedAssets
+  const index = list.findIndex((a) => a.id === galleryStore.activeAsset?.id)
+  return { index, count: list.length }
+})
+const canNavigate = computed(() => position.value.index !== -1)
+const hasPrev = computed(() => position.value.index > 0)
+const hasNext = computed(
+  () => position.value.index !== -1 && (position.value.index < position.value.count - 1 || galleryStore.hasMore)
+)
+
+function handleDetailKeydown(e: KeyboardEvent) {
+  if (!galleryStore.isDetailModalOpen || imageViewerStore.isOpen) return
+  const target = e.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+  if (e.key === 'ArrowLeft' && hasPrev.value) {
+    e.preventDefault()
+    galleryStore.openAdjacentAsset(-1)
+  } else if (e.key === 'ArrowRight' && hasNext.value) {
+    e.preventDefault()
+    galleryStore.openAdjacentAsset(1)
+  } else if (/^[0-5]$/.test(e.key) && galleryStore.activeAsset && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    galleryStore.rateAsset(galleryStore.activeAsset, Number(e.key))
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleDetailKeydown))
+onUnmounted(() => window.removeEventListener('keydown', handleDetailKeydown))
 </script>
 
 <template>
@@ -179,9 +209,36 @@ function handleRateAsset(star: number) {
   >
     <template #header>
       <div class="flex items-center justify-between w-full pr-6 text-xs">
-        <h3 class="text-sm font-bold text-slate-900 dark:text-white truncate">
-          Asset #{{ galleryStore.activeAsset?.id }} – Details
-        </h3>
+        <div class="flex min-w-0 items-center gap-2">
+          <div v-if="canNavigate" class="flex items-center gap-1">
+            <button
+              type="button"
+              :disabled="!hasPrev"
+              @click="galleryStore.openAdjacentAsset(-1)"
+              class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-600 dark:border-white/10 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/10 dark:hover:text-white"
+              title="Previous image (←)"
+              aria-label="Previous image"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              :disabled="!hasNext"
+              @click="galleryStore.openAdjacentAsset(1)"
+              class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-lg leading-none text-slate-600 dark:border-white/10 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/10 dark:hover:text-white"
+              title="Next image (→)"
+              aria-label="Next image"
+            >
+              ›
+            </button>
+            <span class="font-mono text-[11px] text-slate-400">
+              {{ position.index + 1 }} / {{ galleryStore.total || position.count }}
+            </span>
+          </div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white truncate">
+            Asset #{{ galleryStore.activeAsset?.id }}
+          </h3>
+        </div>
         <!-- Rating stars -->
         <div v-if="galleryStore.activeAsset" class="flex items-center gap-1">
           <button
@@ -190,7 +247,7 @@ function handleRateAsset(star: number) {
             type="button"
             @click="handleRateAsset(star)"
             class="text-base text-amber-400 hover:scale-110 transition-transform"
-            :title="galleryStore.activeAsset.rating === star ? 'Clear rating' : `${star} stars`"
+            :title="galleryStore.activeAsset.rating === star ? 'Clear rating (0)' : `${star} stars (key ${star})`"
           >
             {{ (galleryStore.activeAsset.rating || 0) >= star ? '★' : '☆' }}
           </button>

@@ -14,6 +14,7 @@ const toastStore = useToastStore()
 const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
+const email = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 
@@ -28,8 +29,8 @@ async function handleSetup() {
     return
   }
 
-  if (password.value.length < 6) {
-    errorMessage.value = 'Password must be at least 6 characters.'
+  if (password.value.trim().length < authStore.passwordMinLength) {
+    errorMessage.value = `Password must be at least ${authStore.passwordMinLength} characters.`
     return
   }
 
@@ -40,6 +41,7 @@ async function handleSetup() {
     const res = await authStore.setupAdmin({
       username: username.value.trim(),
       password: password.value,
+      email: email.value.trim(),
     })
 
     if (res.success) {
@@ -84,9 +86,18 @@ async function handleSetup() {
           />
 
           <Input
+            id="admin-email"
+            type="email"
+            label="E-mail (optional, for password resets)"
+            placeholder="you@example.com"
+            v-model="email"
+            :disabled="isLoading"
+          />
+
+          <Input
             id="admin-password"
             type="password"
-            label="Password (min. 6 characters)"
+            :label="`Password (min. ${authStore.passwordMinLength} characters)`"
             placeholder="••••••••"
             v-model="password"
             :disabled="isLoading"

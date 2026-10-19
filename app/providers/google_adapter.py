@@ -129,6 +129,7 @@ class GoogleAdapter(ProviderAdapter):
                 "model": model_name,
                 "count": len(images),
                 "response_id": body.get("responseId"),
+                "usage": body.get("usageMetadata"),
             },
         )
 

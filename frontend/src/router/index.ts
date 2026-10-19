@@ -27,6 +27,24 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
+    path: '/account',
+    name: 'account',
+    component: () => import('@/features/account/AccountView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/features/auth/ForgotPasswordView.vue'),
+    meta: { isGuestOnly: true },
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('@/features/auth/ResetPasswordView.vue'),
+    meta: { isPublic: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/features/auth/LoginView.vue'),

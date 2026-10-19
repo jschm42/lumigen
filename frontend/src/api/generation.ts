@@ -82,6 +82,13 @@ export const generationApi = {
     return res.data
   },
 
+  async getJobsStatus(jobIds: number[]): Promise<{ jobs: Generation[]; missing: number[] }> {
+    const res = await apiClient.get<{ jobs: Generation[]; missing: number[] }>('/api/jobs/status', {
+      params: { ids: jobIds.join(',') },
+    })
+    return res.data
+  },
+
   async getQueue(): Promise<{ active: Generation[]; recent: Generation[]; total_active: number }> {
     const res = await apiClient.get<{ active: Generation[]; recent: Generation[]; total_active: number }>('/api/jobs/queue')
     return res.data
