@@ -19,6 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Idempotent: installations created via ``Base.metadata.create_all`` may already
+    # contain this schema object.
+    columns = {col['name'] for col in sa.inspect(op.get_bind()).get_columns('model_configs')}
+    if 'use_custom_api_key' in columns:
+        return
     op.add_column(
         'model_configs',
         sa.Column('use_custom_api_key', sa.Boolean(), nullable=False, server_default='0')

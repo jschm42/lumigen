@@ -15,12 +15,19 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 from app.providers.bfl_adapter import BFLAdapter
+from app.providers.byteplus_adapter import BytePlusAdapter
 from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
+from app.providers.ideogram_adapter import IdeogramAdapter
 from app.providers.minimax_adapter import MiniMaxAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
+from app.providers.replicate_adapter import ReplicateAdapter
+from app.providers.stability_adapter import StabilityAdapter
 from app.providers.stub_adapter import StubAdapter
+from app.providers.together_adapter import TogetherAdapter
+from app.providers.xai_adapter import XAIAdapter
+from app.services.model_config_service import ModelConfigService
 
 
 @dataclass
@@ -97,6 +104,12 @@ class ProviderRegistry:
         self.register(BFLAdapter())
         self.register(FalAdapter())
         self.register(MiniMaxAdapter())
+        self.register(StabilityAdapter())
+        self.register(ReplicateAdapter())
+        self.register(TogetherAdapter())
+        self.register(XAIAdapter())
+        self.register(IdeogramAdapter())
+        self.register(BytePlusAdapter())
 
     def register(self, adapter: ProviderAdapter) -> None:
         """Register *adapter* under its ``name`` attribute, replacing any existing entry."""
@@ -206,20 +219,7 @@ class ProviderRegistry:
         if not api_key:
             return self._settings
 
-        update: dict[str, str] = {}
-        if provider == "openai":
-            update["openai_api_key"] = api_key
-        elif provider == "openrouter":
-            update["openrouter_api_key"] = api_key
-        elif provider == "google":
-            update["google_api_key"] = api_key
-        elif provider == "bfl":
-            update["bfl_api_key"] = api_key
-        elif provider == "fal":
-            update["fal_api_key"] = api_key
-        elif provider == "minimax":
-            update["minimax_api_key"] = api_key
-        else:
+        attr = ModelConfigService.PROVIDER_API_KEY_ATTR.get(provider)
+        if not attr:
             return self._settings
-
-        return self._settings.model_copy(update=update)
+        return self._settings.model_copy(update={attr: api_key})

@@ -30,12 +30,14 @@ from app.providers.base import (
     ProviderInputImage,
 )
 from app.providers.registry import ProviderRegistry
+from app.services.app_settings_service import AppSettingsService
 from app.services.expand_service import ExpandService, expand_to_provider_params
 from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
+from app.services.usage_service import build_pricing
 from app.utils.paths import ensure_dir
 
 _logger = logging.getLogger(__name__)
@@ -82,6 +84,28 @@ class GenerationService:
         self.model_config_service = model_config_service
         self.upscale_service = upscale_service
         self.fal_upscale_service = fal_upscale_service
+
+    def _pricing_snapshot(self, session: Session, model_config_id: Any) -> dict[str, Any] | None:
+        """Return the model's configured prices (plus studio currency) at creation time.
+
+        Snapshotting keeps historic costs stable when prices are changed later.
+        """
+        try:
+            config_id = int(model_config_id)
+        except (TypeError, ValueError):
+            return None
+        if not self.model_config_service:
+            return None
+        config = self.model_config_service.get_model_config(config_id)
+        prices = {
+            "input_per_mtok": getattr(config, "price_input_per_mtok", None),
+            "output_per_mtok": getattr(config, "price_output_per_mtok", None),
+            "per_image": getattr(config, "price_per_image", None),
+        }
+        if all(value is None for value in prices.values()):
+            return None
+        currency = AppSettingsService().get_ui_settings(session)["cost_currency"]
+        return build_pricing(**prices, currency=currency)
 
     def create_generation_from_profile(
         self,
@@ -212,6 +236,10 @@ class GenerationService:
             "upscale_topaz_model_id": upscale_topaz_model_id,
             "upscaling_active": False,
             "output_format": profile.output_format,
+            "aspect_ratio": effective_overrides.get("aspect_ratio") or getattr(profile, "aspect_ratio", None),
+            "resolution": effective_overrides.get("resolution"),
+            "negative_prompt": effective_overrides.get("negative_prompt") or getattr(profile, "negative_prompt", None),
+            "pricing": self._pricing_snapshot(session, effective_model_config_id),
             "provider": effective_provider,
             "model": effective_model,
             "model_config_id": effective_model_config_id,
@@ -1041,6 +1069,8 @@ class GenerationService:
             input_images=input_images,
             mode=str(request_data.get("mode") or "generate").strip().lower(),
             expand=expand_spec,
+            aspect_ratio=str(request_data.get("aspect_ratio") or "").strip() or None,
+            negative_prompt=str(request_data.get("negative_prompt") or "").strip() or None,
         )
 
     def _prepare_provider_request(

@@ -4,6 +4,7 @@ import { useCreditsStore } from '@/stores/credits'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
+import { COPYRIGHT_NOTICE } from '@/constants/app'
 
 const creditsStore = useCreditsStore()
 const activeCategory = ref<'providers' | 'fonts' | 'software'>('providers')
@@ -85,6 +86,72 @@ const providers: ProviderCredit[] = [
     notes: 'Central gateway for accessing diverse open-weight and proprietary image generation models.',
     website: 'https://openrouter.ai',
     docsUrl: 'https://openrouter.ai/docs',
+  },
+  {
+    name: 'Stability AI',
+    badgeText: 'Stable Image',
+    badgeVariant: 'violet',
+    models: 'Stable Image Ultra, Stable Image Core, Stable Diffusion 3.5',
+    licenseType: 'Stability AI API Terms of Service / Community License',
+    attributionText: 'Images generated with Stability AI.',
+    notes: 'Accessed via the Stability AI Platform API; usage is governed by the Stability AI terms and acceptable use policy.',
+    website: 'https://stability.ai',
+    docsUrl: 'https://platform.stability.ai/docs/api-reference',
+  },
+  {
+    name: 'Replicate',
+    badgeText: 'Model Hosting',
+    badgeVariant: 'slate',
+    models: 'Hosted community and official models (e.g. FLUX, Imagen, Ideogram, Recraft)',
+    licenseType: 'Replicate Terms of Service + license of each hosted model',
+    attributionText: 'Inference powered by Replicate.',
+    notes: 'Each model on Replicate has its own license; check the model page before commercial use.',
+    website: 'https://replicate.com',
+    docsUrl: 'https://replicate.com/docs',
+  },
+  {
+    name: 'Together AI',
+    badgeText: 'Inference Cloud',
+    badgeVariant: 'blue',
+    models: 'FLUX.2 [dev], FLUX.1.1 [pro], FLUX.1 [schnell]',
+    licenseType: 'Together AI Terms of Service + model licenses',
+    attributionText: 'Inference powered by Together AI.',
+    notes: 'FLUX models are subject to the Black Forest Labs licenses listed above.',
+    website: 'https://www.together.ai',
+    docsUrl: 'https://docs.together.ai',
+  },
+  {
+    name: 'xAI',
+    badgeText: 'Grok Imagine',
+    badgeVariant: 'slate',
+    models: 'Grok Imagine Image',
+    licenseType: 'xAI API Terms of Service',
+    attributionText: 'Images generated with xAI Grok Imagine.',
+    notes: 'Subject to the xAI terms and acceptable use policy.',
+    website: 'https://x.ai',
+    docsUrl: 'https://docs.x.ai',
+  },
+  {
+    name: 'Ideogram',
+    badgeText: 'Ideogram 3.0',
+    badgeVariant: 'rose',
+    models: 'Ideogram 3.0 (Turbo, Default, Quality)',
+    licenseType: 'Ideogram API Terms of Service',
+    attributionText: 'Images generated with Ideogram.',
+    notes: 'Known for strong typography and text rendering in images.',
+    website: 'https://ideogram.ai',
+    docsUrl: 'https://developer.ideogram.ai',
+  },
+  {
+    name: 'ByteDance Seedream (BytePlus ModelArk)',
+    badgeText: 'Seedream',
+    badgeVariant: 'sky',
+    models: 'Seedream 5.0, Seedream 4.5, Seedream 4.0',
+    licenseType: 'BytePlus ModelArk Terms of Service',
+    attributionText: 'Images generated with ByteDance Seedream via BytePlus ModelArk.',
+    notes: 'Direct access to ByteDance Seed image models, including multi-reference editing.',
+    website: 'https://www.byteplus.com/en/product/modelark',
+    docsUrl: 'https://docs.byteplus.com/en/docs/ModelArk/1541523',
   },
   {
     name: 'Hugging Face',
@@ -422,7 +489,7 @@ const openSourceSoftware: SoftwareCredit[] = [
     <template #footer>
       <div class="flex items-center justify-between w-full">
         <div class="text-[11px] text-slate-500">
-          Lumigen AI Image Studio · Open-Source & Multi-Provider Architecture
+          Lumigen AI Image Studio · <span data-testid="copyright-notice">{{ COPYRIGHT_NOTICE }}</span>
         </div>
         <Button variant="secondary" size="sm" @click="creditsStore.close">
           Close

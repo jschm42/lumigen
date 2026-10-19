@@ -12,6 +12,7 @@ export interface GalleryFilterParams {
   q?: string
   profile_name?: string
   provider?: string
+  model?: string
   min_rating?: number | null
   unrated?: boolean
   time_preset?: string
@@ -24,7 +25,26 @@ export interface GalleryFilterParams {
   page_size?: number
 }
 
+export interface GalleryFacets {
+  providers: string[]
+  models: string[]
+  profiles: string[]
+}
+
 export const galleryApi = {
+  async getFacets(): Promise<GalleryFacets> {
+    const res = await apiClient.get<GalleryFacets>('/api/assets/facets')
+    return res.data
+  },
+
+  /** Download the original files of the given assets as one ZIP archive. */
+  async downloadZip(assetIds: number[]): Promise<{ blob: Blob; filename: string }> {
+    const res = await apiClient.post('/api/assets/download-zip', { asset_ids: assetIds }, { responseType: 'blob' })
+    const disposition = String(res.headers['content-disposition'] || '')
+    const match = disposition.match(/filename="?([^";]+)"?/i)
+    return { blob: res.data as Blob, filename: match ? match[1] : 'lumigen-images.zip' }
+  },
+
   async listAssets(params: GalleryFilterParams): Promise<AssetListResponse> {
     const res = await apiClient.get<AssetListResponse>('/api/assets', {
       params: {

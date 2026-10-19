@@ -56,22 +56,60 @@ def get_providers(session: Session = Depends(get_session)) -> list[dict[str, Any
     """List provider API key statuses."""
     keys = crud.list_provider_api_keys(session)
     key_map = {k.provider.lower(): k for k in keys}
-    providers = [
-        {"provider": "openrouter", "display_name": "OpenRouter"},
-        {"provider": "fal", "display_name": "FAL.AI"},
-        {"provider": "openai", "display_name": "OpenAI"},
-        {"provider": "bfl", "display_name": "Black Forest Labs (BFL)"},
-        {"provider": "google", "display_name": "Google Gemini"},
-    ]
     result = []
-    for p in providers:
-        has_key = p["provider"] in key_map or model_config_service.has_env_api_key(p["provider"])
+    for provider, meta in _provider_catalog():
         result.append({
-            "provider": p["provider"],
-            "display_name": p["display_name"],
-            "has_key": has_key,
+            "provider": provider,
+            "display_name": meta["display_name"],
+            "homepage_url": meta["homepage_url"],
+            "has_key": provider in key_map or model_config_service.has_env_api_key(provider),
         })
     return result
+
+
+def _provider_catalog() -> list[tuple[str, dict[str, str]]]:
+    """Return all user-facing providers (registry order by display name, stub excluded)."""
+    from app.api.generation import provider_registry
+
+    meta = provider_registry.provider_meta()
+    items = [(name, info) for name, info in meta.items() if name != "stub"]
+    return sorted(items, key=lambda item: (item[1]["display_name"] or item[0]).lower())
+
+
+def _parse_price(payload: dict[str, Any], key: str, current: float | None) -> float | None:
+    """Read an optional non-negative price from *payload*; empty values clear the price."""
+    if key not in payload:
+        return current
+    raw = payload.get(key)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{key} must be a number.") from exc
+    if value < 0 or value != value:
+        raise HTTPException(status_code=400, detail=f"{key} must not be negative.")
+    return value
+
+
+def _serialize_model_config(c: Any) -> dict[str, Any]:
+    """Serialize a model configuration including its optional prices."""
+    return {
+        "id": c.id,
+        "name": c.name,
+        "provider": c.provider,
+        "model_identifier": c.model,
+        "is_active": True,
+        "is_default": False,
+        "supported_aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"],
+        "supported_resolutions": ["0.5K", "1K", "2K", "4K"],
+        "price_input_per_mtok": c.price_input_per_mtok,
+        "price_output_per_mtok": c.price_output_per_mtok,
+        "price_per_image": c.price_per_image,
+    }
+
+
+_PRICE_FIELDS = ("price_input_per_mtok", "price_output_per_mtok", "price_per_image")
 
 
 @router.post("/providers/{provider}")
@@ -159,27 +197,23 @@ async def discover_provider_models(
             "flux-dev",
         ],
     }
-    models = default_discovery.get(provider.lower(), [])
+    provider_name = provider.lower()
+    models = default_discovery.get(provider_name)
+    if models is None:
+        # Newer adapters expose a curated model list without network access.
+        from app.api.generation import provider_registry
+
+        try:
+            models = await provider_registry.get(provider_name).list_models(settings)
+        except Exception:
+            models = []
     return {"models": models, "count": len(models)}
 
 
 @router.get("/models")
 def list_admin_models(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
     """List all model configurations."""
-    configs = crud.list_model_configs(session)
-    return [
-        {
-            "id": c.id,
-            "name": c.name,
-            "provider": c.provider,
-            "model_identifier": c.model,
-            "is_active": True,
-            "is_default": False,
-            "supported_aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"],
-            "supported_resolutions": ["0.5K", "1K", "2K", "4K"],
-        }
-        for c in configs
-    ]
+    return [_serialize_model_config(c) for c in crud.list_model_configs(session)]
 
 
 @router.post("/models")
@@ -200,14 +234,9 @@ def create_model_config(
         name=name,
         provider=provider,
         model=model,
+        **{key: _parse_price(payload, key, None) for key in _PRICE_FIELDS},
     )
-    return {
-        "id": cfg.id,
-        "name": cfg.name,
-        "provider": cfg.provider,
-        "model_identifier": cfg.model,
-        "is_active": True,
-    }
+    return _serialize_model_config(cfg)
 
 
 @router.put("/models/{model_id}")
@@ -227,14 +256,9 @@ def update_model_config(
         name=payload.get("name", cfg.name),
         provider=payload.get("provider", cfg.provider),
         model=payload.get("model_identifier", cfg.model),
+        **{key: _parse_price(payload, key, getattr(cfg, key)) for key in _PRICE_FIELDS},
     )
-    return {
-        "id": cfg.id,
-        "name": cfg.name,
-        "provider": cfg.provider,
-        "model_identifier": cfg.model,
-        "is_active": True,
-    }
+    return _serialize_model_config(cfg)
 
 
 @router.delete("/models/{model_id}")

@@ -35,7 +35,11 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 
 def upgrade() -> None:
-    op.add_column("profiles", sa.Column("upscale_model", sa.String(length=128), nullable=True))
+    # Idempotent: installations created via ``Base.metadata.create_all`` may already
+    # contain this schema object.
+    columns = {col["name"] for col in sa.inspect(op.get_bind()).get_columns("profiles")}
+    if "upscale_model" not in columns:
+        op.add_column("profiles", sa.Column("upscale_model", sa.String(length=128), nullable=True))
 
     connection = op.get_bind()
     profiles = sa.table(

@@ -5,13 +5,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import get_session
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
+from app.services.app_settings_service import AppSettingsService
 from app.services.enhancement_service import EnhancementService
 from app.services.generation_service import GenerationService
 from app.services.model_config_service import ModelConfigService
@@ -19,10 +20,11 @@ from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
-from app.services.usage_service import extract_usage
+from app.services.usage_service import build_pricing, compute_usage
 
 router = APIRouter(tags=["generation"])
 settings = get_settings()
+app_settings_service = AppSettingsService()
 
 storage_service = StorageService(max_slug_length=settings.max_slug_length)
 thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_px)
@@ -388,14 +390,46 @@ def _generation_progress(status: str) -> int:
     return 50
 
 
+def _generation_pricing(gen: Any) -> dict[str, Any] | None:
+    """Return the pricing snapshot of a generation, falling back to the current model prices.
+
+    Generations created before pricing snapshots existed use the model configuration's
+    current prices and the studio currency.
+    """
+    req_snapshot = gen.request_snapshot_json or {}
+    if "pricing" in req_snapshot:
+        pricing = req_snapshot.get("pricing")
+        return pricing if isinstance(pricing, dict) else None
+    session = object_session(gen)
+    model_config_id = req_snapshot.get("model_config_id")
+    if session is None or not model_config_id:
+        return None
+    try:
+        config = crud.get_model_config(session, int(model_config_id))
+    except (TypeError, ValueError):
+        return None
+    if config is None:
+        return None
+    return build_pricing(
+        input_per_mtok=config.price_input_per_mtok,
+        output_per_mtok=config.price_output_per_mtok,
+        per_image=config.price_per_image,
+        currency=app_settings_service.get_ui_settings(session)["cost_currency"],
+    )
+
+
 def _generation_usage(gen: Any) -> dict[str, Any] | None:
-    """Return normalized token/cost usage stored with the generation's first asset."""
-    for asset in gen.assets or []:
+    """Return token usage (and cost, when prices are configured) for a finished generation."""
+    assets = list(gen.assets or [])
+    if not assets:
+        return None
+    raw_meta: dict[str, Any] | None = None
+    for asset in assets:
         meta = asset.meta_json if isinstance(asset.meta_json, dict) else {}
-        usage = extract_usage(meta.get("raw_meta"))
-        if usage:
-            return usage
-    return None
+        if isinstance(meta.get("raw_meta"), dict):
+            raw_meta = meta["raw_meta"]
+            break
+    return compute_usage(raw_meta, _generation_pricing(gen), image_count=len(assets))
 
 
 def _utc(value: datetime | None) -> datetime | None:

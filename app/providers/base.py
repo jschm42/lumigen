@@ -26,6 +26,9 @@ class ProviderGenerationRequest:
     input_images: list[ProviderInputImage] = field(default_factory=list)
     mode: str = "generate"
     expand: dict[str, Any] | None = None
+    # Generic UI selections; adapters map them to provider-specific parameters.
+    aspect_ratio: str | None = None
+    negative_prompt: str | None = None
 
 
 @dataclass

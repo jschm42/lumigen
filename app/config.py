@@ -136,6 +136,22 @@ class Settings(BaseSettings):
     fal_api_key: str | None = None
     minimax_api_key: str | None = None
     minimax_base_url: str = "https://api.minimax.io"
+    stability_api_key: str | None = None
+    stability_base_url: str = "https://api.stability.ai"
+    replicate_api_key: str | None = None
+    replicate_base_url: str = "https://api.replicate.com"
+    together_api_key: str | None = None
+    together_base_url: str = "https://api.together.ai"
+    xai_api_key: str | None = None
+    xai_base_url: str = "https://api.x.ai"
+    ideogram_api_key: str | None = None
+    ideogram_base_url: str = "https://api.ideogram.ai"
+    byteplus_api_key: str | None = None
+    # ModelArk data-plane base URL (region specific).
+    byteplus_base_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    # Total time budget for generic HTTP image providers (incl. polling and downloads).
+    provider_http_generate_timeout_seconds: float = 180.0
+    provider_http_connect_timeout_seconds: float = 15.0
 
     @property
     def database_url(self) -> str:

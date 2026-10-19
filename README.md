@@ -1,454 +1,261 @@
+<div align="center">
+
+<img src="frontend/public/app-logo.svg" alt="Lumigen logo" width="96" height="96" />
+
 # Lumigen
 
-**One interface. All your AI image providers.**
+**One studio. Twelve AI image providers. Your images stay on your machine.**
 
-Stop switching between FAL, OpenAI, Google and OpenRouter. 
-Lumigen connects them all in one lightweight local app — 
-no subscription, no tracking, your images stay on your machine.
+A self-hosted, local-first AI image studio: generate with FLUX, GPT-Image, Gemini, Seedream,
+Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interface, without subscriptions or tracking.
 
-![Generation Session](docs/screenshots/generation_session_view.png)
-![Image Gallery](docs/screenshots/gallery_view.png)
+[![License: MIT](https://img.shields.io/badge/license-MIT-0ea5e9.svg)](LICENSE)
+![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
+![Vue 3](https://img.shields.io/badge/Vue%203-SPA-42b883?logo=vue.js&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-local%20data-003b57?logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white)
 
-*Sample images shown in screenshots were generated for demonstration purposes using Black Forest Labs FLUX models.*
+[Features](#-features) · [Providers](#-supported-providers) · [Quick start](#-quick-start) · [Configuration](#%EF%B8%8F-configuration) · [Docker](#-docker)
+
+</div>
+
+<br />
+
+![Generation session](docs/screenshots/generation_session_view.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/gallery_view.png" alt="Gallery grouped by day" /></td>
+    <td width="50%"><img src="docs/screenshots/compare_view.png" alt="Side-by-side compare view" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Gallery</b> – grouped by day, virtualized, keyboard-driven</sub></td>
+    <td align="center"><sub><b>Compare</b> – up to four images with synchronized zoom</sub></td>
+  </tr>
+</table>
+
+<sub><i>Sample images were generated with Black Forest Labs FLUX.2 models for demonstration purposes.</i></sub>
 
 ---
 
-## Why Lumigen
+## ✨ Features
 
-Tired of juggling multiple image generation platforms? 
-Lumigen gives you a single, clean workspace to generate, 
-compare, and organize AI images — across all major providers.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- 🔀 **One app, many providers**: FAL, OpenAI, OpenRouter, Google, BFL — switch in seconds
-- ⏳ **Generation queue**: start multiple jobs consecutively without waiting; backend FIFO semaphore prevents provider overloads
-- 🔄 **One-click retry**: instantly re-run failed or cancelled generations with identical settings
-- 📚 **Asset stacking & version groups**: group variations, iterations, and upscales into clean stacks in the gallery
-- 🎨 **Smart style management**: categorized style presets with dynamic prompt template injection
-- 🚀 **AI image upscaling**: cloud upscaling via FAL.ai (Topaz & creative models) plus optional local Real-ESRGAN
-- 🎯 **Decoupled workflow**: switch models and profiles freely without unintentional parameter/model overrides
-- 🏡 **Your data, your machine**: images and history stay under `./data`, always
-- ⚡ **Fast creative loop**: generate, tweak, rerun, and compare without leaving the app
-- 📤 **Data portability**: import/export profiles, models, and styles via JSON
-- 📦 **Complete archiving**: export full sessions as ZIP with prompts and metadata
-- 🗂️ **Stay organized**: profiles, categories, star ratings, and a full gallery workflow built in
-- 🔍 **Full history**: every image is reproducible, metadata and sidecars preserved
+### 🎨 Create
+- **12 providers, one prompt box** – switch models in a dropdown, no context switch
+- **Sessions as visual history** – every prompt and result of a session in one feed
+- **Live progress** – aspect-correct placeholders, elapsed timer, real cancel
+- **Reference images** – upload or pick from the gallery for image-to-image
+- **Magic Prompt** – LLM-powered prompt enhancement
+- **Style presets** – reusable prompt fragments with live previews
+- **Profiles** – save model, size, seed, categories and upscaling defaults
+
+</td>
+<td width="50%" valign="top">
+
+### 🗂️ Organize
+- **Fast gallery** – infinite scroll and virtualized rendering for thousands of images
+- **Grouped by day** – "Today", "Yesterday", "Saturday, February 21" …
+- **Drag-to-select & keyboard** – rubber-band selection, `0–5` to rate, `Space`, `Enter`, `Ctrl+A`
+- **Compare view** – 2–4 images side by side with synchronized zoom & pan
+- **Filters you can share** – every filter lives in the URL; save favorites as presets
+- **Stacks & categories** – group variations, tag, rate, bulk-edit
+- **ZIP export** – download any selection with one click
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 💸 Stay in control
+- **Token usage per image and per session** (optional)
+- **Your own prices** – set cost per 1M input/output tokens or per image, in any currency
+- **Generation queue** – fire off many jobs; per-provider concurrency, spacing and retries
+- **One-click retry** of failed jobs with identical settings
+- **Upscaling** – fal.ai (Topaz & creative upscalers) or local Real-ESRGAN
+
+</td>
+<td width="50%" valign="top">
+
+### 🔐 Own your studio
+- **Local-first** – SQLite, files and JSON sidecars under `./data`, fully reproducible
+- **Multi-user** – admin/user roles, self-service profile & password change
+- **Password reset** – single-use tokens via e-mail (SMTP) or admin-issued links
+- **Encrypted API keys** – stored with Fernet, per provider or per model
+- **Import / export** – profiles, models and styles as JSON; sessions as ZIP
+- **Docker ready** – one script to build and run
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Getting Started
+## 🔌 Supported providers
 
-### Prerequisites
+| Provider | Example models | Notes |
+|---|---|---|
+| **Black Forest Labs** | FLUX.2 [pro] / [flex] / [klein], FLUX 3 | Native BFL API |
+| **OpenAI** | gpt-image-1, DALL·E 3 | Reports token usage |
+| **Google Gemini** | Gemini image models, Imagen | Reports token usage |
+| **OpenRouter** | FLUX.2, GPT-5 Image, Seedream, … | One key, many models; reports token usage |
+| **fal.ai** | FLUX, Nano Banana 2, Recraft | Also powers cloud upscaling |
+| **MiniMax** | image-01 | Subject reference support |
+| **Stability AI** | Stable Image Ultra / Core, SD 3.5 | Image-to-image for Ultra & SD 3.5 |
+| **Replicate** | Any hosted model, e.g. `black-forest-labs/flux-1.1-pro` | `owner/name` or `owner/name:version` |
+| **Together AI** | FLUX.2 [dev], FLUX.1.1 [pro], FLUX.1 [schnell] | Width/height from aspect ratio |
+| **xAI** | Grok Imagine (`grok-imagine-image-2.0`) | Generation & edits, reports usage |
+| **Ideogram** | Ideogram 3.0 Turbo / Default / Quality | Great typography, style references |
+| **BytePlus ModelArk** | ByteDance Seedream 5.0 / 4.5 / 4.0 | Up to 10 reference images, sequential multi-image output, reports usage |
 
-- Python 3.12+
-- [Poetry](https://python-poetry.org/docs/#installation) 2.x
-- Node.js 20+ and npm (for building the frontend SPA, linting and the pre-commit hook)
-- Optional: Docker & Docker Compose
+Add keys under **Admin → API Keys** (each provider links to its key page) or in `.env`.
 
-### 1) Clone and enter the repository
+> **Why no Midjourney?** Midjourney offers no official API, and its terms prohibit automated access.
+> Lumigen only integrates official provider APIs.
+
+---
+
+## 🚀 Quick start
+
+**Requirements:** Python 3.12+, [Poetry](https://python-poetry.org/docs/#installation) 2.x, Node.js 20+
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/jschm42/anyimggen.git lumigen
 cd lumigen
+
+poetry install                  # Python deps into .venv/
+npm ci                          # Windows PowerShell: npm.cmd ci
+cp .env.example .env            # Windows: copy .env.example .env
+
+poetry run lumigen-migrate      # create / upgrade the database
+npm run build                   # build the Vue frontend
+poetry run lumigen              # start on http://127.0.0.1:8010
 ```
 
-### 2) Install dependencies
+On first start Lumigen asks you to create the admin account. Then:
 
-Poetry creates the virtual environment in `.venv/` (see `poetry.toml`).
+1. **Admin → API Keys** – add a key for at least one provider.
+2. **Admin → Models** – add a model (use *Discover* for suggestions) and optionally set prices.
+3. **Generate** – pick the model, type a prompt, press <kbd>Enter</kbd>.
 
-```bash
-poetry install
-npm ci            # Windows PowerShell: npm.cmd ci
-```
-
-Activate the environment (or prefix commands with `poetry run`):
-
-Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-### 3) Enable the pre-commit lint gate
-
-```bash
-poetry run pre-commit install
-```
-
-Every commit now runs ruff, djlint, eslint and stylelint on the staged files and is rejected if any linter fails.
-Run all hooks manually with `poetry run pre-commit run --all-files`.
-
-### 4) Configure environment
-
-Windows:
-
-```powershell
-copy .env.example .env
-```
-
-macOS/Linux:
-
-```bash
-cp .env.example .env
-```
-
-For a local-only first run, the default `.env` values are enough.
-
-### 5) Run database migrations
-
-```bash
-poetry run lumigen-migrate      # same as: alembic upgrade head
-```
-
-### 6) Build the frontend SPA
-
-```bash
-npm run build
-```
-
-> **Tip:** For interactive frontend development with Hot Module Replacement (HMR), run `npm run dev` in parallel and visit Vite's dev server.
-
-### 7) Start the app
-
-```bash
-poetry run lumigen              # same as: python -m app.main
-```
-
-`lumigen` reads `HOST`, `PORT`, `UVICORN_RELOAD`, `LUMIGEN_SSL_CERT_FILE` and `LUMIGEN_SSL_KEY_FILE` from the environment.
-Both commands are Poetry scripts defined in `[project.scripts]` (`pyproject.toml`) and implemented in `app/cli.py`.
-
-Alternative dev command:
-
-```bash
-uvicorn app.main:app --reload --port 8010
-```
-
-Open: `http://127.0.0.1:8010`
+> **Tip:** for frontend development with hot reload run `npm run dev` alongside the backend.
 
 ---
 
-## First-Time App Usage
+## ⚙️ Configuration
 
-1. Open **Profiles** and create a generation profile.
-2. Choose a provider:
-   - Configure API keys in `.env` or in **Admin → API Keys**.
-3. Go to **Generate**, select your profile or model, compose a prompt, and submit.
-4. Check **Gallery** to browse generated assets, rate images, or inspect metadata sidecars.
+All settings live in `.env` (see [`.env.example`](.env.example)). The most important ones:
 
----
+| Variable | Purpose |
+|---|---|
+| `SESSION_SECRET_KEY` | **Required in production** – long random secret for session cookies |
+| `SESSION_HTTPS_ONLY` | `true` when served via HTTPS |
+| `PROVIDER_CONFIG_KEY` | Fernet key for encrypted API keys (`scripts/generate_provider_key.sh` / `.ps1`) |
+| `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `BFL_API_KEY`, `FAL_API_KEY`, `OPENROUTER_API_KEY`, `MINIMAX_API_KEY` | Provider keys (alternatively set in the Admin UI) |
+| `STABILITY_API_KEY`, `REPLICATE_API_KEY`, `TOGETHER_API_KEY`, `XAI_API_KEY`, `IDEOGRAM_API_KEY`, `BYTEPLUS_API_KEY` | Keys for the newer providers |
+| `BYTEPLUS_BASE_URL` | ModelArk region endpoint (default: `https://ark.ap-southeast.bytepluses.com/api/v3`) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Optional e-mail delivery for password reset links |
+| `PUBLIC_BASE_URL` | Base URL used in reset links (defaults to the request URL) |
+| `PROXY_HEADERS_ENABLED` | Trust `X-Forwarded-*` headers behind a reverse proxy |
 
-## Generation Queue & Workflow
+### Token usage & costs
 
-Lumigen features a dedicated background generation queue with intelligent job management:
+Enable **Admin → General → Show token usage** to display tokens on every generation and per session.
+Costs appear only for models with prices configured under **Admin → Models**
+(per 1M input tokens, per 1M output tokens and/or per image). The currency is set once under
+**Admin → General**. Prices are snapshotted per generation, so later price changes never rewrite history.
 
-- **Continuous Submissions**: Submit multiple prompts and settings consecutively. The Generate button remains active and displays a queued counter (e.g. `+2`), eliminating the need to wait for one job to finish before queuing the next.
-- **Backend Concurrency Control**: A server-side semaphore orchestrates generation runs sequentially. Jobs wait in the database with status `queued` until the lock is acquired, protecting against rate limit hits and GPU resource contention.
-- **Slide-Over Queue Drawer**: Click the **Queue** button in the top navigation bar or the drawer toggle in the studio sidebar to open the queue panel.
-  - **Live Progress**: View real-time progress bars, processing percentages, prompt snippets, and active models.
-  - **Direct Cancellation**: Cancel any pending or running job instantly (`✕ Cancel`).
-  - **History & Instant Retry**: View recently finished, failed, or cancelled jobs.
-- **Failed Job Recovery**: Every failed or cancelled generation card includes an immediate **"🔄 Retry"** button that clones and re-enqueues the exact parameters without manual re-entry.
-- **Persistent Across All Pages**: The queue runs in the background and is accessible from any view (Generate Studio, Gallery, Profiles, Admin Settings). Navigation never interrupts ongoing jobs.
+### Accounts & password reset
 
----
+- Users manage their profile and password under **My Profile** (sidebar, bottom left).
+- *Forgot password?* on the login page issues a single-use token (60 min). With SMTP configured it is
+  e-mailed; otherwise the link is written to the server log, and admins can create reset links under
+  **Admin → Users**.
+- Changing or resetting a password signs out all other sessions of that user.
 
-## Asset Stacking & Gallery Organization
+<details>
+<summary><b>Behind a reverse proxy / production checklist</b></summary>
 
-Keep your creative iterations clean and organized:
+```dotenv
+SESSION_SECRET_KEY=<long-random-secret>
+SESSION_HTTPS_ONLY=true
+PROXY_HEADERS_ENABLED=true
+PROXY_HEADERS_TRUSTED_HOSTS=10.0.0.1      # your proxy, avoid * when possible
+AUTH_ALLOW_ONBOARDING_RESET=false
+```
 
-- **Version Stacks**: Group prompt variations, re-rolls, and upscaled images under a single primary gallery item.
-- **Visual Badges**: Stacked items display a count indicator (e.g. `📚 3`) directly on the gallery card.
-- **Interactive Version Navigator**: Open any stacked asset in the detail inspector to flip between source generations, variants, and upscales.
-- **Batch Actions**: Select multiple gallery cards and click **Group into Stack** in the batch action bar.
-- **Stack Filtering**: Toggle between viewing only primary cover assets or unstacking everything in the gallery view.
+Run `poetry run lumigen-migrate` after every update.
 
----
+</details>
 
-## Style Management & Prompt Injection
+<details>
+<summary><b>Local upscaling with Real-ESRGAN (optional, Linux)</b></summary>
 
-- **Artistic Presets**: Choose from curated styles organized by categories directly within the Studio prompt composer.
-- **Prompt Templates**: Styles support prefix and suffix template expansion (e.g. inject lighting, rendering engine, or artist cues around your prompt).
-- **Admin Configuration**: Create, customize, and categorize styles under **Admin → Styles** with live visual previews.
-
----
-
-## Upscaling
-
-Lumigen supports both cloud-based AI upscaling via FAL.ai and optional offline local upscaling with Real-ESRGAN.
-
-### Cloud Upscaling (FAL.ai & Topaz)
-
-- **Zero Local Setup**: Native integration with FAL.ai upscaler APIs — no CUDA, Vulkan, or binary compilation required.
-- **Topaz Photo AI & Creative Models**: Support for Topaz upscaling models as well as creative image enhancers.
-- **Configurable in Admin**: Manage upscale models, defaults, and API parameters under **Admin → Upscaling**.
-- **One-Click Execution**: Launch upscaling directly from any Generation Card in the Studio or from the Asset Detail Inspector in the Gallery.
-- **Parameter Controls**: Customize scale factor (2x, 4x), resemblance, and creativity.
-- **Lineage Retention**: Upscaled assets automatically link to their parent generation in the database and metadata sidecars.
-
-### Local Upscaling (Optional, Linux + Real-ESRGAN)
-
-Lumigen can upscale generated images locally with Real-ESRGAN NCNN Vulkan.
-
-1. Download the Linux Real-ESRGAN NCNN Vulkan binary:
-	- https://github.com/xinntao/Real-ESRGAN/releases
-2. Download NCNN model files manually (`.param` + `.bin`).
-	- Example model names used by default: `realesrgan-x2plus` and `realesrgan-x4plus`
-	- Required files per model: `realesrgan-x2plus.param` + `realesrgan-x2plus.bin`
-3. Place the model files in your configured model directory (`UPSCALER_MODEL_DIR`).
-	- Default: `./data/models/realesrgan`
-4. Configure `.env`:
+1. Download the [Real-ESRGAN NCNN Vulkan](https://github.com/xinntao/Real-ESRGAN/releases) binary and model files
+   (e.g. `realesrgan-x4plus.param` + `.bin`).
+2. Configure:
 
 ```dotenv
 UPSCALER_COMMAND=/usr/local/bin/realesrgan-ncnn-vulkan
 UPSCALER_MODEL_DIR=./data/models/realesrgan
 ```
 
-#### Docker: option A (embed binary into image)
+**Docker:** either copy the binary to `docker/realesrgan-ncnn-vulkan` before building (it is installed
+automatically), or place it in `./data/bin/` and set `UPSCALER_COMMAND=/app/data/bin/realesrgan-ncnn-vulkan`
+and `UPSCALER_MODEL_DIR=/app/data/models/realesrgan`. If you see `libvulkan.so.1: cannot open shared object file`,
+rebuild the image with `./scripts/docker_update.sh`.
 
-Use this if you want the executable inside the image itself.
-
-1. Copy the Linux executable into the repository at:
-	- `docker/realesrgan-ncnn-vulkan`
-2. Rebuild/restart Docker:
-	- PowerShell: `./scripts/docker_update.ps1`
-	- Bash: `./scripts/docker_update.sh`
-3. Keep model files in shared data dir (see option B below).
-
-During Docker build, Lumigen installs the binary automatically when this file exists.
-
-#### Docker: option B (shared folder for binary + models)
-
-Use this if you do not want to rebuild the image for binary updates.
-
-1. Place binary on host:
-	- `./data/bin/realesrgan-ncnn-vulkan`
-2. Place models on host:
-	- `./data/models/realesrgan`
-3. Configure `.env`:
-
-```dotenv
-UPSCALER_COMMAND=/app/data/bin/realesrgan-ncnn-vulkan
-UPSCALER_MODEL_DIR=/app/data/models/realesrgan
-```
-
-Shared-path mapping (default):
-
-- Host data dir: `./data`
-- Container data dir: `/app/data`
-- Ensure `DOCKER_DATA_DIR` points to the host folder you want to share.
-
-#### Docker troubleshooting (Vulkan)
-
-If you see:
-`error while loading shared libraries: libvulkan.so.1: cannot open shared object file`
-
-rebuild the image so Vulkan runtime libraries are included:
-- PowerShell: `./scripts/docker_update.ps1`
-- Bash: `./scripts/docker_update.sh`
-
-For hardware Vulkan acceleration from host GPU, ensure your Docker runtime is configured for GPU passthrough (e.g. NVIDIA Container Toolkit).
+</details>
 
 ---
 
-## Auth Rollout Checklist
-
-Use this checklist when deploying the login/role feature to a new or existing instance.
-
-1. Install dependencies and run latest migrations:
+## 🐳 Docker
 
 ```bash
-poetry install --only main
-alembic upgrade head
+./scripts/docker_run.sh          # Windows: .\scripts\docker_run.ps1
 ```
 
-2. Set a strong session secret in `.env`:
-
-```dotenv
-SESSION_SECRET_KEY=<long-random-secret>
-```
-
-3. Configure cookie security for your environment:
-
-- local dev over HTTP: `SESSION_HTTPS_ONLY=false`
-- production behind HTTPS: `SESSION_HTTPS_ONLY=true`
-
-If Lumigen runs behind a reverse proxy / TLS terminator, also enable forwarded header trust so request URLs keep the `https` scheme:
-
-```dotenv
-PROXY_HEADERS_ENABLED=true
-PROXY_HEADERS_TRUSTED_HOSTS=*
-```
-
-Use a narrower trusted host/IP list instead of `*` when possible.
-
-4. Start the app and open `/login`.
-
-5. First login flow:
-- if no users exist, `/login` shows onboarding and creates the first user as `admin`
-- afterwards, `/login` switches to normal sign-in mode
-
-6. Verify role behavior:
-- `admin`: full access, including `/admin` and all admin dialogs
-- `user`: no access to admin dialogs/routes
-
-### Dev-Only Onboarding Reset
-
-For local testing, you can enable a reset button in **Admin → Users**:
-
-```dotenv
-AUTH_ALLOW_ONBOARDING_RESET=true
-```
-
-Behavior:
-- visible only for admins
-- deletes all users
-- logs out current session
-- redirects to `/login` so onboarding is shown again
-
-> [!CAUTION]
-> Keep `AUTH_ALLOW_ONBOARDING_RESET=false` in production.
+Open <http://127.0.0.1:7003>. Update after pulling changes with `./scripts/docker_update.sh`
+(or `.ps1`). Data is shared via `DOCKER_DATA_DIR` (default `./data`).
 
 ---
 
-## Provider Configuration
+## 🧱 Tech stack
 
-Set provider API keys in `.env` for default usage:
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, SQLite, httpx, Pillow |
+| Frontend | Vue 3, Vite, Pinia, Vue Router, Tailwind CSS 4, TypeScript |
+| Quality | pytest, ruff, vue-tsc, Playwright, pre-commit |
 
-- `OPENAI_API_KEY`
-- `OPENROUTER_API_KEY`
-- `GOOGLE_API_KEY`
-- `BFL_API_KEY`
-- `FAL_API_KEY`
+<details>
+<summary><b>Development</b></summary>
 
-### OpenRouter
-
-Lumigen connects to OpenRouter with automatic API route detection:
-
-- Set `OPENROUTER_API_KEY` in `.env`.
-- **Multimodal LLMs**: Models generating images via chat completions are handled seamlessly.
-- **Dedicated Image Models (`/api/v1/images`)**: Models requiring OpenRouter's dedicated images endpoint (e.g. OpenAI DALL-E models, Imagen 3) are automatically routed to `/api/v1/images` with aspect ratio mapping and error resilience.
-
-### FAL.ai
-
-Lumigen uses the FAL.ai queue API for both image generation and upscaling.
-
-- API docs: <https://docs.fal.ai/examples/model-apis/generate-images-from-text>
-- Set `FAL_API_KEY` in `.env`.
-
-Popular models:
-- `fal-ai/flux/schnell` — FLUX Schnell (fast)
-- `fal-ai/flux/dev` — FLUX Dev
-- `fal-ai/flux-pro` — FLUX Pro
-- `fal-ai/flux-pro/v1.1` — FLUX Pro v1.1
-- `fal-ai/flux-pro/v1.1-ultra` — FLUX Pro v1.1 Ultra
-
-### Google (Gemini / Imagen)
-
-Lumigen uses the Google Generative Language API for the `google` provider.
-
-- Recommended Gemini image model:
-	- `gemini-2.0-flash-preview-image-generation`
-- Recommended Imagen model:
-	- `imagen-3.0-generate-002`
-
-Notes:
-- For Gemini image generation, Lumigen calls `models/{model}:generateContent`.
-- For Imagen models (`imagen*`), Lumigen calls `models/{model}:predict`.
-- You can optionally override endpoint base URL:
-
-```dotenv
-GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-```
-
-### Encrypted Custom Keys
-
-For per-model custom API keys in Admin, set `PROVIDER_CONFIG_KEY` first. Generate one with:
-- Bash: `./scripts/generate_provider_key.sh`
-- PowerShell: `./scripts/generate_provider_key.ps1`
-
----
-
-## Docker
-
-Run (build + start on port `7003`):
-
-macOS/Linux:
 ```bash
-./scripts/docker_run.sh
+poetry run pre-commit install            # lint gate on every commit
+python -m pytest -q tests/unit tests/providers tests/db
+python -m ruff check app/
+cd frontend && npx vue-tsc -b            # type-check the SPA
+npx playwright test                      # end-to-end tests
 ```
 
-Windows PowerShell:
-```powershell
-.\scripts\docker_run.ps1
-```
+- Schema changes need a model change **and** an Alembic migration in `alembic/versions/`.
+- Provider logic lives in `app/providers/*_adapter.py`; orchestration in `ProviderRegistry`.
+- Release notes: [`docs/releases/`](docs/releases/). Bump the version with `python scripts/update_version.py <version>`.
 
-Update container after pulling new changes:
-
-macOS/Linux:
-```bash
-./scripts/docker_update.sh
-```
-
-Windows PowerShell:
-```powershell
-.\scripts\docker_update.ps1
-```
-
-Optional in `.env`:
-```dotenv
-DOCKER_DATA_DIR=./data
-```
-
-Open: `http://127.0.0.1:7003`
+</details>
 
 ---
 
-## Development Notes
+## 📜 License
 
-- **Frontend Architecture**: Vue 3 Single-Page Application (SPA) located in `frontend/` powered by Vite, Pinia, Vue Router, and Tailwind CSS.
-- **Frontend Dev Server**: Run `npm run dev` in the project root for fast Vite HMR.
-- **Frontend Production Build**: Run `npm run build` to compile assets into `app/web/dist/`.
-- **Database Migrations**: Add Alembic migrations under `alembic/versions/` for schema changes. Apply with `alembic upgrade head`.
-- **Python Linting**: Run `python -m ruff check app/`.
-- **Unit Tests**: Run unit tests with `pytest -q tests/unit`.
-- **End-to-End Tests**: Run Playwright tests with `npm run test:e2e` (or `npm run test:e2e:ui`).
+Lumigen is released under the [MIT License](LICENSE). Third-party notices: [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+Generated images are subject to the terms of the provider and model you use — see **Credits & Licenses** in the app.
 
----
-
-## Release Notes & History
-
-Detailed release notes and migration guides for every version are available in [`docs/releases/`](docs/releases/):
-
-- [v0.4.2-beta](docs/releases/v0.4.2-beta.md) — AI Image Upscaling (FAL Topaz), Asset Stacking, Style Presets, Generation Controls overhaul
-- [v0.4.0-beta](docs/releases/v0.4.0-beta.md) — Vue 3 SPA architecture, background generation queue, one-click retry, OpenRouter routing
-- [v0.3.0-beta](docs/releases/v0.3.0-beta.md) — Google & FAL.ai providers, JSON import/export, session archiving
-- [v0.2.0-beta](docs/releases/v0.2.0-beta.md) — Multi-user authentication, admin dashboard, aspect ratio handling
-- [v0.1.0-alpha.1](docs/releases/v0.1.0-alpha.1.md) — Initial alpha release
-
----
-
-## Version Management
-
-The app version is managed centrally through the `VERSION` file in the project root. This version is displayed in both the user menu and the admin about section.
-
-To update the version, you can either:
-1. Manually edit the `VERSION` file in the project root
-2. Use the provided script: `python scripts/update_version.py <new_version>`
-
-Example: `python scripts/update_version.py 0.4.2-beta`
-
----
-
-## License
-
-See `LICENSE`.
-
-Third-party asset licenses:
-- Bootstrap Icons font (`app/web/static/fonts/bootstrap-icons.woff2`, `app/web/static/fonts/bootstrap-icons.woff`): MIT
-- See `licenses/bootstrap-icons-MIT.txt` and `licenses/bootstrap-icons-NOTICE.md`
-- Overview: `THIRD_PARTY_LICENSES.md`
+<div align="center">
+<sub>© 2026 by Jean Schmitz</sub>
+</div>

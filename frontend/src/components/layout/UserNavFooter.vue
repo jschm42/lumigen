@@ -2,6 +2,7 @@
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCreditsStore } from '@/stores/credits'
+import { COPYRIGHT_NOTICE } from '@/constants/app'
 
 interface Props {
   collapsed?: boolean
@@ -86,5 +87,16 @@ const creditsStore = useCreditsStore()
         <span v-if="!collapsed">Logout</span>
       </button>
     </div>
+
+    <button
+      v-if="!collapsed"
+      type="button"
+      @click="creditsStore.open()"
+      class="block w-full cursor-pointer text-center text-[10px] text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+      title="Credits & licenses"
+      data-testid="copyright-notice"
+    >
+      {{ COPYRIGHT_NOTICE }}
+    </button>
   </div>
 </template>

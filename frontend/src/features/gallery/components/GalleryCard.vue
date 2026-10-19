@@ -97,7 +97,11 @@ const isContain = computed(() => galleryStore.filters.thumb_fit === 'contain')
 </script>
 
 <template>
-  <div class="relative group/stack">
+  <div
+    class="relative group/stack rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+    :data-asset-id="asset.id"
+    tabindex="0"
+  >
     <!-- Physical Stack Backplates (Shown for collapsed stack) -->
     <template v-if="asset.stack_id && !galleryStore.isStackExpanded(asset.stack_id)">
       <!-- Backmost Layer 2 -->
@@ -137,6 +141,7 @@ const isContain = computed(() => galleryStore.filters.thumb_fit === 'contain')
           ]"
           loading="lazy"
           decoding="async"
+          draggable="false"
         />
       </div>
 

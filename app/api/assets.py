@@ -1,12 +1,15 @@
 """Assets & Gallery REST API routes."""
 from __future__ import annotations
 
+import tempfile
 import uuid
-from datetime import date, datetime, timedelta
+import zipfile
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -21,6 +24,23 @@ router = APIRouter(prefix="/assets", tags=["assets"])
 settings = get_settings()
 storage_service = StorageService(max_slug_length=settings.max_slug_length)
 gallery_service = GalleryService()
+
+MAX_ZIP_ASSETS = 500
+_ZIP_CHUNK_SIZE = 1024 * 1024
+
+
+def _iso_utc(value: datetime | None) -> str:
+    """Return an ISO timestamp with explicit UTC offset (SQLite drops tzinfo on read)."""
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
+
+
+def _local_to_utc_naive(value: datetime) -> datetime:
+    """Convert a naive server-local datetime to naive UTC, matching stored asset times."""
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _clean_up_stacks(session: Session, affected_stack_ids: set[str]) -> None:
@@ -97,7 +117,7 @@ def serialize_asset(
         "mime": a.mime,
         "rating": rating,
         "is_favorite": rating >= 4,
-        "created_at": a.created_at.isoformat() if a.created_at else "",
+        "created_at": _iso_utc(a.created_at),
         "thumbnail_url": f"/assets/{a.id}/thumb",
         "image_url": f"/assets/{a.id}/file",
         "download_url": f"/assets/{a.id}/download",
@@ -115,6 +135,7 @@ def list_assets(
     q: str = Query(default=""),
     profile_name: str = Query(default=""),
     provider: str = Query(default=""),
+    model: str = Query(default=""),
     min_rating: int | None = Query(default=None),
     unrated: bool = Query(default=False),
     time_preset: str = Query(default=""),
@@ -145,6 +166,7 @@ def list_assets(
     q_val = q if isinstance(q, str) else ""
     profile_val = profile_name if isinstance(profile_name, str) else ""
     provider_val = provider if isinstance(provider, str) else ""
+    model_val = model if isinstance(model, str) else ""
     min_rating_val = min_rating if isinstance(min_rating, int) else None
     unrated_val = unrated if isinstance(unrated, bool) else False
 
@@ -177,12 +199,19 @@ def list_assets(
         except Exception:
             pass
 
+    # Day boundaries are computed in server-local time; stored timestamps are UTC.
+    if created_after is not None:
+        created_after = _local_to_utc_naive(created_after)
+    if created_before is not None:
+        created_before = _local_to_utc_naive(created_before)
+
     page_data = gallery_service.list_assets(
         session,
         page=page_val,
         page_size=page_size_val,
         profile_name=profile_val or None,
         provider=provider_val or None,
+        model=model_val or None,
         prompt_query=q_val or None,
         category_ids=parsed_cat_ids or None,
         min_rating=min_rating_val if not unrated_val else None,
@@ -199,6 +228,79 @@ def list_assets(
         "page": page_data.page,
         "total_pages": page_data.pages,
     }
+
+
+@router.get("/facets")
+def get_asset_facets(session: Session = Depends(get_session)) -> dict[str, list[str]]:
+    """Return the distinct providers, models and profile names that have assets."""
+    options = gallery_service.list_filter_options(session)
+    return {
+        "providers": options.providers,
+        "models": options.models,
+        "profiles": options.profile_names,
+    }
+
+
+@router.post("/download-zip")
+def download_assets_zip(
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    """Stream a ZIP archive containing the original files of the given assets.
+
+    Files are stored uncompressed (images are already compressed). Missing files are
+    skipped; at most ``MAX_ZIP_ASSETS`` assets are accepted per request.
+    """
+    from app.api.generation import generation_service
+
+    raw_ids = payload.get("asset_ids") or []
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=400, detail="No assets selected.")
+    asset_ids: list[int] = []
+    for raw in raw_ids:
+        try:
+            asset_ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    asset_ids = list(dict.fromkeys(asset_ids))
+    if len(asset_ids) > MAX_ZIP_ASSETS:
+        raise HTTPException(status_code=400, detail=f"At most {MAX_ZIP_ASSETS} images per download.")
+
+    assets = list(
+        session.scalars(
+            select(Asset).options(selectinload(Asset.generation)).where(Asset.id.in_(asset_ids))
+        ).all()
+    )
+    spool = tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024)
+    written = 0
+    with zipfile.ZipFile(spool, mode="w", compression=zipfile.ZIP_STORED) as archive:
+        for asset in sorted(assets, key=lambda item: item.id):
+            try:
+                path = generation_service.asset_absolute_path(asset, which="file")
+            except ValueError:
+                continue
+            if not path.is_file():
+                continue
+            archive.write(path, arcname=f"{asset.id}-{Path(asset.file_path).name}")
+            written += 1
+    if written == 0:
+        spool.close()
+        raise HTTPException(status_code=404, detail="None of the selected image files were found.")
+    spool.seek(0)
+
+    def iterate():
+        try:
+            while chunk := spool.read(_ZIP_CHUNK_SIZE):
+                yield chunk
+        finally:
+            spool.close()
+
+    filename = f"lumigen-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{written}-images.zip"
+    return StreamingResponse(
+        iterate(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{asset_id}")

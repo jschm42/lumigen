@@ -418,14 +418,15 @@ export const useGenerateStore = defineStore('generate', () => {
       sessionUsageTotal.value = null
       return
     }
-    const units = new Set(items.map((u) => u.cost_unit).filter(Boolean))
-    const unit = units.size === 1 ? (Array.from(units)[0] as TokenUsage['cost_unit']) : units.size > 1 ? 'mixed' : null
+    // Costs only add up within one currency (same rule as the backend's sum_usage).
+    const currencies = new Set(items.filter((u) => u.cost != null).map((u) => u.currency).filter(Boolean))
+    const currency = currencies.size === 1 ? (Array.from(currencies)[0] as string) : currencies.size > 1 ? 'mixed' : null
     sessionUsageTotal.value = {
       input_tokens: items.reduce((sum, u) => sum + (u.input_tokens || 0), 0),
       output_tokens: items.reduce((sum, u) => sum + (u.output_tokens || 0), 0),
       total_tokens: items.reduce((sum, u) => sum + (u.total_tokens || 0), 0),
-      cost: unit && unit !== 'mixed' ? items.reduce((sum, u) => sum + (u.cost || 0), 0) : null,
-      cost_unit: unit,
+      cost: currency && currency !== 'mixed' ? items.reduce((sum, u) => sum + (u.cost || 0), 0) : null,
+      currency,
     }
   }
 

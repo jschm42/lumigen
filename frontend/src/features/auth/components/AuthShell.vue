@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Card from '@/components/ui/Card.vue'
+import { COPYRIGHT_NOTICE } from '@/constants/app'
 
 interface Props {
   title: string
@@ -35,8 +36,9 @@ defineProps<Props>()
         <slot />
       </Card>
 
-      <div class="text-center text-xs text-slate-400 dark:text-slate-500">
-        <slot name="footer" />
+      <div class="space-y-1 text-center text-xs text-slate-400 dark:text-slate-500">
+        <div><slot name="footer" /></div>
+        <div data-testid="copyright-notice">{{ COPYRIGHT_NOTICE }}</div>
       </div>
     </div>
   </div>

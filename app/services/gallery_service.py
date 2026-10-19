@@ -27,6 +27,7 @@ class GalleryFilterOptions:
 
     profile_names: list[str]
     providers: list[str]
+    models: list[str]
     statuses: list[str]
     categories: list[Category]
 
@@ -45,6 +46,7 @@ class GalleryService:
         page_size: int | None = None,
         profile_name: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
         prompt_query: str | None = None,
         category_ids: list[int] | None = None,
         min_rating: int | None = None,
@@ -66,6 +68,8 @@ class GalleryService:
             filters.append(Generation.profile_name == profile_name)
         if provider:
             filters.append(Generation.provider == provider)
+        if model:
+            filters.append(Generation.model == model)
         if prompt_query:
             filters.append(Generation.prompt_user.ilike(f"%{prompt_query}%"))
         normalized_category_ids = sorted({item for item in (category_ids or []) if item > 0})
@@ -138,6 +142,12 @@ class GalleryService:
             .distinct()
             .order_by(Generation.provider.asc())
         )
+        model_stmt = (
+            select(Generation.model)
+            .join(Asset)
+            .distinct()
+            .order_by(Generation.model.asc())
+        )
         status_stmt = (
             select(Generation.status)
             .join(Asset)
@@ -148,12 +158,14 @@ class GalleryService:
 
         profile_names = [item for item in session.scalars(profile_stmt).all() if item]
         providers = [item for item in session.scalars(provider_stmt).all() if item]
+        models = [item for item in session.scalars(model_stmt).all() if item]
         statuses = [item for item in session.scalars(status_stmt).all() if item]
         categories = list(session.scalars(categories_stmt).all())
 
         return GalleryFilterOptions(
             profile_names=profile_names,
             providers=providers,
+            models=models,
             statuses=statuses,
             categories=categories,
         )

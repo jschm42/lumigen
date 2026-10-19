@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { User } from '@/types'
+import type { GalleryPreset, User } from '@/types'
 
 export interface AccountUpdatePayload {
   username?: string
@@ -15,6 +15,16 @@ export const accountApi = {
 
   async updateAccount(payload: AccountUpdatePayload): Promise<User> {
     const res = await apiClient.patch<User>('/api/account', payload)
+    return res.data
+  },
+
+  async getGalleryPresets(): Promise<GalleryPreset[]> {
+    const res = await apiClient.get<GalleryPreset[]>('/api/account/gallery-presets')
+    return res.data
+  },
+
+  async saveGalleryPresets(presets: GalleryPreset[]): Promise<GalleryPreset[]> {
+    const res = await apiClient.put<GalleryPreset[]>('/api/account/gallery-presets', presets)
     return res.data
   },
 

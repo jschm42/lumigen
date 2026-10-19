@@ -44,11 +44,11 @@ function formatRelative(value?: string) {
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
   if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`
   if (diffSeconds < 86400 * 7) return `${Math.floor(diffSeconds / 86400)}d ago`
-  return new Date(value).toLocaleDateString()
+  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function imageCountLabel(session: ChatSession) {
-  const count = session.generation_count || 0
+  const count = session.asset_count ?? session.generation_count ?? 0
   return `${count} ${count === 1 ? 'image' : 'images'}`
 }
 

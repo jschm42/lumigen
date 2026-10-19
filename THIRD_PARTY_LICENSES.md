@@ -31,3 +31,23 @@ This file tracks third-party assets that are redistributed with Lumigen.
 - License: SIL Open Font License 1.1
 - Local license text: `licenses/OFL-1.1.txt`
 - Local notice: `licenses/fonts-NOTICE.md`
+
+## AI provider integrations
+
+Lumigen talks to the following image-generation APIs. No provider code, models or assets
+are redistributed; each service's own terms apply to the API usage and generated images.
+
+| Provider | Terms / documentation |
+|---|---|
+| OpenAI | https://openai.com/policies/terms-of-use |
+| Google Gemini / Imagen | https://ai.google.dev/gemini-api/terms |
+| Black Forest Labs (FLUX) | https://docs.bfl.ai |
+| fal.ai | https://fal.ai/terms |
+| OpenRouter | https://openrouter.ai/terms |
+| MiniMax | https://platform.minimax.io |
+| Stability AI | https://stability.ai/terms-of-use |
+| Replicate | https://replicate.com/terms (plus the license of each hosted model) |
+| Together AI | https://www.together.ai/terms-of-service |
+| xAI | https://x.ai/legal/terms-of-service |
+| Ideogram | https://ideogram.ai/legal/api-tos |
+| BytePlus ModelArk (ByteDance Seedream) | https://www.byteplus.com/en/legal/terms-of-service |

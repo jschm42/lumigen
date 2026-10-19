@@ -6,6 +6,7 @@ import { useToastStore } from '@/stores/toast'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Card from '@/components/ui/Card.vue'
+import { COPYRIGHT_NOTICE } from '@/constants/app'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -125,6 +126,10 @@ async function handleSetup() {
           </div>
         </form>
       </Card>
+
+      <p class="text-center text-xs text-slate-400 dark:text-slate-500" data-testid="copyright-notice">
+        {{ COPYRIGHT_NOTICE }}
+      </p>
     </div>
   </div>
 </template>

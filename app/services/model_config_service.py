@@ -18,6 +18,12 @@ class ModelConfigService:
         "bfl": "bfl_api_key",
         "fal": "fal_api_key",
         "minimax": "minimax_api_key",
+        "stability": "stability_api_key",
+        "replicate": "replicate_api_key",
+        "together": "together_api_key",
+        "xai": "xai_api_key",
+        "ideogram": "ideogram_api_key",
+        "byteplus": "byteplus_api_key",
     }
 
     def __init__(self, settings: Settings) -> None:

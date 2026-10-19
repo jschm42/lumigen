@@ -9,7 +9,7 @@ except ImportError:
     UTC = UTC
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -140,6 +140,10 @@ class ModelConfig(Base, TimestampMixin):
     api_key_encrypted: Mapped[str | None] = mapped_column(
         String(4096), nullable=True
     )
+    # Optional pricing used to compute generation costs (currency is a studio setting).
+    price_input_per_mtok: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_output_per_mtok: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_per_image: Mapped[float | None] = mapped_column(Float, nullable=True)
     use_custom_api_key: Mapped[bool] = mapped_column(
         Boolean(), default=False, nullable=False
     )

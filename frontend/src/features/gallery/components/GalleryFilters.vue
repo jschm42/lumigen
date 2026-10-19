@@ -5,18 +5,49 @@ import { useGalleryStore } from '@/stores/gallery'
 const galleryStore = useGalleryStore()
 const isCategoryPopoverOpen = ref(false)
 const popoverRef = ref<HTMLElement | null>(null)
+const isPresetsOpen = ref(false)
+const presetsRef = ref<HTMLElement | null>(null)
+const presetName = ref('')
+const isMoreOpen = ref(
+  !!(galleryStore.filters.provider || galleryStore.filters.model || galleryStore.filters.profile_name)
+)
+
+const moreFilterCount = computed(
+  () => [galleryStore.filters.provider, galleryStore.filters.model, galleryStore.filters.profile_name].filter(Boolean).length
+)
 
 function handleClickOutside(event: MouseEvent) {
   if (popoverRef.value && !popoverRef.value.contains(event.target as Node)) {
     isCategoryPopoverOpen.value = false
   }
+  if (presetsRef.value && !presetsRef.value.contains(event.target as Node)) {
+    isPresetsOpen.value = false
+  }
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isCategoryPopoverOpen.value) {
+  if (event.key === 'Escape' && (isCategoryPopoverOpen.value || isPresetsOpen.value)) {
     isCategoryPopoverOpen.value = false
+    isPresetsOpen.value = false
     event.stopPropagation()
   }
+}
+
+function setFacet(key: 'provider' | 'model' | 'profile_name', value: string) {
+  galleryStore.filters[key] = value
+  galleryStore.fetchAssets(true)
+}
+
+async function handleSavePreset() {
+  if (!presetName.value.trim()) return
+  await galleryStore.savePreset(presetName.value)
+  presetName.value = ''
+}
+
+function handleApplyPreset(preset: (typeof galleryStore.presets)[number]) {
+  galleryStore.applyPreset(preset)
+  isPresetsOpen.value = false
+  isMoreOpen.value = isMoreOpen.value || moreFilterCount.value > 0
 }
 
 onMounted(() => {
@@ -211,6 +242,101 @@ function toggleCategory(catId: number) {
 
       <!-- Stacks, Thumbnail Size & Reset -->
       <div class="ml-auto flex shrink-0 items-center gap-2">
+        <!-- More filters (provider / model / profile) -->
+        <button
+          type="button"
+          @click="isMoreOpen = !isMoreOpen"
+          :class="[
+            'px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer',
+            isMoreOpen || moreFilterCount > 0 ? 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300' : 'border-slate-300/80 bg-white/80 text-slate-600 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:text-white',
+          ]"
+          title="Filter by provider, model or profile"
+          data-testid="gallery-more-filters"
+        >
+          <span>⚙️</span>
+          <span class="hidden sm:inline">More</span>
+          <span v-if="moreFilterCount" class="rounded-full bg-sky-500 px-1.5 text-[10px] font-bold text-white">{{ moreFilterCount }}</span>
+        </button>
+
+        <!-- Saved filter presets -->
+        <div class="relative" ref="presetsRef">
+          <button
+            type="button"
+            @click="isPresetsOpen = !isPresetsOpen"
+            :class="[
+              'px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer',
+              isPresetsOpen ? 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300' : 'border-slate-300/80 bg-white/80 text-slate-600 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:text-white',
+            ]"
+            title="Saved filter presets"
+            data-testid="gallery-presets"
+          >
+            <span>🔖</span>
+            <span class="hidden sm:inline">Presets</span>
+          </button>
+          <div
+            v-if="isPresetsOpen"
+            class="absolute right-0 top-full z-50 mt-1.5 w-72 space-y-2 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-white/10 dark:bg-slate-900"
+          >
+            <div v-if="galleryStore.presets.length === 0" class="px-2 py-1.5 text-slate-400">
+              No presets yet. Set up filters and save them here.
+            </div>
+            <div
+              v-for="preset in galleryStore.presets"
+              :key="preset.id"
+              class="group flex items-center gap-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+            >
+              <button
+                type="button"
+                @click="handleApplyPreset(preset)"
+                class="min-w-0 flex-1 cursor-pointer truncate px-2 py-1.5 text-left text-slate-700 dark:text-slate-200"
+                :title="`Apply preset ${preset.name}`"
+              >
+                {{ preset.name }}
+              </button>
+              <button
+                type="button"
+                @click.stop="galleryStore.deletePreset(preset.id)"
+                class="cursor-pointer px-2 py-1 text-slate-400 opacity-0 transition-opacity hover:text-rose-500 group-hover:opacity-100"
+                title="Delete preset"
+                aria-label="Delete preset"
+              >
+                ✕
+              </button>
+            </div>
+            <form class="flex gap-1.5 border-t border-slate-200 pt-2 dark:border-white/10" @submit.prevent="handleSavePreset">
+              <input
+                v-model="presetName"
+                maxlength="40"
+                placeholder="Save current filters as…"
+                class="min-w-0 flex-1 rounded-lg border border-slate-300/80 bg-white px-2 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100"
+                data-testid="gallery-preset-name"
+              />
+              <button
+                type="submit"
+                :disabled="!presetName.trim()"
+                class="cursor-pointer rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Save
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Group by day -->
+        <button
+          type="button"
+          @click="galleryStore.filters.group_by_date = galleryStore.filters.group_by_date === false"
+          :class="[
+            'px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer',
+            galleryStore.filters.group_by_date !== false ? 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300' : 'border-slate-300/80 bg-white/80 text-slate-600 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:text-white',
+          ]"
+          :title="galleryStore.filters.group_by_date !== false ? 'Grouped by day (click for one continuous grid)' : 'Group images by day'"
+          data-testid="gallery-group-toggle"
+        >
+          <span>📅</span>
+          <span class="hidden sm:inline">Days</span>
+        </button>
+
         <!-- Stacks Collapse/Expand Toggle -->
         <button
           type="button"
@@ -261,9 +387,34 @@ function toggleCategory(catId: number) {
       </div>
     </div>
 
+    <!-- More filters row -->
+    <div v-if="isMoreOpen" class="flex flex-wrap items-center gap-2 border-t border-slate-200/60 pt-2.5 dark:border-white/10">
+      <div class="min-w-[140px] flex-[1_1_160px]">
+        <select :value="galleryStore.filters.provider || ''" @change="setFacet('provider', ($event.target as HTMLSelectElement).value)" class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500" data-testid="gallery-filter-provider">
+          <option value="">All providers</option>
+          <option v-for="item in galleryStore.facets.providers" :key="item" :value="item">{{ item }}</option>
+        </select>
+      </div>
+      <div class="min-w-[160px] flex-[2_1_220px]">
+        <select :value="galleryStore.filters.model || ''" @change="setFacet('model', ($event.target as HTMLSelectElement).value)" class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500" data-testid="gallery-filter-model">
+          <option value="">All models</option>
+          <option v-for="item in galleryStore.facets.models" :key="item" :value="item">{{ item }}</option>
+        </select>
+      </div>
+      <div class="min-w-[140px] flex-[1_1_160px]">
+        <select :value="galleryStore.filters.profile_name || ''" @change="setFacet('profile_name', ($event.target as HTMLSelectElement).value)" class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500" data-testid="gallery-filter-profile">
+          <option value="">All profiles</option>
+          <option v-for="item in galleryStore.facets.profiles" :key="item" :value="item">{{ item }}</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Result summary & reset -->
-    <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+    <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
       <span data-testid="gallery-result-summary">{{ resultSummary }}</span>
+      <span class="hidden flex-1 text-center text-slate-400 lg:inline" data-testid="gallery-keyboard-hint">
+        Drag to select · hover + <kbd class="font-mono">0–5</kbd> rate · <kbd class="font-mono">Space</kbd> select · <kbd class="font-mono">Enter</kbd> open · <kbd class="font-mono">Ctrl+A</kbd> all
+      </span>
       <button
         v-if="galleryStore.activeFilterCount > 0"
         type="button"

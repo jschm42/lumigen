@@ -21,7 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("assets", sa.Column("rating", sa.Integer(), nullable=True))
+    # Idempotent: installations created via ``Base.metadata.create_all`` may already
+    # contain this schema object.
+    columns = {col["name"] for col in sa.inspect(op.get_bind()).get_columns("assets")}
+    if "rating" not in columns:
+        op.add_column("assets", sa.Column("rating", sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:

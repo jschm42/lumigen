@@ -10,6 +10,8 @@ import type { UiSettings } from '@/types'
 const authStore = useAuthStore()
 const toastStore = useToastStore()
 
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CNY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK', 'PLN', 'INR', 'BRL']
+
 const settings = ref<UiSettings | null>(null)
 const savingKey = ref<keyof UiSettings | null>(null)
 
@@ -59,8 +61,9 @@ async function update<K extends keyof UiSettings>(key: K, value: UiSettings[K]) 
         <div class="space-y-1">
           <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Show token usage</div>
           <p class="max-w-xl text-slate-500">
-            Display consumed tokens and provider cost on every generation and as a session total.
-            Available for providers that report usage (OpenRouter, OpenAI GPT-Image, Google Gemini; BFL reports credits).
+            Display consumed tokens on every generation and as a session total (reported by OpenRouter,
+            OpenAI GPT-Image, Google Gemini, xAI and Seedream). If prices are configured for a model under
+            <strong>Models</strong>, the cost is shown as well; otherwise only tokens are displayed.
           </p>
         </div>
         <div class="flex items-center gap-2 pt-0.5">
@@ -71,6 +74,31 @@ async function update<K extends keyof UiSettings>(key: K, value: UiSettings[K]) 
             @update:modelValue="update('show_token_usage', $event)"
             data-testid="setting-show-token-usage"
           />
+        </div>
+      </div>
+
+      <div class="flex items-start justify-between gap-6 p-4">
+        <div class="space-y-1">
+          <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Cost currency</div>
+          <p class="max-w-xl text-slate-500">
+            Currency of all model prices (per 1M tokens / per image) and of the displayed costs.
+            Changing it does not convert existing prices.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 pt-0.5">
+          <Spinner v-if="savingKey === 'cost_currency'" size="sm" class="text-sky-500" />
+          <select
+            :value="settings.cost_currency"
+            :disabled="savingKey !== null"
+            @change="update('cost_currency', ($event.target as HTMLSelectElement).value)"
+            class="rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs font-semibold text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
+            data-testid="setting-cost-currency"
+          >
+            <option v-for="code in CURRENCIES" :key="code" :value="code">{{ code }}</option>
+            <option v-if="!CURRENCIES.includes(settings.cost_currency)" :value="settings.cost_currency">
+              {{ settings.cost_currency }}
+            </option>
+          </select>
         </div>
       </div>
     </div>

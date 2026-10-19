@@ -11,14 +11,18 @@ export interface User {
 
 export interface UiSettings {
   show_token_usage: boolean
+  /** ISO 4217 currency for configured model prices, e.g. "USD" or "EUR". */
+  cost_currency: string
 }
 
 export interface TokenUsage {
   input_tokens: number | null
   output_tokens: number | null
   total_tokens: number | null
+  /** Only set when prices are configured for the model. */
   cost: number | null
-  cost_unit: 'usd' | 'credits' | 'mixed' | null
+  /** ISO 4217 code, or "mixed" for totals across different currencies. */
+  currency: string | null
 }
 
 export interface ModelConfig {
@@ -33,6 +37,12 @@ export interface ModelConfig {
   generic_params?: Record<string, any>
   fal_params?: Record<string, any>
   capabilities?: string[]
+  /** Optional price per one million input tokens (studio currency). */
+  price_input_per_mtok?: number | null
+  /** Optional price per one million output tokens (studio currency). */
+  price_output_per_mtok?: number | null
+  /** Optional price per generated image (studio currency). */
+  price_per_image?: number | null
 }
 
 export interface Profile {
@@ -174,6 +184,7 @@ export interface StylePreset {
 export interface ProviderApiKeyStatus {
   provider: string
   display_name: string
+  homepage_url?: string
   has_key: boolean
   is_encrypted?: boolean
   status?: 'ok' | 'error' | 'unconfigured'
@@ -198,10 +209,35 @@ export interface GalleryFilterState {
   date_from: string
   date_to: string
   category_ids: number[]
+  model?: string
   thumb_size: 'sm' | 'md' | 'lg'
   thumb_fit?: 'cover' | 'contain'
+  group_by_date?: boolean
   artbook_token?: string
   collapse_stacks?: boolean
+}
+
+export type GalleryPresetFilters = Partial<
+  Pick<
+    GalleryFilterState,
+    | 'q'
+    | 'min_rating'
+    | 'unrated'
+    | 'time_preset'
+    | 'date_from'
+    | 'date_to'
+    | 'category_ids'
+    | 'profile_name'
+    | 'provider'
+    | 'model'
+    | 'collapse_stacks'
+  >
+>
+
+export interface GalleryPreset {
+  id: string
+  name: string
+  filters: GalleryPresetFilters
 }
 
 export interface UpscaleModel {

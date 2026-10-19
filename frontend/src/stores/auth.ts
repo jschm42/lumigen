@@ -7,6 +7,7 @@ declare const __APP_VERSION__: string | undefined
 
 const DEFAULT_UI_SETTINGS: UiSettings = {
   show_token_usage: false,
+  cost_currency: 'USD',
 }
 
 export const useAuthStore = defineStore('auth', () => {

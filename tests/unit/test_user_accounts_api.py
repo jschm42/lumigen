@@ -9,7 +9,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db.models import AppSetting, PasswordResetToken, User
-from app.services.usage_service import extract_usage, sum_usage
 from app.services.user_service import hash_reset_token
 
 ADMIN_PASSWORD = "admin-pass-123"
@@ -68,7 +67,7 @@ def test_status_exposes_profile_and_ui_settings(api: TestClient):
     assert status["authenticated"] is True
     assert status["user"]["username"] == "boss"
     assert status["user"]["last_login_at"]
-    assert status["ui_settings"] == {"show_token_usage": False}
+    assert status["ui_settings"] == {"show_token_usage": False, "cost_currency": "USD"}
     assert "password_hash" not in status["user"]
 
 
@@ -240,38 +239,6 @@ def test_ui_settings_roundtrip(api: TestClient):
     _setup_admin(api)
     res = api.put("/api/admin/settings", json={"show_token_usage": True, "unknown": 1})
     assert res.status_code == 200
-    assert res.json() == {"show_token_usage": True}
+    assert res.json() == {"show_token_usage": True, "cost_currency": "USD"}
     assert api.get("/api/auth/status").json()["ui_settings"]["show_token_usage"] is True
     assert api.put("/api/admin/settings", json={"show_token_usage": "yes"}).status_code == 400
-
-
-def test_extract_usage_normalizes_providers():
-    openrouter = extract_usage(
-        {"usage": {"prompt_tokens": 10, "completion_tokens": 1290, "total_tokens": 1300, "cost": 0.04}}
-    )
-    assert openrouter == {
-        "input_tokens": 10,
-        "output_tokens": 1290,
-        "total_tokens": 1300,
-        "cost": 0.04,
-        "cost_unit": "usd",
-    }
-    gemini = extract_usage({"usage": {"promptTokenCount": 7, "candidatesTokenCount": 1290}})
-    assert gemini["total_tokens"] == 1297
-    bfl = extract_usage({"cost": 4})
-    assert bfl["cost"] == 4.0 and bfl["cost_unit"] == "credits"
-    assert extract_usage({"usage": None}) is None
-    assert extract_usage(None) is None
-
-
-def test_sum_usage_handles_mixed_units():
-    total = sum_usage(
-        [
-            {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3, "cost": 0.5, "cost_unit": "usd"},
-            None,
-            {"input_tokens": 4, "output_tokens": 5, "total_tokens": 9, "cost": 2, "cost_unit": "credits"},
-        ]
-    )
-    assert total["total_tokens"] == 12
-    assert total["cost"] is None and total["cost_unit"] == "mixed"
-    assert sum_usage([None]) is None

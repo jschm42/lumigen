@@ -58,6 +58,15 @@ async function handleTestKey(provider: string) {
             <h4 class="font-bold text-sm text-slate-900 dark:text-white">
               {{ provider.display_name }}
             </h4>
+            <a
+              v-if="provider.homepage_url"
+              :href="provider.homepage_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
+            >
+              Get API key ↗
+            </a>
             <span
               :class="[
                 'px-2 py-0.5 rounded-full text-[10px] font-semibold',

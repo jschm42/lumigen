@@ -17,6 +17,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Idempotent: installations created via ``Base.metadata.create_all`` may already
+    # contain this schema object.
+    inspector = sa.inspect(op.get_bind())
+    if inspector.has_table('chat_sessions'):
+        indexes = {item['name'] for item in inspector.get_indexes('chat_sessions')}
+        if op.f('ix_chat_sessions_chat_session_id') not in indexes:
+            op.create_index(op.f('ix_chat_sessions_chat_session_id'), 'chat_sessions', ['chat_session_id'], unique=True)
+        return
     op.create_table(
         'chat_sessions',
         sa.Column('id', sa.Integer(), nullable=False),

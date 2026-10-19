@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAdminStore } from '@/stores/admin'
+import { useAuthStore } from '@/stores/auth'
+import { formatMoney } from '@/utils/format'
 import { adminApi } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 import Button from '@/components/ui/Button.vue'
@@ -10,7 +12,45 @@ import Switch from '@/components/ui/Switch.vue'
 import type { ModelConfig } from '@/types'
 
 const adminStore = useAdminStore()
+const authStore = useAuthStore()
 const toastStore = useToastStore()
+
+const PRICE_FIELDS = ['price_input_per_mtok', 'price_output_per_mtok', 'price_per_image'] as const
+type PriceField = (typeof PRICE_FIELDS)[number]
+
+// Prices are edited as strings so an empty field clears the price.
+const priceInputs = ref<Record<PriceField, string>>({
+  price_input_per_mtok: '',
+  price_output_per_mtok: '',
+  price_per_image: '',
+})
+const priceError = ref('')
+
+const currency = computed(() => authStore.uiSettings.cost_currency || 'USD')
+const providerOptions = computed(() =>
+  adminStore.providerStatuses.map((p) => ({ value: p.provider, label: p.display_name }))
+)
+
+function providerLabel(provider: string) {
+  return adminStore.providerStatuses.find((p) => p.provider === provider)?.display_name || provider
+}
+
+function fillPrices(config: Partial<ModelConfig>) {
+  PRICE_FIELDS.forEach((field) => {
+    const value = config[field]
+    priceInputs.value[field] = value == null ? '' : String(value)
+  })
+  priceError.value = ''
+}
+
+function priceSummary(model: ModelConfig): string {
+  const parts: string[] = []
+  if (model.price_input_per_mtok != null) parts.push(`in ${formatMoney(model.price_input_per_mtok, currency.value)}`)
+  if (model.price_output_per_mtok != null) parts.push(`out ${formatMoney(model.price_output_per_mtok, currency.value)}`)
+  const tokenPart = parts.length ? `${parts.join(' / ')} per 1M tokens` : ''
+  const imagePart = model.price_per_image != null ? `${formatMoney(model.price_per_image, currency.value)} per image` : ''
+  return [tokenPart, imagePart].filter(Boolean).join(' · ') || '—'
+}
 
 const isEditorOpen = ref(false)
 const isDiscovering = ref(false)
@@ -30,6 +70,7 @@ const editingConfig = ref<Partial<ModelConfig>>({
 
 onMounted(() => {
   adminStore.fetchModelConfigs()
+  if (adminStore.providerStatuses.length === 0) adminStore.fetchProviderKeys()
 })
 
 function openNew() {
@@ -43,17 +84,41 @@ function openNew() {
     supported_aspect_ratios: ['1:1', '16:9', '9:16'],
     supported_resolutions: ['1K', '2K'],
   }
+  fillPrices({})
   isEditorOpen.value = true
 }
 
 function openEdit(config: ModelConfig) {
   editingConfig.value = { ...config }
+  fillPrices(config)
   isEditorOpen.value = true
+}
+
+function addDiscovered(model: string) {
+  openNew()
+  editingConfig.value.provider = selectedProvider.value
+  editingConfig.value.model_identifier = model
+  editingConfig.value.name = model.split('/').pop()?.slice(0, 50) || model
 }
 
 async function handleSave() {
   if (!editingConfig.value.name || !editingConfig.value.model_identifier) return
-  await adminStore.saveModelConfig(editingConfig.value)
+  const prices: Partial<Record<PriceField, number | null>> = {}
+  for (const field of PRICE_FIELDS) {
+    const raw = priceInputs.value[field].trim().replace(',', '.')
+    if (!raw) {
+      prices[field] = null
+      continue
+    }
+    const value = Number(raw)
+    if (!Number.isFinite(value) || value < 0) {
+      priceError.value = 'Prices must be non-negative numbers.'
+      return
+    }
+    prices[field] = value
+  }
+  priceError.value = ''
+  await adminStore.saveModelConfig({ ...editingConfig.value, ...prices })
   isEditorOpen.value = false
 }
 
@@ -94,6 +159,7 @@ async function handleDiscover() {
             <th class="p-3.5">Name</th>
             <th class="p-3.5">Provider</th>
             <th class="p-3.5">Identifier</th>
+            <th class="p-3.5">Pricing ({{ currency }})</th>
             <th class="p-3.5">Active</th>
             <th class="p-3.5">Default</th>
             <th class="p-3.5 text-right">Actions</th>
@@ -106,8 +172,9 @@ async function handleDiscover() {
             class="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors"
           >
             <td class="p-3.5 font-bold text-slate-900 dark:text-white">{{ model.name }}</td>
-            <td class="p-3.5 uppercase font-mono text-[10px] text-slate-500">{{ model.provider }}</td>
+            <td class="p-3.5 text-[11px] text-slate-500">{{ providerLabel(model.provider) }}</td>
             <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">{{ model.model_identifier }}</td>
+            <td class="p-3.5 text-[11px] text-slate-500">{{ priceSummary(model) }}</td>
             <td class="p-3.5">
               <span :class="model.is_active ? 'text-emerald-500 font-bold' : 'text-slate-400'">
                 {{ model.is_active ? 'Yes' : 'No' }}
@@ -147,10 +214,9 @@ async function handleDiscover() {
           v-model="selectedProvider"
           class="rounded-xl border border-slate-300/80 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
         >
-          <option value="openrouter">OpenRouter</option>
-          <option value="fal">FAL.AI</option>
-          <option value="openai">OpenAI</option>
-          <option value="google">Google Gemini</option>
+          <option v-for="option in providerOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
         </select>
         <Button
           variant="secondary"
@@ -167,7 +233,7 @@ async function handleDiscover() {
           v-for="m in discoveredModels"
           :key="m"
           class="flex items-center justify-between px-2 py-1 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded cursor-pointer"
-          @click="editingConfig.model_identifier = m; editingConfig.name = m; isEditorOpen = true"
+          @click="addDiscovered(m)"
         >
           <span class="font-mono">{{ m }}</span>
           <span class="text-sky-500 font-semibold text-[10px]">+ Add as configuration</span>
@@ -205,12 +271,42 @@ async function handleDiscover() {
             v-model="editingConfig.provider"
             class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
           >
-            <option value="openrouter">OpenRouter</option>
-            <option value="fal">FAL.AI</option>
-            <option value="openai">OpenAI</option>
-            <option value="bfl">Black Forest Labs</option>
-            <option value="google">Google Gemini</option>
+            <option v-for="option in providerOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
           </select>
+        </div>
+
+        <div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-white/10">
+          <div class="flex items-baseline justify-between gap-2">
+            <label class="font-semibold uppercase tracking-wider text-[11px] text-slate-500">Pricing (optional)</label>
+            <span class="text-[11px] text-slate-400">Currency: {{ currency }} · change under General</span>
+          </div>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <Input
+              id="price-input"
+              label="Input / 1M tokens"
+              placeholder="e.g. 5.00"
+              v-model="priceInputs.price_input_per_mtok"
+            />
+            <Input
+              id="price-output"
+              label="Output / 1M tokens"
+              placeholder="e.g. 40.00"
+              v-model="priceInputs.price_output_per_mtok"
+            />
+            <Input
+              id="price-image"
+              label="Per image"
+              placeholder="e.g. 0.04"
+              v-model="priceInputs.price_per_image"
+            />
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Leave empty to show only token counts. Token prices apply to providers that report usage;
+            the per-image price works for every provider.
+          </p>
+          <p v-if="priceError" class="text-xs font-medium text-rose-500">{{ priceError }}</p>
         </div>
 
         <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-white/10">

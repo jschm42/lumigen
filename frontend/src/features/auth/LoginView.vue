@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Card from '@/components/ui/Card.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
+import { COPYRIGHT_NOTICE } from '@/constants/app'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -198,8 +199,9 @@ async function handleSubmit() {
       </Card>
 
       <!-- Footer Info -->
-      <p v-if="versionDisplay" class="text-center text-xs text-slate-400 dark:text-slate-500 font-mono">
-        Lumigen Studio {{ versionDisplay }}
+      <p class="text-center text-xs text-slate-400 dark:text-slate-500">
+        <span v-if="versionDisplay" class="font-mono">Lumigen Studio {{ versionDisplay }} · </span>
+        <span data-testid="copyright-notice">{{ COPYRIGHT_NOTICE }}</span>
       </p>
     </div>
   </div>

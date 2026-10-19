@@ -1,6 +1,7 @@
 """Sessions REST API routes."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,6 +14,19 @@ from app.db.models import Generation
 from app.services.usage_service import sum_usage
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    """Return *value* as an aware UTC datetime (SQLite drops tzinfo on read)."""
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _iso(value: datetime | None) -> str:
+    """Return an ISO timestamp with explicit UTC offset, or an empty string."""
+    aware = _utc(value)
+    return aware.isoformat() if aware else ""
 
 
 def generation_session_token(generation: Generation) -> str:
@@ -46,10 +60,10 @@ def list_sessions(
     created_any = False
     for tok, gens in generations_by_session.items():
         if tok and tok.startswith("session:") and tok not in existing_tokens:
-            first_prompt = gens[0].prompt_user or gens[0].prompt_final or "Neue Session"
+            first_prompt = gens[0].prompt_user or gens[0].prompt_final or "New session"
             raw_prompt = first_prompt.strip().replace("\r\n", " ").replace("\n", " ")
             cleaned_title = raw_prompt[:40].rsplit(" ", 1)[0] if len(raw_prompt) > 40 else raw_prompt
-            cleaned_title = cleaned_title.strip() or "Neue Session"
+            cleaned_title = cleaned_title.strip() or "New session"
             new_s = crud.create_chat_session(
                 session,
                 chat_session_id=tok,
@@ -59,9 +73,18 @@ def list_sessions(
             existing_tokens.add(tok)
             created_any = True
 
-    if created_any:
-        from datetime import datetime
-        db_sessions.sort(key=lambda s: s.updated_at or s.created_at or datetime.min, reverse=True)
+    # Order by real activity (latest generation), not by when the session row was created.
+    def _last_activity(chat_session: Any) -> datetime:
+        times = [
+            _utc(g.finished_at or g.created_at)
+            for g in generations_by_session.get(chat_session.chat_session_id, [])
+        ]
+        times = [t for t in times if t is not None]
+        fallback = _utc(chat_session.updated_at or chat_session.created_at) or datetime.min.replace(tzinfo=UTC)
+        return max(times) if times else fallback
+
+    _ = created_any
+    db_sessions.sort(key=_last_activity, reverse=True)
 
     result = []
     q_lower = q.lower().strip()
@@ -86,9 +109,9 @@ def list_sessions(
         result.append({
             "id": s.id,
             "session_token": s.chat_session_id,
-            "title": s.title or "Unbenannte Session",
-            "created_at": s.created_at.isoformat() if s.created_at else "",
-            "updated_at": s.updated_at.isoformat() if s.updated_at else "",
+            "title": s.title or "Untitled session",
+            "created_at": _iso(min((g.created_at for g in generations if g.created_at), default=s.created_at)),
+            "updated_at": _iso(_last_activity(s)),
             "cover_asset_id": cover_id,
             "cover_asset_url": cover_url,
             "generation_count": gen_count,

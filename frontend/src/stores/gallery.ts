@@ -1,8 +1,26 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { galleryApi, type GalleryFilterParams } from '@/api/gallery'
+import { galleryApi, type GalleryFacets, type GalleryFilterParams } from '@/api/gallery'
+import { accountApi } from '@/api/account'
 import { useToastStore } from './toast'
-import type { Asset, Category, GalleryFilterState } from '@/types'
+import type { Asset, Category, GalleryFilterState, GalleryPreset, GalleryPresetFilters } from '@/types'
+
+/** Filter keys that are shared via URL and stored in presets (view preferences excluded). */
+const FILTER_KEYS = [
+  'q',
+  'min_rating',
+  'unrated',
+  'time_preset',
+  'date_from',
+  'date_to',
+  'category_ids',
+  'profile_name',
+  'provider',
+  'model',
+  'collapse_stacks',
+] as const
+
+type FilterKey = (typeof FILTER_KEYS)[number]
 
 export const useGalleryStore = defineStore('gallery', () => {
   const toastStore = useToastStore()
@@ -27,15 +45,18 @@ export const useGalleryStore = defineStore('gallery', () => {
   const VIEW_PREFS_KEY = 'lumigen_gallery_view'
   const PAGE_SIZE = 40
 
-  function readViewPrefs(): Pick<GalleryFilterState, 'thumb_size' | 'thumb_fit'> {
+  type ViewPrefs = Pick<GalleryFilterState, 'thumb_size' | 'thumb_fit' | 'group_by_date'>
+
+  function readViewPrefs(): ViewPrefs {
     try {
       const raw = JSON.parse(localStorage.getItem(VIEW_PREFS_KEY) || '{}')
       return {
         thumb_size: ['sm', 'md', 'lg'].includes(raw.thumb_size) ? raw.thumb_size : 'md',
         thumb_fit: raw.thumb_fit === 'contain' ? 'contain' : 'cover',
+        group_by_date: raw.group_by_date !== false,
       }
     } catch (_e) {
-      return { thumb_size: 'md', thumb_fit: 'cover' }
+      return { thumb_size: 'md', thumb_fit: 'cover', group_by_date: true }
     }
   }
 
@@ -44,6 +65,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       q: '',
       profile_name: '',
       provider: '',
+      model: '',
       min_rating: null,
       unrated: false,
       time_preset: '',
@@ -59,10 +81,13 @@ export const useGalleryStore = defineStore('gallery', () => {
   const filters = ref<GalleryFilterState>(defaultFilters())
 
   watch(
-    () => [filters.value.thumb_size, filters.value.thumb_fit],
-    ([thumbSize, thumbFit]) => {
+    () => [filters.value.thumb_size, filters.value.thumb_fit, filters.value.group_by_date],
+    ([thumbSize, thumbFit, groupByDate]) => {
       try {
-        localStorage.setItem(VIEW_PREFS_KEY, JSON.stringify({ thumb_size: thumbSize, thumb_fit: thumbFit }))
+        localStorage.setItem(
+          VIEW_PREFS_KEY,
+          JSON.stringify({ thumb_size: thumbSize, thumb_fit: thumbFit, group_by_date: groupByDate })
+        )
       } catch (_e) {
         // Storage unavailable: preferences simply do not persist.
       }
@@ -79,8 +104,126 @@ export const useGalleryStore = defineStore('gallery', () => {
     if (f.category_ids.length) count++
     if (f.profile_name) count++
     if (f.provider) count++
+    if (f.model) count++
     return count
   })
+
+  // --- Facets (provider / model / profile options) ---------------------------
+  const facets = ref<GalleryFacets>({ providers: [], models: [], profiles: [] })
+
+  async function loadFacets() {
+    try {
+      facets.value = await galleryApi.getFacets()
+    } catch (_e) {
+      // Filters simply show no extra options.
+    }
+  }
+
+  // --- URL sync ---------------------------------------------------------------
+  /** Serialize the active filters into URL query parameters (defaults are omitted). */
+  function filtersToQuery(): Record<string, string> {
+    const f = filters.value
+    const query: Record<string, string> = {}
+    if (f.q.trim()) query.q = f.q.trim()
+    if (f.unrated) query.rating = 'unrated'
+    else if (f.min_rating) query.rating = String(f.min_rating)
+    if (f.time_preset) query.time = f.time_preset
+    if (f.date_from) query.from = f.date_from
+    if (f.date_to) query.to = f.date_to
+    if (f.category_ids.length) query.cats = f.category_ids.join(',')
+    if (f.profile_name) query.profile = f.profile_name
+    if (f.provider) query.provider = f.provider
+    if (f.model) query.model = f.model
+    if (!f.collapse_stacks) query.stacks = 'expanded'
+    return query
+  }
+
+  /** Apply filters from URL query parameters; unknown or missing keys fall back to defaults. */
+  function applyQuery(query: Record<string, unknown>) {
+    const read = (key: string) => (typeof query[key] === 'string' ? (query[key] as string) : '')
+    const rating = read('rating')
+    const cats = read('cats')
+      .split(',')
+      .map((v) => Number(v))
+      .filter((v) => Number.isInteger(v) && v > 0)
+    filters.value = {
+      ...filters.value,
+      q: read('q'),
+      unrated: rating === 'unrated',
+      min_rating: rating && rating !== 'unrated' ? Number(rating) || null : null,
+      time_preset: read('time'),
+      date_from: read('from'),
+      date_to: read('to'),
+      category_ids: cats,
+      profile_name: read('profile'),
+      provider: read('provider'),
+      model: read('model'),
+      collapse_stacks: read('stacks') !== 'expanded',
+    }
+  }
+
+  // --- Presets ----------------------------------------------------------------
+  const presets = ref<GalleryPreset[]>([])
+
+  function currentPresetFilters(): GalleryPresetFilters {
+    const result: Record<string, unknown> = {}
+    FILTER_KEYS.forEach((key: FilterKey) => {
+      result[key] = filters.value[key]
+    })
+    return result as GalleryPresetFilters
+  }
+
+  async function loadPresets() {
+    try {
+      presets.value = await accountApi.getGalleryPresets()
+    } catch (_e) {
+      presets.value = []
+    }
+  }
+
+  async function persistPresets(next: GalleryPreset[]) {
+    try {
+      presets.value = await accountApi.saveGalleryPresets(next)
+      return true
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Presets could not be saved.')
+      return false
+    }
+  }
+
+  async function savePreset(name: string) {
+    const trimmed = name.trim().slice(0, 40)
+    if (!trimmed) return
+    const existing = presets.value.find((p) => p.name.toLowerCase() === trimmed.toLowerCase())
+    const preset: GalleryPreset = {
+      id: existing?.id || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      name: trimmed,
+      filters: currentPresetFilters(),
+    }
+    const next = existing
+      ? presets.value.map((p) => (p.id === existing.id ? preset : p))
+      : [...presets.value, preset]
+    if (await persistPresets(next)) {
+      toastStore.success(existing ? `Preset "${trimmed}" updated.` : `Preset "${trimmed}" saved.`)
+    }
+  }
+
+  async function deletePreset(id: string) {
+    await persistPresets(presets.value.filter((p) => p.id !== id))
+  }
+
+  function applyPreset(preset: GalleryPreset) {
+    const { thumb_size, thumb_fit, group_by_date } = filters.value
+    filters.value = {
+      ...defaultFilters(),
+      ...preset.filters,
+      category_ids: [...(preset.filters.category_ids || [])],
+      thumb_size,
+      thumb_fit,
+      group_by_date,
+    }
+    fetchAssets(true)
+  }
 
   // Stack expansion state
   const expandedStackIds = ref<Set<string>>(new Set())
@@ -130,6 +273,7 @@ export const useGalleryStore = defineStore('gallery', () => {
       q: filters.value.q || undefined,
       profile_name: filters.value.profile_name || undefined,
       provider: filters.value.provider || undefined,
+      model: filters.value.model || undefined,
       min_rating: filters.value.min_rating || undefined,
       unrated: filters.value.unrated || undefined,
       time_preset: filters.value.time_preset || undefined,
@@ -278,6 +422,66 @@ export const useGalleryStore = defineStore('gallery', () => {
       selectedAssetIds.value.push(id)
     }
     lastSelectedAssetId.value = id
+  }
+
+  /** Replace (or extend, when ``additive``) the selection, e.g. after a rubber-band drag. */
+  function setSelection(ids: number[], additive = false) {
+    const next = additive ? new Set([...selectedAssetIds.value, ...ids]) : new Set(ids)
+    selectedAssetIds.value = Array.from(next)
+    lastSelectedAssetId.value = ids.length ? ids[ids.length - 1] : lastSelectedAssetId.value
+  }
+
+  function findLoadedAsset(id: number): Asset | undefined {
+    for (const asset of assets.value) {
+      if (asset.id === id) return asset
+      const nested = asset.stack_items?.find((item) => item.id === id)
+      if (nested) return nested
+    }
+    return undefined
+  }
+
+  /** Selected assets in selection order (also resolves items inside expanded stacks). */
+  const selectedAssets = computed<Asset[]>(() =>
+    selectedAssetIds.value.map(findLoadedAsset).filter((a): a is Asset => !!a)
+  )
+
+  /** Rate several assets at once (keyboard rating of a selection). */
+  async function rateAssets(ids: number[], rating: number) {
+    const targets = ids.map(findLoadedAsset).filter((a): a is Asset => !!a)
+    if (targets.length === 0) return
+    const results = await Promise.allSettled(targets.map((a) => galleryApi.rateAsset(a.id, rating)))
+    let ok = 0
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        targets[index].rating = result.value.rating
+        if (activeAsset.value?.id === targets[index].id) activeAsset.value.rating = result.value.rating
+        ok++
+      }
+    })
+    if (ok < targets.length) toastStore.error(`${targets.length - ok} ratings could not be saved.`)
+    else if (targets.length > 1) toastStore.success(`${ok} images rated ${rating} ★.`)
+  }
+
+  const isZipDownloading = ref(false)
+
+  async function downloadSelectedZip() {
+    if (selectedAssetIds.value.length === 0 || isZipDownloading.value) return
+    isZipDownloading.value = true
+    try {
+      const { blob, filename } = await galleryApi.downloadZip(selectedAssetIds.value)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (_error) {
+      toastStore.error('ZIP download failed.')
+    } finally {
+      isZipDownloading.value = false
+    }
   }
 
   function selectAll() {
@@ -507,9 +711,9 @@ export const useGalleryStore = defineStore('gallery', () => {
   }
 
   function resetFilters() {
-    // View preferences (size / crop) are not filters and survive a reset.
-    const { thumb_size, thumb_fit } = filters.value
-    filters.value = { ...defaultFilters(), thumb_size, thumb_fit }
+    // View preferences (size / crop / grouping) are not filters and survive a reset.
+    const { thumb_size, thumb_fit, group_by_date } = filters.value
+    filters.value = { ...defaultFilters(), thumb_size, thumb_fit, group_by_date }
     fetchAssets(true)
   }
 
@@ -525,6 +729,20 @@ export const useGalleryStore = defineStore('gallery', () => {
     hasMore,
     activeFilterCount,
     displayedAssets,
+    facets,
+    loadFacets,
+    filtersToQuery,
+    applyQuery,
+    presets,
+    loadPresets,
+    savePreset,
+    deletePreset,
+    applyPreset,
+    setSelection,
+    selectedAssets,
+    rateAssets,
+    isZipDownloading,
+    downloadSelectedZip,
     loadMore,
     searchDebounced,
     openAdjacentAsset,

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useQueueStore } from '@/stores/queue'
 import { useCreditsStore } from '@/stores/credits'
 import ThemeToggle from './ThemeToggle.vue'
+import { COPYRIGHT_NOTICE } from '@/constants/app'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -203,6 +204,10 @@ onUnmounted(() => {
             >
               🚪 Sign out
             </button>
+
+            <div class="mt-1 border-t border-slate-200 px-3 pt-2 pb-1 text-[10px] text-slate-400 dark:border-white/10 dark:text-slate-500">
+              {{ COPYRIGHT_NOTICE }}
+            </div>
           </div>
         </div>
 

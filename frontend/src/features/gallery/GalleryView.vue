@@ -1,43 +1,79 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useGalleryStore } from '@/stores/gallery'
 import { useImageViewerStore } from '@/stores/imageViewer'
 import GalleryFilters from './components/GalleryFilters.vue'
-import GalleryCard from './components/GalleryCard.vue'
+import VirtualAssetGrid from './components/VirtualAssetGrid.vue'
 import BatchActionBar from './components/BatchActionBar.vue'
 import AssetDetailModal from './components/AssetDetailModal.vue'
 import Spinner from '@/components/ui/Spinner.vue'
 import Button from '@/components/ui/Button.vue'
 
+const route = useRoute()
+const router = useRouter()
 const galleryStore = useGalleryStore()
 const imageViewerStore = useImageViewerStore()
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
+const hoveredAssetId = ref<number | null>(null)
 let observer: IntersectionObserver | null = null
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-
-  // Do not clear selection if a modal or image viewer is active
-  if (
+function isOverlayOpen() {
+  return (
     imageViewerStore.isOpen ||
     galleryStore.isDetailModalOpen ||
     document.body.style.overflow === 'hidden' ||
-    document.querySelector('.fixed.inset-0.z-50')
-  ) {
+    !!document.querySelector('.fixed.inset-0.z-50')
+  )
+}
+
+function isTypingTarget(el: EventTarget | null) {
+  const node = el as HTMLElement | null
+  return !!node && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT' || node.isContentEditable)
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (isOverlayOpen()) return
+
+  if (e.key === 'Escape') {
+    const activeEl = document.activeElement as HTMLElement | null
+    if (isTypingTarget(activeEl)) {
+      activeEl?.blur()
+      return
+    }
+    if (galleryStore.selectedAssetIds.length > 0) galleryStore.clearSelection()
     return
   }
 
-  // If focused in an input/textarea, blur it first
-  const activeEl = document.activeElement as HTMLElement | null
-  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-    activeEl.blur()
+  if (isTypingTarget(e.target)) return
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+    e.preventDefault()
+    galleryStore.selectAll()
     return
   }
+  if (e.ctrlKey || e.metaKey || e.altKey) return
 
-  if (galleryStore.selectedAssetIds.length > 0) {
-    galleryStore.clearSelection()
+  const targetId = hoveredAssetId.value
+  if (targetId === null) return
+
+  if (/^[0-5]$/.test(e.key)) {
+    // Rating a selected image applies to the whole selection.
+    const selection = galleryStore.selectedAssetIds
+    const ids = selection.length > 1 && selection.includes(targetId) ? [...selection] : [targetId]
+    galleryStore.rateAssets(ids, Number(e.key))
+    e.preventDefault()
+  } else if (e.key === ' ') {
+    e.preventDefault()
+    galleryStore.toggleSelectAsset(targetId, e.shiftKey)
+  } else if (e.key === 'Enter') {
+    const asset = galleryStore.displayedAssets.find((a) => a.id === targetId)
+    if (asset) {
+      e.preventDefault()
+      galleryStore.openDetailModal(asset)
+    }
   }
 }
 
@@ -50,7 +86,7 @@ function setupObserver() {
         galleryStore.loadMore()
       }
     },
-    { root: scrollContainerRef.value, rootMargin: '600px 0px' }
+    { root: scrollContainerRef.value, rootMargin: '800px 0px' }
   )
   observer.observe(sentinelRef.value)
 }
@@ -58,26 +94,53 @@ function setupObserver() {
 // The sentinel only exists once results are rendered.
 watch(sentinelRef, () => setupObserver())
 
+// --- URL <-> filter sync ------------------------------------------------------
+function queryKey(query: Record<string, unknown>) {
+  return JSON.stringify(
+    Object.keys(query)
+      .sort()
+      .map((key) => [key, query[key]])
+  )
+}
+
+const filterQuery = computed(() => galleryStore.filtersToQuery())
+
+// Filter changes update the URL: discrete changes push a history entry (so the
+// browser's Back button steps through them), typing in the search box replaces it.
+watch(filterQuery, (next, previous) => {
+  if (queryKey(next) === queryKey(route.query as Record<string, unknown>)) return
+  const onlySearchChanged =
+    previous && queryKey({ ...next, q: undefined }) === queryKey({ ...previous, q: undefined })
+  const navigate = onlySearchChanged ? router.replace : router.push
+  navigate({ query: next })
+})
+
+// Back/forward navigation: apply the URL filters and reload.
+watch(
+  () => route.query,
+  (query) => {
+    if (route.name !== 'gallery') return
+    if (queryKey(query as Record<string, unknown>) === queryKey(filterQuery.value)) return
+    galleryStore.applyQuery(query as Record<string, unknown>)
+    galleryStore.fetchAssets(true)
+  }
+)
+
 onMounted(() => {
+  if (Object.keys(route.query).length > 0) {
+    galleryStore.applyQuery(route.query as Record<string, unknown>)
+  } else if (Object.keys(filterQuery.value).length > 0) {
+    router.replace({ query: filterQuery.value })
+  }
   galleryStore.fetchAssets(true)
+  galleryStore.loadFacets()
+  galleryStore.loadPresets()
   window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
   observer?.disconnect()
-})
-
-const gridColsClass = computed(() => {
-  switch (galleryStore.filters.thumb_size) {
-    case 'sm':
-      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-2'
-    case 'lg':
-      return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4'
-    case 'md':
-    default:
-      return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9 gap-3'
-  }
 })
 
 const isInitialLoading = computed(() => galleryStore.isLoading && !galleryStore.hasLoadedOnce)
@@ -92,7 +155,7 @@ const isRefreshing = computed(() => galleryStore.isLoading && galleryStore.hasLo
     </div>
 
     <!-- Initial loading: skeleton grid -->
-    <div v-if="isInitialLoading" :class="['grid', gridColsClass]">
+    <div v-if="isInitialLoading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
       <div
         v-for="n in 18"
         :key="n"
@@ -133,14 +196,15 @@ const isRefreshing = computed(() => galleryStore.isLoading && galleryStore.hasLo
         </span>
       </div>
 
-      <div
-        :class="['grid transition-opacity duration-150', gridColsClass, isRefreshing ? 'opacity-60' : '']"
-        data-testid="gallery-grid"
-      >
-        <GalleryCard
-          v-for="asset in galleryStore.displayedAssets"
-          :key="asset.id"
-          :asset="asset"
+      <div :class="['transition-opacity duration-150', isRefreshing ? 'opacity-60' : '']">
+        <VirtualAssetGrid
+          :assets="galleryStore.displayedAssets"
+          :scroll-el="scrollContainerRef"
+          :thumb-size="galleryStore.filters.thumb_size"
+          :group-by-date="galleryStore.filters.group_by_date !== false"
+          :selected-ids="galleryStore.selectedAssetIds"
+          @selection="galleryStore.setSelection($event)"
+          @hover="hoveredAssetId = $event"
         />
       </div>
 
