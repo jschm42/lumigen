@@ -16,14 +16,19 @@ Lumigen is a local-first AI image studio (FastAPI monolith) for image generation
 Run all commands from the **repository root**.
 
 ```bash
-# 1. Create/activate a virtualenv
-# 2. Install Python deps
-pip install -r requirements.txt
-# 3. Apply migrations
-alembic upgrade head
-# 4. Install Node deps (required for JS/CSS lint and Playwright)
+# 1. Install Python deps (Poetry creates .venv/ in the repo, see poetry.toml)
+poetry install
+# 2. Install Node deps (required for JS/CSS lint, pre-commit and Playwright)
 npm.cmd ci          # use npm.cmd on Windows (PowerShell script-execution policy)
+# 3. Enable the pre-commit lint gate (ruff, djlint, eslint, stylelint)
+poetry run pre-commit install
+# 4. Apply migrations
+poetry run alembic upgrade head
 ```
+
+- Dependencies live in `pyproject.toml` (`[project].dependencies` = runtime, `[tool.poetry.group.dev]` = tests + linters); `poetry.lock` is committed. Add deps with `poetry add <pkg>` / `poetry add --group dev <pkg>`.
+- Activate `.venv` or prefix commands below with `poetry run`.
+- Commits are gated by `.pre-commit-config.yaml`; run all hooks with `poetry run pre-commit run --all-files`. Do not bypass with `--no-verify`.
 
 ## Running the app
 
@@ -55,7 +60,7 @@ npx.cmd eslint app/web/static/js/                  # JS lint
 npx.cmd stylelint "app/web/static/css/app.css"     # CSS lint
 ```
 
-Install linters if missing: `python -m pip install ruff djlint`
+Linters are part of the Poetry dev group (`poetry install`).
 
 ## Pre-PR validation order
 
@@ -131,6 +136,6 @@ Install linters if missing: `python -m pip install ruff djlint`
 
 ```
 .github/    alembic/    app/    tests/    scripts/    docs/    docker/    data/
-README.md   requirements.txt   pyproject.toml   pytest.ini   alembic.ini
+README.md   pyproject.toml   poetry.lock   .pre-commit-config.yaml   pytest.ini   alembic.ini
 package.json   eslint.config.mjs   Dockerfile   .stylelintrc.json   playwright.config.js
 ```

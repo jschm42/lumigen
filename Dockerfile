@@ -14,8 +14,10 @@ RUN apt-get update \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+ENV POETRY_VERSION=2.5.1     POETRY_VIRTUALENVS_CREATE=false     POETRY_NO_INTERACTION=1
+
+COPY pyproject.toml poetry.lock ./
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"     && poetry install --only main --no-root     && pip uninstall -y poetry     && rm -rf /root/.cache
 
 COPY alembic.ini ./
 COPY VERSION ./

@@ -42,7 +42,8 @@ Create images from prompts, keep everything organized, and iterate quickly with 
 ### Prerequisites
 
 - Python 3.12+
-- pip
+- [Poetry](https://python-poetry.org/docs/#installation) 2.x
+- Node.js (for JS/CSS lint and the pre-commit hook)
 - Optional: Docker
 
 ### 1) Clone and enter the repository
@@ -52,27 +53,37 @@ git clone <your-repo-url>
 cd lumigen
 ```
 
-### 2) Create and activate a virtual environment
+### 2) Install dependencies
+
+Poetry creates the virtual environment in `.venv/` (see `poetry.toml`).
+
+```bash
+poetry install
+npm ci            # Windows PowerShell: npm.cmd ci
+```
+
+Activate the environment (or prefix commands with `poetry run`):
 
 Windows PowerShell:
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
 macOS/Linux:
 
 ```bash
-python -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3) Install dependencies
+### 3) Enable the pre-commit lint gate
 
 ```bash
-pip install -r requirements.txt
+poetry run pre-commit install
 ```
+
+Every commit now runs ruff, djlint, eslint and stylelint on the staged files and is rejected if any linter fails.
+Run all hooks manually with `poetry run pre-commit run --all-files`.
 
 ### 4) Configure environment
 
@@ -125,7 +136,7 @@ Use this checklist when deploying the login/role feature to a new or existing in
 1. Install dependencies and run latest migration:
 
 ```bash
-pip install -r requirements.txt
+poetry install --only main
 alembic upgrade head
 ```
 

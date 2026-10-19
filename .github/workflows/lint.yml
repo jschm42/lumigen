@@ -18,10 +18,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --only dev --no-root
       - name: Run ruff
-        run: ruff check app/
+        run: poetry run ruff check app/
 
   lint-html:
     name: HTML (djlint)
@@ -31,10 +33,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install djlint
-        run: pip install djlint
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --only dev --no-root
       - name: Run djlint
-        run: djlint app/web/templates/ --lint
+        run: poetry run djlint app/web/templates/ --lint
 
   lint-js:
     name: JavaScript (eslint)

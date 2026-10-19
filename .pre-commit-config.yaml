@@ -1,0 +1,34 @@
+# Lint gate before every commit. Mirrors .github/workflows/lint.yml.
+# Setup once: `poetry install` then `poetry run pre-commit install`.
+default_install_hook_types: [pre-commit]
+fail_fast: false
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (Python)
+        entry: poetry run ruff check
+        language: system
+        types: [python]
+        files: ^app/
+
+      - id: djlint
+        name: djlint (templates)
+        entry: poetry run djlint --lint
+        language: system
+        types: [html]
+        files: ^app/web/templates/
+
+      - id: eslint
+        name: eslint (JavaScript)
+        entry: npx --no-install eslint
+        language: system
+        types: [javascript]
+        files: ^app/web/static/js/
+
+      - id: stylelint
+        name: stylelint (CSS)
+        entry: npx --no-install stylelint
+        language: system
+        files: ^app/web/static/css/app\.css$

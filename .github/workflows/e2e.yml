@@ -20,8 +20,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Poetry
+        run: pipx install poetry
+
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: poetry install --no-root
+
+      - name: Put Poetry venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - uses: actions/setup-node@v4
         with:

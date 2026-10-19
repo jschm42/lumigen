@@ -18,11 +18,11 @@ Use this file as the primary onboarding source. Trust these instructions first a
 ## Most reliable command order
 Always run commands from repository root.
 
-1. Create/activate virtualenv.
-2. Install Python deps: `pip install -r requirements.txt`.
-3. Apply migrations: `alembic upgrade head`.
-4. Install Node deps before JS/CSS lint: `npm ci`.
-5. Run app or tests/lints as needed.
+1. Install Python deps with Poetry (creates `.venv/`): `poetry install`.
+2. Install Node deps before JS/CSS lint: `npm ci`.
+3. Enable the commit lint gate: `poetry run pre-commit install`.
+4. Apply migrations: `alembic upgrade head`.
+5. Run app or tests/lints as needed (activate `.venv` or prefix with `poetry run`).
 
 ## Command matrix (validated)
 Status values: `verified`, `verified with caveat`, `failed here with workaround`, `documented only`.
@@ -36,17 +36,16 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 - `npx playwright test` -> run all Playwright e2e tests (requires `npm ci` and `npx playwright install --with-deps chromium` first).
 - `npx playwright test --ui` -> open the Playwright interactive UI runner.
 - `python scripts/smoke_web_routes.py` -> `verified with caveat`: currently fails with `AssertionError: admin page does not include external admin-page.js`.
-- `ruff check app/` -> `failed here with workaround`: command not found in shell until tool installed.
-- `python -m ruff check app/` -> `failed here with workaround`: module not installed in current venv.
-- `djlint app/web/templates/ --lint` -> `failed here with workaround`: command not found until installed.
+- `poetry run ruff check app/` -> ruff is in the Poetry dev group.
+- `poetry run djlint app/web/templates/ --lint` -> djlint is in the Poetry dev group.
+- `poetry run pre-commit run --all-files` -> runs the same lint gate as the git pre-commit hook.
 - `npm ci` -> `failed here with workaround` in PowerShell due `npm.ps1` execution policy.
 - `npm.cmd ci` -> `verified with caveat` (succeeds; observed AutoRun warning lines but install completes).
 - `npx eslint app/web/static/js/` -> use `npx.cmd eslint app/web/static/js/` on Windows PowerShell.
 - `npx stylelint "app/web/static/css/app.css"` -> use `npx.cmd stylelint "app/web/static/css/app.css"` on Windows PowerShell.
 
 ### Required workarounds observed
-- If `ruff`/`djlint` are missing locally, install first:
-	- `python -m pip install ruff djlint`
+- If `ruff`/`djlint`/`pre-commit` are missing locally, run `poetry install` (dev group).
 - For Playwright, install browsers after `npm ci`:
 	- `npx playwright install --with-deps chromium`
 - On Windows PowerShell with script execution restrictions, use `.cmd` shims:
@@ -122,7 +121,7 @@ Recommended pre-PR validation order:
 - `alembic.ini` uses `sqlite:///./data/app.db` (relative path): run Alembic from repo root.
 
 ## Root layout quick reference
-- Root files: `README.md`, `requirements.txt`, `pyproject.toml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`, `playwright.config.js`.
+- Root files: `README.md`, `pyproject.toml`, `poetry.lock`, `poetry.toml`, `.pre-commit-config.yaml`, `pytest.ini`, `alembic.ini`, `package.json`, `eslint.config.mjs`, `Dockerfile`, `.stylelintrc.json`, `playwright.config.js`.
 - Top directories: `.github/`, `alembic/`, `app/`, `tests/`, `scripts/`, `docs/`, `docker/`, `data/`.
 
 ## Playwright e2e tests
