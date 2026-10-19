@@ -21,7 +21,7 @@ Always run commands from repository root.
 1. Install Python deps with Poetry (creates `.venv/`): `poetry install`.
 2. Install Node deps before JS/CSS lint: `npm ci`.
 3. Enable the commit lint gate: `poetry run pre-commit install`.
-4. Apply migrations: `alembic upgrade head`.
+4. Apply migrations: `poetry run lumigen-migrate` (= `alembic upgrade head`).
 5. Run app or tests/lints as needed (activate `.venv` or prefix with `poetry run`).
 
 ## Command matrix (validated)
@@ -30,6 +30,7 @@ Status values: `verified`, `verified with caveat`, `failed here with workaround`
 - `python --version` -> `verified` (3.12.10).
 - `alembic upgrade head` -> `verified`.
 - `python -m app.main` -> `verified` (server starts on `http://127.0.0.1:8010`).
+- `poetry run lumigen` / `poetry run lumigen-migrate` -> Poetry scripts from `app/cli.py` (start server / apply migrations).
 - `python -m pytest -q tests/unit/test_gallery_service.py` -> `verified` (`5 passed`, ~0.4s).
 - `python -m pytest -q tests/ui_routes/test_ui_routes.py` -> `verified` (`15 passed`, ~12s).
 - `python -m pytest -q tests/routes tests/ui_routes` -> `verified` (`54 passed`, ~28s).

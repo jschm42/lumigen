@@ -23,7 +23,7 @@ npm.cmd ci          # use npm.cmd on Windows (PowerShell script-execution policy
 # 3. Enable the pre-commit lint gate (ruff, djlint, eslint, stylelint)
 poetry run pre-commit install
 # 4. Apply migrations
-poetry run alembic upgrade head
+poetry run lumigen-migrate
 ```
 
 - Dependencies live in `pyproject.toml` (`[project].dependencies` = runtime, `[tool.poetry.group.dev]` = tests + linters); `poetry.lock` is committed. Add deps with `poetry add <pkg>` / `poetry add --group dev <pkg>`.
@@ -33,8 +33,11 @@ poetry run alembic upgrade head
 ## Running the app
 
 ```bash
-python -m app.main
+poetry run lumigen-migrate   # apply migrations (alembic upgrade head)
+poetry run lumigen           # start the server (python -m app.main)
 ```
+
+Entry points are defined in `[project.scripts]` (`pyproject.toml`) and implemented in `app/cli.py`.
 
 ## Testing
 

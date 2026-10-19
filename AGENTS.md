@@ -29,7 +29,7 @@ npm.cmd ci          # use .cmd on Windows PowerShell
 # 3. Enable the pre-commit lint gate
 poetry run pre-commit install
 # 4. Apply migrations
-poetry run alembic upgrade head
+poetry run lumigen-migrate
 # 5. Install Playwright browsers (once)
 npx.cmd playwright install --with-deps chromium
 ```
@@ -47,8 +47,11 @@ Use `.cmd` shims on Windows PowerShell:
 ## Running the app
 
 ```bash
-python -m app.main
+poetry run lumigen-migrate   # apply migrations (alembic upgrade head)
+poetry run lumigen           # start the server (python -m app.main)
 ```
+
+Entry points are defined in `[project.scripts]` (`pyproject.toml`) and implemented in `app/cli.py`.
 
 ## Testing
 

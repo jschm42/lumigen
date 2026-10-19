@@ -1,5 +1,7 @@
 [project]
 name = "lumigen"
+# Keep in sync with the VERSION file (scripts/update_version.py updates both).
+version = "0.4.2-beta"
 description = "Local-first AI image studio for image generation, gallery management, metadata sidecars, and optional upscaling."
 requires-python = ">=3.12"
 dependencies = [
@@ -17,9 +19,13 @@ dependencies = [
     "huggingface_hub>=0.24.0",
 ]
 
+[project.scripts]
+lumigen = "app.cli:start"
+lumigen-migrate = "app.cli:migrate"
+
 [tool.poetry]
-# Lumigen is an application, not a distributable package.
-package-mode = false
+# Package mode is required so Poetry installs the [project.scripts] entry points.
+packages = [{ include = "app" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.3.0"

@@ -102,7 +102,7 @@ For a local-only first run, the default `.env` values are enough.
 ### 5) Run database migrations
 
 ```bash
-alembic upgrade head
+poetry run lumigen-migrate      # same as: alembic upgrade head
 ```
 
 ### 6) Build the frontend SPA
@@ -116,8 +116,11 @@ npm run build
 ### 7) Start the app
 
 ```bash
-python -m app.main
+poetry run lumigen              # same as: python -m app.main
 ```
+
+`lumigen` reads `HOST`, `PORT`, `UVICORN_RELOAD`, `LUMIGEN_SSL_CERT_FILE` and `LUMIGEN_SSL_KEY_FILE` from the environment.
+Both commands are Poetry scripts defined in `[project.scripts]` (`pyproject.toml`) and implemented in `app/cli.py`.
 
 Alternative dev command:
 
