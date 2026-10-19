@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from app.config import Settings
-from app.providers.base import ProviderGenerationRequest, ProviderInputImage
+from app.providers.base import ProviderError, ProviderGenerationRequest, ProviderInputImage
 from app.providers.bfl_adapter import BFLAdapter
 from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
@@ -83,7 +83,18 @@ async def test_google_generate_calls_expected_endpoint_and_payload(monkeypatch: 
         seed=12,
         output_format="png",
         model="gemini-2.0-flash-preview-image-generation",
-        params={"safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}]},
+        params={
+            "safetySettings": [
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_ONLY_HIGH",
+                }
+            ],
+            "image_config": {
+                "aspect_ratio": "16:9",
+                "image_size": "2K",
+            },
+        },
     )
 
     result = await adapter.generate(request, settings)
@@ -94,9 +105,12 @@ async def test_google_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     assert call["headers"]["Content-Type"] == "application/json"
     assert call["params"]["key"] == "google-key"
     assert call["json"]["contents"][0]["parts"][0]["text"] == "A river"
-    assert call["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
+    assert call["json"]["generationConfig"]["responseModalities"] == ["TEXT", "IMAGE"]
     assert call["json"]["generationConfig"]["candidateCount"] == 1
     assert call["json"]["generationConfig"]["seed"] == 12
+    assert "responseMimeType" not in call["json"]["generationConfig"]
+    assert call["json"]["generationConfig"]["imageConfig"]["aspectRatio"] == "16:9"
+    assert call["json"]["generationConfig"]["imageConfig"]["imageSize"] == "2K"
     assert "safetySettings" in call["json"]
     assert len(result.images) == 1
     assert result.images[0].width == 22
@@ -108,10 +122,13 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     calls: list[dict] = []
     image_bytes = _png_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    captured_timeout: httpx.Timeout | None = None
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-            _ = args, kwargs
+            _ = args
+            nonlocal captured_timeout
+            captured_timeout = kwargs.get("timeout")
 
         async def __aenter__(self):
             return self
@@ -131,7 +148,12 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", FakeAsyncClient)
 
     adapter = OpenAIAdapter()
-    settings = Settings(openai_api_key="openai-key", openai_base_url="https://api.openai.test/v1")
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+        provider_openai_generate_timeout_seconds=91,
+        provider_openai_generate_connect_timeout_seconds=7,
+    )
     request = ProviderGenerationRequest(
         prompt="A mountain",
         width=640,
@@ -156,9 +178,299 @@ async def test_openai_generate_calls_expected_endpoint_and_payload(monkeypatch: 
     assert call["json"]["size"] == "640x480"
     assert call["json"]["output_format"] == "png"
     assert call["json"]["quality"] == "high"
+    assert isinstance(captured_timeout, httpx.Timeout)
+    assert captured_timeout.connect == pytest.approx(7)
+    assert captured_timeout.read == pytest.approx(91)
     assert len(result.images) == 1
     assert result.images[0].width == 640
     assert result.images[0].height == 480
+
+
+def _multipart_records_from_call(call: dict) -> tuple[list[tuple[str, tuple[str, bytes, str]]], dict[str, str]]:
+    """Convert a captured ``post`` call into (files, data) tuples for assertions."""
+    raw_files = call.get("files") or []
+    files: list[tuple[str, tuple[str, bytes, str]]] = []
+    for field_name, file_tuple in raw_files:
+        filename, file_obj, content_type = file_tuple
+        files.append((field_name, (filename, file_obj.read(), content_type)))
+    return files, dict(call.get("data") or {})
+
+
+class _MultipartCapturingClient:
+    """Test double that records ``post`` calls, including multipart ``files`` and ``data``."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        _ = args, kwargs
+        self.calls: list[dict] = []
+
+    async def __aenter__(self) -> _MultipartCapturingClient:
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> bool:
+        return False
+
+    async def post(  # type: ignore[no-untyped-def]
+        self,
+        url: str,
+        headers: dict | None = None,
+        json: dict | None = None,
+        data: dict | None = None,
+        files: list | None = None,
+        params: dict | None = None,
+    ) -> httpx.Response:
+        _ = json, params
+        self.calls.append(
+            {
+                "method": "POST",
+                "url": url,
+                "headers": headers or {},
+                "data": data or {},
+                "files": files or [],
+            }
+        )
+        image_bytes = _png_bytes(8, 8)
+        image_b64 = base64.b64encode(image_bytes).decode("ascii")
+        return _json_response(
+            "POST",
+            url,
+            200,
+            {"created": 99, "data": [{"b64_json": image_b64}]},
+        )
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_input_images_uses_edits_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Make it look like a watercolor",
+        width=1024,
+        height=1024,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gpt-image-1",
+        input_images=[ProviderInputImage(data=_png_bytes(16, 16), mime="image/png")],
+        params={"quality": "high"},
+    )
+
+    result = await adapter.generate(request, settings)
+
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["url"] == "https://api.openai.test/v1/images/edits"
+    assert call["headers"]["Authorization"] == "Bearer openai-key"
+    assert "Content-Type" not in call["headers"]
+
+    files, data = _multipart_records_from_call(call)
+    assert data["model"] == "gpt-image-1"
+    assert data["prompt"] == "Make it look like a watercolor"
+    assert data["n"] == "1"
+    assert data["size"] == "1024x1024"
+    assert data["output_format"] == "png"
+    assert "response_format" not in data
+    assert data["quality"] == "high"
+
+    assert len(files) == 1
+    field_name, (filename, file_bytes, content_type) = files[0]
+    assert field_name == "image[]"
+    assert filename.endswith(".png")
+    assert content_type == "image/png"
+    assert file_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+
+    assert len(result.images) == 1
+    assert result.images[0].mime == "image/png"
+    assert result.raw_meta["model"] == "gpt-image-1"
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_multiple_input_images_sends_array_field_and_mask(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Blend the two",
+        width=512,
+        height=512,
+        n_images=2,
+        seed=None,
+        output_format="webp",
+        model="gpt-image-1",
+        input_images=[
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+        ],
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert data["model"] == "gpt-image-1"
+    assert data["n"] == "2"
+    assert data["output_format"] == "webp"
+
+    image_fields = [name for name, _ in files if name == "image[]"]
+    mask_fields = [name for name, _ in files if name == "mask"]
+    assert len(image_fields) == 1
+    assert len(mask_fields) == 1
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_expand_internal_params_omits_them_from_multipart_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Continue the scene",
+        width=640,
+        height=480,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="gpt-image-2",
+        input_images=[
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+        ],
+        params={
+            "padded_image": b"ignored",
+            "mask": b"ignored-mask",
+            "target_width": 640,
+            "target_height": 480,
+            "quality": "high",
+        },
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert call["url"] == "https://api.openai.test/v1/images/edits"
+    assert data["model"] == "gpt-image-2"
+    assert data["quality"] == "high"
+    assert "padded_image" not in data
+    assert "mask" not in data
+    assert "target_width" not in data
+    assert "target_height" not in data
+    assert any(name == "image[]" for name, _ in files)
+    assert any(name == "mask" for name, _ in files)
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_dalle2_input_images_uses_edits_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="Turn it into a sketch",
+        width=256,
+        height=256,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="dall-e-2",
+        input_images=[
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+            ProviderInputImage(data=_png_bytes(16, 16), mime="image/png"),
+        ],
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert call["url"] == "https://api.openai.test/v1/images/edits"
+    assert data["model"] == "dall-e-2"
+    assert data["response_format"] == "b64_json"
+    assert "output_format" not in data
+    assert data["prompt"] == "Turn it into a sketch"
+
+    image_fields = [name for name, _ in files if name == "image"]
+    assert len(image_fields) == 1
+    assert any(name == "mask" for name, _ in files)
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_dalle2_no_prompt_uses_variations_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _MultipartCapturingClient()
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", lambda *a, **kw: client)
+
+    adapter = OpenAIAdapter()
+    settings = Settings(
+        openai_api_key="openai-key",
+        openai_base_url="https://api.openai.test/v1",
+    )
+    request = ProviderGenerationRequest(
+        prompt="",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="dall-e-2",
+        input_images=[ProviderInputImage(data=_png_bytes(16, 16), mime="image/png")],
+    )
+
+    await adapter.generate(request, settings)
+
+    call = client.calls[0]
+    files, data = _multipart_records_from_call(call)
+    assert call["url"] == "https://api.openai.test/v1/images/variations"
+    assert data["model"] == "dall-e-2"
+    assert data["response_format"] == "b64_json"
+    assert "prompt" not in data
+    assert len([name for name, _ in files if name == "image"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_openai_generate_with_dalle3_input_images_raises_error() -> None:
+    adapter = OpenAIAdapter()
+    settings = Settings(openai_api_key="openai-key")
+    request = ProviderGenerationRequest(
+        prompt="Edit it",
+        width=1024,
+        height=1024,
+        n_images=1,
+        seed=None,
+        output_format="png",
+        model="dall-e-3",
+        input_images=[ProviderInputImage(data=_png_bytes(16, 16), mime="image/png")],
+    )
+
+    with pytest.raises(ProviderError, match="DALL-E 3 does not support input images"):
+        await adapter.generate(request, settings)
 
 
 @pytest.mark.asyncio
@@ -313,6 +625,97 @@ async def test_bfl_generate_calls_submit_and_polling_endpoints(monkeypatch: pyte
     assert poll_call["method"] == "GET"
     assert poll_call["url"] == "https://poll.bfl.test/result/req-123"
     assert poll_call["headers"]["accept"] == "application/json"
+
+    assert len(result.images) == 1
+    assert result.images[0].width == 18
+    assert result.images[0].height == 14
+
+
+@pytest.mark.asyncio
+async def test_bfl_generate_flux3_image_payload_and_polling(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict] = []
+    poll_statuses = ["Reasoning", "Generating", "Ready"]
+    sample_bytes = _png_bytes(18, 14)
+    sample_b64 = base64.b64encode(sample_bytes).decode("ascii")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "POST", "url": url, "headers": headers or {}, "json": json})
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {"id": "flux3-req-1", "polling_url": "https://poll.bfl.test/result/flux3-1"},
+            )
+
+        async def get(self, url, headers=None):  # type: ignore[no-untyped-def]
+            calls.append({"method": "GET", "url": url, "headers": headers or {}, "json": None})
+            status = poll_statuses.pop(0) if poll_statuses else "Ready"
+            resp: dict[str, object] = {"status": status}
+            if status == "Ready":
+                resp["result"] = {"sample": sample_b64}
+            return _json_response("GET", url, 200, resp)
+
+    async def fast_sleep(_duration: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.providers.bfl_adapter.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.providers.bfl_adapter.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr(BFLAdapter, "_write_debug_log", lambda self, prefix, data: None)
+
+    adapter = BFLAdapter()
+    settings = Settings(bfl_api_key="bfl-key")
+
+    # Test with model alias "flux-3", aspect ratio 16:9 via resolution 1920x1080 and params
+    request = ProviderGenerationRequest(
+        prompt="A rabbit riding a pumpkin",
+        width=1920,
+        height=1080,
+        n_images=1,
+        seed=42,  # Should be omitted for flux-3-image
+        output_format="png",  # Should be omitted for flux-3-image
+        model="flux-3",  # Should be normalized to flux-3-image
+        params={
+            "resolution": "2K",
+            "aspect_ratio": "16:9",
+            "safety_tolerance": 3,
+            "grounding": False,
+        },
+    )
+
+    result = await adapter.generate(request, settings)
+
+    assert len(calls) == 4  # 1 POST + 3 GETs (Reasoning, Generating, Ready)
+    submit_call = calls[0]
+
+    assert submit_call["method"] == "POST"
+    assert submit_call["url"] == "https://api.bfl.ai/v1/flux-3-image"
+    assert submit_call["headers"]["x-key"] == "bfl-key"
+
+    # Strictly forbidden extra fields MUST NOT be present
+    payload = submit_call["json"]
+    assert "width" not in payload
+    assert "height" not in payload
+    assert "seed" not in payload
+    assert "output_format" not in payload
+    assert "num_images" not in payload
+    assert "input_image" not in payload
+
+    # Allowed fields
+    assert payload["prompt"] == "A rabbit riding a pumpkin"
+    assert payload["aspect_ratio"] == "16:9"
+    assert payload["resolution"] == "2k"
+    assert payload["safety_tolerance"] == 3
+    assert payload["grounding"] is False
 
     assert len(result.images) == 1
     assert result.images[0].width == 18

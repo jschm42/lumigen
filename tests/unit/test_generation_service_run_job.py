@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from app.config import Settings
 from app.db.models import Generation
 from app.providers.base import (
+    ExpandSpec,
     ProviderGenerationRequest,
     ProviderGenerationResult,
     ProviderImage,
@@ -301,3 +303,76 @@ async def test_run_generation_job_cancelled_cleans_up_without_failure_sidecar(
     assert session.commits == 2
     assert sidecars.failure_calls == 0
     assert storage.deletes
+
+
+def test_prepare_provider_request_builds_expand_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:
+    generation = _build_generation()
+    source_asset = SimpleNamespace(id=44, generation=generation)
+    storage = _FakeStorageService()
+    service = GenerationService(
+        settings=Settings(),
+        registry=SimpleNamespace(),
+        storage_service=storage,
+        thumbnail_service=SimpleNamespace(),
+        sidecar_service=SimpleNamespace(),
+        model_config_service=None,
+        upscale_service=None,
+    )
+    request = ProviderGenerationRequest(
+        prompt="original prompt",
+        width=512,
+        height=512,
+        n_images=1,
+        seed=1,
+        output_format="png",
+        model="gpt-image-1",
+        api_key="openai-key",
+        params={},
+        mode="expand",
+        expand=ExpandSpec(
+            top=12,
+            right=14,
+            bottom=16,
+            left=18,
+            continuation_prompt="continue scene",
+            source_asset_id=44,
+        ),
+    )
+
+    monkeypatch.setattr(
+        "app.services.generation_service.crud.get_asset",
+        lambda _session, asset_id, with_generation=True: source_asset if asset_id == 44 else None,
+    )
+    monkeypatch.setattr(
+        service,
+        "asset_absolute_path",
+        lambda _asset, which="file": Path(__file__),
+    )
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda self: b"source-image",
+    )
+
+    class _Artifacts:
+        padded = SimpleNamespace(data=b"padded", width=100, height=120, source_offset_x=18, source_offset_y=12)
+        mask_bytes = b"mask"
+        target_width = 100
+        target_height = 120
+
+    monkeypatch.setattr(
+        "app.services.generation_service.ExpandService.prepare",
+        lambda data, spec: _Artifacts(),
+    )
+
+    prepared = service._prepare_provider_request(SimpleNamespace(), request)
+
+    assert "Extend the provided image only into the transparent border areas." in prepared.prompt
+    assert "Do not redraw, replace, or alter the original image area." in prepared.prompt
+    assert prepared.prompt.endswith("Additional edge guidance: continue scene")
+    assert prepared.width == 100
+    assert prepared.height == 120
+    assert len(prepared.input_images) == 2
+    assert prepared.input_images[0].data == b"padded"
+    assert prepared.input_images[1].data == b"mask"
+    assert prepared.params["target_width"] == 100

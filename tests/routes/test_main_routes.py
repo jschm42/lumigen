@@ -9,6 +9,7 @@ from app.providers.base import ProviderError
 class _FakeSession:
     def __init__(self) -> None:
         self.added = []
+        self.deleted = []
         self.commits = 0
         self._scalar_value = None
         self._scalars_result = []
@@ -18,6 +19,9 @@ class _FakeSession:
 
     def commit(self) -> None:
         self.commits += 1
+
+    def delete(self, item) -> None:  # type: ignore[no-untyped-def]
+        self.deleted.append(item)
 
     def scalar(self, _query):  # type: ignore[no-untyped-def]
         return self._scalar_value
@@ -34,7 +38,8 @@ def _override_session(fake_session: _FakeSession):
 
 
 def test_provider_models_success(client, app_module, monkeypatch) -> None:
-    async def fake_list_models(provider: str) -> list[str]:
+    async def fake_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        _ = api_key
         assert provider == "stub"
         return ["model-b", "model-a"]
 
@@ -50,8 +55,8 @@ def test_provider_models_success(client, app_module, monkeypatch) -> None:
 
 
 def test_provider_models_error_returns_payload(client, app_module, monkeypatch) -> None:
-    async def failing_list_models(provider: str) -> list[str]:
-        _ = provider
+    async def failing_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        _ = provider, api_key
         raise ProviderError("provider unavailable")
 
     monkeypatch.setattr(
@@ -109,10 +114,43 @@ def test_session_preferences_success_calls_crud(client, app_module, monkeypatch)
     }
 
 
+def test_new_artbook_creates_empty_session_and_redirects(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    called: dict[str, object] = {}
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    monkeypatch.setattr(app_module, "build_chat_session_token", lambda: "session:new123")
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+
+    def fake_upsert(_session, chat_session_id, **_kwargs):  # type: ignore[no-untyped-def]
+        called["chat_session_id"] = chat_session_id
+        return SimpleNamespace(chat_session_id=chat_session_id)
+
+    monkeypatch.setattr(app_module.crud, "upsert_chat_session_preferences", fake_upsert)
+
+    response = client.post(
+        "/sessions/new",
+        data={
+            "workspace_view": "chat",
+            "artbook_filter": "today",
+            "artbook_name_query": "fox",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Anew123&artbook_filter=today&artbook_name_query=fox"
+    assert called["chat_session_id"] == "session:new123"
+
+
 def test_rename_session_updates_generations_and_redirects(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
     generation_one = SimpleNamespace(request_snapshot_json={"foo": "bar"})
     generation_two = SimpleNamespace(request_snapshot_json={})
+    chat_session_row = SimpleNamespace(chat_session_id="session:abc", title=None)
 
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
@@ -121,6 +159,9 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
         app_module,
         "list_generations_for_session_token",
         lambda _session, _token: [generation_one, generation_two],
+    )
+    monkeypatch.setattr(
+        app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row
     )
 
     response = client.post(
@@ -135,11 +176,95 @@ def test_rename_session_updates_generations_and_redirects(client, app_module, mo
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc"
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc&artbook_filter=all"
     assert generation_one.request_snapshot_json["chat_session_title"] == "My Session"
     assert generation_two.request_snapshot_json["chat_session_title"] == "My Session"
+    assert chat_session_row.title == "My Session"
     assert fake_session.commits == 1
-    assert len(fake_session.added) == 2
+    assert chat_session_row in fake_session.added
+    assert generation_one in fake_session.added
+    assert generation_two in fake_session.added
+
+
+def test_rename_session_persists_title_on_empty_artbook(
+    client, app_module, monkeypatch
+) -> None:
+    """Renaming a freshly created Artbook (no generations yet) must persist the title on the ChatSession row."""
+    fake_session = _FakeSession()
+    chat_session_row = SimpleNamespace(
+        chat_session_id="session:empty", title=None
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [],
+    )
+    monkeypatch.setattr(
+        app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row
+    )
+
+    response = client.post(
+        "/sessions/rename",
+        data={
+            "session_token": "session:empty",
+            "title": "My Empty Artbook",
+            "active_conversation": "session:empty",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert chat_session_row.title == "My Empty Artbook"
+    assert chat_session_row in fake_session.added
+    assert fake_session.commits == 1
+
+
+def test_rename_session_creates_missing_chat_session_row(
+    client, app_module, monkeypatch
+) -> None:
+    """If the ChatSession row is missing but generations exist (legacy data), the endpoint creates the row and persists the title."""
+    fake_session = _FakeSession()
+    created_row = SimpleNamespace(chat_session_id="session:orphan", title=None)
+    generation = SimpleNamespace(request_snapshot_json={})
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [generation],
+    )
+    monkeypatch.setattr(
+        app_module.crud, "get_chat_session", lambda _session, _token: None
+    )
+    monkeypatch.setattr(
+        app_module.crud,
+        "upsert_chat_session_preferences",
+        lambda _session, chat_session_id, **_kwargs: created_row,
+    )
+
+    response = client.post(
+        "/sessions/rename",
+        data={
+            "session_token": "session:orphan",
+            "title": "Rescued Artbook",
+            "active_conversation": "session:orphan",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert created_row.title == "Rescued Artbook"
+    assert generation.request_snapshot_json["chat_session_title"] == "Rescued Artbook"
+    assert created_row in fake_session.added
+    assert fake_session.commits == 1
 
 
 def test_archive_session_marks_generations_as_archived(client, app_module, monkeypatch) -> None:
@@ -166,13 +291,14 @@ def test_archive_session_marks_generations_as_archived(client, app_module, monke
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?workspace_view=chat&conversation=new"
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new&artbook_filter=all"
     assert generation.request_snapshot_json["chat_archived"] is True
     assert fake_session.commits == 1
 
 
 def test_delete_session_marks_chat_history_deleted_without_removing_assets(client, app_module, monkeypatch) -> None:
     fake_session = _FakeSession()
+    chat_session_row = SimpleNamespace(chat_session_id="session:abc")
     generation = SimpleNamespace(
         request_snapshot_json={
             "chat_session_id": "session:abc",
@@ -189,6 +315,7 @@ def test_delete_session_marks_chat_history_deleted_without_removing_assets(clien
         "list_generations_for_session_token",
         lambda _session, _token: [generation],
     )
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row)
 
     response = client.post(
         "/sessions/delete",
@@ -201,7 +328,7 @@ def test_delete_session_marks_chat_history_deleted_without_removing_assets(clien
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?workspace_view=chat&conversation=new"
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new&artbook_filter=all"
     snapshot = generation.request_snapshot_json
     assert snapshot["chat_hidden"] is True
     assert snapshot["chat_deleted"] is True
@@ -209,6 +336,103 @@ def test_delete_session_marks_chat_history_deleted_without_removing_assets(clien
     assert "chat_session_id" not in snapshot
     assert "chat_session_title" not in snapshot
     assert fake_session.commits == 1
+    assert chat_session_row in fake_session.deleted
+
+
+def test_delete_session_removes_empty_artbook_row(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    chat_session_row = SimpleNamespace(chat_session_id="session:empty")
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [],
+    )
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: chat_session_row)
+
+    response = client.post(
+        "/sessions/delete",
+        data={
+            "session_token": "session:empty",
+            "active_conversation": "session:empty",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=new&artbook_filter=all"
+    assert chat_session_row in fake_session.deleted
+    assert fake_session.commits == 1
+
+
+def test_set_session_cover_updates_snapshot_and_redirects(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    generation = SimpleNamespace(
+        request_snapshot_json={"chat_session_id": "session:abc"},
+        assets=[SimpleNamespace(id=11), SimpleNamespace(id=22)],
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token, with_assets=False: [generation],
+    )
+
+    response = client.post(
+        "/sessions/cover",
+        data={
+            "session_token": "session:abc",
+            "asset_id": "22",
+            "active_conversation": "session:abc",
+            "workspace_view": "chat",
+            "artbook_filter": "today",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?workspace_view=chat&conversation=session%3Aabc&artbook_filter=today"
+    assert generation.request_snapshot_json["chat_cover_asset_id"] == 22
+    assert fake_session.commits == 1
+
+
+def test_set_session_cover_rejects_asset_outside_session(client, app_module, monkeypatch) -> None:
+    fake_session = _FakeSession()
+    generation = SimpleNamespace(
+        request_snapshot_json={"chat_session_id": "session:abc"},
+        assets=[SimpleNamespace(id=11)],
+    )
+
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    monkeypatch.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token, with_assets=False: [generation],
+    )
+
+    response = client.post(
+        "/sessions/cover",
+        data={
+            "session_token": "session:abc",
+            "asset_id": "99",
+            "active_conversation": "session:abc",
+            "workspace_view": "chat",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "error=Image+does+not+belong+to+this+session" in response.headers["location"]
+    assert fake_session.commits == 0
 
 
 def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monkeypatch) -> None:
@@ -219,7 +443,7 @@ def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monk
     monkeypatch.setattr(
         app_module,
         "build_session_items",
-        lambda _session, offset=0, limit=10, max_days=None: (
+        lambda _session, offset=0, limit=10, max_days=None, artbook_filter="all", artbook_name_query="": (
             [
                 {
                     "token": "session:one",
@@ -229,6 +453,9 @@ def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monk
                     "time_category": "last7days",
                     "time_category_label": "Last 7 days",
                     "latest_created_at": None,
+                    "cover_asset_id": None,
+                    "cover_thumb_url": "",
+                    "active_filter_label": "Last updated",
                 }
             ],
             True,
@@ -242,7 +469,7 @@ def test_sessions_list_fragment_renders_loading_trigger(client, app_module, monk
 
     assert response.status_code == 200
     assert "Session One" in body
-    assert "Loading more sessions..." in body
+    assert "Loading more artbooks..." in body
     assert "hx-get=\"/sessions/list-fragment?offset=1" in body
 
 
@@ -339,6 +566,53 @@ def test_generate_submit_with_fal_model_override_sets_fal_overrides(
     assert overrides["upscale_provider"] == "fal"
     assert overrides["upscale_model"] == "fal-ai/topaz/upscale/image"
     assert overrides["upscale_topaz_model_id"] == 7
+
+
+def test_generate_submit_with_google_controls_sets_image_config_overrides(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    captured: dict[str, object] = {}
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="google",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={"image_config": {"legacy": "keep"}},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def create_generation_from_profile(self, _session, _profile, _prompt, overrides=None):  # type: ignore[no-untyped-def]
+            captured["overrides"] = dict(overrides or {})
+            return SimpleNamespace(id=18)
+
+        def enqueue(self, *_args, **_kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "prompt",
+            "profile_id": "1",
+            "google_aspect_ratio": "16:9",
+            "google_resolution": "2K",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "workspace_view=chat" in response.headers["location"]
+    overrides = captured["overrides"]
+    assert overrides["params_json"]["image_config"]["aspect_ratio"] == "16:9"
+    assert overrides["params_json"]["image_config"]["image_size"] == "2K"
+    assert overrides["params_json"]["image_config"]["legacy"] == "keep"
 
 
 def test_bulk_set_categories_rejects_missing_assets(client, app_module) -> None:
@@ -481,7 +755,7 @@ def test_rerun_generation_default_view_returns_job_status_fragment(
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
     )
-    source = SimpleNamespace(id=10, status="failed")
+    source = SimpleNamespace(id=10, status="failed", request_snapshot_json={})
     new_gen = SimpleNamespace(
         id=11,
         status="queued",
@@ -498,9 +772,11 @@ def test_rerun_generation_default_view_returns_job_status_fragment(
 
     class _FakeGenerationService:
         def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            """Return the pre-built generation stub."""
             return new_gen
 
         def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
             pass
 
     monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
@@ -517,7 +793,7 @@ def test_rerun_generation_chat_view_returns_chat_fragment(
     app_module.app.dependency_overrides[app_module.get_session] = _override_session(
         fake_session
     )
-    source = SimpleNamespace(id=10, status="failed")
+    source = SimpleNamespace(id=10, status="failed", request_snapshot_json={})
     new_gen = SimpleNamespace(
         id=12,
         status="queued",
@@ -534,9 +810,11 @@ def test_rerun_generation_chat_view_returns_chat_fragment(
 
     class _FakeGenerationService:
         def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            """Return the pre-built generation stub."""
             return new_gen
 
         def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
             pass
 
     monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
@@ -544,6 +822,101 @@ def test_rerun_generation_chat_view_returns_chat_fragment(
     response = client.post("/generations/10/rerun?view=chat")
     assert response.status_code == 200
     assert b"chat-generation-12" in response.content
+
+
+def test_rerun_generation_with_profile_id_uses_profile(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    source = SimpleNamespace(
+        id=10,
+        status="failed",
+        prompt_user="hello",
+        request_snapshot_json={"chat_session_id": "sess-1"},
+    )
+    new_gen = SimpleNamespace(
+        id=13,
+        status="queued",
+        error=None,
+        failure_sidecar_path=None,
+        assets=[],
+        profile_name="new profile",
+        provider="stub",
+        model="stub-model",
+        prompt_user="hello",
+        request_snapshot_json={},
+    )
+    fake_profile = SimpleNamespace(id=7, name="new profile")
+    monkeypatch.setattr(app_module.crud, "get_generation", lambda _session, _id: source)
+    monkeypatch.setattr(
+        app_module.crud, "get_profile", lambda _session, _id: fake_profile
+    )
+    captured = {}
+
+    class _FakeGenerationService:
+        def create_generation_from_profile(self, _session, profile, prompt_user, overrides=None):  # type: ignore[no-untyped-def]
+            """Capture arguments and return the pre-built generation stub."""
+            captured["profile"] = profile
+            captured["prompt_user"] = prompt_user
+            captured["overrides"] = overrides
+            return new_gen
+
+        def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
+            pass
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post("/generations/10/rerun?view=chat", data={"profile_id": "7"})
+    assert response.status_code == 200
+    assert b"chat-generation-13" in response.content
+    assert captured["profile"] is fake_profile
+    assert captured["prompt_user"] == "hello"
+    assert captured["overrides"] == {"chat_session_id": "sess-1"}
+
+
+def test_rerun_generation_with_unknown_profile_id_falls_back_to_snapshot(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+    source = SimpleNamespace(id=10, status="failed", request_snapshot_json={})
+    new_gen = SimpleNamespace(
+        id=14,
+        status="queued",
+        error=None,
+        failure_sidecar_path=None,
+        assets=[],
+        profile_name="default",
+        provider="stub",
+        model="stub-model",
+        prompt_user="hello",
+        request_snapshot_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_generation", lambda _session, _id: source)
+    monkeypatch.setattr(
+        app_module.crud, "get_profile", lambda _session, _id: None
+    )
+
+    class _FakeGenerationService:
+        def create_generation_from_snapshot(self, _session, _source):  # type: ignore[no-untyped-def]
+            """Return the pre-built generation stub."""
+            return new_gen
+
+        def enqueue(self, _bg, _gen_id):  # type: ignore[no-untyped-def]
+            """No-op enqueue for testing."""
+            pass
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post("/generations/10/rerun", data={"profile_id": "99"})
+    assert response.status_code == 200
+    assert b"job-14" in response.content
 
 
 def test_asset_file_missing_asset_returns_404(client, app_module) -> None:
@@ -770,4 +1143,161 @@ def test_generate_submit_rejects_upload_exceeding_size_limit(
 
     assert response.status_code == 303
     assert "exceeds" in response.headers["location"]
+    assert fake_generation_service.create_called is False
+
+
+def test_generate_submit_rejects_input_images_for_fal_provider(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="fal",
+        model="fal-ai/flux/schnell",
+        upscale_model=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def __init__(self) -> None:
+            self.create_called = False
+
+        def create_generation_from_profile(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+            self.create_called = True
+            raise AssertionError("Must not be called on validation error")
+
+        def enqueue(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+    fake_generation_service = _FakeGenerationService()
+    monkeypatch.setattr(app_module, "generation_service", fake_generation_service)
+
+    image_data = b"\x89PNG\r\n\x1a\n"
+    response = client.post(
+        "/generate",
+        data={"prompt_user": "prompt", "profile_id": "1"},
+        files={"input_images": ("test.png", image_data, "image/png")},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "FAL+provider+does+not+support+input+images" in response.headers["location"]
+    assert fake_generation_service.create_called is False
+
+
+def test_generate_submit_with_expand_mode_sets_expand_overrides(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    captured: dict[str, object] = {}
+    source_asset = SimpleNamespace(id=44, generation=SimpleNamespace(id=9))
+    fake_session._scalar_value = source_asset
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="openai",
+        model="gpt-image-1",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+    monkeypatch.setattr(app_module.crud, "get_chat_session", lambda _session, _token: None)
+    monkeypatch.setattr(
+        app_module.crud,
+        "get_asset",
+        lambda _session, asset_id, with_generation=True: source_asset if asset_id == 44 else None,
+    )
+
+    class _FakeGenerationService:
+        def create_generation_from_profile(self, _session, _profile, _prompt, overrides=None):  # type: ignore[no-untyped-def]
+            captured["prompt"] = _prompt
+            captured["overrides"] = dict(overrides or {})
+            return SimpleNamespace(id=21)
+
+        def enqueue(self, *_args, **_kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+    monkeypatch.setattr(app_module, "generation_service", _FakeGenerationService())
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "continue the image",
+            "profile_id": "1",
+            "generation_mode": "expand",
+            "expand_source_asset_id": "44",
+            "expand_top": "32",
+            "expand_right": "64",
+            "expand_bottom": "0",
+            "expand_left": "16",
+            "continuation_prompt": "continue the image",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    overrides = captured["overrides"]
+    assert overrides["mode"] == "expand"
+    assert overrides["expand"].top == 32
+    assert overrides["expand"].right == 64
+    assert overrides["expand"].left == 16
+    assert overrides["expand"].source_asset_id == 44
+
+
+def test_generate_submit_rejects_expand_for_unsupported_provider(
+    client, app_module, monkeypatch
+) -> None:
+    fake_session = _FakeSession()
+    app_module.app.dependency_overrides[app_module.get_session] = _override_session(
+        fake_session
+    )
+
+    profile = SimpleNamespace(
+        provider="stub",
+        model="stub-v1",
+        upscale_provider=None,
+        upscale_model=None,
+        upscale_topaz_model_id=None,
+        params_json={},
+    )
+    monkeypatch.setattr(app_module.crud, "get_profile", lambda _session, _id: profile)
+
+    class _FakeGenerationService:
+        def __init__(self) -> None:
+            self.create_called = False
+
+        def create_generation_from_profile(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+            self.create_called = True
+            raise AssertionError("Must not be called on validation error")
+
+        def enqueue(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            _ = args, kwargs
+
+    fake_generation_service = _FakeGenerationService()
+    monkeypatch.setattr(app_module, "generation_service", fake_generation_service)
+
+    response = client.post(
+        "/generate",
+        data={
+            "prompt_user": "continue the image",
+            "profile_id": "1",
+            "generation_mode": "expand",
+            "expand_source_asset_id": "44",
+            "expand_top": "32",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "only+available+for+OpenAI+profiles" in response.headers["location"]
     assert fake_generation_service.create_called is False

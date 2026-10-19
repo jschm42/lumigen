@@ -1,4 +1,14 @@
 {
+  "name": "lumigen",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.50.0",
@@ -6,10 +16,7 @@
     "stylelint": "^17.4.0",
     "stylelint-config-standard": "^40.0.0"
   },
-  "scripts": {
-    "lint:js": "eslint app/web/static/js/",
-    "lint:css": "stylelint app/web/static/css/app.css",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+  "dependencies": {
+    "opencode-ai": "^1.16.0"
   }
 }

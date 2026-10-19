@@ -102,6 +102,7 @@ Recommended pre-PR validation order:
 - Add/adjust tests in `tests/` for any backend or UI behavior change.
 - Tailwind theming policy: use only the original Tailwind light/dark theme approach (class-based dark mode). Do not introduce custom light/dark override systems that bypass Tailwind utilities.
 - If theme customization is required, implement it strictly according to Tailwind's official theme customization guidance: https://tailwindcss.com/docs/theme#customizing-your-theme
+- Keep credits & third-party licenses up to date: when adding, updating, or removing dependencies (`pyproject.toml`, `frontend/package.json`), AI provider integrations (`app/providers/*`), or redistributed assets (fonts, icons), update `THIRD_PARTY_LICENSES.md` and `frontend/src/components/ui/CreditsModal.vue` to maintain accurate attribution notices and license compliance.
 
 ## Release preparation
 - Before creating a release, update the version number in the `VERSION` file located in the project root.
@@ -131,6 +132,14 @@ Recommended pre-PR validation order:
 - Playwright artifacts (report, test results, auth state) are git-ignored; `playwright/.auth/.gitkeep` preserves the directory.
 - To add a new e2e test: create `tests/e2e/<feature>.spec.js`, import `{ test, expect }` from `@playwright/test`, and use the `storageState` from the `chromium` project (configured automatically).
 - Browser installation: run `npx playwright install --with-deps chromium` once after `npm ci`.
+
+## Provider Image Request Documentation
+For implementing or understanding image requests to various providers, refer to the following documentation:
+- OpenRouter: https://openrouter.ai/docs/guides/overview/multimodal/image-generation
+- FAL.AI: https://fal.ai/models/fal-ai/nano-banana-2/api
+- BFL: https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint
+- OpenAI: https://developers.openai.com/api/docs/guides/image-generation
+- Google Gemini: https://ai.google.dev/gemini-api/docs/image-generation
 
 ## When to search
 Only search if one of these is true:

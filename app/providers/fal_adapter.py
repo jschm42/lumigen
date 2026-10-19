@@ -51,6 +51,46 @@ class FalAdapter(ProviderAdapter):
     MAX_POLL_ATTEMPTS = 90
     POLL_INTERVAL = 2.0  # seconds
     _logger = logging.getLogger(__name__)
+    _internal_param_keys = {
+        "description",
+        "resolution",
+        "default_resolution",
+        "aspect_ratio",
+        "default_aspect_ratio",
+        "negative_prompt",
+        "system_prompt",
+        "base_prompt",
+        "fal_aspect_ratio",
+        "fal_resolution",
+        "fal_image_size",
+        "openrouter_aspect_ratio",
+        "openrouter_image_size",
+        "google_aspect_ratio",
+        "google_resolution",
+        "image_config",
+        "category_ids",
+        "categories",
+        "selected_style_ids",
+        "selected_style_names",
+        "upscale_provider",
+        "upscale_model",
+        "upscale_topaz_model_id",
+        "upscaling_active",
+        "chat_session_id",
+        "chat_session_title",
+        "conversation",
+        "mode",
+        "expand",
+        "source_asset_id",
+        "continuation_prompt",
+        "width",
+        "height",
+        "seed",
+        "input_images",
+        "is_style_generation",
+        "style_id",
+        "overrides",
+    }
 
     async def list_models(self, settings: Settings) -> list[str]:
         """Return a curated list of popular FAL.ai image-generation model IDs."""
@@ -70,6 +110,11 @@ class FalAdapter(ProviderAdapter):
                 "FAL adapter requires FAL_API_KEY in .env or a custom API key."
             )
 
+        if request.input_images:
+            raise ProviderError(
+                "FAL provider does not support input images."
+            )
+
         queue_url = f"{self.QUEUE_URL}/{request.model}"
         headers = {
             "Authorization": f"Key {api_key}",
@@ -78,7 +123,10 @@ class FalAdapter(ProviderAdapter):
         payload = self._build_payload(request)
         self._log_request("POST", queue_url, headers, payload)
 
-        timeout = httpx.Timeout(60.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.provider_fal_generate_timeout_seconds,
+            connect=settings.provider_fal_generate_connect_timeout_seconds,
+        )
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(queue_url, headers=headers, json=payload)
 
@@ -263,6 +311,16 @@ class FalAdapter(ProviderAdapter):
             "prompt": request.prompt,
         }
 
+        # Preserve explicit dimensions for models that still expect `image_size`.
+        if request.width is not None and request.height is not None:
+            try:
+                payload["image_size"] = {
+                    "width": int(request.width),
+                    "height": int(request.height),
+                }
+            except (TypeError, ValueError):
+                pass
+
         fal_aspect_ratio = None
         fal_resolution = None
         fal_image_size = None
@@ -297,6 +355,7 @@ class FalAdapter(ProviderAdapter):
             for key, value in request.params.items():
                 if (
                     key not in payload
+                    and key not in self._internal_param_keys
                     and key not in {"fal_aspect_ratio", "fal_resolution", "fal_image_size"}
                     and value is not None
                 ):

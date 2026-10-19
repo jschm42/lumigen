@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, case, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
@@ -15,7 +15,9 @@ from app.db.models import (
     ModelConfig,
     Profile,
     ProviderApiKey,
+    SessionInputImage,
     StorageTemplate,
+    Style,
     TopazUpscaleModel,
     User,
 )
@@ -160,8 +162,49 @@ def get_topaz_upscale_model_by_name(
     return session.scalar(stmt)
 
 
+def get_default_topaz_upscale_model(
+    session: Session,
+) -> TopazUpscaleModel | None:
+    """Return the designated default enabled Topaz/FAL upscale model, or None if no default is configured."""
+    stmt = (
+        select(TopazUpscaleModel)
+        .where(
+            TopazUpscaleModel.is_enabled.is_(True),
+            TopazUpscaleModel.is_default.is_(True),
+        )
+    )
+    return session.scalar(stmt)
+
+
+def set_default_topaz_upscale_model(
+    session: Session, topaz_model_id: int
+) -> TopazUpscaleModel | None:
+    """Set the specified model as the only default upscale model."""
+    target = get_topaz_upscale_model(session, topaz_model_id)
+    if not target:
+        return None
+
+    # Reset existing defaults
+    all_models = list_topaz_upscale_models(session)
+    for m in all_models:
+        m.is_default = (m.id == topaz_model_id)
+        session.add(m)
+
+    session.commit()
+    session.refresh(target)
+    return target
+
+
 def create_topaz_upscale_model(session: Session, **fields) -> TopazUpscaleModel:
     """Create a new Topaz upscale model row and return it."""
+    is_default = fields.get("is_default", False)
+    if is_default:
+        # Clear other defaults first
+        all_models = list_topaz_upscale_models(session)
+        for m in all_models:
+            m.is_default = False
+            session.add(m)
+
     row = TopazUpscaleModel(**fields)
     session.add(row)
     session.commit()
@@ -175,6 +218,14 @@ def update_topaz_upscale_model(
     **fields,
 ) -> TopazUpscaleModel:
     """Update a Topaz upscale model's fields and return the refreshed instance."""
+    is_default = fields.get("is_default")
+    if is_default:
+        all_models = list_topaz_upscale_models(session)
+        for m in all_models:
+            if m.id != topaz_model.id:
+                m.is_default = False
+                session.add(m)
+
     for key, value in fields.items():
         setattr(topaz_model, key, value)
     session.add(topaz_model)
@@ -214,6 +265,12 @@ def list_categories_by_ids(session: Session, category_ids: list[int]) -> list[Ca
 def get_category(session: Session, category_id: int) -> Category | None:
     """Return a category by primary key, or ``None`` if not found."""
     stmt = select(Category).where(Category.id == category_id)
+    return session.scalar(stmt)
+
+
+def get_category_by_name(session: Session, name: str) -> Category | None:
+    """Return a category by exact name, or ``None`` if not found."""
+    stmt = select(Category).where(Category.name == name)
     return session.scalar(stmt)
 
 
@@ -335,18 +392,29 @@ def list_provider_api_keys(session: Session) -> list[ProviderApiKey]:
 
 
 def upsert_provider_api_key(
-    session: Session, provider: str, api_key_encrypted: str
+    session: Session,
+    provider: str,
+    api_key_encrypted: str | None = None,
+    *,
+    api_key: str | None = None,
 ) -> ProviderApiKey:
-    """Insert or update the encrypted API key for *provider* and return the row."""
-    existing = get_provider_api_key(session, provider)
+    """Insert or update the encrypted API key for *provider* and return the row.
+
+    Accepts encrypted token via *api_key_encrypted* or *api_key*.
+    """
+    key_encrypted = api_key_encrypted or api_key
+    if not key_encrypted:
+        raise ValueError("Encrypted API key is required.")
+    provider_name = provider.strip().lower()
+    existing = get_provider_api_key(session, provider_name)
     if existing:
-        existing.api_key_encrypted = api_key_encrypted
+        existing.api_key_encrypted = key_encrypted
         session.add(existing)
         session.commit()
         session.refresh(existing)
         return existing
 
-    row = ProviderApiKey(provider=provider, api_key_encrypted=api_key_encrypted)
+    row = ProviderApiKey(provider=provider_name, api_key_encrypted=key_encrypted)
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -355,7 +423,7 @@ def upsert_provider_api_key(
 
 def delete_provider_api_key(session: Session, provider: str) -> bool:
     """Delete the stored API key for *provider*. Returns ``True`` if a row was deleted."""
-    existing = get_provider_api_key(session, provider)
+    existing = get_provider_api_key(session, provider.strip().lower())
     if not existing:
         return False
     session.delete(existing)
@@ -368,6 +436,7 @@ def upsert_enhancement_config(
     provider: str,
     model: str,
     api_key_encrypted: str | None,
+    default_enhancement_prompt: str | None = None,
 ) -> EnhancementConfig:
     """Insert or update the singleton enhancement configuration and return it."""
     existing = get_enhancement_config(session)
@@ -375,6 +444,7 @@ def upsert_enhancement_config(
         existing.provider = provider
         existing.model = model
         existing.api_key_encrypted = api_key_encrypted
+        existing.default_enhancement_prompt = default_enhancement_prompt
         session.add(existing)
         session.commit()
         session.refresh(existing)
@@ -384,6 +454,7 @@ def upsert_enhancement_config(
         provider=provider,
         model=model,
         api_key_encrypted=api_key_encrypted,
+        default_enhancement_prompt=default_enhancement_prompt,
     )
     session.add(row)
     session.commit()
@@ -450,6 +521,24 @@ def get_generation(
     return session.scalar(stmt)
 
 
+def list_queue_generations(session: Session, limit: int = 30) -> list[Generation]:
+    """Return active (running, queued) generations first, followed by recent ones."""
+    stmt: Select[tuple[Generation]] = (
+        select(Generation)
+        .options(selectinload(Generation.assets))
+        .order_by(
+            case(
+                (Generation.status == "running", 1),
+                (Generation.status == "queued", 2),
+                else_=3,
+            ),
+            Generation.created_at.desc(),
+        )
+        .limit(limit)
+    )
+    return list(session.scalars(stmt))
+
+
 def get_asset(
     session: Session, asset_id: int, with_generation: bool = True
 ) -> Asset | None:
@@ -462,11 +551,20 @@ def get_asset(
     return session.scalar(stmt)
 
 
+def delete_asset(session: Session, asset: Asset) -> None:
+    """Delete the given asset row from the database."""
+    session.delete(asset)
+    session.commit()
+
+
 def get_chat_session(session: Session, chat_session_id: str) -> ChatSession | None:
     """Return a chat session by its string ID with the last profile eagerly loaded, or ``None``."""
     stmt = (
         select(ChatSession)
-        .options(selectinload(ChatSession.last_profile))
+        .options(
+            selectinload(ChatSession.last_profile),
+            selectinload(ChatSession.last_model_config),
+        )
         .where(ChatSession.chat_session_id == chat_session_id)
     )
     return session.scalar(stmt)
@@ -477,6 +575,9 @@ def upsert_chat_session_preferences(
     chat_session_id: str,
     last_profile_id: int | None = None,
     last_thumb_size: str | None = None,
+    selected_style_ids: str | None = None,
+    last_llm_model: str | None = None,
+    last_model_config_id: int | None = None,
 ) -> ChatSession:
     """Persist UI preferences for a chat session, creating the row if it does not yet exist."""
     existing = get_chat_session(session, chat_session_id)
@@ -485,17 +586,153 @@ def upsert_chat_session_preferences(
             existing.last_profile_id = last_profile_id
         if last_thumb_size is not None:
             existing.last_thumb_size = last_thumb_size
+        if selected_style_ids is not None:
+            existing.selected_style_ids = selected_style_ids
+        if last_llm_model is not None:
+            existing.last_llm_model = last_llm_model
+        if last_model_config_id is not None:
+            existing.last_model_config_id = last_model_config_id
         session.add(existing)
         session.commit()
-        session.refresh(existing)
+        if hasattr(session, "refresh"):
+            session.refresh(existing)
         return existing
 
     row = ChatSession(
         chat_session_id=chat_session_id,
         last_profile_id=last_profile_id,
         last_thumb_size=last_thumb_size or "md",
+        selected_style_ids=selected_style_ids,
+        last_llm_model=last_llm_model,
+        last_model_config_id=last_model_config_id,
     )
+    session.add(row)
+    session.commit()
+    if hasattr(session, "refresh"):
+        session.refresh(row)
+    return row
+
+
+def list_chat_sessions(session: Session) -> list[ChatSession]:
+    """Return all chat sessions ordered by updated_at descending."""
+    stmt = (
+        select(ChatSession)
+        .options(
+            selectinload(ChatSession.last_profile),
+            selectinload(ChatSession.last_model_config),
+        )
+        .order_by(ChatSession.updated_at.desc())
+    )
+    return list(session.scalars(stmt).all())
+
+
+def create_chat_session(session: Session, **fields) -> ChatSession:
+    """Create a new chat session from the given field values and return it."""
+    row = ChatSession(**fields)
     session.add(row)
     session.commit()
     session.refresh(row)
     return row
+
+
+def delete_chat_session(session: Session, chat_session: ChatSession) -> None:
+    """Delete the given chat session from the database."""
+    session.delete(chat_session)
+    session.commit()
+
+
+def list_styles(session: Session) -> list[Style]:
+    """Return all styles ordered by name."""
+    stmt = select(Style).order_by(Style.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def get_style(session: Session, style_id: int) -> Style | None:
+    """Return a style by primary key, or ``None`` if not found."""
+    stmt = select(Style).where(Style.id == style_id)
+    return session.scalar(stmt)
+
+
+def get_style_by_name(session: Session, name: str) -> Style | None:
+    """Return a style by name, or ``None`` if not found."""
+    stmt = select(Style).where(Style.name == name)
+    return session.scalar(stmt)
+
+
+def get_styles_by_ids(session: Session, style_ids: list[int]) -> list[Style]:
+    """Return the styles whose IDs are in *style_ids*, ordered by name."""
+    if not style_ids:
+        return []
+    stmt = select(Style).where(Style.id.in_(style_ids)).order_by(Style.name.asc())
+    return list(session.scalars(stmt).all())
+
+
+def create_style(session: Session, **fields) -> Style:
+    """Create a new style from the given field values and return it."""
+    row = Style(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_style(session: Session, style: Style, **fields) -> Style:
+    """Update the given style's fields and return the refreshed instance."""
+    for key, value in fields.items():
+        setattr(style, key, value)
+    session.add(style)
+    session.commit()
+    session.refresh(style)
+    return style
+
+
+def delete_style(session: Session, style: Style) -> None:
+    """Delete the given style from the database."""
+    session.delete(style)
+    session.commit()
+
+
+def list_session_input_images(
+    session: Session, chat_session_id: str
+) -> list[SessionInputImage]:
+    """Return session-scoped input images ordered by sort index and creation order."""
+    stmt = (
+        select(SessionInputImage)
+        .where(SessionInputImage.chat_session_id == chat_session_id)
+        .order_by(SessionInputImage.sort_index.asc(), SessionInputImage.id.asc())
+    )
+    return list(session.scalars(stmt).all())
+
+
+def create_session_input_image(session: Session, **fields) -> SessionInputImage:
+    """Create a session input image row and return the refreshed instance."""
+    row = SessionInputImage(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def get_session_input_image(
+    session: Session, session_input_image_id: int
+) -> SessionInputImage | None:
+    """Return a session input image by primary key, or ``None`` if not found."""
+    stmt = select(SessionInputImage).where(SessionInputImage.id == session_input_image_id)
+    return session.scalar(stmt)
+
+
+def delete_session_input_image(session: Session, row: SessionInputImage) -> None:
+    """Delete a single session input image row."""
+    session.delete(row)
+    session.commit()
+
+
+def clear_session_input_images(session: Session, chat_session_id: str) -> list[SessionInputImage]:
+    """Delete and return all session input image rows for the given chat session."""
+    rows = list_session_input_images(session, chat_session_id)
+    if not rows:
+        return []
+    for row in rows:
+        session.delete(row)
+    session.commit()
+    return rows

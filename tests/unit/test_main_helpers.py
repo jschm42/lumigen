@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import base64
+import json
+import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
+from itsdangerous import TimestampSigner
+from starlette.responses import Response
 
 
 def test_parse_optional_int(app_module) -> None:
@@ -180,6 +186,96 @@ def test_format_session_helpers(app_module) -> None:
     assert app_module.get_session_time_category(now - timedelta(days=500)) == "older"
 
 
+def test_default_artbook_title_uses_bracketed_date(app_module) -> None:
+    value = app_module.default_artbook_title(datetime(2026, 5, 31, 12, 0, 0))
+    assert value == "Artbook [31.05.2026]"
+
+
+def test_resolve_artbook_title_prefers_chat_session_title(app_module) -> None:
+    chat_session = SimpleNamespace(
+        chat_session_id="session:abc",
+        title="My Cool Artbook",
+        created_at=datetime(2026, 6, 1, 9, 0, 0),
+    )
+    fake_session = SimpleNamespace()
+    monkey = pytest.MonkeyPatch()
+
+    def fake_get_chat_session(_session, _token):
+        return chat_session
+
+    def fake_list_generations(_session, _token):
+        return [
+            SimpleNamespace(
+                request_snapshot_json={"chat_session_title": "snapshot title"}
+            )
+        ]
+
+    monkey.setattr(
+        app_module.crud, "get_chat_session", fake_get_chat_session
+    )
+    monkey.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        fake_list_generations,
+    )
+    try:
+        assert (
+            app_module.resolve_artbook_title_for_token(fake_session, "session:abc")
+            == "My Cool Artbook"
+        )
+    finally:
+        monkey.undo()
+
+
+def test_resolve_artbook_title_falls_back_to_snapshot_then_default(app_module) -> None:
+    fake_session = SimpleNamespace()
+    monkey = pytest.MonkeyPatch()
+
+    monkey.setattr(
+        app_module.crud,
+        "get_chat_session",
+        lambda _session, _token: SimpleNamespace(
+            chat_session_id="session:abc",
+            title=None,
+            created_at=datetime(2026, 6, 1, 9, 0, 0),
+        ),
+    )
+    monkey.setattr(
+        app_module,
+        "list_generations_for_session_token",
+        lambda _session, _token: [
+            SimpleNamespace(
+                request_snapshot_json={"chat_session_title": "snapshot title"}
+            )
+        ],
+    )
+    try:
+        assert (
+            app_module.resolve_artbook_title_for_token(fake_session, "session:abc")
+            == "snapshot title"
+        )
+
+        monkey.setattr(
+            app_module,
+            "list_generations_for_session_token",
+            lambda _session, _token: [],
+        )
+        assert (
+            app_module.resolve_artbook_title_for_token(fake_session, "session:abc")
+            == "Artbook [01.06.2026]"
+        )
+
+        monkey.setattr(
+            app_module.crud, "get_chat_session", lambda _session, _token: None
+        )
+        title = app_module.resolve_artbook_title_for_token(
+            fake_session, "session:abc"
+        )
+        assert title.startswith("Artbook [")
+    finally:
+        monkey.undo()
+
+
 def test_normalize_time_preset_supports_extended_values(app_module) -> None:
     assert app_module.normalize_time_preset("today") == "today"
     assert app_module.normalize_time_preset("last_60_days") == "last_60_days"
@@ -198,3 +294,68 @@ def test_parse_proxy_trusted_hosts(app_module) -> None:
         "127.0.0.1",
         "10.0.0.1",
     ]
+
+
+def _sign_session_payload(app_module, payload: dict, *, age_seconds: int = 0) -> str:
+    """Sign a session payload with the app's secret key, optionally back-dated."""
+    signer = TimestampSigner(str(app_module.settings.session_secret_key))
+    raw = base64.b64encode(json.dumps(payload).encode("utf-8"))
+    if age_seconds <= 0:
+        return signer.sign(raw).decode("utf-8")
+
+    fake_now = int(time.time()) - age_seconds
+    with patch.object(type(signer), "get_timestamp", return_value=fake_now):
+        return signer.sign(raw).decode("utf-8")
+
+
+def test_session_cookie_age_seconds_returns_positive_age(app_module) -> None:
+    payload = {"user_id": 1}
+    raw_cookie = _sign_session_payload(app_module, payload, age_seconds=7200)
+    age = app_module._session_cookie_age_seconds(raw_cookie)
+    assert age is not None
+    assert age > 7100
+
+
+def test_session_cookie_age_seconds_returns_none_for_garbage(app_module) -> None:
+    assert app_module._session_cookie_age_seconds("not-a-valid-cookie") is None
+    assert app_module._session_cookie_age_seconds("a.b") is None
+
+
+def test_maybe_roll_session_cookie_noop_when_fresh(app_module) -> None:
+    raw_cookie = _sign_session_payload(app_module, {"user_id": 1})
+    response = Response()
+    app_module._maybe_roll_session_cookie(response, raw_cookie)
+    assert not response.headers.getlist("set-cookie")
+
+
+def test_maybe_roll_session_cookie_noop_when_none(app_module) -> None:
+    response = Response()
+    app_module._maybe_roll_session_cookie(response, None)
+    assert not response.headers.getlist("set-cookie")
+
+
+def test_maybe_roll_session_cookie_adds_set_cookie_when_stale(app_module) -> None:
+    max_age = app_module.settings.session_max_age_seconds
+    age = max(max_age // 4, 3600) + 100
+    raw_cookie = _sign_session_payload(app_module, {"user_id": 1}, age_seconds=age)
+    response = Response()
+    app_module._maybe_roll_session_cookie(response, raw_cookie)
+    cookies = response.headers.getlist("set-cookie")
+    assert len(cookies) == 1
+    assert cookies[0].startswith(f"{app_module.settings.session_cookie_name}=")
+
+
+def test_maybe_roll_session_cookie_skips_when_session_middleware_already_set(app_module) -> None:
+    """If SessionMiddleware already added a Set-Cookie, auth_guard must not clobber it."""
+    max_age = app_module.settings.session_max_age_seconds
+    age = max(max_age // 4, 3600) + 100
+    raw_cookie = _sign_session_payload(app_module, {"user_id": 1}, age_seconds=age)
+    response = Response()
+    response.headers.append(
+        "set-cookie",
+        f"{app_module.settings.session_cookie_name}=already-set; path=/; httponly",
+    )
+    app_module._maybe_roll_session_cookie(response, raw_cookie)
+    cookies = response.headers.getlist("set-cookie")
+    assert len(cookies) == 1
+    assert cookies[0].startswith(f"{app_module.settings.session_cookie_name}=already-set")

@@ -105,6 +105,8 @@ Linters are part of the Poetry dev group (`poetry install`).
 - No inline JS or CSS in templates; use `app/web/static/js/*` and `app/web/static/css/app.css`.
 - Add/adjust tests for every backend or UI behavior change.
 - Tailwind theming: use class-based dark mode only. Do not introduce custom light/dark override systems. Follow [Tailwind theme customization](https://tailwindcss.com/docs/theme#customizing-your-theme).
+- Language & Localization: All user-facing UI text, labels, placeholders, tooltips, buttons, modal titles, confirmation dialogs, toasts/notifications, error messages, and default seed data (styles, templates) MUST be in English. Never hardcode German strings in components, stores, templates, or backend responses. All code, comments, docstrings, and generated text must be in English.
+- Keep credits & third-party licenses up to date: when adding, updating, or removing dependencies (`pyproject.toml`, `frontend/package.json`), AI provider integrations (`app/providers/*`), or redistributed assets (fonts, icons), update `THIRD_PARTY_LICENSES.md` and `frontend/src/components/ui/CreditsModal.vue` to maintain accurate attribution notices and license compliance.
 
 ## Release preparation
 - Before creating a release, update the version number in the `VERSION` file located in the project root.
@@ -131,6 +133,16 @@ Linters are part of the Poetry dev group (`poetry install`).
 - Production needs a strong `SESSION_SECRET_KEY`.
 - API key encryption requires `PROVIDER_CONFIG_KEY` (generate via `scripts/generate_provider_key.ps1` or `.sh`).
 - Run Alembic from repo root (`alembic.ini` uses `sqlite:///./data/app.db`).
+
+## Provider image request documentation
+
+For implementing or understanding image requests to various providers, use the `image-provider-api-docs` skill ([.agents/skills/image-provider-api-docs/SKILL.md](file:///d:/DEV/repositories/git/lumigen/.agents/skills/image-provider-api-docs/SKILL.md)) or refer to:
+
+- OpenRouter: https://openrouter.ai/docs/guides/overview/multimodal/image-generation
+- FAL.AI: https://fal.ai/models/fal-ai/nano-banana-2/api
+- BFL: https://docs.bfl.ai/flux_3/flux3_image_generate (and https://docs.bfl.ai/quick_start/generating_images#primary-global-endpoint)
+- OpenAI: https://developers.openai.com/api/docs/guides/image-generation
+- Google Gemini: https://ai.google.dev/gemini-api/docs/image-generation
 
 ## Root layout
 

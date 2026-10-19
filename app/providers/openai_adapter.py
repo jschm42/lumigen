@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import base64
 import logging
+from io import BytesIO
 from typing import Any
 
 import httpx
+from PIL import Image
 
 from app.config import Settings
 from app.providers.base import (
@@ -20,12 +22,69 @@ from app.providers.base import (
 
 
 class OpenAIAdapter(ProviderAdapter):
-    """Provider adapter for the OpenAI image-generation API (DALL-E models)."""
+    """Provider adapter for the OpenAI image-generation API (DALL-E and gpt-image-* models)."""
 
     name = "openai"
     display_name = "OpenAI"
     homepage_url = "https://platform.openai.com/api-keys"
     _logger = logging.getLogger(__name__)
+    _internal_param_keys = {
+        "description",
+        "resolution",
+        "default_resolution",
+        "aspect_ratio",
+        "default_aspect_ratio",
+        "negative_prompt",
+        "system_prompt",
+        "base_prompt",
+        "fal_aspect_ratio",
+        "fal_resolution",
+        "fal_image_size",
+        "openrouter_aspect_ratio",
+        "openrouter_image_size",
+        "google_aspect_ratio",
+        "google_resolution",
+        "image_config",
+        "category_ids",
+        "categories",
+        "selected_style_ids",
+        "selected_style_names",
+        "upscale_provider",
+        "upscale_model",
+        "upscale_topaz_model_id",
+        "upscaling_active",
+        "chat_session_id",
+        "chat_session_title",
+        "conversation",
+        "mode",
+        "expand",
+        "source_asset_id",
+        "continuation_prompt",
+        "width",
+        "height",
+        "seed",
+        "input_images",
+        "is_style_generation",
+        "style_id",
+        "overrides",
+        "padded_image",
+        "padded_width",
+        "padded_height",
+        "padded_offset_x",
+        "padded_offset_y",
+        "mask",
+        "target_width",
+        "target_height",
+    }
+    _allowed_param_keys = {
+        "quality",
+        "style",
+        "user",
+        "background",
+        "output_format",
+        "response_format",
+        "moderation",
+    }
 
     async def list_models(self, settings: Settings) -> list[str]:
         if not settings.openai_api_key:
@@ -33,7 +92,10 @@ class OpenAIAdapter(ProviderAdapter):
 
         url = settings.openai_base_url.rstrip("/") + "/models"
         headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
-        timeout = httpx.Timeout(30.0, connect=10.0)
+        timeout = httpx.Timeout(
+            settings.llm_models_timeout_seconds,
+            connect=settings.llm_models_connect_timeout_seconds,
+        )
         self._log_request("GET", url, headers)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -62,18 +124,10 @@ class OpenAIAdapter(ProviderAdapter):
         if not settings.openai_api_key:
             raise ProviderConfigError("OpenAI adapter requires OPENAI_API_KEY in .env.")
 
-        url = settings.openai_base_url.rstrip("/") + "/images/generations"
-        headers = {
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-        }
-        output_format = self._normalize_output_format(request.output_format)
-        payload = self._build_payload(request, output_format)
-        self._log_request("POST", url, headers, payload)
-
-        timeout = httpx.Timeout(60.0, connect=10.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
+        if request.input_images:
+            response = await self._generate_with_input_images(request, settings)
+        else:
+            response = await self._generate_text_only(request, settings)
 
         if response.status_code == 429:
             raise ProviderRateLimitError("OpenAI rate limit reached (429).")
@@ -91,7 +145,7 @@ class OpenAIAdapter(ProviderAdapter):
             raise ProviderError("OpenAI returned no image data.")
 
         width, height = self._resolve_dimensions(request)
-        mime = self._mime_from_format(output_format)
+        mime = self._mime_from_format(self._normalize_output_format(request.output_format))
         images: list[ProviderImage] = []
         for idx, item in enumerate(data_list, start=1):
             b64_value = item.get("b64_json")
@@ -136,13 +190,124 @@ class OpenAIAdapter(ProviderAdapter):
         else:
             payload["output_format"] = output_format
 
-        # Keep adapter forward-compatible with extra provider-specific knobs.
+        # Pass only recognized OpenAI parameters, filtering out internal/profile metadata keys.
         if isinstance(request.params, dict):
             for key, value in request.params.items():
-                if key not in payload and value is not None:
+                if (
+                    key in self._allowed_param_keys
+                    and key not in payload
+                    and key not in self._internal_param_keys
+                    and value is not None
+                ):
                     payload[key] = value
 
         return payload
+
+    async def _generate_text_only(
+        self, request: ProviderGenerationRequest, settings: Settings
+    ) -> httpx.Response:
+        """Send a text-to-image request to the OpenAI generations endpoint."""
+        url = settings.openai_base_url.rstrip("/") + "/images/generations"
+        headers = {
+            "Authorization": f"Bearer {settings.openai_api_key}",
+            "Content-Type": "application/json",
+        }
+        output_format = self._normalize_output_format(request.output_format)
+        payload = self._build_payload(request, output_format)
+        self._log_request("POST", url, headers, payload)
+
+        timeout = httpx.Timeout(
+            settings.provider_openai_generate_timeout_seconds,
+            connect=settings.provider_openai_generate_connect_timeout_seconds,
+        )
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await client.post(url, headers=headers, json=payload)
+
+    async def _generate_with_input_images(
+        self, request: ProviderGenerationRequest, settings: Settings
+    ) -> httpx.Response:
+        """Send an image-edit/variation request to the OpenAI API.
+
+        OpenAI's ``/v1/images/generations`` endpoint does not accept input images,
+        so any request that carries ``input_images`` must be routed through
+        ``/v1/images/edits`` (or ``/v1/images/variations`` for DALL-E 2 without a
+        prompt). This applies to both DALL-E 2 and the ``gpt-image-*`` family;
+        DALL-E 3 does not support input images at all and is rejected explicitly.
+        """
+        model_name = (request.model or "").strip().lower()
+        has_prompt = bool(request.prompt and request.prompt.strip())
+
+        if model_name.startswith("dall-e-3"):
+            raise ProviderError(
+                "DALL-E 3 does not support input images. Use a DALL-E 2 or gpt-image-* model for image-to-image."
+            )
+
+        is_dalle2 = model_name.startswith("dall-e-2")
+        if is_dalle2 and not has_prompt:
+            url = settings.openai_base_url.rstrip("/") + "/images/variations"
+        else:
+            url = settings.openai_base_url.rstrip("/") + "/images/edits"
+
+        headers = {
+            "Authorization": f"Bearer {settings.openai_api_key}",
+        }
+
+        is_gpt_image = model_name.startswith("gpt-image")
+        first_image_bytes = self._ensure_png(request.input_images[0].data)
+        reference_field = "image[]" if is_gpt_image else "image"
+        files: list[tuple[str, tuple[str, BytesIO, str]]] = [
+            (reference_field, ("input.png", BytesIO(first_image_bytes), "image/png"))
+        ]
+
+        if len(request.input_images) > 1 and has_prompt:
+            mask_bytes = self._ensure_png(request.input_images[1].data)
+            files.append(("mask", ("mask.png", BytesIO(mask_bytes), "image/png")))
+
+        data: dict[str, str] = {
+            "model": request.model,
+            "n": str(max(1, int(request.n_images))),
+            "size": self._size_string(request),
+        }
+        if not is_dalle2:
+            data["background"] = "opaque"
+        if is_dalle2:
+            data["response_format"] = "b64_json"
+        else:
+            data["output_format"] = self._normalize_output_format(request.output_format)
+        if has_prompt:
+            data["prompt"] = request.prompt
+
+        if isinstance(request.params, dict):
+            for key, value in request.params.items():
+                if (
+                    key in data
+                    or value is None
+                    or key in self._internal_param_keys
+                    or key not in self._allowed_param_keys
+                    or isinstance(value, (bytes, bytearray, memoryview))
+                ):
+                    continue
+                data[key] = str(value)
+
+        self._log_request("POST", url, headers, {"data": data, "files": [name for name, _ in files]})
+
+        timeout = httpx.Timeout(
+            settings.provider_openai_generate_timeout_seconds,
+            connect=settings.provider_openai_generate_connect_timeout_seconds,
+        )
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await client.post(url, headers=headers, files=files, data=data)
+
+    @staticmethod
+    def _ensure_png(image_bytes: bytes) -> bytes:
+        """Return *image_bytes* re-encoded as PNG, falling back to the input on failure."""
+        try:
+            with Image.open(BytesIO(image_bytes)) as pil_img:
+                buffer = BytesIO()
+                pil_img.save(buffer, format="PNG")
+                return buffer.getvalue()
+        except Exception:
+            return image_bytes
 
     def _size_string(self, request: ProviderGenerationRequest) -> str:
         if request.width and request.height:

@@ -372,7 +372,7 @@ def test_create_profile_openrouter_ignores_size_and_saves_params(client, app_mod
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/profiles"
+    assert response.headers["location"] == "/?workspace_view=profiles"
     assert called["session"] is fake_session
     assert called["provider"] == "openrouter"
     assert called["width"] is None
@@ -420,7 +420,7 @@ def test_create_profile_with_fal_model_upscale_choice(client, app_module, monkey
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/profiles"
+    assert response.headers["location"] == "/?workspace_view=profiles"
     assert called["session"] is fake_session
     assert called["upscale_provider"] == "fal"
     assert called["upscale_model"] == "fal-ai/topaz/upscale/image"
@@ -454,7 +454,7 @@ def test_create_profile_category_mismatch_returns_error_redirect(client, app_mod
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/profiles?create=1&error=")
+    assert response.headers["location"].startswith("/?workspace_view=profiles&create=1&error=")
     assert "selected%20categories%20do%20not%20exist" in response.headers["location"]
 
 
@@ -516,7 +516,7 @@ def test_update_profile_success_with_standard_provider(client, app_module, monke
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/profiles"
+    assert response.headers["location"] == "/?workspace_view=profiles"
     assert called["session"] is fake_session
     assert called["db_profile"] is profile
     assert called["name"] == "Updated Profile"
@@ -557,5 +557,5 @@ def test_update_profile_validation_error_redirects_edit_dialog(client, app_modul
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/profiles?edit_id=4&error=")
+    assert response.headers["location"].startswith("/?workspace_view=profiles&edit_id=4&error=")
     assert "Width%20must%20be%20greater%20than%200" in response.headers["location"]
