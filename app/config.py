@@ -149,6 +149,11 @@ class Settings(BaseSettings):
     byteplus_api_key: str | None = None
     # ModelArk data-plane base URL (region specific).
     byteplus_base_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    # Seedance video generation (BytePlus ModelArk). Falls back to BYTEPLUS_API_KEY when unset.
+    seedance_api_key: str | None = None
+    seedance_base_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    provider_seedance_generate_timeout_seconds: float = 300.0
+    provider_seedance_generate_connect_timeout_seconds: float = 15.0
     # Total time budget for generic HTTP image providers (incl. polling and downloads).
     provider_http_generate_timeout_seconds: float = 180.0
     provider_http_connect_timeout_seconds: float = 15.0

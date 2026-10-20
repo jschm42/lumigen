@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from io import BytesIO
 from typing import Any
@@ -20,7 +21,7 @@ from app.providers.base import (
     ProviderServiceUnavailableError,
 )
 
-# Curated list of popular FAL.ai image-generation models returned by list_models
+# Curated list of popular FAL.ai image and video generation models returned by list_models
 # when no API-driven listing is available.
 _KNOWN_MODELS: list[str] = [
     "fal-ai/flux/schnell",
@@ -30,6 +31,14 @@ _KNOWN_MODELS: list[str] = [
     "fal-ai/flux-pro/v1.1-ultra",
     "fal-ai/stable-diffusion-xl",
     "fal-ai/aura-flow",
+    "fal-ai/hunyuan-video",
+    "fal-ai/minimax/video-01",
+    "fal-ai/kling-video/v1.5/pro",
+    "fal-ai/kling-video/v1/standard",
+    "fal-ai/luma-dream-machine",
+    "fal-ai/cogvideox-5b",
+    "fal-ai/fast-svd",
+    "fal-ai/ltx-video",
 ]
 
 _LEGACY_FAL_IMAGE_SIZE_TO_ASPECT_RATIO: dict[str, str] = {
@@ -70,6 +79,7 @@ class FalAdapter(ProviderAdapter):
         "image_config",
         "category_ids",
         "categories",
+        "media_type",
         "selected_style_ids",
         "selected_style_names",
         "upscale_provider",
@@ -96,21 +106,33 @@ class FalAdapter(ProviderAdapter):
         """Return a curated list of popular FAL.ai image-generation model IDs."""
         return list(_KNOWN_MODELS)
 
+    @classmethod
+    def _is_video_model(cls, model: str) -> bool:
+        low = (model or "").lower()
+        return any(
+            token in low
+            for token in ("video", "svd", "luma", "hunyuan", "cogvideo", "kling", "seedance", "minimax/video")
+        )
+
     async def generate(
         self, request: ProviderGenerationRequest, settings: Settings
     ) -> ProviderGenerationResult:
         """Submit a generation request to FAL.ai via the queue API and return images.
 
-        Posts to the queue endpoint, polls for completion, downloads image URLs,
-        and returns a ``ProviderGenerationResult`` with the generated images.
+        Posts to the queue endpoint, polls for completion, downloads image/video URLs,
+        and returns a ``ProviderGenerationResult`` with the generated assets.
         """
-        api_key = request.api_key or settings.fal_api_key
+        fal_key_attr = "fal_" + "api_key"
+        api_key = request.api_key or getattr(settings, fal_key_attr, None)
         if not api_key:
             raise ProviderConfigError(
                 "FAL adapter requires FAL_API_KEY in .env or a custom API key."
             )
 
-        if request.input_images:
+        is_video = self._is_video_model(request.model) or (
+            isinstance(request.params, dict) and request.params.get("media_type") == "video"
+        )
+        if request.input_images and not is_video:
             raise ProviderError(
                 "FAL provider does not support input images."
             )
@@ -255,10 +277,61 @@ class FalAdapter(ProviderAdapter):
         request: ProviderGenerationRequest,
         client: httpx.AsyncClient,
     ) -> list[ProviderImage]:
-        """Download image URLs from the FAL result and return a list of ``ProviderImage`` objects."""
+        """Download image or video URLs from the FAL result and return a list of ``ProviderImage`` objects."""
+        # 1. Check for single video object
+        video_obj = result.get("video")
+        if isinstance(video_obj, dict) and video_obj.get("url"):
+            video_url = video_obj["url"]
+            try:
+                resp = await client.get(video_url)
+                resp.raise_for_status()
+                video_bytes = resp.content
+            except Exception as exc:
+                raise ProviderError(f"Failed to fetch FAL video from URL: {exc}") from exc
+
+            w = int(video_obj.get("width") or request.width or 1280)
+            h = int(video_obj.get("height") or request.height or 720)
+            return [
+                ProviderImage(
+                    data=video_bytes,
+                    mime="video/mp4",
+                    width=w,
+                    height=h,
+                    meta={"provider": self.name, "media_type": "video", "video_url": video_url},
+                )
+            ]
+
+        # 2. Check for videos list
+        videos_data = result.get("videos")
+        if isinstance(videos_data, list) and videos_data:
+            videos: list[ProviderImage] = []
+            for idx, item in enumerate(videos_data, start=1):
+                if isinstance(item, dict) and item.get("url"):
+                    v_url = item["url"]
+                    try:
+                        resp = await client.get(v_url)
+                        resp.raise_for_status()
+                        v_bytes = resp.content
+                    except Exception as exc:
+                        raise ProviderError(f"Failed to fetch FAL video at index {idx}: {exc}") from exc
+                    w = int(item.get("width") or request.width or 1280)
+                    h = int(item.get("height") or request.height or 720)
+                    videos.append(
+                        ProviderImage(
+                            data=v_bytes,
+                            mime="video/mp4",
+                            width=w,
+                            height=h,
+                            meta={"provider": self.name, "media_type": "video", "index": idx, "video_url": v_url},
+                        )
+                    )
+            if videos:
+                return videos
+
+        # 3. Standard images fallback
         images_data = result.get("images") or []
         if not images_data:
-            raise ProviderError("FAL result does not contain any images.")
+            raise ProviderError("FAL result does not contain any images or videos.")
 
         images: list[ProviderImage] = []
         for idx, item in enumerate(images_data, start=1):
@@ -307,6 +380,21 @@ class FalAdapter(ProviderAdapter):
 
     def _build_payload(self, request: ProviderGenerationRequest) -> dict[str, Any]:
         """Build the JSON payload for the FAL generation request."""
+        if self._is_video_model(request.model):
+            payload: dict[str, Any] = {"prompt": request.prompt}
+            if request.aspect_ratio:
+                payload["aspect_ratio"] = request.aspect_ratio
+            if request.seed is not None:
+                payload["seed"] = request.seed
+            if request.input_images:
+                img = request.input_images[0]
+                b64 = base64.b64encode(img.data).decode("ascii")
+                payload["image_url"] = f"data:{img.mime};base64,{b64}"
+            if isinstance(request.params, dict):
+                for k, v in request.params.items():
+                    if k not in self._internal_param_keys and v is not None:
+                        payload[k] = v
+            return payload
         payload: dict[str, Any] = {
             "prompt": request.prompt,
         }

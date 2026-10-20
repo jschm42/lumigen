@@ -124,6 +124,7 @@ export interface Asset {
   download_url: string
   width?: number
   height?: number
+  mime?: string
   metadata?: AssetMetadata
   categories?: Category[]
   category_ids?: number[]

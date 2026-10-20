@@ -24,6 +24,7 @@ class ModelConfigService:
         "xai": "xai_api_key",
         "ideogram": "ideogram_api_key",
         "byteplus": "byteplus_api_key",
+        "seedance": "seedance_api_key",
     }
 
     def __init__(self, settings: Settings) -> None:
@@ -78,7 +79,11 @@ class ModelConfigService:
         attr_name = self.PROVIDER_API_KEY_ATTR.get(provider_lower)
         if not attr_name:
             return None
-        return getattr(self._settings, attr_name, None)
+        env_key = getattr(self._settings, attr_name, None)
+        if not env_key and provider_lower == "seedance":
+            # Seedance runs on BytePlus ModelArk, so the BytePlus key works too.
+            env_key = getattr(self._settings, "byteplus_api_key", None)
+        return env_key
 
     def has_env_api_key(self, provider: str) -> bool:
         """Return True if the provider has an API key set in the environment (.env)."""

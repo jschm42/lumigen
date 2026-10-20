@@ -23,6 +23,7 @@ from app.providers.minimax_adapter import MiniMaxAdapter
 from app.providers.openai_adapter import OpenAIAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
 from app.providers.replicate_adapter import ReplicateAdapter
+from app.providers.seedance_adapter import SeedanceAdapter
 from app.providers.stability_adapter import StabilityAdapter
 from app.providers.stub_adapter import StubAdapter
 from app.providers.together_adapter import TogetherAdapter
@@ -110,6 +111,7 @@ class ProviderRegistry:
         self.register(XAIAdapter())
         self.register(IdeogramAdapter())
         self.register(BytePlusAdapter())
+        self.register(SeedanceAdapter())
 
     def register(self, adapter: ProviderAdapter) -> None:
         """Register *adapter* under its ``name`` attribute, replacing any existing entry."""
