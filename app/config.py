@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     app_version: str = VERSION
     log_level: str = "INFO"
 
+    host: str = "127.0.0.1"
+    port: int = 8010
+    backend_host: str | None = None
+    backend_port: int | None = None
+    frontend_host: str | None = None
+    frontend_port: int = 5173
+
     data_dir: Path = Path("./data")
     sqlite_path: Path = Path("./data/app.db")
     default_base_dir: Path = Path("./data/images")
@@ -157,6 +164,16 @@ class Settings(BaseSettings):
     # Total time budget for generic HTTP image providers (incl. polling and downloads).
     provider_http_generate_timeout_seconds: float = 180.0
     provider_http_connect_timeout_seconds: float = 15.0
+
+    @property
+    def server_host(self) -> str:
+        """Return the effective backend server host."""
+        return self.backend_host or self.host
+
+    @property
+    def server_port(self) -> int:
+        """Return the effective backend server port."""
+        return self.backend_port if self.backend_port is not None else self.port
 
     @property
     def database_url(self) -> str:
