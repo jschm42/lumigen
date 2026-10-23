@@ -25,6 +25,7 @@ const initialTranslateY = ref<number>(0)
 const imgRef = ref<HTMLImageElement | null>(null)
 const isCopied = ref<boolean>(false)
 const isDownloading = ref<boolean>(false)
+const isVideo = computed(() => !!imageViewerStore.activeAsset?.mime?.startsWith('video/'))
 
 // Reset transformations whenever a new image opens
 watch(
@@ -127,6 +128,13 @@ function handleImageLoad(e: Event) {
   const target = e.target as HTMLImageElement
   if (target && target.naturalWidth && target.naturalHeight) {
     imageViewerStore.setDimensions(target.naturalWidth, target.naturalHeight)
+  }
+}
+
+function handleVideoLoad(e: Event) {
+  const target = e.target as HTMLVideoElement
+  if (target && target.videoWidth && target.videoHeight) {
+    imageViewerStore.setDimensions(target.videoWidth, target.videoHeight)
   }
 }
 
@@ -452,7 +460,23 @@ onUnmounted(() => {
               transition: isDragging ? 'none' : 'transform 0.15s cubic-bezier(0.2, 0, 0, 1)',
             }"
           >
+            <!-- Mouse events are stopped so the native video controls stay usable -->
+            <video
+              v-if="isVideo"
+              :key="imageViewerStore.imageUrl"
+              :src="imageViewerStore.imageUrl"
+              :poster="imageViewerStore.activeAsset?.thumbnail_url"
+              class="max-h-[85vh] max-w-[85vw] object-contain rounded-lg shadow-2xl pointer-events-auto"
+              controls
+              autoplay
+              loop
+              playsinline
+              @mousedown.stop
+              @dblclick.stop
+              @loadedmetadata="handleVideoLoad"
+            />
             <img
+              v-else
               ref="imgRef"
               :src="imageViewerStore.imageUrl"
               :alt="promptText"

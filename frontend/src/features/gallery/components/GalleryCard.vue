@@ -94,6 +94,7 @@ onUnmounted(detachListeners)
 
 const isSelected = computed(() => galleryStore.selectedAssetIds.includes(props.asset.id))
 const isContain = computed(() => galleryStore.filters.thumb_fit === 'contain')
+const isVideo = computed(() => !!props.asset.mime?.startsWith('video/'))
 </script>
 
 <template>
@@ -143,6 +144,19 @@ const isContain = computed(() => galleryStore.filters.thumb_fit === 'contain')
           decoding="async"
           draggable="false"
         />
+      </div>
+
+      <!-- Video Badge -->
+      <div
+        v-if="isVideo"
+        class="absolute bottom-2 left-2 h-6 px-1.5 rounded-lg flex items-center gap-1 bg-black/70 border border-white/30 text-white text-[10px] font-semibold shadow-sm pointer-events-none group-hover:opacity-0 transition-opacity"
+        title="Video"
+        data-testid="video-badge"
+      >
+        <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span>Video</span>
       </div>
 
       <!-- Top Overlay (Select checkbox, Stack badge & Rating button) -->

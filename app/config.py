@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     app_version: str = VERSION
     log_level: str = "INFO"
 
+    host: str = "127.0.0.1"
+    port: int = 8010
+    backend_host: str | None = None
+    backend_port: int | None = None
+    frontend_host: str | None = None
+    frontend_port: int = 5173
+
     data_dir: Path = Path("./data")
     sqlite_path: Path = Path("./data/app.db")
     default_base_dir: Path = Path("./data/images")
@@ -149,9 +156,24 @@ class Settings(BaseSettings):
     byteplus_api_key: str | None = None
     # ModelArk data-plane base URL (region specific).
     byteplus_base_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    # Seedance video generation (BytePlus ModelArk). Falls back to BYTEPLUS_API_KEY when unset.
+    seedance_api_key: str | None = None
+    seedance_base_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    provider_seedance_generate_timeout_seconds: float = 300.0
+    provider_seedance_generate_connect_timeout_seconds: float = 15.0
     # Total time budget for generic HTTP image providers (incl. polling and downloads).
     provider_http_generate_timeout_seconds: float = 180.0
     provider_http_connect_timeout_seconds: float = 15.0
+
+    @property
+    def server_host(self) -> str:
+        """Return the effective backend server host."""
+        return self.backend_host or self.host
+
+    @property
+    def server_port(self) -> int:
+        """Return the effective backend server port."""
+        return self.backend_port if self.backend_port is not None else self.port
 
     @property
     def database_url(self) -> str:

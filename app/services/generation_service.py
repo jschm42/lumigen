@@ -745,7 +745,8 @@ class GenerationService:
                 upscale_topaz_model_id = self._parse_optional_int(
                     generation.request_snapshot_json.get("upscale_topaz_model_id")
                 )
-                upscale_enabled = bool(upscale_provider)
+                has_video_results = any(self._is_video_result(img) for img in result.images)
+                upscale_enabled = bool(upscale_provider) and not has_video_results
 
                 if upscale_enabled and upscale_provider == "local":
                     if not self.upscale_service:
@@ -782,7 +783,12 @@ class GenerationService:
                     image_height = image.height
                     image_mime = image.mime
                     upscale_meta = None
-                    if upscale_enabled and upscale_provider == "local" and self.upscale_service:
+                    is_video = self._is_video_result(image)
+                    # Image upscalers cannot process video, so skip them for video assets.
+                    if is_video:
+                        if not str(image_mime or "").lower().startswith("video/"):
+                            image_mime = "video/mp4"
+                    elif upscale_enabled and upscale_provider == "local" and self.upscale_service:
                         (
                             image_data,
                             image_width,
@@ -889,7 +895,11 @@ class GenerationService:
                         prompt_user=generation.prompt_user,
                         generation_id=generation.id,
                         idx=idx,
-                        ext=output_format,
+                        ext=(
+                            self._video_extension_from_mime(image_mime)
+                            if is_video
+                            else output_format
+                        ),
                     )
                     rel_path = rendered_rel_path
                     abs_path = self.storage_service.resolve_managed_path(
@@ -898,6 +908,7 @@ class GenerationService:
                     self.storage_service.write_bytes_atomic(abs_path, image_data)
                     created_files.append(rel_path.as_posix())
 
+                    # ThumbnailService extracts the first frame for video files.
                     thumb_rel = self.thumbnail_service.create_thumbnail(
                         base_dir, rel_path
                     )
@@ -1280,6 +1291,15 @@ class GenerationService:
         if not data:
             raise ProviderError("No image data was provided")
 
+        # Videos are stored as-is; Pillow cannot decode them.
+        if (fallback_mime or "").lower().startswith("video/"):
+            return (
+                data,
+                int(fallback_width or 1280),
+                int(fallback_height or 720),
+                fallback_mime,
+            )
+
         try:
             with Image.open(BytesIO(data)) as source:
                 normalized = ImageOps.exif_transpose(source)
@@ -1301,6 +1321,29 @@ class GenerationService:
             raise
         except Exception as exc:
             raise ProviderError(f"Failed to process image: {exc}") from exc
+
+    @staticmethod
+    def _is_video_result(image: Any) -> bool:
+        """Return True if a provider result item is a video rather than an image."""
+        mime = str(getattr(image, "mime", "") or "").lower()
+        meta = getattr(image, "meta", None)
+        return mime.startswith("video/") or (
+            isinstance(meta, dict) and meta.get("media_type") == "video"
+        )
+
+    @staticmethod
+    def _video_extension_from_mime(mime: str) -> str:
+        """Return the file extension for a video MIME type (defaults to ``mp4``)."""
+        subtype = (mime or "").lower().partition("/")[2].split(";")[0].strip()
+        mapping = {
+            "mp4": "mp4",
+            "webm": "webm",
+            "quicktime": "mov",
+            "x-matroska": "mkv",
+            "x-msvideo": "avi",
+            "x-m4v": "m4v",
+        }
+        return mapping.get(subtype, "mp4")
 
     def _normalized_output_format(self, value: str) -> str:
         raw = (value or "png").strip().lower().lstrip(".")

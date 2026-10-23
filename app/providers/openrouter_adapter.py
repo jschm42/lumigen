@@ -452,7 +452,11 @@ class OpenRouterAdapter(ProviderAdapter):
             or image_obj.get("base64")
             or image_obj.get("image_base64")
         )
-        if isinstance(b64, str) and self._looks_like_base64_payload(b64):
+        if isinstance(b64, str) and (
+            "b64_json" in image_obj
+            or "image_base64" in image_obj
+            or self._looks_like_base64_payload(b64)
+        ):
             return self._to_data_url(b64, output_format)
 
         return None

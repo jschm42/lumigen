@@ -268,7 +268,21 @@ onUnmounted(() => window.removeEventListener('keydown', handleDetailKeydown))
           ]"
           title="Open in fullscreen & zoom viewer"
         >
+          <!-- Click is stopped so the video controls don't open the image viewer -->
+          <video
+            v-if="galleryStore.activeAsset.mime?.startsWith('video/')"
+            :key="galleryStore.activeAsset.id"
+            :src="galleryStore.activeAsset.image_url"
+            :poster="galleryStore.activeAsset.thumbnail_url"
+            class="max-h-[52vh] w-auto object-contain rounded-xl shadow-2xl"
+            controls
+            autoplay
+            loop
+            playsinline
+            @click.stop
+          />
           <img
+            v-else
             :src="galleryStore.activeAsset.image_url || galleryStore.activeAsset.thumbnail_url"
             :alt="galleryStore.activeAsset.prompt"
             class="max-h-[52vh] w-auto object-contain rounded-xl shadow-2xl transition-transform duration-200 group-hover:scale-[1.01]"

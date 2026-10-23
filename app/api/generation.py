@@ -79,6 +79,9 @@ async def api_generate_submit(
         upscale_model = payload.get("upscale_model", "__profile__")
         input_image_asset_id = payload.get("asset_id") or payload.get("input_image_asset_id")
         raw_category_ids = payload.get("category_ids")
+        media_type = payload.get("media_type")
+        duration = payload.get("duration")
+        generate_audio = payload.get("generate_audio")
     else:
         form = await request.form()
         prompt = str(form.get("prompt", "")).strip()
@@ -101,6 +104,9 @@ async def api_generate_submit(
         upscale_model = str(form.get("upscale_model", "__profile__"))
         input_image_asset_id = form.get("asset_id") or form.get("input_image_asset_id")
         raw_category_ids = form.getlist("category_ids") or form.getlist("category_ids[]") or None
+        media_type = form.get("media_type")
+        duration = form.get("duration")
+        generate_audio = form.get("generate_audio")
 
         # Collect uploaded image files from form
         for key in ("images", "input_images"):
@@ -322,6 +328,27 @@ async def api_generate_submit(
             overrides["width"] = w_val
         if h_val and h_val > 0:
             overrides["height"] = h_val
+
+    # Video generation parameters (Seedance, FAL video models)
+    video_params: dict[str, Any] = {}
+    media_type_value = str(media_type or "").strip().lower()
+    if media_type_value in {"image", "video"}:
+        video_params["media_type"] = media_type_value
+    duration_val = _parse_int(duration)
+    if duration_val is not None and duration_val > 0:
+        video_params["duration"] = duration_val
+    if generate_audio is not None and generate_audio != "":
+        if isinstance(generate_audio, bool):
+            video_params["generate_audio"] = generate_audio
+        else:
+            video_params["generate_audio"] = str(generate_audio).strip().lower() in {
+                "1", "true", "on", "yes",
+            }
+    if video_params:
+        params_json_base = overrides.get("params_json")
+        if not isinstance(params_json_base, dict):
+            params_json_base = dict(profile.params_json or {})
+        overrides["params_json"] = {**params_json_base, **video_params}
 
     if aspect_ratio:
         overrides["aspect_ratio"] = aspect_ratio

@@ -146,6 +146,10 @@ async function copyPrompt() {
   }
 }
 
+function isVideoAsset(asset: Asset): boolean {
+  return !!asset.mime?.startsWith('video/')
+}
+
 function handleImageClick(asset: Asset) {
   imageViewerStore.openViewer({
     asset,
@@ -305,7 +309,22 @@ function handleImageClick(asset: Asset) {
           ]"
           title="Click to enlarge (fullscreen & zoom)"
         >
+          <!-- Click is stopped so the video controls don't open the viewer -->
+          <video
+            v-if="isVideoAsset(asset)"
+            :src="asset.image_url"
+            :poster="asset.thumbnail_url"
+            :class="[
+              assets.length === 1 ? 'max-h-[460px] sm:max-h-[520px] w-auto max-w-full object-contain' : 'h-full w-full object-cover aspect-square',
+            ]"
+            controls
+            playsinline
+            preload="metadata"
+            @click.stop
+            @loadedmetadata="emit('image-loaded')"
+          />
           <img
+            v-else
             :src="asset.image_url || asset.thumbnail_url"
             :alt="asset.prompt"
             :class="[
@@ -315,7 +334,26 @@ function handleImageClick(asset: Asset) {
             loading="lazy"
             @load="emit('image-loaded')"
           />
-          <div class="pointer-events-none absolute inset-0 flex items-end justify-end bg-gradient-to-t from-slate-950/70 via-transparent to-transparent p-2.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <!-- Video badge (top-left); its "Open" overlay sits top-right so it doesn't cover the native controls -->
+          <span
+            v-if="isVideoAsset(asset)"
+            class="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-lg border border-white/30 bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+            data-testid="video-badge"
+          >
+            <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            Video
+          </span>
+          <div
+            v-if="isVideoAsset(asset)"
+            class="pointer-events-none absolute right-2 top-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          >
+            <span class="pointer-events-auto inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
+              Open
+            </span>
+          </div>
+          <div v-else class="pointer-events-none absolute inset-0 flex items-end justify-end bg-gradient-to-t from-slate-950/70 via-transparent to-transparent p-2.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <span class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
               <svg class="h-3.5 w-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
