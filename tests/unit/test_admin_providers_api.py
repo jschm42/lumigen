@@ -86,6 +86,8 @@ def test_get_providers_status(db_session: Session, monkeypatch: pytest.MonkeyPat
     providers_before = admin_api.get_providers(session=db_session)
     fal_status = next(p for p in providers_before if p["provider"] == "fal")
     assert fal_status["has_key"] is False
+    assert fal_status["display_name"] == "fal.ai"
+    assert fal_status["homepage_url"] == "https://fal.ai/dashboard/keys"
 
     admin_api.update_provider_key("fal", {"api_key": "fal-test-key"}, session=db_session)
 

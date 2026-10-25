@@ -164,3 +164,72 @@ async def test_video_download_failure_raises_provider_error(transport) -> None: 
     transport["handler"] = handler
     with pytest.raises(ProviderError, match="Failed to fetch FAL video"):
         await FalAdapter().generate(_request(), Settings(fal_api_key="fal-key"))
+
+
+@pytest.mark.asyncio
+async def test_generate_uses_status_and_response_urls_from_submit_response(transport) -> None:  # type: ignore[no-untyped-def]
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={
+                    "request_id": "custom-req-1",
+                    "status_url": "https://queue.fal.run/fal-ai/custom-parent/requests/custom-req-1/status",
+                    "response_url": "https://queue.fal.run/fal-ai/custom-parent/requests/custom-req-1",
+                },
+            )
+        if url == "https://queue.fal.run/fal-ai/custom-parent/requests/custom-req-1/status":
+            return httpx.Response(200, json={"status": "COMPLETED"})
+        if url == "https://queue.fal.run/fal-ai/custom-parent/requests/custom-req-1":
+            return httpx.Response(
+                200, json={"video": {"url": "https://v.fal.media/out.mp4", "width": 1280, "height": 720}}
+            )
+        if url.startswith("https://v.fal.media/"):
+            return httpx.Response(200, content=VIDEO_BYTES)
+        return httpx.Response(404)
+
+    transport["handler"] = handler
+    req = _request(model="fal-ai/custom-parent/sub-path/text-to-video")
+    result = await FalAdapter().generate(req, Settings(fal_api_key="fal-key"))
+    assert len(result.images) == 1
+    assert result.images[0].mime == "video/mp4"
+
+
+@pytest.mark.asyncio
+async def test_generate_polls_response_url_when_status_url_returns_405(transport) -> None:  # type: ignore[no-untyped-def]
+    status_calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if request.method == "POST":
+            return httpx.Response(200, json={"request_id": "req-405"})
+        if url.endswith("/requests/req-405/status"):
+            return httpx.Response(405)  # Method Not Allowed
+        if url.endswith("/requests/req-405"):
+            status_calls["count"] += 1
+            if status_calls["count"] < 2:
+                return httpx.Response(202)  # Still processing
+            return httpx.Response(
+                200, json={"video": {"url": "https://v.fal.media/out.mp4", "width": 1280, "height": 720}}
+            )
+        if url.startswith("https://v.fal.media/"):
+            return httpx.Response(200, content=VIDEO_BYTES)
+        return httpx.Response(404)
+
+    transport["handler"] = handler
+    req = _request()
+    result = await FalAdapter().generate(req, Settings(fal_api_key="fal-key"))
+    assert len(result.images) == 1
+    assert result.images[0].mime == "video/mp4"
+
+
+@pytest.mark.asyncio
+async def test_image_to_video_requires_input_image() -> None:
+    request = _request(
+        model="fal-ai/kling-video/v2.5-turbo/standard/image-to-video",
+        input_images=[],
+    )
+    with pytest.raises(ProviderError, match="image-to-video model and requires an input image"):
+        await FalAdapter().generate(request, Settings(fal_api_key="fal-key"))
+

@@ -220,3 +220,15 @@ async def test_registry_generate_passes_request_and_custom_api_key() -> None:
     assert adapter.captured_request is request
     assert adapter.captured_settings is not None
     assert adapter.captured_settings.openai_api_key == "custom-openai-key"
+
+
+def test_registered_providers_have_display_name_and_homepage_url() -> None:
+    settings = Settings()
+    registry = ProviderRegistry(settings)
+    meta = registry.provider_meta()
+
+    for name, info in meta.items():
+        if name == "stub":
+            continue
+        assert info["display_name"], f"Provider {name} is missing display_name"
+        assert info["homepage_url"], f"Provider {name} is missing homepage_url"

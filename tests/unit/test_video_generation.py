@@ -46,6 +46,12 @@ def test_thumbnail_service_is_video_path():
     assert ThumbnailService.is_video_path("graphic.webp") is False
 
 
+def test_thumbnail_service_find_ffmpeg():
+    bin_path = ThumbnailService._find_ffmpeg()
+    assert bin_path
+    assert "ffmpeg" in bin_path.lower()
+
+
 def test_thumbnail_service_video_frame_extraction(tmp_path: Path):
     storage = _MockStorageService()
     thumb_service = ThumbnailService(storage_service=storage, max_px=128)
