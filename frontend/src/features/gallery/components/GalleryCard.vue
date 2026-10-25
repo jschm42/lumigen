@@ -95,6 +95,7 @@ onUnmounted(detachListeners)
 const isSelected = computed(() => galleryStore.selectedAssetIds.includes(props.asset.id))
 const isContain = computed(() => galleryStore.filters.thumb_fit === 'contain')
 const isVideo = computed(() => !!props.asset.mime?.startsWith('video/'))
+const isSvg = computed(() => props.asset.mime === 'image/svg+xml' || !!props.asset.image_url?.endsWith('.svg'))
 </script>
 
 <template>
@@ -157,6 +158,16 @@ const isVideo = computed(() => !!props.asset.mime?.startsWith('video/'))
           <path d="M8 5v14l11-7z" />
         </svg>
         <span>Video</span>
+      </div>
+
+      <!-- SVG Badge -->
+      <div
+        v-else-if="isSvg"
+        class="absolute bottom-2 left-2 h-6 px-1.5 rounded-lg flex items-center gap-1 bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold shadow-sm pointer-events-none group-hover:opacity-0 transition-opacity"
+        title="Vector Graphic (SVG)"
+        data-testid="svg-badge"
+      >
+        <span>SVG</span>
       </div>
 
       <!-- Top Overlay (Select checkbox, Stack badge & Rating button) -->

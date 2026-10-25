@@ -1885,8 +1885,10 @@ def _sanitize_mime_type(value: str | None) -> str:
 def _guess_extension(filename: str | None, mime_type: str) -> str:
     """Guess a safe file extension from filename or MIME type."""
     suffix = Path(str(filename or "")).suffix.lower().lstrip(".")
-    if suffix in {"png", "jpg", "jpeg", "webp", "gif"}:
+    if suffix in {"png", "jpg", "jpeg", "webp", "gif", "svg"}:
         return "jpg" if suffix == "jpeg" else suffix
+    if mime_type == "image/svg+xml":
+        return "svg"
     if mime_type == "image/png":
         return "png"
     if mime_type == "image/jpeg":
@@ -5854,17 +5856,19 @@ def asset_thumbnail(
                 )
                 thumbnail_service.create_thumbnail(base_dir, asset.file_path)
                 if absolute_path.exists():
+                    thumb_media = "image/svg+xml" if absolute_path.suffix.lower() == ".svg" else "image/webp"
                     return FileResponse(
                         path=absolute_path,
-                        media_type="image/webp",
+                        media_type=thumb_media,
                         headers={"Cache-Control": "public, max-age=604800, immutable"},
                     )
         except Exception as exc:
             logger.error(f"Failed to automatically generate missing asset thumbnail: {exc}")
         raise HTTPException(status_code=404, detail="Thumbnail missing")
+    thumb_media = "image/svg+xml" if absolute_path.suffix.lower() == ".svg" else "image/webp"
     return FileResponse(
         path=absolute_path,
-        media_type="image/webp",
+        media_type=thumb_media,
         headers={"Cache-Control": "public, max-age=604800, immutable"},
     )
 

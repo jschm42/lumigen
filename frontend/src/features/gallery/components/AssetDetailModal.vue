@@ -517,7 +517,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleDetailKeydown))
             🔁 Remix in Studio
           </Button>
 
-          <Button variant="surface" size="sm" @click="isUpscaleModalOpen = true">
+          <Button
+            v-if="!galleryStore.activeAsset?.mime?.startsWith('video/') && galleryStore.activeAsset?.mime !== 'image/svg+xml'"
+            variant="surface"
+            size="sm"
+            @click="isUpscaleModalOpen = true"
+          >
             ✨ Upscale
           </Button>
 

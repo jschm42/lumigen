@@ -235,7 +235,7 @@ class GenerationService:
             "upscale_model": upscale_model,
             "upscale_topaz_model_id": upscale_topaz_model_id,
             "upscaling_active": False,
-            "output_format": profile.output_format,
+            "output_format": effective_overrides.get("output_format") or profile.output_format,
             "aspect_ratio": effective_overrides.get("aspect_ratio") or getattr(profile, "aspect_ratio", None),
             "resolution": effective_overrides.get("resolution"),
             "negative_prompt": effective_overrides.get("negative_prompt") or getattr(profile, "negative_prompt", None),
@@ -784,10 +784,13 @@ class GenerationService:
                     image_mime = image.mime
                     upscale_meta = None
                     is_video = self._is_video_result(image)
-                    # Image upscalers cannot process video, so skip them for video assets.
+                    is_svg = self._is_svg_result(image, output_format)
+                    # Video and SVG assets cannot be processed by raster upscalers, so skip them.
                     if is_video:
                         if not str(image_mime or "").lower().startswith("video/"):
                             image_mime = "video/mp4"
+                    elif is_svg:
+                        image_mime = "image/svg+xml"
                     elif upscale_enabled and upscale_provider == "local" and self.upscale_service:
                         (
                             image_data,
@@ -898,7 +901,11 @@ class GenerationService:
                         ext=(
                             self._video_extension_from_mime(image_mime)
                             if is_video
-                            else output_format
+                            else (
+                                "svg"
+                                if is_svg or image_mime == "image/svg+xml" or output_format == "svg"
+                                else output_format
+                            )
                         ),
                     )
                     rel_path = rendered_rel_path
@@ -1300,6 +1307,20 @@ class GenerationService:
                 fallback_mime,
             )
 
+        # Vector SVGs are stored as-is; Pillow cannot decode them.
+        is_svg = (
+            (fallback_mime or "").lower() == "image/svg+xml"
+            or output_format == "svg"
+            or (data.lstrip().startswith((b"<svg", b"<?xml")) and b"<svg" in data[:1000])
+        )
+        if is_svg:
+            return (
+                data,
+                int(fallback_width or 1024),
+                int(fallback_height or 1024),
+                "image/svg+xml",
+            )
+
         try:
             with Image.open(BytesIO(data)) as source:
                 normalized = ImageOps.exif_transpose(source)
@@ -1332,6 +1353,18 @@ class GenerationService:
         )
 
     @staticmethod
+    def _is_svg_result(image: Any, output_format: str = "") -> bool:
+        """Return True if a provider result item is an SVG vector graphic."""
+        mime = str(getattr(image, "mime", "") or "").lower()
+        data = getattr(image, "data", b"") or b""
+        fmt = (output_format or "").strip().lower().lstrip(".")
+        if mime == "image/svg+xml" or fmt == "svg":
+            return True
+        if data and data.lstrip().startswith((b"<svg", b"<?xml")) and b"<svg" in data[:1000]:
+            return True
+        return False
+
+    @staticmethod
     def _video_extension_from_mime(mime: str) -> str:
         """Return the file extension for a video MIME type (defaults to ``mp4``)."""
         subtype = (mime or "").lower().partition("/")[2].split(";")[0].strip()
@@ -1349,7 +1382,7 @@ class GenerationService:
         raw = (value or "png").strip().lower().lstrip(".")
         if raw in {"jpg", "jpeg"}:
             return "jpeg"
-        if raw in {"png", "webp"}:
+        if raw in {"png", "webp", "svg"}:
             return raw
         return "png"
 
@@ -1361,6 +1394,8 @@ class GenerationService:
         return "PNG"
 
     def _mime_from_output(self, output_format: str) -> str:
+        if output_format == "svg":
+            return "image/svg+xml"
         if output_format == "jpeg":
             return "image/jpeg"
         if output_format == "webp":

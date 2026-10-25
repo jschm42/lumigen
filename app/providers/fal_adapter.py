@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
+import xml.etree.ElementTree as ET
 from io import BytesIO
 from typing import Any
 
@@ -422,9 +424,19 @@ class FalAdapter(ProviderAdapter):
             )
 
             content_type = item.get("content_type") or ""
-            mime = self._mime_from_content_type(
-                content_type, self._normalize_output_format(request.output_format)
+            is_svg = (
+                "svg" in content_type.lower()
+                or (
+                    image_bytes.lstrip().startswith((b"<svg", b"<?xml"))
+                    and b"<svg" in image_bytes[:1000]
+                )
             )
+            if is_svg:
+                mime = "image/svg+xml"
+            else:
+                mime = self._mime_from_content_type(
+                    content_type, self._normalize_output_format(request.output_format)
+                )
 
             images.append(
                 ProviderImage(
@@ -512,23 +524,27 @@ class FalAdapter(ProviderAdapter):
         return payload
 
     def _normalize_output_format(self, value: str | None) -> str:
-        """Normalize an output-format string to one of ``jpeg``, ``png``, or ``webp``."""
+        """Normalize an output-format string to one of ``jpeg``, ``png``, ``webp``, or ``svg``."""
         raw = (value or "jpeg").strip().lower().lstrip(".")
         if raw in {"jpg", "jpeg"}:
             return "jpeg"
-        if raw in {"png", "webp"}:
+        if raw in {"png", "webp", "svg"}:
             return raw
         return "jpeg"
 
     def _mime_from_content_type(self, content_type: str, fallback_format: str) -> str:
         """Return a MIME type string derived from the FAL content_type field or fallback format."""
         ct = (content_type or "").lower()
+        if "svg" in ct:
+            return "image/svg+xml"
         if "jpeg" in ct or "jpg" in ct:
             return "image/jpeg"
         if "png" in ct:
             return "image/png"
         if "webp" in ct:
             return "image/webp"
+        if fallback_format == "svg":
+            return "image/svg+xml"
         if fallback_format == "jpeg":
             return "image/jpeg"
         if fallback_format == "webp":
@@ -546,6 +562,27 @@ class FalAdapter(ProviderAdapter):
                     return int(width), int(height)
         except (UnidentifiedImageError, OSError):
             pass
+
+        # If SVG, parse dimensions or viewBox from XML
+        if image_bytes.lstrip().startswith((b"<svg", b"<?xml")) and b"<svg" in image_bytes[:1000]:
+            try:
+                root = ET.fromstring(image_bytes)
+                if root.tag.endswith("svg"):
+                    w_str = root.attrib.get("width")
+                    h_str = root.attrib.get("height")
+                    if w_str and h_str:
+                        w_clean = re.sub(r"[^\d.]", "", w_str)
+                        h_clean = re.sub(r"[^\d.]", "", h_str)
+                        if w_clean and h_clean:
+                            return int(float(w_clean)), int(float(h_clean))
+                    viewbox = root.attrib.get("viewBox") or root.attrib.get("viewbox")
+                    if viewbox:
+                        parts = viewbox.replace(",", " ").split()
+                        if len(parts) >= 4:
+                            return int(float(parts[2])), int(float(parts[3]))
+            except Exception:
+                pass
+
         return fallback_width, fallback_height
 
     def _extract_error_message(self, response: httpx.Response) -> str:

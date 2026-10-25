@@ -24,6 +24,8 @@ class ThumbnailService:
     def thumbnail_relative_path(self, image_relative_path: str | Path) -> Path:
         """Return the relative path for the thumbnail of *image_relative_path* (stored under ``.thumbs/``)."""
         image_rel = Path(image_relative_path)
+        if self.is_svg_path(image_rel):
+            return Path(".thumbs") / image_rel.with_suffix(".svg")
         return Path(".thumbs") / image_rel.with_suffix(".webp")
 
     @staticmethod
@@ -31,15 +33,25 @@ class ThumbnailService:
         """Return True if *path* has a known video file extension."""
         return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
-    def create_thumbnail(self, base_dir: Path, image_relative_path: str | Path) -> Path:
-        """Generate and write a WebP thumbnail for the asset at *image_relative_path*.
+    @staticmethod
+    def is_svg_path(path: str | Path) -> bool:
+        """Return True if *path* has an SVG file extension."""
+        return Path(path).suffix.lower() == ".svg"
 
-        For video files the first frame is extracted with ``ffmpeg``. Returns the
-        thumbnail relative path.
+    def create_thumbnail(self, base_dir: Path, image_relative_path: str | Path) -> Path:
+        """Generate and write a WebP or SVG thumbnail for the asset at *image_relative_path*.
+
+        For video files the first frame is extracted with ``ffmpeg``.
+        For SVG vector graphics the vector file is preserved directly.
+        Returns the thumbnail relative path.
         """
         image_abs = self.storage_service.resolve_managed_path(base_dir, image_relative_path)
         thumbnail_rel = self.thumbnail_relative_path(image_relative_path)
         thumbnail_abs = self.storage_service.resolve_managed_path(base_dir, thumbnail_rel)
+
+        if self.is_svg_path(image_abs):
+            self.storage_service.write_bytes_atomic(thumbnail_abs, image_abs.read_bytes())
+            return thumbnail_rel
 
         if self.is_video_path(image_abs):
             source_bytes = self._extract_first_frame(image_abs)

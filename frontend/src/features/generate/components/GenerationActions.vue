@@ -82,6 +82,7 @@ function handleUpscaleSubmitted(jobId: number) {
 
     <!-- Upscale -->
     <button
+      v-if="!asset.mime?.startsWith('video/') && asset.mime !== 'image/svg+xml'"
       type="button"
       @click="isUpscaleModalOpen = true"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"

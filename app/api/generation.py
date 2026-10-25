@@ -82,6 +82,7 @@ async def api_generate_submit(
         media_type = payload.get("media_type")
         duration = payload.get("duration")
         generate_audio = payload.get("generate_audio")
+        output_format = payload.get("output_format")
     else:
         form = await request.form()
         prompt = str(form.get("prompt", "")).strip()
@@ -107,6 +108,7 @@ async def api_generate_submit(
         media_type = form.get("media_type")
         duration = form.get("duration")
         generate_audio = form.get("generate_audio")
+        output_format = form.get("output_format")
 
         # Collect uploaded image files from form
         for key in ("images", "input_images"):
@@ -194,6 +196,9 @@ async def api_generate_submit(
             last_model_config_id=model_config_id,
         )
 
+    if output_format:
+        overrides["output_format"] = str(output_format).strip().lower().lstrip(".")
+
     if model_config_id:
         model_cfg = crud.get_model_config(session, model_config_id)
         if model_cfg:
@@ -201,6 +206,9 @@ async def api_generate_submit(
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
             overrides["model_name"] = model_cfg.name
+            cfg_params = model_cfg.generic_params if isinstance(model_cfg.generic_params, dict) else {}
+            if "output_format" in cfg_params and "output_format" not in overrides:
+                overrides["output_format"] = str(cfg_params["output_format"]).strip().lower().lstrip(".")
     elif getattr(profile, "model_config_id", None):
         model_cfg = crud.get_model_config(session, profile.model_config_id)
         if model_cfg:
@@ -208,6 +216,9 @@ async def api_generate_submit(
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
             overrides["model_name"] = model_cfg.name
+            cfg_params = model_cfg.generic_params if isinstance(model_cfg.generic_params, dict) else {}
+            if "output_format" in cfg_params and "output_format" not in overrides:
+                overrides["output_format"] = str(cfg_params["output_format"]).strip().lower().lstrip(".")
 
     provider_value = str(overrides.get("provider") or profile.provider or "").strip().lower()
 

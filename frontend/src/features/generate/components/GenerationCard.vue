@@ -159,6 +159,10 @@ function isVideoAsset(asset: Asset): boolean {
   return !!asset.mime?.startsWith('video/')
 }
 
+function isSvgAsset(asset: Asset): boolean {
+  return asset.mime === 'image/svg+xml' || !!asset.image_url?.endsWith('.svg')
+}
+
 function handleImageClick(asset: Asset) {
   imageViewerStore.openViewer({
     asset,
@@ -353,6 +357,14 @@ function handleImageClick(asset: Asset) {
               <path d="M8 5v14l11-7z" />
             </svg>
             Video
+          </span>
+          <!-- SVG Vector badge (top-left) -->
+          <span
+            v-else-if="isSvgAsset(asset)"
+            class="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-md"
+            data-testid="svg-badge"
+          >
+            SVG
           </span>
           <div
             v-if="isVideoAsset(asset)"
