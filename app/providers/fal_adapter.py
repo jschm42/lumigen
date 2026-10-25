@@ -55,6 +55,8 @@ class FalAdapter(ProviderAdapter):
     """Provider adapter for the FAL.ai image-generation API (queue-based)."""
 
     name = "fal"
+    display_name = "fal.ai"
+    homepage_url = "https://fal.ai/dashboard/keys"
     BASE_URL = "https://fal.run"
     QUEUE_URL = "https://queue.fal.run"
     MAX_POLL_ATTEMPTS = 90

@@ -56,7 +56,7 @@ async function handleTestKey(provider: string) {
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <h4 class="font-bold text-sm text-slate-900 dark:text-white">
-              {{ provider.display_name }}
+              {{ provider.display_name || provider.provider }}
             </h4>
             <a
               v-if="provider.homepage_url"
