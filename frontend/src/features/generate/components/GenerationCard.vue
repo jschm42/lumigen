@@ -104,6 +104,15 @@ const usageText = computed(() =>
   authStore.uiSettings.show_token_usage ? formatUsage(props.generation.usage) : null
 )
 
+const displayModelName = computed(() => {
+  const raw = props.generation.model_name
+  if (!raw) return ''
+  const found = generateStore.activeModels.find(
+    (m) => m.model_identifier === raw || m.name === raw
+  )
+  return found?.name || raw
+})
+
 // --- Actions ----------------------------------------------------------------
 async function handleRetry() {
   isRetrying.value = true
@@ -374,7 +383,7 @@ function handleImageClick(asset: Asset) {
 
     <!-- Meta footer -->
     <footer class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-      <span v-if="generation.model_name" class="font-medium text-sky-700 dark:text-sky-300">{{ generation.model_name }}</span>
+      <span v-if="displayModelName" class="font-medium text-sky-700 dark:text-sky-300" :title="generation.model_name">{{ displayModelName }}</span>
       <span v-if="generation.aspect_ratio" class="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">{{ generation.aspect_ratio }}</span>
       <span v-if="dimensions" class="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">{{ dimensions }}</span>
       <span v-if="generation.profile_name && generation.profile_name !== 'default'" title="Profile">· {{ generation.profile_name }}</span>

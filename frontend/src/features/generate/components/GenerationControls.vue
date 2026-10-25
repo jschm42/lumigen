@@ -55,6 +55,21 @@ watch(
     const profile = profilesStore.profiles.find((p) => p.id === Number(profileId))
     if (profile) {
       generateStore.applyProfileDefaults(profile)
+      if (profile.default_model_config_id) {
+        generateStore.selectedModelConfigId = profile.default_model_config_id
+      }
+    }
+  }
+)
+
+watch(
+  () => generateStore.selectedModelConfigId,
+  (newModelId) => {
+    if (newModelId && generateStore.selectedProfileId) {
+      const currentProfile = profilesStore.profiles.find((p) => p.id === Number(generateStore.selectedProfileId))
+      if (currentProfile?.default_model_config_id && currentProfile.default_model_config_id !== newModelId) {
+        generateStore.selectedProfileId = null
+      }
     }
   }
 )

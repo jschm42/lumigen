@@ -200,12 +200,14 @@ async def api_generate_submit(
             overrides["model_config_id"] = model_cfg.id
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
+            overrides["model_name"] = model_cfg.name
     elif getattr(profile, "model_config_id", None):
         model_cfg = crud.get_model_config(session, profile.model_config_id)
         if model_cfg:
             overrides["model_config_id"] = model_cfg.id
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
+            overrides["model_name"] = model_cfg.name
 
     provider_value = str(overrides.get("provider") or profile.provider or "").strip().lower()
 
@@ -493,7 +495,7 @@ def serialize_generation(gen: Any, session_token: str | None = None) -> dict[str
         "created_at": _utc(gen.created_at).isoformat() if gen.created_at else "",
         "completed_at": _utc(gen.finished_at).isoformat() if gen.finished_at else None,
         "duration_seconds": _duration_seconds(gen),
-        "model_name": gen.model,
+        "model_name": req_snapshot.get("model_name") or gen.model,
         "provider": gen.provider,
         "profile_name": gen.profile_name,
         "aspect_ratio": req_snapshot.get("aspect_ratio", "1:1"),
