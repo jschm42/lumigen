@@ -60,13 +60,48 @@ class ThumbnailService:
         image.save(buffer, format="WEBP", quality=85)
         return buffer
 
-    @staticmethod
-    def _extract_first_frame(video_abs: Path) -> bytes:
+    @classmethod
+    def _find_ffmpeg(cls) -> str:
+        """Find the ffmpeg executable across PATH and well-known installation locations."""
+        found = shutil.which("ffmpeg")
+        if found:
+            return found
+
+        home = Path.home()
+        candidates = [
+            home / "Tools" / "ffmpeg-2025-12-07-git-c4d22f2d2c-essentials_build" / "bin" / "ffmpeg.exe",
+            Path(r"C:\ProgramData\chocolatey\bin\ffmpeg.exe"),
+            Path(r"C:\Program Files\ffmpeg\bin\ffmpeg.exe"),
+            Path(r"C:\ffmpeg\bin\ffmpeg.exe"),
+            home / ".local" / "bin" / "ffmpeg",
+            Path("/usr/bin/ffmpeg"),
+            Path("/usr/local/bin/ffmpeg"),
+        ]
+        for c in candidates:
+            if c.is_file():
+                return str(c)
+
+        local_app_data = Path(home / "AppData" / "Local")
+        if local_app_data.is_dir():
+            hermes = list(local_app_data.glob("hermes/tools/ffmpeg*/bin/ffmpeg.exe"))
+            if hermes and hermes[0].is_file():
+                return str(hermes[0])
+
+        tools = home / "Tools"
+        if tools.is_dir():
+            for exe in tools.glob("**/ffmpeg.exe"):
+                if exe.is_file():
+                    return str(exe)
+
+        return _FFMPEG_FALLBACK_PATH
+
+    @classmethod
+    def _extract_first_frame(cls, video_abs: Path) -> bytes:
         """Return the first frame of *video_abs* as PNG bytes using ``ffmpeg``.
 
         Raises ``RuntimeError`` if ffmpeg fails or produces no output.
         """
-        ffmpeg_bin = shutil.which("ffmpeg") or _FFMPEG_FALLBACK_PATH
+        ffmpeg_bin = cls._find_ffmpeg()
         cmd = [
             ffmpeg_bin,
             "-ss", "00:00:00.000",
