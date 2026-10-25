@@ -99,6 +99,9 @@ class ProviderAdapter(ABC):
     name: str
     display_name: str = ""
     homepage_url: str = ""
+    #: Media kinds this provider can produce. Declarative capability used by the
+    #: admin UI to label providers as video-capable before any model is configured.
+    media_types: tuple[str, ...] = ("image",)
     _logger: logging.Logger = logging.getLogger(__name__)
 
     def _log_request(
@@ -206,3 +209,38 @@ class ProviderAdapter(ABC):
     async def list_models(self, settings: Settings) -> list[str]:
         """Return the list of model IDs available from this provider. Defaults to an empty list."""
         return []
+
+    #: Substrings that identify a model ID as video-generating. Adapters whose
+    #: models are video-only (e.g. Seedance) override :meth:`media_type_for_model`
+    #: instead of relying on the heuristic.
+    _VIDEO_MODEL_TOKENS: tuple[str, ...] = (
+        "video",
+        "t2v",
+        "i2v",
+        "svd",
+        "luma",
+        "hunyuan",
+        "cogvideo",
+        "kling",
+        "seedance",
+        "dream-machine",
+        "veo",
+        "sora",
+        "pika",
+        "hailuo",
+        "wan2",
+        "animatediff",
+    )
+
+    @classmethod
+    def media_type_for_model(cls, model: str) -> str:
+        """Return ``"video"`` when *model* produces video, otherwise ``"image"``.
+
+        This is a naming heuristic so that the studio can label and route models
+        before a generation request has been made. Adapters with a homogeneous
+        catalogue (all-video or all-image) override this method explicitly.
+        """
+        low = (model or "").lower()
+        if any(token in low for token in cls._VIDEO_MODEL_TOKENS):
+            return "video"
+        return "image"

@@ -53,16 +53,22 @@ fal_upscale_service = FalUpscaleService()
 
 @router.get("/providers")
 def get_providers(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
-    """List provider API key statuses."""
+    """List provider API key statuses including the media kinds each provider supports."""
+    from app.api.generation import provider_registry
+
     keys = crud.list_provider_api_keys(session)
     key_map = {k.provider.lower(): k for k in keys}
+    media_types_by_provider = provider_registry.provider_media_types()
     result = []
     for provider, meta in _provider_catalog():
+        media_types = media_types_by_provider.get(provider, ["image"])
         result.append({
             "provider": provider,
             "display_name": meta["display_name"],
             "homepage_url": meta["homepage_url"],
             "has_key": provider in key_map or model_config_service.has_env_api_key(provider),
+            "media_types": media_types,
+            "supports_video": "video" in media_types,
         })
     return result
 
@@ -94,15 +100,21 @@ def _parse_price(payload: dict[str, Any], key: str, current: float | None) -> fl
 
 def _serialize_model_config(c: Any) -> dict[str, Any]:
     """Serialize a model configuration including its optional prices."""
+    from app.api.generation import provider_registry
+
+    media_type = provider_registry.media_type_for(c.provider, c.model)
+    is_video = media_type == "video"
     return {
         "id": c.id,
         "name": c.name,
         "provider": c.provider,
         "model_identifier": c.model,
+        "media_type": media_type,
+        "capabilities": ["video"] if is_video else ["image"],
         "is_active": True,
         "is_default": False,
         "supported_aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"],
-        "supported_resolutions": ["0.5K", "1K", "2K", "4K"],
+        "supported_resolutions": ["720p", "1080p"] if is_video else ["0.5K", "1K", "2K", "4K"],
         "price_input_per_mtok": c.price_input_per_mtok,
         "price_output_per_mtok": c.price_output_per_mtok,
         "price_per_image": c.price_per_image,
@@ -174,12 +186,6 @@ async def discover_provider_models(
             "stabilityai/stable-diffusion-3.5-large",
             "google/imagen-3",
         ],
-        "fal": [
-            "fal-ai/flux/schnell",
-            "fal-ai/flux/dev",
-            "fal-ai/nano-banana-2",
-            "fal-ai/recraft-v3",
-        ],
         "openai": [
             "dall-e-3",
             "dall-e-2",
@@ -199,15 +205,26 @@ async def discover_provider_models(
     }
     provider_name = provider.lower()
     models = default_discovery.get(provider_name)
+    from app.api.generation import provider_registry
+
     if models is None:
         # Newer adapters expose a curated model list without network access.
-        from app.api.generation import provider_registry
-
         try:
             models = await provider_registry.get(provider_name).list_models(settings)
         except Exception:
             models = []
-    return {"models": models, "count": len(models)}
+
+    # Annotate every discovered model with the media type it produces so the admin
+    # UI can distinguish image from video models (e.g. FAL.ai video models).
+    media_types = {
+        model: provider_registry.media_type_for(provider_name, model) for model in models
+    }
+    return {
+        "models": models,
+        "count": len(models),
+        "media_types": media_types,
+        "video_models": [model for model, kind in media_types.items() if kind == "video"],
+    }
 
 
 @router.get("/models")

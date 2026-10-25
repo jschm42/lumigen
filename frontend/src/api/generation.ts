@@ -25,6 +25,12 @@ export interface SubmitGenerationPayload {
   category_ids?: number[]
   fal_params?: Record<string, any>
   generic_params?: Record<string, any>
+  /** "image" or "video"; video models require an explicit media type. */
+  media_type?: 'image' | 'video'
+  /** Clip length in seconds (video models only). */
+  duration?: number | null
+  /** Whether the provider should synthesize an audio track (video models only). */
+  generate_audio?: boolean
 }
 
 export interface EnhancePromptPayload {
@@ -64,6 +70,9 @@ export const generationApi = {
     }
     if (payload.fal_params) formData.append('fal_params_json', JSON.stringify(payload.fal_params))
     if (payload.generic_params) formData.append('generic_params_json', JSON.stringify(payload.generic_params))
+    if (payload.media_type) formData.append('media_type', payload.media_type)
+    if (payload.duration != null) formData.append('duration', String(payload.duration))
+    if (payload.generate_audio != null) formData.append('generate_audio', payload.generate_audio ? 'true' : 'false')
 
     if (payload.input_images && payload.input_images.length > 0) {
       payload.input_images.forEach((file) => {

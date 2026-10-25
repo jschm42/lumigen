@@ -39,6 +39,8 @@ _KNOWN_MODELS: list[str] = [
     "fal-ai/cogvideox-5b",
     "fal-ai/fast-svd",
     "fal-ai/ltx-video",
+    "fal-ai/veo3",
+    "fal-ai/veo3/fast",
 ]
 
 _LEGACY_FAL_IMAGE_SIZE_TO_ASPECT_RATIO: dict[str, str] = {
@@ -55,6 +57,7 @@ class FalAdapter(ProviderAdapter):
     """Provider adapter for the FAL.ai image-generation API (queue-based)."""
 
     name = "fal"
+    media_types = ("image", "video")
     BASE_URL = "https://fal.run"
     QUEUE_URL = "https://queue.fal.run"
     MAX_POLL_ATTEMPTS = 90
@@ -108,11 +111,8 @@ class FalAdapter(ProviderAdapter):
 
     @classmethod
     def _is_video_model(cls, model: str) -> bool:
-        low = (model or "").lower()
-        return any(
-            token in low
-            for token in ("video", "svd", "luma", "hunyuan", "cogvideo", "kling", "seedance", "minimax/video")
-        )
+        """Return True when *model* is a FAL.ai video model."""
+        return cls.media_type_for_model(model) == "video"
 
     async def generate(
         self, request: ProviderGenerationRequest, settings: Settings

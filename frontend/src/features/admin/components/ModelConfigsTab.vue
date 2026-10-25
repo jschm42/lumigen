@@ -56,6 +56,8 @@ const isEditorOpen = ref(false)
 const isDiscovering = ref(false)
 const selectedProvider = ref('openrouter')
 const discoveredModels = ref<string[]>([])
+// Provider-reported media type per discovered model (image/video).
+const discoveredMediaTypes = ref<Record<string, string>>({})
 
 const editingConfig = ref<Partial<ModelConfig>>({
   id: undefined,
@@ -127,7 +129,13 @@ async function handleDiscover() {
   try {
     const res = await adminApi.discoverModels(selectedProvider.value)
     discoveredModels.value = res.models
-    toastStore.success(`Found ${res.count} models from provider.`)
+    discoveredMediaTypes.value = res.media_types || {}
+    const videoCount = res.video_models?.length || 0
+    toastStore.success(
+      videoCount > 0
+        ? `Found ${res.count} models from provider (${videoCount} video).`
+        : `Found ${res.count} models from provider.`
+    )
   } catch (error: any) {
     toastStore.error(error?.response?.data?.detail || 'Model discovery failed.')
   } finally {
@@ -173,7 +181,13 @@ async function handleDiscover() {
           >
             <td class="p-3.5 font-bold text-slate-900 dark:text-white">{{ model.name }}</td>
             <td class="p-3.5 text-[11px] text-slate-500">{{ providerLabel(model.provider) }}</td>
-            <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">{{ model.model_identifier }}</td>
+            <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">
+              {{ model.model_identifier }}
+              <span
+                v-if="model.media_type === 'video'"
+                class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300"
+              >🎬 Video</span>
+            </td>
             <td class="p-3.5 text-[11px] text-slate-500">{{ priceSummary(model) }}</td>
             <td class="p-3.5">
               <span :class="model.is_active ? 'text-emerald-500 font-bold' : 'text-slate-400'">
@@ -235,7 +249,13 @@ async function handleDiscover() {
           class="flex items-center justify-between px-2 py-1 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded cursor-pointer"
           @click="addDiscovered(m)"
         >
-          <span class="font-mono">{{ m }}</span>
+          <span class="font-mono flex items-center gap-1.5">
+            {{ m }}
+            <span
+              v-if="discoveredMediaTypes[m] === 'video'"
+              class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300"
+            >🎬 Video</span>
+          </span>
           <span class="text-sky-500 font-semibold text-[10px]">+ Add as configuration</span>
         </div>
       </div>
