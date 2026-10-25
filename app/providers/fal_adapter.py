@@ -33,6 +33,10 @@ _KNOWN_MODELS: list[str] = [
     "fal-ai/aura-flow",
     "fal-ai/hunyuan-video",
     "fal-ai/minimax/video-01",
+    "fal-ai/kling-video/v2.5-turbo/standard/text-to-video",
+    "fal-ai/kling-video/v2.5-turbo/standard/image-to-video",
+    "fal-ai/kling-video/v1.5/pro/text-to-video",
+    "fal-ai/kling-video/v1.5/pro/image-to-video",
     "fal-ai/kling-video/v1.5/pro",
     "fal-ai/kling-video/v1/standard",
     "fal-ai/luma-dream-machine",
@@ -139,6 +143,16 @@ class FalAdapter(ProviderAdapter):
                 "FAL provider does not support input images."
             )
 
+        if (
+            is_video
+            and ("image-to-video" in request.model.lower() or "i2v" in request.model.lower())
+            and not request.input_images
+        ):
+            raise ProviderError(
+                f"Model '{request.model}' is an image-to-video model and requires an input image. "
+                "Please upload an image or choose a text-to-video model."
+            )
+
         queue_url = f"{self.QUEUE_URL}/{request.model}"
         headers = {
             "Authorization": f"Key {api_key}",
@@ -181,8 +195,27 @@ class FalAdapter(ProviderAdapter):
                     f"FAL did not return a request_id. Response: {submit_result}"
                 )
 
+            status_url = (
+                str(submit_result.get("status_url") or "").strip()
+                or f"{self.QUEUE_URL}/{request.model}/requests/{request_id}/status"
+            )
+            response_url = (
+                str(
+                    submit_result.get("response_url")
+                    or submit_result.get("result_url")
+                    or ""
+                ).strip()
+                or f"{self.QUEUE_URL}/{request.model}/requests/{request_id}"
+            )
+
             images = await self._poll_for_result(
-                client, request.model, request_id, api_key, request
+                client=client,
+                model=request.model,
+                request_id=request_id,
+                api_key=api_key,
+                request=request,
+                status_url=status_url,
+                response_url=response_url,
             )
 
         return ProviderGenerationResult(
@@ -202,10 +235,12 @@ class FalAdapter(ProviderAdapter):
         request_id: str,
         api_key: str,
         request: ProviderGenerationRequest,
+        status_url: str | None = None,
+        response_url: str | None = None,
     ) -> list[ProviderImage]:
         """Poll the FAL queue until the request is COMPLETED, then fetch and return images."""
-        status_url = f"{self.QUEUE_URL}/{model}/requests/{request_id}/status"
-        result_url = f"{self.QUEUE_URL}/{model}/requests/{request_id}"
+        status_url = status_url or f"{self.QUEUE_URL}/{model}/requests/{request_id}/status"
+        result_url = response_url or f"{self.QUEUE_URL}/{model}/requests/{request_id}"
         headers = {
             "Authorization": f"Key {api_key}",
             "Content-Type": "application/json",
@@ -215,6 +250,29 @@ class FalAdapter(ProviderAdapter):
             await asyncio.sleep(self.POLL_INTERVAL)
 
             response = await client.get(status_url, headers=headers)
+
+            # Some endpoints or subpaths do not expose a GET /status route;
+            # fall back to polling result_url directly.
+            if response.status_code == 405:
+                result_response = await client.get(result_url, headers=headers)
+                if result_response.status_code == 200:
+                    try:
+                        result_body = result_response.json()
+                    except Exception as exc:
+                        raise ProviderError("FAL result returned non-JSON.") from exc
+                    return await self._extract_images(result_body, request, client)
+                if result_response.status_code in {202, 204, 425, 429}:
+                    continue
+                if result_response.status_code >= 500:
+                    if attempt < self.MAX_POLL_ATTEMPTS - 1:
+                        continue
+                    raise ProviderServiceUnavailableError(
+                        f"FAL result polling failed ({result_response.status_code})."
+                    )
+                message = self._extract_error_message(result_response)
+                raise ProviderError(
+                    f"FAL result polling failed ({result_response.status_code}): {message}"
+                )
 
             if response.status_code >= 500:
                 if attempt < self.MAX_POLL_ATTEMPTS - 1:
@@ -251,7 +309,7 @@ class FalAdapter(ProviderAdapter):
                     ) from exc
                 return await self._extract_images(result_body, request, client)
 
-            elif status == "FAILED":
+            elif status in ("FAILED", "CANCELLED"):
                 detail = status_body.get("error") or status_body.get("detail") or "Unknown error"
                 self._logger.error(
                     "FAL generation failed: %s, status_body=%s", detail, status_body
@@ -502,6 +560,17 @@ class FalAdapter(ProviderAdapter):
         if isinstance(detail, str) and detail.strip():
             return detail.strip()
         if isinstance(detail, list) and detail:
+            formatted_errors: list[str] = []
+            for item in detail:
+                if isinstance(item, dict):
+                    loc_parts = [str(p) for p in item.get("loc", []) if p != "body"]
+                    loc = ".".join(loc_parts)
+                    msg = item.get("msg") or item.get("message") or str(item)
+                    formatted_errors.append(f"{loc}: {msg}" if loc else str(msg))
+                elif isinstance(item, str):
+                    formatted_errors.append(item)
+            if formatted_errors:
+                return "; ".join(formatted_errors)[:400]
             return str(detail[0])[:400]
 
         error_obj = data.get("error")
