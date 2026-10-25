@@ -94,6 +94,16 @@ export const useGenerateStore = defineStore('generate', () => {
     return activeModels.value.find((m) => m.id === selectedModelConfigId.value) || null
   })
 
+  // Media kind of the selected model; drives the video-specific controls.
+  const selectedMediaType = computed<'image' | 'video'>(() =>
+    selectedModel.value?.media_type === 'video' ? 'video' : 'image'
+  )
+  const isVideoModel = computed(() => selectedMediaType.value === 'video')
+
+  // Video-only generation options (provider payload: media_type/duration/generate_audio).
+  const videoDuration = ref<number>(5)
+  const videoGenerateAudio = ref<boolean>(false)
+
   function addAttachedImage(file: File) {
     if (attachedImages.value.length >= 5) {
       toastStore.warning('Maximum 5 reference images allowed.')
@@ -524,6 +534,10 @@ export const useGenerateStore = defineStore('generate', () => {
         category_ids: selectedCategoryIds.value.length > 0 ? selectedCategoryIds.value : undefined,
         input_images: inputFiles.length > 0 ? inputFiles : undefined,
         asset_id: firstAsset ? firstAsset.assetId : undefined,
+        // Video models need an explicit media type so the provider builds a clip payload.
+        media_type: isVideoModel.value ? 'video' : undefined,
+        duration: isVideoModel.value ? videoDuration.value : undefined,
+        generate_audio: isVideoModel.value ? videoGenerateAudio.value : undefined,
       }
 
       const res = await generationApi.submitGeneration(payload)
@@ -641,6 +655,10 @@ export const useGenerateStore = defineStore('generate', () => {
     lastSubmittedAt,
     sessionUsageTotal,
     selectedModel,
+    selectedMediaType,
+    isVideoModel,
+    videoDuration,
+    videoGenerateAudio,
     selectedCategoryIds,
     profileLockedCategoryIds,
     addAttachedImage,

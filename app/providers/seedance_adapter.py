@@ -64,6 +64,7 @@ class SeedanceAdapter(ProviderAdapter):
     name = "seedance"
     display_name = "ByteDance Seedance (BytePlus)"
     homepage_url = "https://www.byteplus.com/en/product/seedance"
+    media_types = ("video",)
     MAX_POLL_ATTEMPTS = 120
     POLL_INTERVAL = 3.0  # seconds
     _logger = logging.getLogger(__name__)
@@ -72,6 +73,11 @@ class SeedanceAdapter(ProviderAdapter):
         """Return the known Seedance video model IDs."""
         _ = settings
         return list(_KNOWN_MODELS)
+
+    @classmethod
+    def media_type_for_model(cls, model: str) -> str:
+        """Seedance only ships video models, so every model renders video."""
+        return "video"
 
     def _resolve_ratio(self, request: ProviderGenerationRequest) -> str:
         """Map aspect ratio selection to Seedance ratio format."""

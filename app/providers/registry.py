@@ -131,12 +131,33 @@ class ProviderRegistry:
             for name, adapter in self._adapters.items()
         }
 
+    def provider_media_types(self) -> dict[str, list[str]]:
+        """Return a dict mapping each provider name to the media kinds it can produce."""
+        return {
+            name: list(getattr(adapter, "media_types", ("image",)))
+            for name, adapter in self._adapters.items()
+        }
+
     def get(self, provider: str) -> ProviderAdapter:
         """Return the adapter for *provider*, raising ``ProviderError`` if unknown."""
         adapter = self._adapters.get(provider)
         if not adapter:
             raise ProviderError(f"Unknown provider: {provider}")
         return adapter
+
+    def media_type_for(self, provider: str, model: str) -> str:
+        """Return the media type (``"image"`` or ``"video"``) a model produces.
+
+        Unknown providers degrade to ``"image"`` so that stale model configs never
+        break the studio listing.
+        """
+        adapter = self._adapters.get(provider)
+        if adapter is None:
+            return "image"
+        try:
+            return "video" if adapter.media_type_for_model(model) == "video" else "image"
+        except Exception:  # pragma: no cover - defensive against third-party adapters
+            return "image"
 
     def _build_policy(self, provider: str) -> ProviderPolicy:
         defaults = self._settings

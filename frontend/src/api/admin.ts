@@ -41,7 +41,9 @@ export const adminApi = {
     return res.data
   },
 
-  async discoverModels(provider: string): Promise<{ models: string[]; count: number }> {
+  async discoverModels(
+    provider: string
+  ): Promise<{ models: string[]; count: number; media_types?: Record<string, string>; video_models?: string[] }> {
     const res = await apiClient.get(`/api/admin/providers/${provider}/discover-models`)
     return res.data
   },

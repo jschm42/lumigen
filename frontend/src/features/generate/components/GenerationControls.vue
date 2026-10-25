@@ -114,9 +114,41 @@ const selectedCategorySummaryTitle = computed(() => {
           :key="model.id"
           :value="model.id"
         >
-          {{ model.name }} ({{ model.provider.toUpperCase() }})
+          {{ model.name }} ({{ model.provider.toUpperCase() }}){{ model.media_type === 'video' ? ' · 🎬 Video' : '' }}
         </option>
       </select>
+    </div>
+
+    <!-- Video options: shown for video-capable models (FAL.ai video models, Seedance) -->
+    <div
+      v-if="generateStore.isVideoModel"
+      class="flex items-center gap-2 rounded-xl border border-violet-300/70 bg-violet-50/70 px-2.5 py-1.5 text-xs text-violet-900 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-200"
+      data-testid="video-controls"
+    >
+      <span class="font-semibold">🎬 Video</span>
+      <label class="flex items-center gap-1">
+        <span class="text-[11px]">Duration</span>
+        <select
+          v-model.number="generateStore.videoDuration"
+          class="rounded-lg border border-violet-300/70 bg-white/90 px-1.5 py-0.5 text-[11px] dark:border-violet-500/30 dark:bg-slate-900/80 dark:text-violet-100"
+          data-testid="video-duration"
+        >
+          <option :value="4">4s</option>
+          <option :value="5">5s</option>
+          <option :value="6">6s</option>
+          <option :value="8">8s</option>
+          <option :value="10">10s</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1 text-[11px] cursor-pointer">
+        <input
+          v-model="generateStore.videoGenerateAudio"
+          type="checkbox"
+          class="rounded border-violet-300 text-violet-600 focus:ring-violet-400 cursor-pointer"
+          data-testid="video-audio"
+        />
+        Audio
+      </label>
     </div>
 
     <!-- Profile Selector -->

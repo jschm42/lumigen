@@ -30,6 +30,8 @@ export interface ModelConfig {
   name: string
   provider: 'openai' | 'fal' | 'bfl' | 'openrouter' | 'google' | string
   model_identifier: string
+  /** Media kind produced by the model; "video" models render MP4 clips. */
+  media_type?: 'image' | 'video'
   is_active: boolean
   is_default: boolean
   supported_aspect_ratios: string[]
@@ -187,6 +189,9 @@ export interface ProviderApiKeyStatus {
   display_name: string
   homepage_url?: string
   has_key: boolean
+  /** Media kinds the provider can produce, e.g. ["image", "video"]. */
+  media_types?: string[]
+  supports_video?: boolean
   is_encrypted?: boolean
   status?: 'ok' | 'error' | 'unconfigured'
   message?: string

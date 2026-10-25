@@ -77,6 +77,14 @@ async function handleTestKey(provider: string) {
             >
               {{ provider.has_key ? 'Key configured' : 'Not configured' }}
             </span>
+            <span
+              v-if="provider.supports_video"
+              class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300"
+              data-testid="provider-video-badge"
+              title="This provider can generate video models"
+            >
+              🎬 Video
+            </span>
           </div>
 
           <Button
