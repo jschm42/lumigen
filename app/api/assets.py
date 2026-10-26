@@ -271,17 +271,41 @@ def download_assets_zip(
             select(Asset).options(selectinload(Asset.generation)).where(Asset.id.in_(asset_ids))
         ).all()
     )
+    from app.utils.slugify import slugify
+
     spool = tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024)
     written = 0
+    used_names: set[str] = set()
     with zipfile.ZipFile(spool, mode="w", compression=zipfile.ZIP_STORED) as archive:
-        for asset in sorted(assets, key=lambda item: item.id):
+        sorted_assets = sorted(
+            assets,
+            key=lambda item: (item.stack_order if item.stack_order is not None else 999999, item.id),
+        )
+        for asset in sorted_assets:
             try:
                 path = generation_service.asset_absolute_path(asset, which="file")
             except ValueError:
                 continue
             if not path.is_file():
                 continue
-            archive.write(path, arcname=f"{asset.id}-{Path(asset.file_path).name}")
+
+            item_title = None
+            if asset.meta_json and isinstance(asset.meta_json, dict):
+                item_title = asset.meta_json.get("item_title")
+
+            ext = Path(asset.file_path).suffix or ".png"
+            if item_title:
+                title_slug = slugify(str(item_title), max_length=36, fallback=f"item-{asset.id}")
+                idx = (asset.stack_order + 1) if asset.stack_order is not None else written + 1
+                arc_name = f"{idx:02d}-{title_slug}{ext}"
+            else:
+                arc_name = f"{asset.id}-{Path(asset.file_path).name}"
+
+            if arc_name in used_names:
+                arc_name = f"{asset.id}-{arc_name}"
+            used_names.add(arc_name)
+
+            archive.write(path, arcname=arc_name)
             written += 1
     if written == 0:
         spool.close()
@@ -295,7 +319,12 @@ def download_assets_zip(
         finally:
             spool.close()
 
-    filename = f"lumigen-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{written}-images.zip"
+    custom_name = payload.get("filename")
+    if custom_name and isinstance(custom_name, str):
+        slug = slugify(custom_name, max_length=48, fallback="lumigen-set")
+        filename = f"{slug}-{written}-images.zip"
+    else:
+        filename = f"lumigen-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{written}-images.zip"
     return StreamingResponse(
         iterate(),
         media_type="application/zip",

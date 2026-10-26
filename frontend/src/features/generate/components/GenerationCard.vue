@@ -8,6 +8,7 @@ import { useToastStore } from '@/stores/toast'
 import Spinner from '@/components/ui/Spinner.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import GenerationActions from './GenerationActions.vue'
+import { galleryApi } from '@/api/gallery'
 import { describeUsage, formatDuration, formatTimestamp, formatUsage } from '@/utils/format'
 
 interface Props {
@@ -179,6 +180,31 @@ async function copyPrompt() {
   }
 }
 
+const isDownloadingZip = ref(false)
+
+async function handleDownloadSetZip() {
+  if (isDownloadingZip.value || assets.value.length === 0) return
+  isDownloadingZip.value = true
+  try {
+    const assetIds = assets.value.map((a) => a.id)
+    const customName = props.generation.agentic_plan?.set_title || props.generation.prompt || 'lumigen-set'
+    const { blob, filename } = await galleryApi.downloadZip(assetIds, customName)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toastStore.success('ZIP archive downloaded!')
+  } catch (_err) {
+    toastStore.error('Failed to download ZIP archive.')
+  } finally {
+    isDownloadingZip.value = false
+  }
+}
+
 function isVideoAsset(asset: Asset): boolean {
   return !!asset.mime?.startsWith('video/')
 }
@@ -221,6 +247,19 @@ function handleImageClick(asset: Asset) {
           >
             📚 View in Gallery Stack
           </router-link>
+          <button
+            v-if="assets.length > 1"
+            type="button"
+            @click="handleDownloadSetZip"
+            :disabled="isDownloadingZip"
+            class="inline-flex cursor-pointer items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800 transition-colors disabled:opacity-50"
+            title="Download entire set as a ZIP archive"
+          >
+            <svg class="h-3 w-3 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>{{ isDownloadingZip ? 'Downloading ZIP…' : 'Download ZIP' }}</span>
+          </button>
         </div>
         <p
           :class="[
@@ -264,6 +303,19 @@ function handleImageClick(asset: Asset) {
         >
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
+        <button
+          v-if="assets.length > 1"
+          type="button"
+          @click="handleDownloadSetZip"
+          :disabled="isDownloadingZip"
+          class="cursor-pointer rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-sky-600 dark:hover:bg-white/10 dark:hover:text-sky-300 disabled:opacity-50"
+          title="Download entire set as ZIP"
+          aria-label="Download entire set as ZIP"
+        >
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
         </button>
         <button
@@ -417,11 +469,14 @@ function handleImageClick(asset: Asset) {
           </div>
           <div
             v-else
-            class="pointer-events-none absolute inset-0 flex flex-col justify-between p-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40"
+            class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/30"
           >
             <!-- Top Right: Zoom button -->
-            <div class="flex items-center justify-end">
-              <span class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
+            <div class="pointer-events-auto absolute top-2 right-2">
+              <span
+                class="inline-flex cursor-pointer select-none items-center gap-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur-md hover:bg-slate-800 transition-colors"
+                title="Click to enlarge (fullscreen & zoom)"
+              >
                 <svg class="h-3.5 w-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
                 </svg>
@@ -429,8 +484,8 @@ function handleImageClick(asset: Asset) {
               </span>
             </div>
 
-            <!-- Bottom: Action Toolbar inside hover overlay -->
-            <div class="pointer-events-auto flex items-center justify-center">
+            <!-- Bottom: Action Toolbar inside hover overlay (strictly 10px above bottom edge, never clipped) -->
+            <div class="pointer-events-auto absolute bottom-2.5 left-0 right-0 flex items-center justify-center px-1.5" @click.stop>
               <GenerationActions
                 :asset="asset"
                 :generation="generation"

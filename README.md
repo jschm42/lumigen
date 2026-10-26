@@ -46,6 +46,7 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 
 ### 🎨 Create
 - **13 providers, one prompt box** – switch models and media types in a dropdown, no context switch
+- **🤖 Agentic Mode** – decompose high-level prompts (e.g. "RPG icons" or "character concepts") into cohesive multi-image sets using LLM reasoning; automatically groups outputs into gallery stacks with one-click full-set ZIP download
 - **AI Video Generation** – text-to-video & image-to-video via ByteDance Seedance & fal.ai (Kling 2.5/1.5, Minimax Video-01, Hunyuan, Luma, LTX, Veo 3)
 - **Vector Graphics (SVG)** – prompt-to-SVG vector output (e.g. Recraft V3) stored in pure XML without rasterization artifacts
 - **Sessions as visual history** – every prompt, image, and video of a session in one unified feed
@@ -65,8 +66,8 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 - **Drag-to-select & keyboard** – rubber-band selection, `0–5` to rate, `Space`, `Enter`, `Ctrl+A`
 - **Compare view** – 2–4 images side by side with synchronized zoom & pan
 - **Filters you can share** – filter by media type, rating, or provider; every filter lives in the URL
-- **Stacks & categories** – group variations and versions, tag, rate, bulk-edit
-- **ZIP export** – download any selection with one click
+- **Stacks & categories** – group variations and versions, tag, rate, bulk-edit, or view cohesive agentic stacks
+- **ZIP export** – download any selection or entire multi-image agentic sets with one click
 
 </td>
 </tr>
@@ -172,6 +173,14 @@ Enable **Admin → General → Show token usage** to display tokens on every gen
 Costs appear only for models with prices configured under **Admin → Models**
 (per 1M input tokens, per 1M output tokens and/or per image). The currency is set once under
 **Admin → General**. Prices are snapshotted per generation, so later price changes never rewrite history.
+
+### 🤖 Agentic Mode & Reasoning Models
+
+Agentic Mode turns a high-level creative direction (e.g. *"design a set of 5 RPG icons"*) into a cohesive collection of individual standalone images:
+- **LLM Decomposition:** An intelligent reasoning model breaks down your instruction into concrete, solitary items (e.g. Health Potion, Broadsword, Tower Shield) while applying a shared visual style anchor.
+- **Anti-Grid Safeguards:** Enforces single, centered, isolated subjects per image with automated negative prompts to prevent models from drawing sprite sheets or multi-icon collages.
+- **Configurable Models:** Add, test, and manage reasoning models (such as `DeepSeek 4.1`, `gpt-4o-mini`, `o3-mini`, `gemini-2.5-flash`) under **Admin → Reasoning Models**, complete with custom API keys and default selection.
+- **One-Click ZIP Export:** Instantly download the entire set as a structured ZIP archive with human-readable file names (`01-health-potion.png`, `02-iron-longsword.png`, etc.).
 
 ### Accounts & password reset
 

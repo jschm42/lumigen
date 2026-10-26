@@ -77,14 +77,14 @@ function handleUpscaleSubmitted(jobId: number) {
   <!-- Overlay Mode (Floating inside image hover overlay) -->
   <div
     v-if="variant === 'overlay'"
-    class="flex items-center gap-0.5 rounded-xl bg-slate-950/85 backdrop-blur-md px-1.5 py-1 border border-white/15 shadow-xl text-white"
+    class="flex items-center justify-center gap-0.5 rounded-full bg-slate-900/90 backdrop-blur-md px-2 py-1 border border-white/20 shadow-2xl text-white max-w-full"
     @click.stop
   >
     <!-- Remix -->
     <button
       type="button"
       @click="handleRemix"
-      class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/20 transition-colors"
+      class="p-1 rounded-full text-slate-300 hover:text-white hover:bg-white/20 transition-colors shrink-0"
       title="Load prompt & settings into editor"
       aria-label="Remix"
     >
@@ -98,7 +98,7 @@ function handleUpscaleSubmitted(jobId: number) {
       v-if="!asset.mime?.startsWith('video/') && asset.mime !== 'image/svg+xml'"
       type="button"
       @click="isUpscaleModalOpen = true"
-      class="p-1.5 rounded-lg text-amber-300 hover:text-amber-200 hover:bg-white/20 transition-colors"
+      class="p-1 rounded-full text-amber-300 hover:text-amber-200 hover:bg-white/20 transition-colors shrink-0"
       title="Upscale image"
       aria-label="Upscale"
     >
@@ -111,7 +111,7 @@ function handleUpscaleSubmitted(jobId: number) {
     <button
       type="button"
       @click="generateStore.attachAssetAsImage(asset)"
-      class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/20 transition-colors"
+      class="p-1 rounded-full text-slate-300 hover:text-white hover:bg-white/20 transition-colors shrink-0"
       title="Load as input image in prompt composer"
       aria-label="As Input"
     >
@@ -124,7 +124,7 @@ function handleUpscaleSubmitted(jobId: number) {
     <button
       type="button"
       @click="copyPrompt"
-      class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/20 transition-colors"
+      class="p-1 rounded-full text-slate-300 hover:text-white hover:bg-white/20 transition-colors shrink-0"
       title="Copy prompt"
       aria-label="Copy Prompt"
     >
@@ -138,7 +138,7 @@ function handleUpscaleSubmitted(jobId: number) {
       type="button"
       @click="handleDownload"
       :disabled="isDownloading"
-      class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/20 transition-colors disabled:opacity-50"
+      class="p-1 rounded-full text-slate-300 hover:text-white hover:bg-white/20 transition-colors shrink-0 disabled:opacity-50"
       title="Download image"
       aria-label="Download"
     >
@@ -151,7 +151,7 @@ function handleUpscaleSubmitted(jobId: number) {
     <button
       type="button"
       @click="openDetail"
-      class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/20 transition-colors"
+      class="p-1 rounded-full text-slate-300 hover:text-white hover:bg-white/20 transition-colors shrink-0"
       title="Show metadata & details"
       aria-label="Details"
     >

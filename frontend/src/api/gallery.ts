@@ -38,11 +38,15 @@ export const galleryApi = {
   },
 
   /** Download the original files of the given assets as one ZIP archive. */
-  async downloadZip(assetIds: number[]): Promise<{ blob: Blob; filename: string }> {
-    const res = await apiClient.post('/api/assets/download-zip', { asset_ids: assetIds }, { responseType: 'blob' })
+  async downloadZip(assetIds: number[], filename?: string): Promise<{ blob: Blob; filename: string }> {
+    const res = await apiClient.post(
+      '/api/assets/download-zip',
+      { asset_ids: assetIds, filename },
+      { responseType: 'blob' }
+    )
     const disposition = String(res.headers['content-disposition'] || '')
     const match = disposition.match(/filename="?([^";]+)"?/i)
-    return { blob: res.data as Blob, filename: match ? match[1] : 'lumigen-images.zip' }
+    return { blob: res.data as Blob, filename: match ? match[1] : (filename ? `${filename}.zip` : 'lumigen-images.zip') }
   },
 
   async listAssets(params: GalleryFilterParams): Promise<AssetListResponse> {
