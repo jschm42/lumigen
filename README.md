@@ -25,6 +25,12 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 
 <table>
   <tr>
+    <td colspan="2"><img src="docs/screenshots/agentic_mode_view.png" alt="Agentic Mode – Cohesive Multi-Image Set Decomposition & Generation" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub><b>Agentic Mode</b> – decompose high-level prompts into solitary cohesive item sets with anti-grid safeguards & one-click ZIP download</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/gallery_view.png" alt="Gallery grouped by day" /></td>
     <td width="50%"><img src="docs/screenshots/compare_view.png" alt="Side-by-side compare view" /></td>
   </tr>
@@ -175,6 +181,8 @@ Costs appear only for models with prices configured under **Admin → Models**
 **Admin → General**. Prices are snapshotted per generation, so later price changes never rewrite history.
 
 ### 🤖 Agentic Mode & Reasoning Models
+
+![Agentic Mode in Lumigen Studio](docs/screenshots/agentic_mode_view.png)
 
 Agentic Mode turns a high-level creative direction (e.g. *"design a set of 5 RPG icons"*) into a cohesive collection of individual standalone images:
 - **LLM Decomposition:** An intelligent reasoning model breaks down your instruction into concrete, solitary items (e.g. Health Potion, Broadsword, Tower Shield) while applying a shared visual style anchor.
