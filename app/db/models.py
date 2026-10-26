@@ -180,6 +180,32 @@ class EnhancementConfig(Base, TimestampMixin):
     default_enhancement_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ReasoningModelConfig(Base, TimestampMixin):
+    """Named configuration for an LLM reasoning/planning model."""
+
+    __tablename__ = "reasoning_model_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    api_key_encrypted: Mapped[str | None] = mapped_column(
+        String(4096), nullable=True
+    )
+    use_custom_api_key: Mapped[bool] = mapped_column(
+        Boolean(), default=False, nullable=False
+    )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean(), default=False, nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean(), default=True, nullable=False
+    )
+    price_input_per_mtok: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_output_per_mtok: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
 class ProviderApiKey(Base, TimestampMixin):
     """Centrally stored encrypted API key for a given image-generation provider."""
 

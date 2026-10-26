@@ -2,13 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { adminApi, type SystemInfo } from '@/api/admin'
 import { useToastStore } from './toast'
-import type { ModelConfig, ProviderApiKeyStatus, StylePreset, UpscaleModel, User } from '@/types'
+import type { ModelConfig, ProviderApiKeyStatus, ReasoningModelConfig, StylePreset, UpscaleModel, User } from '@/types'
 
 export const useAdminStore = defineStore('admin', () => {
   const toastStore = useToastStore()
 
   const providerStatuses = ref<ProviderApiKeyStatus[]>([])
   const modelConfigs = ref<ModelConfig[]>([])
+  const reasoningModels = ref<ReasoningModelConfig[]>([])
   const styles = ref<StylePreset[]>([])
   const users = ref<User[]>([])
   const systemInfo = ref<SystemInfo | null>(null)
@@ -192,9 +193,65 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  async function fetchReasoningModels() {
+    try {
+      reasoningModels.value = await adminApi.getReasoningModels()
+    } catch (_error) {
+      reasoningModels.value = []
+    }
+  }
+
+  async function saveReasoningModel(model: Partial<ReasoningModelConfig> & { custom_api_key?: string }) {
+    try {
+      let saved: ReasoningModelConfig
+      if (model.id) {
+        saved = await adminApi.updateReasoningModel(model.id, model)
+        const index = reasoningModels.value.findIndex((m) => m.id === saved.id)
+        if (index !== -1) reasoningModels.value[index] = saved
+      } else {
+        saved = await adminApi.createReasoningModel(model)
+        reasoningModels.value.push(saved)
+      }
+      if (saved.is_default) {
+        reasoningModels.value.forEach((m) => {
+          if (m.id !== saved.id) m.is_default = false
+        })
+      }
+      toastStore.success('Reasoning model configuration saved.')
+      return saved
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to save reasoning model.')
+      throw error
+    }
+  }
+
+  async function deleteReasoningModel(id: number) {
+    try {
+      await adminApi.deleteReasoningModel(id)
+      reasoningModels.value = reasoningModels.value.filter((m) => m.id !== id)
+      toastStore.success('Reasoning model configuration deleted.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to delete reasoning model.')
+      throw error
+    }
+  }
+
+  async function setDefaultReasoningModel(id: number) {
+    try {
+      await adminApi.setDefaultReasoningModel(id)
+      reasoningModels.value.forEach((m) => {
+        m.is_default = m.id === id
+      })
+      toastStore.success('Default reasoning model updated.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to set default reasoning model.')
+    }
+  }
+
   return {
     providerStatuses,
     modelConfigs,
+    reasoningModels,
     upscaleModels,
     styles,
     users,
@@ -206,6 +263,10 @@ export const useAdminStore = defineStore('admin', () => {
     fetchModelConfigs,
     saveModelConfig,
     deleteModelConfig,
+    fetchReasoningModels,
+    saveReasoningModel,
+    deleteReasoningModel,
+    setDefaultReasoningModel,
     fetchUpscaleModels,
     saveUpscaleModel,
     deleteUpscaleModel,

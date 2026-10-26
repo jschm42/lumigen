@@ -47,6 +47,22 @@ export interface ModelConfig {
   price_per_image?: number | null
 }
 
+export interface ReasoningModelConfig {
+  id: number
+  name: string
+  provider: string
+  model_identifier: string
+  description?: string
+  use_custom_api_key?: boolean
+  has_custom_api_key?: boolean
+  is_default?: boolean
+  is_active?: boolean
+  price_input_per_mtok?: number | null
+  price_output_per_mtok?: number | null
+  created_at?: string
+  updated_at?: string
+}
+
 export interface Profile {
   id: number
   name: string

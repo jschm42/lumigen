@@ -74,6 +74,11 @@ const selectedStyle = computed(() => {
   return generateStore.styles.find((s) => String(s.id) === String(generateStore.selectedStyleId)) || null
 })
 
+const defaultLlmModelName = computed(() => {
+  const def = generateStore.availableLlmModels.find((m) => m.is_default)
+  return def ? def.name : null
+})
+
 function triggerFileInput() {
   fileInputRef.value?.click()
 }
@@ -203,23 +208,44 @@ function handleKeydown(e: KeyboardEvent) {
         <span>Agentic Mode:</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Min Images:</label>
+        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Reasoning Model:</label>
+        <select
+          v-model="generateStore.agenticLlmModel"
+          class="rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-xs text-slate-800 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200 max-w-[210px] truncate"
+          title="Choose the LLM model used for planning and decomposing the image set"
+        >
+          <option value="">
+            Auto {{ defaultLlmModelName ? `(${defaultLlmModelName})` : '(Default)' }}
+          </option>
+          <option
+            v-for="m in generateStore.availableLlmModels"
+            :key="m.id"
+            :value="m.id"
+          >
+            {{ m.name }}{{ m.is_default ? ' ★' : '' }}
+          </option>
+        </select>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Min (optional):</label>
         <input
           type="number"
-          min="2"
+          min="1"
           max="12"
           v-model.number="generateStore.agenticMinImages"
-          class="w-14 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200"
+          placeholder="Auto"
+          class="w-16 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500"
         />
       </div>
       <div class="flex items-center gap-1.5">
-        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Max Images:</label>
+        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Max (optional):</label>
         <input
           type="number"
-          min="2"
+          min="1"
           max="12"
           v-model.number="generateStore.agenticMaxImages"
-          class="w-14 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200"
+          placeholder="Auto"
+          class="w-16 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500"
         />
       </div>
       <div class="hidden sm:flex items-center text-[11px] text-indigo-600/80 dark:text-indigo-400/80 italic ml-auto">
@@ -345,7 +371,7 @@ function handleKeydown(e: KeyboardEvent) {
           title="Toggle Agentic Mode (generates a cohesive set grouped into a gallery stack)"
         >
           <span>🤖</span>
-          <span>Agentic Set</span>
+          <span>Agentic Mode</span>
         </button>
 
         <!-- Advanced Overrides Toggle -->

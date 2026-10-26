@@ -19,6 +19,7 @@ from app.db.models import (
     PasswordResetToken,
     Profile,
     ProviderApiKey,
+    ReasoningModelConfig,
     SessionInputImage,
     StorageTemplate,
     Style,
@@ -814,3 +815,95 @@ def clear_session_input_images(session: Session, chat_session_id: str) -> list[S
         session.delete(row)
     session.commit()
     return rows
+
+
+def list_reasoning_model_configs(
+    session: Session, active_only: bool = False
+) -> list[ReasoningModelConfig]:
+    """Return all reasoning model configurations ordered by default status and name."""
+    stmt = select(ReasoningModelConfig)
+    if active_only:
+        stmt = stmt.where(ReasoningModelConfig.is_active.is_(True))
+    stmt = stmt.order_by(
+        ReasoningModelConfig.is_default.desc(),
+        ReasoningModelConfig.name.asc(),
+    )
+    return list(session.scalars(stmt).all())
+
+
+def get_reasoning_model_config(
+    session: Session, reasoning_model_id: int
+) -> ReasoningModelConfig | None:
+    """Return a reasoning model configuration by primary key, or ``None``."""
+    stmt = select(ReasoningModelConfig).where(ReasoningModelConfig.id == reasoning_model_id)
+    return session.scalar(stmt)
+
+
+def get_default_reasoning_model_config(
+    session: Session,
+) -> ReasoningModelConfig | None:
+    """Return the designated default reasoning model configuration, or the first active one."""
+    stmt = (
+        select(ReasoningModelConfig)
+        .where(
+            ReasoningModelConfig.is_active.is_(True),
+            ReasoningModelConfig.is_default.is_(True),
+        )
+        .order_by(ReasoningModelConfig.id.asc())
+    )
+    default_cfg = session.scalar(stmt)
+    if default_cfg:
+        return default_cfg
+    fallback_stmt = (
+        select(ReasoningModelConfig)
+        .where(ReasoningModelConfig.is_active.is_(True))
+        .order_by(ReasoningModelConfig.id.asc())
+    )
+    return session.scalar(fallback_stmt)
+
+
+def create_reasoning_model_config(
+    session: Session, **fields
+) -> ReasoningModelConfig:
+    """Create a new reasoning model configuration and optionally set as the sole default."""
+    if fields.get("is_default"):
+        for row in session.scalars(
+            select(ReasoningModelConfig).where(ReasoningModelConfig.is_default.is_(True))
+        ).all():
+            row.is_default = False
+    row = ReasoningModelConfig(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_reasoning_model_config(
+    session: Session,
+    config: ReasoningModelConfig,
+    **fields,
+) -> ReasoningModelConfig:
+    """Update fields on the given reasoning model configuration."""
+    if fields.get("is_default"):
+        for row in session.scalars(
+            select(ReasoningModelConfig).where(
+                ReasoningModelConfig.id != config.id,
+                ReasoningModelConfig.is_default.is_(True),
+            )
+        ).all():
+            row.is_default = False
+    for key, value in fields.items():
+        setattr(config, key, value)
+    session.add(config)
+    session.commit()
+    session.refresh(config)
+    return config
+
+
+def delete_reasoning_model_config(
+    session: Session, config: ReasoningModelConfig
+) -> None:
+    """Delete the given reasoning model configuration."""
+    session.delete(config)
+    session.commit()
+

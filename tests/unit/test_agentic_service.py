@@ -119,3 +119,66 @@ async def test_agentic_plan_fallback_on_llm_error(monkeypatch: pytest.MonkeyPatc
     assert len(plan.items) >= 4
     assert plan.set_title != ""
     assert plan.items[0].title == "Variation 1"
+
+
+@pytest.mark.asyncio
+async def test_agentic_plan_optional_min_max(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+
+    llm_payload = {
+        "set_title": "Sci-Fi Badges",
+        "common_style_anchor": "cyberpunk badge, neon glow",
+        "negative_prompt": "blurry",
+        "items": [
+            {"title": "Badge 1", "prompt_detail": "detail 1"},
+            {"title": "Badge 2", "prompt_detail": "detail 2"},
+            {"title": "Badge 3", "prompt_detail": "detail 3"},
+        ],
+    }
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append({"url": url, "headers": headers or {}, "json": kwargs.get("json")})
+            return _json_response(
+                "POST",
+                url,
+                200,
+                {
+                    "choices": [
+                        {"message": {"content": json.dumps(llm_payload)}}
+                    ]
+                },
+            )
+
+    monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+
+    secrets = SimpleNamespace(
+        get_default_api_key=lambda provider: "test-openai-key",
+        decrypt_api_key=lambda tok: tok,
+    )
+    enhancement = EnhancementService(Settings(), secrets)
+    service = AgenticService(Settings(), secrets, enhancement)
+
+    # Calling with min_images=None, max_images=None
+    plan = await service.plan_set(
+        instruction="design cool sci-fi badges",
+        min_images=None,
+        max_images=None,
+    )
+
+    assert isinstance(plan, AgenticPlan)
+    assert plan.set_title == "Sci-Fi Badges"
+    assert len(plan.items) == 3
+    # Verify the prompt sent to LLM contains "ideal count" instruction
+    prompt_sent = calls[0]["json"]["messages"][1]["content"]
+    assert "Decide on an ideal number" in prompt_sent
+

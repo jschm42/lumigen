@@ -96,3 +96,13 @@ class ModelConfigService:
         """Get a model config by ID."""
         with SessionLocal() as session:
             return crud.get_model_config(session, model_config_id)
+
+    def get_reasoning_model_api_key(self, reasoning_model_id: int) -> str | None:
+        """Get custom API key for a reasoning model config if enabled, else provider key."""
+        with SessionLocal() as session:
+            config = crud.get_reasoning_model_config(session, reasoning_model_id)
+            if not config:
+                return None
+            if config.use_custom_api_key and config.api_key_encrypted:
+                return self.decrypt_api_key(config.api_key_encrypted)
+            return self.get_default_api_key(config.provider)

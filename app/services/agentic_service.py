@@ -17,7 +17,7 @@ AGENTIC_SET_PLANNING_PROMPT = """You are an expert AI art director and prompt en
 Your task is to take a high-level creative instruction for a set/collection of images and plan a cohesive, consistent set of individual image prompts.
 
 GUIDELINES:
-1. Target count: You must plan between {min_images} and {max_images} items (inclusive).
+1. Target count: {count_instruction}
 2. Common Style Anchor: Formulate a detailed stylistic anchor ('common_style_anchor') that forces visual coherence across every item in the set (e.g. rendering style, medium, lighting, color palette, perspective, framing, background/isolation).
 3. Negative prompt: Formulate an overarching negative prompt ('negative_prompt') to maintain quality and prevent style drift.
 4. Item prompts: Each item must describe a distinct element of the set. Keep each item's 'prompt_detail' focused on the specific subject, allowing the common style anchor to unify the look.
@@ -85,8 +85,8 @@ class AgenticService:
     async def plan_set(
         self,
         instruction: str,
-        min_images: int = 4,
-        max_images: int = 8,
+        min_images: int | None = None,
+        max_images: int | None = None,
         target_model: str = "Unknown",
         target_provider: str = "Unknown",
         llm_model: str | None = None,
@@ -94,10 +94,27 @@ class AgenticService:
         """Decompose a high-level instruction into a cohesive multi-image generation plan.
 
         Calls the configured LLM to generate a structured JSON plan with a unified
-        style anchor and individual item prompts.
+        style anchor and individual item prompts. Min and max images are optional.
         """
-        min_count = max(2, min(min_images, 12))
-        max_count = max(min_count, min(max_images, 12))
+        min_count = max(1, min(min_images, 16)) if min_images is not None else None
+        max_count = max(min_count or 1, min(max_images, 16)) if max_images is not None else None
+
+        if min_count is not None and max_count is not None:
+            count_instruction = f"Plan between {min_count} and {max_count} items (inclusive)."
+            effective_min = min_count
+            effective_max = max_count
+        elif min_count is not None:
+            effective_min = min_count
+            effective_max = max(min_count, 12)
+            count_instruction = f"Plan at least {min_count} items (maximum {effective_max})."
+        elif max_count is not None:
+            effective_min = min(2, max_count)
+            effective_max = max_count
+            count_instruction = f"Plan up to {max_count} items (at least {effective_min})."
+        else:
+            effective_min = 2
+            effective_max = 10
+            count_instruction = "Decide on an ideal number of items for this collection based on the instruction (typically 3 to 8 items)."
 
         try:
             provider, model, api_key, _ = self._enhancement_service._resolve_llm(
@@ -107,17 +124,16 @@ class AgenticService:
             logger.warning(
                 "Could not resolve LLM for agentic planning (%s), using fallback.", exc
             )
-            return self._fallback_plan(instruction, min_count)
+            return self._fallback_plan(instruction, effective_min)
 
         system_prompt = AGENTIC_SET_PLANNING_PROMPT.format(
-            min_images=min_count,
-            max_images=max_count,
+            count_instruction=count_instruction,
         )
 
         user_content = (
             f"Instruction: {instruction}\n"
             f"Target Image Model: {target_model} ({target_provider})\n"
-            f"Required items count range: between {min_count} and {max_count} items."
+            f"Target items count guideline: {count_instruction}"
         )
 
         messages = [
@@ -147,7 +163,7 @@ class AgenticService:
                 "X-Title": self._settings.app_name,
             }
         else:
-            return self._fallback_plan(instruction, min_count)
+            return self._fallback_plan(instruction, effective_min)
 
         timeout = httpx.Timeout(
             self._settings.llm_enhancement_timeout_seconds,
@@ -160,15 +176,15 @@ class AgenticService:
                 response.raise_for_status()
             except Exception as e:
                 logger.error("Agentic planning LLM call failed: %s", e)
-                return self._fallback_plan(instruction, min_count)
+                return self._fallback_plan(instruction, effective_min)
 
         data = response.json()
         choices = data.get("choices") or []
         if not choices:
-            return self._fallback_plan(instruction, min_count)
+            return self._fallback_plan(instruction, effective_min)
 
         raw_content = choices[0].get("message", {}).get("content", "").strip()
-        return self._parse_plan_json(raw_content, instruction, min_count, max_count)
+        return self._parse_plan_json(raw_content, instruction, effective_min, effective_max)
 
     def _parse_plan_json(
         self,

@@ -57,9 +57,10 @@ export const useGenerateStore = defineStore('generate', () => {
 
   // Agentic Mode
   const isAgenticMode = ref<boolean>(false)
-  const agenticMinImages = ref<number>(4)
-  const agenticMaxImages = ref<number>(8)
+  const agenticMinImages = ref<number | null>(null)
+  const agenticMaxImages = ref<number | null>(null)
   const agenticLlmModel = ref<string>('')
+  const availableLlmModels = ref<{ id: string; name: string; provider: string; is_default?: boolean }[]>([])
 
   // Advanced Overrides (from old prompt panel)
   const isAdvancedOpen = ref<boolean>(false)
@@ -299,6 +300,15 @@ export const useGenerateStore = defineStore('generate', () => {
       const upscaleData = await generationApi.getUpscaleModels()
       if (Array.isArray(upscaleData) && upscaleData.length > 0) {
         availableUpscaleModels.value = upscaleData
+      }
+    } catch (_error) {
+      // fallback
+    }
+
+    try {
+      const llmData = await generationApi.getLlmModels()
+      if (Array.isArray(llmData) && llmData.length > 0) {
+        availableLlmModels.value = llmData
       }
     } catch (_error) {
       // fallback
@@ -575,7 +585,7 @@ export const useGenerateStore = defineStore('generate', () => {
         assets: [],
         is_agentic: isAgenticMode.value,
         agentic_step: isAgenticMode.value ? 'planning' : undefined,
-        total_planned: isAgenticMode.value ? agenticMaxImages.value : undefined,
+        total_planned: isAgenticMode.value ? (agenticMaxImages.value ?? undefined) : undefined,
       }
       generations.value.push(optimisticGen)
       lastSubmittedAt.value = Date.now()
@@ -678,6 +688,7 @@ export const useGenerateStore = defineStore('generate', () => {
     agenticMinImages,
     agenticMaxImages,
     agenticLlmModel,
+    availableLlmModels,
     addAttachedImage,
     attachAssetAsImage,
     removeAttachedImage,

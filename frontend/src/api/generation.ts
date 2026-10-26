@@ -177,5 +177,10 @@ export const generationApi = {
     >('/api/upscale-models')
     return res.data
   },
+
+  async getLlmModels(): Promise<{ id: string; name: string; provider: string; is_default?: boolean }[]> {
+    const res = await apiClient.get<{ id: string; name: string; provider: string; is_default?: boolean }[]>('/api/llm-models')
+    return res.data
+  },
 }
 

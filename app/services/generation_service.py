@@ -1067,8 +1067,10 @@ class GenerationService:
                 self._raise_if_cancelled(session, generation_id)
 
                 req_snap = dict(generation.request_snapshot_json or {})
-                min_images = int(req_snap.get("min_images") or 4)
-                max_images = int(req_snap.get("max_images") or 8)
+                min_raw = req_snap.get("min_images")
+                max_raw = req_snap.get("max_images")
+                min_images = int(min_raw) if min_raw is not None and str(min_raw).isdigit() else None
+                max_images = int(max_raw) if max_raw is not None and str(max_raw).isdigit() else None
                 llm_model = req_snap.get("llm_model")
 
                 # Step 1: LLM Planning

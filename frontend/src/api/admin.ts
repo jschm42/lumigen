@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { DiscoveredUpscaleModel, ModelConfig, ProviderApiKeyStatus, StylePreset, UiSettings, UpscaleModel, User } from '@/types'
+import type { DiscoveredUpscaleModel, ModelConfig, ProviderApiKeyStatus, ReasoningModelConfig, StylePreset, UiSettings, UpscaleModel, User } from '@/types'
 
 export interface AdminUserPayload {
   username?: string
@@ -216,6 +216,36 @@ export const adminApi = {
 
   async discoverUpscaleModels(): Promise<{ models: DiscoveredUpscaleModel[]; count: number }> {
     const res = await apiClient.get('/api/admin/upscale/discover-models')
+    return res.data
+  },
+
+  async getReasoningModels(): Promise<ReasoningModelConfig[]> {
+    const res = await apiClient.get<ReasoningModelConfig[]>('/api/admin/reasoning-models')
+    return res.data
+  },
+
+  async createReasoningModel(
+    payload: Partial<ReasoningModelConfig> & { custom_api_key?: string }
+  ): Promise<ReasoningModelConfig> {
+    const res = await apiClient.post<ReasoningModelConfig>('/api/admin/reasoning-models', payload)
+    return res.data
+  },
+
+  async updateReasoningModel(
+    id: number,
+    payload: Partial<ReasoningModelConfig> & { custom_api_key?: string }
+  ): Promise<ReasoningModelConfig> {
+    const res = await apiClient.put<ReasoningModelConfig>(`/api/admin/reasoning-models/${id}`, payload)
+    return res.data
+  },
+
+  async deleteReasoningModel(id: number): Promise<{ success: boolean }> {
+    const res = await apiClient.delete<{ success: boolean }>(`/api/admin/reasoning-models/${id}`)
+    return res.data
+  },
+
+  async setDefaultReasoningModel(id: number): Promise<ReasoningModelConfig> {
+    const res = await apiClient.post<ReasoningModelConfig>(`/api/admin/reasoning-models/${id}/set-default`)
     return res.data
   },
 }

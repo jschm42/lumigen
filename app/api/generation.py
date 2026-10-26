@@ -217,8 +217,8 @@ async def api_generate_submit(
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
             overrides["model_name"] = model_cfg.name
-            cfg_params = model_cfg.generic_params if isinstance(model_cfg.generic_params, dict) else {}
-            if "output_format" in cfg_params and "output_format" not in overrides:
+            cfg_params = getattr(model_cfg, "generic_params", None)
+            if isinstance(cfg_params, dict) and "output_format" in cfg_params and "output_format" not in overrides:
                 overrides["output_format"] = str(cfg_params["output_format"]).strip().lower().lstrip(".")
     elif getattr(profile, "model_config_id", None):
         model_cfg = crud.get_model_config(session, profile.model_config_id)
@@ -227,8 +227,8 @@ async def api_generate_submit(
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
             overrides["model_name"] = model_cfg.name
-            cfg_params = model_cfg.generic_params if isinstance(model_cfg.generic_params, dict) else {}
-            if "output_format" in cfg_params and "output_format" not in overrides:
+            cfg_params = getattr(model_cfg, "generic_params", None)
+            if isinstance(cfg_params, dict) and "output_format" in cfg_params and "output_format" not in overrides:
                 overrides["output_format"] = str(cfg_params["output_format"]).strip().lower().lstrip(".")
 
     provider_value = str(overrides.get("provider") or profile.provider or "").strip().lower()
@@ -422,8 +422,17 @@ async def api_generate_submit(
         overrides["is_agentic"] = True
         min_val = _parse_int(min_images) if min_images is not None else None
         max_val = _parse_int(max_images) if max_images is not None else None
-        overrides["min_images"] = max(2, min(min_val or 4, 12))
-        overrides["max_images"] = max(overrides["min_images"], min(max_val or 8, 12))
+        if min_val is not None and min_val > 0:
+            overrides["min_images"] = max(1, min(min_val, 16))
+        else:
+            overrides["min_images"] = None
+
+        if max_val is not None and max_val > 0:
+            effective_min = overrides.get("min_images") or 1
+            overrides["max_images"] = max(effective_min, min(max_val, 16))
+        else:
+            overrides["max_images"] = None
+
         if llm_model:
             overrides["llm_model"] = str(llm_model).strip()
 
@@ -703,6 +712,12 @@ async def api_enhance_prompt(
         return {
             "enhanced_prompt": enhanced_fallback,
         }
+
+
+@router.get("/llm-models")
+def list_llm_models() -> list[dict[str, Any]]:
+    """Return available LLM reasoning and prompt planning models."""
+    return enhancement_service.list_available_llm_models()
 
 
 @router.get("/upscale-models")

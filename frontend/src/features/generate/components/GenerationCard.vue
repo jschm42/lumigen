@@ -208,7 +208,7 @@ function handleImageClick(asset: Asset) {
         <!-- Agentic badge & Set title -->
         <div v-if="generation.is_agentic" class="flex flex-wrap items-center gap-1.5 pb-0.5">
           <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-            🤖 Agentic Set • {{ assets.length }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} Items
+            🤖 Agentic Mode • {{ assets.length }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} Items
           </span>
           <span v-if="generation.agentic_plan?.set_title" class="text-xs font-bold text-slate-800 dark:text-slate-100">
             {{ generation.agentic_plan.set_title }}

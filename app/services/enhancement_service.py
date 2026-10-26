@@ -56,49 +56,79 @@ class EnhancementService:
             return True
         return False
 
-    def list_available_llm_models(self) -> list[dict[str, str]]:
+    def list_available_llm_models(self) -> list[dict[str, Any]]:
         """Return a list of available LLM model descriptors for the UI selectbox."""
-        models: list[dict[str, str]] = []
+        models: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
+
+        # 1. Primary: load user-configured reasoning models from database
+        try:
+            with SessionLocal() as session:
+                db_models = crud.list_reasoning_model_configs(session, active_only=True)
+                for rm in db_models:
+                    model_id = f"reasoning:{rm.id}"
+                    models.append({
+                        "id": model_id,
+                        "name": rm.name,
+                        "provider": rm.provider,
+                        "model": rm.model,
+                        "is_default": rm.is_default,
+                        "description": rm.description or "",
+                    })
+                    seen_ids.add(model_id)
+        except Exception as exc:
+            logger.warning("Could not load reasoning model configs from DB: %s", exc)
+
+        # If reasoning models were configured in the database, return them
+        if models:
+            return models
 
         config = self._get_config()
         if config and config.get("model"):
             model_id = f"{config['provider']}:{config['model']}"
             display_name = f"{config['model']} ({config['provider'].title()})"
-            models.append({"id": model_id, "name": display_name, "provider": config["provider"]})
+            models.append({"id": model_id, "name": display_name, "provider": config["provider"], "is_default": True})
             seen_ids.add(model_id)
 
         has_openrouter = bool(self._get_default_api_key("openrouter"))
         has_openai = bool(self._get_default_api_key("openai"))
 
         curated_openrouter = [
+            ("openrouter:anthropic/claude-3.7-sonnet", "OpenRouter: Claude 3.7 Sonnet (Reasoning)"),
+            ("openrouter:openai/o3-mini", "OpenRouter: OpenAI o3-mini (Reasoning)"),
+            ("openrouter:deepseek/deepseek-r1", "OpenRouter: DeepSeek R1 (Reasoning)"),
             ("openrouter:openai/gpt-4o-mini", "OpenRouter: GPT-4o Mini"),
             ("openrouter:openai/gpt-4o", "OpenRouter: GPT-4o"),
             ("openrouter:anthropic/claude-3.5-sonnet", "OpenRouter: Claude 3.5 Sonnet"),
-            ("openrouter:anthropic/claude-3.7-sonnet", "OpenRouter: Claude 3.7 Sonnet"),
             ("openrouter:google/gemini-2.0-flash-001", "OpenRouter: Gemini 2.0 Flash"),
             ("openrouter:meta-llama/llama-3.3-70b-instruct", "OpenRouter: Llama 3.3 70B"),
             ("openrouter:deepseek/deepseek-chat", "OpenRouter: DeepSeek V3"),
-            ("openrouter:deepseek/deepseek-r1", "OpenRouter: DeepSeek R1"),
         ]
 
         curated_openai = [
+            ("openai:o3-mini", "OpenAI: o3-mini (Reasoning)"),
             ("openai:gpt-4o-mini", "OpenAI: GPT-4o Mini"),
             ("openai:gpt-4o", "OpenAI: GPT-4o"),
-            ("openai:o3-mini", "OpenAI: o3-mini"),
         ]
 
         if has_openrouter:
             for mid, mname in curated_openrouter:
                 if mid not in seen_ids:
-                    models.append({"id": mid, "name": mname, "provider": "openrouter"})
+                    models.append({"id": mid, "name": mname, "provider": "openrouter", "is_default": False})
                     seen_ids.add(mid)
 
         if has_openai:
             for mid, mname in curated_openai:
                 if mid not in seen_ids:
-                    models.append({"id": mid, "name": mname, "provider": "openai"})
+                    models.append({"id": mid, "name": mname, "provider": "openai", "is_default": False})
                     seen_ids.add(mid)
+
+        # Fallback: if no active provider key is detected yet, provide the full curated list
+        if not models:
+            for mid, mname in curated_openrouter:
+                models.append({"id": mid, "name": mname, "provider": "openrouter", "is_default": False})
+            for mid, mname in curated_openai:
+                models.append({"id": mid, "name": mname, "provider": "openai", "is_default": False})
 
         return models
 
@@ -127,6 +157,48 @@ class EnhancementService:
         """
         Resolve (provider, model, api_key, default_prompt) for the requested LLM identifier or fallback.
         """
+        # 1. First, check configured ReasoningModelConfigs in database
+        try:
+            with SessionLocal() as session:
+                db_cfg = None
+                if llm_model and str(llm_model).strip():
+                    token = str(llm_model).strip()
+                    if token.startswith("reasoning:"):
+                        try:
+                            cfg_id = int(token.split(":", 1)[1])
+                            db_cfg = crud.get_reasoning_model_config(session, cfg_id)
+                        except ValueError:
+                            pass
+                    elif token.isdigit():
+                        db_cfg = crud.get_reasoning_model_config(session, int(token))
+                    else:
+                        for rm in crud.list_reasoning_model_configs(session, active_only=True):
+                            if (
+                                rm.name.lower() == token.lower()
+                                or f"{rm.provider}:{rm.model}".lower() == token.lower()
+                                or rm.model.lower() == token.lower()
+                            ):
+                                db_cfg = rm
+                                break
+                else:
+                    # When no model is explicitly specified, use the designated default reasoning model
+                    db_cfg = crud.get_default_reasoning_model_config(session)
+
+                if db_cfg:
+                    if db_cfg.use_custom_api_key and db_cfg.api_key_encrypted:
+                        api_key = self._secrets.decrypt_api_key(db_cfg.api_key_encrypted)
+                    else:
+                        api_key = self._get_default_api_key(db_cfg.provider)
+                    if not api_key:
+                        raise ValueError(
+                            f"No API key configured for LLM provider '{db_cfg.provider}' (model: {db_cfg.name})"
+                        )
+                    return db_cfg.provider, db_cfg.model, api_key, None
+        except ValueError:
+            raise
+        except Exception as exc:
+            logger.debug("Reasoning model DB resolution skipped: %s", exc)
+
         default_config = self._get_config()
 
         if not llm_model or not llm_model.strip():

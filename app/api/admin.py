@@ -292,6 +292,130 @@ def delete_model_config(
     return {"success": True}
 
 
+def _serialize_reasoning_model_config(c: Any) -> dict[str, Any]:
+    """Serialize a reasoning model configuration."""
+    return {
+        "id": c.id,
+        "name": c.name,
+        "provider": c.provider,
+        "model_identifier": c.model,
+        "description": c.description or "",
+        "use_custom_api_key": bool(c.use_custom_api_key),
+        "has_custom_api_key": bool(c.api_key_encrypted),
+        "is_default": bool(c.is_default),
+        "is_active": bool(c.is_active),
+        "price_input_per_mtok": c.price_input_per_mtok,
+        "price_output_per_mtok": c.price_output_per_mtok,
+    }
+
+
+@router.get("/reasoning-models")
+def list_admin_reasoning_models(
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
+    """List all reasoning model configurations."""
+    return [_serialize_reasoning_model_config(c) for c in crud.list_reasoning_model_configs(session)]
+
+
+@router.post("/reasoning-models")
+def create_reasoning_model(
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Create a new reasoning model configuration."""
+    name = str(payload.get("name", "")).strip()
+    model = str(payload.get("model_identifier", "")).strip()
+    provider = str(payload.get("provider", "openrouter")).strip().lower()
+
+    if not name or not model:
+        raise HTTPException(status_code=400, detail="Name and model identifier required")
+
+    use_custom_key = bool(payload.get("use_custom_api_key"))
+    api_key_encrypted = None
+    custom_key = str(payload.get("custom_api_key", "")).strip()
+    if use_custom_key and custom_key:
+        api_key_encrypted = model_config_service.encrypt_api_key(custom_key)
+
+    cfg = crud.create_reasoning_model_config(
+        session,
+        name=name,
+        provider=provider,
+        model=model,
+        description=str(payload.get("description", "")).strip() or None,
+        use_custom_api_key=use_custom_key,
+        api_key_encrypted=api_key_encrypted,
+        is_default=bool(payload.get("is_default", False)),
+        is_active=bool(payload.get("is_active", True)),
+        price_input_per_mtok=_parse_price(payload, "price_input_per_mtok", None),
+        price_output_per_mtok=_parse_price(payload, "price_output_per_mtok", None),
+    )
+    return _serialize_reasoning_model_config(cfg)
+
+
+@router.put("/reasoning-models/{model_id}")
+def update_reasoning_model(
+    model_id: int,
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Update a reasoning model configuration."""
+    cfg = crud.get_reasoning_model_config(session, model_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Reasoning model not found")
+
+    use_custom_key = bool(payload.get("use_custom_api_key", cfg.use_custom_api_key))
+    api_key_encrypted = cfg.api_key_encrypted
+    custom_key = payload.get("custom_api_key")
+    if custom_key is not None:
+        key_str = str(custom_key).strip()
+        if key_str:
+            api_key_encrypted = model_config_service.encrypt_api_key(key_str)
+        elif not use_custom_key:
+            api_key_encrypted = None
+
+    fields: dict[str, Any] = {
+        "name": payload.get("name", cfg.name),
+        "provider": payload.get("provider", cfg.provider),
+        "model": payload.get("model_identifier", cfg.model),
+        "description": payload.get("description", cfg.description),
+        "use_custom_api_key": use_custom_key,
+        "api_key_encrypted": api_key_encrypted,
+        "is_default": payload.get("is_default", cfg.is_default),
+        "is_active": payload.get("is_active", cfg.is_active),
+        "price_input_per_mtok": _parse_price(payload, "price_input_per_mtok", cfg.price_input_per_mtok),
+        "price_output_per_mtok": _parse_price(payload, "price_output_per_mtok", cfg.price_output_per_mtok),
+    }
+
+    cfg = crud.update_reasoning_model_config(session, cfg, **fields)
+    return _serialize_reasoning_model_config(cfg)
+
+
+@router.delete("/reasoning-models/{model_id}")
+def delete_reasoning_model(
+    model_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, bool]:
+    """Delete a reasoning model configuration."""
+    cfg = crud.get_reasoning_model_config(session, model_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Reasoning model not found")
+    crud.delete_reasoning_model_config(session, cfg)
+    return {"success": True}
+
+
+@router.post("/reasoning-models/{model_id}/set-default")
+def set_default_reasoning_model(
+    model_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Designate a reasoning model configuration as the system default."""
+    cfg = crud.get_reasoning_model_config(session, model_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Reasoning model not found")
+    cfg = crud.update_reasoning_model_config(session, cfg, is_default=True)
+    return _serialize_reasoning_model_config(cfg)
+
+
 def _serialize_style(s: crud.Style) -> dict[str, Any]:
     """Serialize a Style model instance to a dictionary for API responses."""
     updated_ts = (
