@@ -415,16 +415,33 @@ function handleImageClick(asset: Asset) {
               Open
             </span>
           </div>
-          <div v-else class="pointer-events-none absolute inset-0 flex items-end justify-end bg-gradient-to-t from-slate-950/70 via-transparent to-transparent p-2.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-            <span class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
-              <svg class="h-3.5 w-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-              </svg>
-              Zoom
-            </span>
+          <div
+            v-else
+            class="pointer-events-none absolute inset-0 flex flex-col justify-between p-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40"
+          >
+            <!-- Top Right: Zoom button -->
+            <div class="flex items-center justify-end">
+              <span class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
+                <svg class="h-3.5 w-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                </svg>
+                Zoom
+              </span>
+            </div>
+
+            <!-- Bottom: Action Toolbar inside hover overlay -->
+            <div class="pointer-events-auto flex items-center justify-center">
+              <GenerationActions
+                :asset="asset"
+                :generation="generation"
+                variant="overlay"
+                @delete="isDeleteOpen = true"
+              />
+            </div>
           </div>
         </div>
 
+        <!-- Under image: Item title and order (clean, no clutter) -->
         <div v-if="getItemTitle(asset)" class="flex items-center justify-between px-1">
           <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" :title="getItemTitle(asset)!">
             {{ getItemTitle(asset) }}
@@ -434,10 +451,12 @@ function handleImageClick(asset: Asset) {
           </span>
         </div>
 
+        <!-- Normal inline action bar below image: ONLY when there is 1 single image -->
         <GenerationActions
+          v-if="assets.length === 1"
           :asset="asset"
           :generation="generation"
-          :compact="assets.length > 1"
+          variant="inline"
           @delete="isDeleteOpen = true"
         />
       </div>

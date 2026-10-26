@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,24 +15,42 @@ from app.services.model_config_service import ModelConfigService
 logger = logging.getLogger(__name__)
 
 AGENTIC_SET_PLANNING_PROMPT = """You are an expert AI art director and prompt engineer.
-Your task is to take a high-level creative instruction for a set/collection of images and plan a cohesive, consistent set of individual image prompts.
+Your task is to take a high-level creative instruction for a set/collection of images and decompose it into a cohesive set of individual, standalone image prompts.
 
-GUIDELINES:
-1. Target count: {count_instruction}
-2. Common Style Anchor: Formulate a detailed stylistic anchor ('common_style_anchor') that forces visual coherence across every item in the set (e.g. rendering style, medium, lighting, color palette, perspective, framing, background/isolation).
-3. Negative prompt: Formulate an overarching negative prompt ('negative_prompt') to maintain quality and prevent style drift.
-4. Item prompts: Each item must describe a distinct element of the set. Keep each item's 'prompt_detail' focused on the specific subject, allowing the common style anchor to unify the look.
-5. Provide a short, user-friendly 'set_title' and a distinct 'title' for each item.
+CRITICAL RULES FOR IMAGE GENERATION:
+1. EXACTLY ONE SINGLE STANDALONE OBJECT PER IMAGE:
+   Each planned item corresponds to ONE separate image.
+   NEVER generate a sprite sheet, grid, sheet of icons, collage, montage, multiple items, or collection in a single image.
+   If the instruction asks for "RPG icons", "weapons", "character avatars", etc., you MUST break this down into concrete, individual solitary subjects (e.g. Item 1: "Healing Potion", Item 2: "Steel Broadsword", Item 3: "Dragon Shield", Item 4: "Magic Scroll", Item 5: "Mana Crystal").
+   Every item's prompt MUST describe EXACTLY ONE solitary centered object isolated on its own.
+
+2. AVOID PLURAL AND COLLECTION KEYWORDS:
+   In each item's 'prompt_detail', NEVER use words like "icons", "set", "sheet", "sprite sheet", "collection", "grid", "collage", or "group".
+   Instead, explicitly start each item prompt with phrases like:
+   "A single isolated [subject], centered, solitary standalone object..."
+
+3. COMMON STYLE ANCHOR:
+   Formulate a cohesive 'common_style_anchor' to be appended to every item prompt.
+   It MUST enforce visual consistency and solitary framing, for example:
+   "single isolated standalone game asset icon, centered solitary subject, dark clean neutral studio background, no grid, no sheet, cohesive art style, masterpiece"
+
+4. NEGATIVE PROMPT:
+   Formulate an overarching 'negative_prompt' that strictly forbids grids and collections:
+   "sheet, sprite sheet, icon sheet, grid, collage, multiple items, multiple objects, split frame, collection of items, borders with multiple icons, ui frame with multiple icons, blurry, distorted, low quality"
+
+5. TARGET COUNT:
+   {count_instruction}
+   Do not plan fewer items than requested.
 
 IMPORTANT: You MUST respond ONLY with a valid JSON object matching this structure:
 {{
   "set_title": "Short title of the set, e.g. 'Fantasy RPG Inventory Icons'",
-  "common_style_anchor": "Styling keywords to append, e.g. 'clean game asset icon, dark fantasy RPG, glowing aura, solid dark background, sharp digital painting'",
-  "negative_prompt": "Negative keywords to avoid, e.g. 'blurry, photo, complex background, text, watermark'",
+  "common_style_anchor": "Styling keywords, e.g. 'single isolated standalone game asset icon, centered solitary object, dark neutral background, no grid, no sheet, sharp digital painting'",
+  "negative_prompt": "sheet, sprite sheet, icon sheet, grid, collage, multiple items, multiple objects, collection of icons, blurry, low quality",
   "items": [
     {{
       "title": "Item name, e.g. 'Health Potion'",
-      "prompt_detail": "Detailed subject prompt, e.g. 'round glass flask filled with shimmering ruby red elixir, ornate brass stopper'"
+      "prompt_detail": "A single isolated round glass flask filled with glowing ruby red elixir, ornate brass stopper, solitary centered object"
     }}
   ]
 }}
@@ -100,20 +119,24 @@ class AgenticService:
         max_count = max(min_count or 1, min(max_images, 16)) if max_images is not None else None
 
         if min_count is not None and max_count is not None:
-            count_instruction = f"Plan between {min_count} and {max_count} items (inclusive)."
+            count_instruction = f"Plan between {min_count} and {max_count} items (inclusive, target: {max_count} items)."
             effective_min = min_count
             effective_max = max_count
+            target_fallback = max_count
         elif min_count is not None:
             effective_min = min_count
             effective_max = max(min_count, 12)
+            target_fallback = min_count
             count_instruction = f"Plan at least {min_count} items (maximum {effective_max})."
         elif max_count is not None:
             effective_min = min(2, max_count)
             effective_max = max_count
-            count_instruction = f"Plan up to {max_count} items (at least {effective_min})."
+            target_fallback = max_count
+            count_instruction = f"Plan {max_count} distinct items (or at least {effective_min})."
         else:
             effective_min = 2
             effective_max = 10
+            target_fallback = 4
             count_instruction = "Decide on an ideal number of items for this collection based on the instruction (typically 3 to 8 items)."
 
         try:
@@ -124,7 +147,7 @@ class AgenticService:
             logger.warning(
                 "Could not resolve LLM for agentic planning (%s), using fallback.", exc
             )
-            return self._fallback_plan(instruction, effective_min)
+            return self._fallback_plan(instruction, target_fallback)
 
         system_prompt = AGENTIC_SET_PLANNING_PROMPT.format(
             count_instruction=count_instruction,
@@ -163,7 +186,7 @@ class AgenticService:
                 "X-Title": self._settings.app_name,
             }
         else:
-            return self._fallback_plan(instruction, effective_min)
+            return self._fallback_plan(instruction, target_fallback)
 
         timeout = httpx.Timeout(
             self._settings.llm_enhancement_timeout_seconds,
@@ -176,12 +199,12 @@ class AgenticService:
                 response.raise_for_status()
             except Exception as e:
                 logger.error("Agentic planning LLM call failed: %s", e)
-                return self._fallback_plan(instruction, effective_min)
+                return self._fallback_plan(instruction, target_fallback)
 
         data = response.json()
         choices = data.get("choices") or []
         if not choices:
-            return self._fallback_plan(instruction, effective_min)
+            return self._fallback_plan(instruction, target_fallback)
 
         raw_content = choices[0].get("message", {}).get("content", "").strip()
         return self._parse_plan_json(raw_content, instruction, effective_min, effective_max)
@@ -226,14 +249,14 @@ class AgenticService:
                     items.append(AgenticItemPlan(title=f"Item {idx}", prompt_detail=it.strip()))
 
         if len(items) < min_count:
-            # Pad with fallback variations if count is too low
+            # Pad with fallback solitary items if count is too low
             diff = min_count - len(items)
             for d in range(diff):
                 num = len(items) + 1
                 items.append(
                     AgenticItemPlan(
                         title=f"{set_title} #{num}",
-                        prompt_detail=f"{instruction}, variation {num}",
+                        prompt_detail=f"A single isolated {set_title}, unique solitary item variation {num}, centered standalone object, dark background",
                     )
                 )
 
@@ -254,18 +277,50 @@ class AgenticService:
             clean_title = clean_title[:40].rsplit(" ", 1)[0]
         set_title = clean_title or "Generated Set"
 
+        # Sanitize instruction: strip plural/collection words that trigger grid generation in diffusion models
+        sanitized = re.sub(
+            r"\b(icons?|set of|collection of|sheet|sprite sheet|pack|grid|bundle)\b",
+            "",
+            instruction,
+            flags=re.IGNORECASE,
+        ).strip()
+        sanitized = re.sub(r"\s+", " ", sanitized).strip(" ,.-") or "game asset"
+
+        rpg_archetypes = [
+            ("Health Potion", "A single isolated round glass flask filled with glowing ruby red healing elixir, ornate brass stopper, solitary centered object"),
+            ("Iron Longsword", "A single isolated tempered steel longsword with leather-wrapped grip and ornate crossguard, solitary centered object"),
+            ("Tower Shield", "A single isolated heavy metal tower shield with engraved heraldic crest, solitary centered object"),
+            ("Magic Scroll", "A single isolated rolled parchment magic scroll tied with golden ribbon and glowing runes, solitary centered object"),
+            ("Mana Crystal", "A single isolated floating radiant azure mana crystal pulsing with mystical energy, solitary centered object"),
+            ("Ancient Spellbook", "A single isolated thick leather-bound grimoire with glowing arcane symbols, solitary centered object"),
+            ("Knight Helm", "A single isolated steel knight helm with closed visor, solitary centered object"),
+            ("Enchanted Ring", "A single isolated golden signet ring set with a faceted glowing emerald, solitary centered object"),
+        ]
+
+        lower_inst = instruction.lower()
+        is_rpg_or_icon = any(k in lower_inst for k in ["rpg", "fantasy", "game", "icon", "inventory", "item", "loot"])
+
         items: list[AgenticItemPlan] = []
         for idx in range(1, target_count + 1):
-            items.append(
-                AgenticItemPlan(
-                    title=f"Variation {idx}",
-                    prompt_detail=f"{instruction}, unique variation {idx}",
+            if is_rpg_or_icon and idx <= len(rpg_archetypes):
+                _, detail = rpg_archetypes[idx - 1]
+                items.append(
+                    AgenticItemPlan(
+                        title=f"Variation {idx}",
+                        prompt_detail=detail,
+                    )
                 )
-            )
+            else:
+                items.append(
+                    AgenticItemPlan(
+                        title=f"Variation {idx}",
+                        prompt_detail=f"A single isolated {sanitized}, distinct solitary variation {idx}, centered standalone object, clean studio background",
+                    )
+                )
 
         return AgenticPlan(
             set_title=set_title,
-            common_style_anchor="consistent visual theme, high quality, cohesive style",
-            negative_prompt="blurry, distorted, low quality",
+            common_style_anchor="single isolated standalone game asset icon, solitary centered object, clean dark neutral background, no grid, no sheet, sharp focus, cohesive visual style",
+            negative_prompt="sheet, sprite sheet, icon sheet, grid, collage, multiple items, multiple objects, split frame, collection of icons, blurry, distorted, low quality",
             items=items,
         )
