@@ -35,45 +35,6 @@ const editingConfig = ref<Partial<ReasoningModelConfig>>({
 const priceInputPerMtok = ref('')
 const priceOutputPerMtok = ref('')
 
-const POPULAR_PRESETS = [
-  {
-    name: 'Claude 3.7 Sonnet (Reasoning)',
-    provider: 'openrouter',
-    model: 'anthropic/claude-3.7-sonnet',
-    description: 'Anthropic hybrid reasoning model',
-  },
-  {
-    name: 'OpenAI o3-mini (Reasoning)',
-    provider: 'openrouter',
-    model: 'openai/o3-mini',
-    description: 'OpenAI fast reasoning model via OpenRouter',
-  },
-  {
-    name: 'DeepSeek R1 (Reasoning)',
-    provider: 'openrouter',
-    model: 'deepseek/deepseek-r1',
-    description: 'DeepSeek R1 open-weights reasoning model',
-  },
-  {
-    name: 'OpenRouter GPT-4o Mini',
-    provider: 'openrouter',
-    model: 'openai/gpt-4o-mini',
-    description: 'Fast and economical planning model',
-  },
-  {
-    name: 'OpenAI o3-mini (Direct)',
-    provider: 'openai',
-    model: 'o3-mini',
-    description: 'Direct OpenAI o3-mini reasoning model',
-  },
-  {
-    name: 'OpenAI GPT-4o Mini (Direct)',
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    description: 'Direct OpenAI GPT-4o Mini',
-  },
-]
-
 onMounted(() => {
   adminStore.fetchReasoningModels()
   if (adminStore.providerStatuses.length === 0) adminStore.fetchProviderKeys()
@@ -102,13 +63,6 @@ function openEdit(config: ReasoningModelConfig) {
   priceInputPerMtok.value = config.price_input_per_mtok != null ? String(config.price_input_per_mtok) : ''
   priceOutputPerMtok.value = config.price_output_per_mtok != null ? String(config.price_output_per_mtok) : ''
   isEditorOpen.value = true
-}
-
-function applyPreset(preset: (typeof POPULAR_PRESETS)[0]) {
-  editingConfig.value.name = preset.name
-  editingConfig.value.provider = preset.provider
-  editingConfig.value.model_identifier = preset.model
-  editingConfig.value.description = preset.description
 }
 
 async function handleSave() {
@@ -269,28 +223,10 @@ function priceSummary(model: ReasoningModelConfig): string {
       @update:open="isEditorOpen = $event"
     >
       <div class="space-y-4">
-        <!-- Quick Presets -->
-        <div v-if="!editingConfig.id" class="space-y-1.5 pb-2 border-b border-slate-200 dark:border-white/10">
-          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Quick Fill Preset:
-          </label>
-          <div class="flex flex-wrap gap-1.5">
-            <button
-              v-for="preset in POPULAR_PRESETS"
-              :key="preset.name"
-              type="button"
-              @click="applyPreset(preset)"
-              class="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 dark:border-white/10 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-300 transition"
-            >
-              {{ preset.name }}
-            </button>
-          </div>
-        </div>
-
         <div class="grid grid-cols-2 gap-3">
           <Input
             label="Model Display Name"
-            placeholder="e.g. Claude 3.7 Sonnet (Reasoning)"
+            placeholder="e.g. My Reasoning Model"
             v-model="editingConfig.name"
             required
           />
@@ -310,14 +246,14 @@ function priceSummary(model: ReasoningModelConfig): string {
 
         <Input
           label="Model Identifier"
-          placeholder="e.g. anthropic/claude-3.7-sonnet or o3-mini"
+          placeholder="e.g. anthropic/claude-3.7-sonnet"
           v-model="editingConfig.model_identifier"
           required
         />
 
         <Input
           label="Description (Optional)"
-          placeholder="e.g. Hybrid thinking model for deep decomposition"
+          placeholder="e.g. Reasoning model for image set decomposition"
           v-model="editingConfig.description"
         />
 
