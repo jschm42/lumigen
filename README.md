@@ -4,10 +4,9 @@
 
 # Lumigen
 
-**One studio. Twelve AI image providers. Your images stay on your machine.**
+**One studio. Thirteen AI providers for images, video & vector graphics. Your media stays on your machine.**
 
-A self-hosted, local-first AI image studio: generate with FLUX, GPT-Image, Gemini, Seedream,
-Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interface, without subscriptions or tracking.
+A self-hosted, local-first AI creation studio: generate images, videos, and scalable vector graphics with FLUX, GPT-Image, Gemini, Seedream, Seedance, Kling, Recraft, Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interface, without subscriptions or tracking.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-0ea5e9.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)
@@ -46,24 +45,27 @@ Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interfa
 <td width="50%" valign="top">
 
 ### 🎨 Create
-- **12 providers, one prompt box** – switch models in a dropdown, no context switch
-- **Sessions as visual history** – every prompt and result of a session in one feed
+- **13 providers, one prompt box** – switch models and media types in a dropdown, no context switch
+- **AI Video Generation** – text-to-video & image-to-video via ByteDance Seedance & fal.ai (Kling 2.5/1.5, Minimax Video-01, Hunyuan, Luma, LTX, Veo 3)
+- **Vector Graphics (SVG)** – prompt-to-SVG vector output (e.g. Recraft V3) stored in pure XML without rasterization artifacts
+- **Sessions as visual history** – every prompt, image, and video of a session in one unified feed
 - **Live progress** – aspect-correct placeholders, elapsed timer, real cancel
-- **Reference images** – upload or pick from the gallery for image-to-image
+- **Reference images** – upload or pick from the gallery for image-to-image and image-to-video
 - **Magic Prompt** – LLM-powered prompt enhancement
 - **Style presets** – reusable prompt fragments with live previews
-- **Profiles** – save model, size, seed, categories and upscaling defaults
+- **Profiles** – save model, size, seed, categories, media type, and upscaling defaults
 
 </td>
 <td width="50%" valign="top">
 
 ### 🗂️ Organize
-- **Fast gallery** – infinite scroll and virtualized rendering for thousands of images
+- **Fast gallery** – infinite scroll and virtualized rendering for thousands of images, videos, and vectors
+- **Inline video & SVG badges** – first-frame video thumbnails (via ffmpeg), inline video playback, and distinct `SVG` / `Video` badges
 - **Grouped by day** – "Today", "Yesterday", "Saturday, February 21" …
 - **Drag-to-select & keyboard** – rubber-band selection, `0–5` to rate, `Space`, `Enter`, `Ctrl+A`
 - **Compare view** – 2–4 images side by side with synchronized zoom & pan
-- **Filters you can share** – every filter lives in the URL; save favorites as presets
-- **Stacks & categories** – group variations, tag, rate, bulk-edit
+- **Filters you can share** – filter by media type, rating, or provider; every filter lives in the URL
+- **Stacks & categories** – group variations and versions, tag, rate, bulk-edit
 - **ZIP export** – download any selection with one click
 
 </td>
@@ -72,11 +74,11 @@ Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interfa
 <td width="50%" valign="top">
 
 ### 💸 Stay in control
-- **Token usage per image and per session** (optional)
-- **Your own prices** – set cost per 1M input/output tokens or per image, in any currency
+- **Token usage per image/video and per session** (optional)
+- **Your own prices** – set cost per 1M input/output tokens or per generation, in any currency
 - **Generation queue** – fire off many jobs; per-provider concurrency, spacing and retries
 - **One-click retry** of failed jobs with identical settings
-- **Upscaling** – fal.ai (Topaz & creative upscalers) or local Real-ESRGAN
+- **Upscaling** – fal.ai (Topaz & creative upscalers) or local Real-ESRGAN (automatically skipped for video & SVG)
 
 </td>
 <td width="50%" valign="top">
@@ -103,14 +105,15 @@ Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interfa
 | **OpenAI** | gpt-image-1, DALL·E 3 | Reports token usage |
 | **Google Gemini** | Gemini image models, Imagen | Reports token usage |
 | **OpenRouter** | FLUX.2, GPT-5 Image, Seedream, … | One key, many models; reports token usage |
-| **fal.ai** | FLUX, Nano Banana 2, Recraft | Also powers cloud upscaling |
+| **fal.ai** | FLUX, Kling Video (v2.5/v1.5), Minimax Video, Hunyuan, Recraft V3 (SVG), Luma Dream Machine | Image generation, video models (text-to-video & image-to-video), cloud upscaling, and SVG vector graphics |
+| **ByteDance Seedance** | Seedance 2.5 / 2.0 / 1.5 Pro | Dedicated video generation on BytePlus ModelArk (text-to-video, resolutions up to 1080p, custom ratios) |
+| **BytePlus ModelArk** | ByteDance Seedream 5.0 / 4.5 / 4.0 | Up to 10 reference images, sequential multi-image output, reports usage |
 | **MiniMax** | image-01 | Subject reference support |
 | **Stability AI** | Stable Image Ultra / Core, SD 3.5 | Image-to-image for Ultra & SD 3.5 |
-| **Replicate** | Any hosted model, e.g. `black-forest-labs/flux-1.1-pro` | `owner/name` or `owner/name:version` |
+| **Replicate** | Any hosted model, e.g. `black-forest-labs/flux-1.1-pro`, `recraft-ai/recraft-v3` | Supports image, video, and SVG vector models |
 | **Together AI** | FLUX.2 [dev], FLUX.1.1 [pro], FLUX.1 [schnell] | Width/height from aspect ratio |
 | **xAI** | Grok Imagine (`grok-imagine-image-2.0`) | Generation & edits, reports usage |
 | **Ideogram** | Ideogram 3.0 Turbo / Default / Quality | Great typography, style references |
-| **BytePlus ModelArk** | ByteDance Seedream 5.0 / 4.5 / 4.0 | Up to 10 reference images, sequential multi-image output, reports usage |
 
 Add keys under **Admin → API Keys** (each provider links to its key page) or in `.env`.
 
@@ -156,7 +159,8 @@ All settings live in `.env` (see [`.env.example`](.env.example)). The most impor
 | `SESSION_HTTPS_ONLY` | `true` when served via HTTPS |
 | `PROVIDER_CONFIG_KEY` | Fernet key for encrypted API keys (`scripts/generate_provider_key.sh` / `.ps1`) |
 | `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `BFL_API_KEY`, `FAL_API_KEY`, `OPENROUTER_API_KEY`, `MINIMAX_API_KEY` | Provider keys (alternatively set in the Admin UI) |
-| `STABILITY_API_KEY`, `REPLICATE_API_KEY`, `TOGETHER_API_KEY`, `XAI_API_KEY`, `IDEOGRAM_API_KEY`, `BYTEPLUS_API_KEY` | Keys for the newer providers |
+| `STABILITY_API_KEY`, `REPLICATE_API_KEY`, `TOGETHER_API_KEY`, `XAI_API_KEY`, `IDEOGRAM_API_KEY` | Additional image generation provider keys |
+| `BYTEPLUS_API_KEY`, `SEEDANCE_API_KEY` | BytePlus ModelArk: Seedream image models and Seedance video models (`SEEDANCE_API_KEY` falls back to `BYTEPLUS_API_KEY`) |
 | `BYTEPLUS_BASE_URL` | ModelArk region endpoint (default: `https://ark.ap-southeast.bytepluses.com/api/v3`) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Optional e-mail delivery for password reset links |
 | `PUBLIC_BASE_URL` | Base URL used in reset links (defaults to the request URL) |
@@ -189,6 +193,14 @@ AUTH_ALLOW_ONBOARDING_RESET=false
 ```
 
 Run `poetry run lumigen-migrate` after every update.
+
+</details>
+
+<details>
+<summary><b>Video thumbnails with ffmpeg (recommended for video generation)</b></summary>
+
+Lumigen automatically extracts crisp first-frame poster thumbnails for generated videos using `ffmpeg`.
+Ensure `ffmpeg` is available in your system `PATH` (or standard installation locations like `/usr/bin/ffmpeg`, `C:\Program Files\ffmpeg\bin`, or via package managers such as `choco install ffmpeg` / `brew install ffmpeg` / `apt install ffmpeg`).
 
 </details>
 
@@ -228,7 +240,7 @@ Open <http://127.0.0.1:7003>. Update after pulling changes with `./scripts/docke
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, SQLite, httpx, Pillow |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, SQLite, httpx, Pillow, ffmpeg |
 | Frontend | Vue 3, Vite, Pinia, Vue Router, Tailwind CSS 4, TypeScript |
 | Quality | pytest, ruff, vue-tsc, Playwright, pre-commit |
 
