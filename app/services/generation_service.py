@@ -30,6 +30,7 @@ from app.providers.base import (
     ProviderInputImage,
 )
 from app.providers.registry import ProviderRegistry
+from app.services.agentic_service import AgenticService
 from app.services.app_settings_service import AppSettingsService
 from app.services.expand_service import ExpandService, expand_to_provider_params
 from app.services.model_config_service import ModelConfigService
@@ -75,6 +76,7 @@ class GenerationService:
         model_config_service: ModelConfigService | None = None,
         upscale_service: UpscaleService | None = None,
         fal_upscale_service=None,
+        agentic_service: AgenticService | None = None,
     ) -> None:
         self.settings = settings
         self.registry = registry
@@ -84,6 +86,7 @@ class GenerationService:
         self.model_config_service = model_config_service
         self.upscale_service = upscale_service
         self.fal_upscale_service = fal_upscale_service
+        self.agentic_service = agentic_service
 
     def _pricing_snapshot(self, session: Session, model_config_id: Any) -> dict[str, Any] | None:
         """Return the model's configured prices (plus studio currency) at creation time.
@@ -258,6 +261,11 @@ class GenerationService:
                 if isinstance(serialized_expand, dict)
                 else None
             ),
+            "is_agentic": bool(effective_overrides.get("is_agentic", False)),
+            "min_images": effective_overrides.get("min_images"),
+            "max_images": effective_overrides.get("max_images"),
+            "llm_model": effective_overrides.get("llm_model"),
+            "stack_id": effective_overrides.get("stack_id"),
             "overrides": {
                 "width": "width" in effective_overrides,
                 "height": "height" in effective_overrides,
@@ -274,6 +282,7 @@ class GenerationService:
                 "chat_session_title": "chat_session_title" in effective_overrides,
                 "mode": "mode" in effective_overrides,
                 "expand": "expand" in effective_overrides,
+                "is_agentic": "is_agentic" in effective_overrides,
             },
         }
 
@@ -485,7 +494,17 @@ class GenerationService:
     async def run_generation_job(self, generation_id: int) -> None:
         """Execute the generation job: call the provider, save files, and update the DB status."""
         async with self.get_queue_semaphore():
-            await self._execute_generation_job(generation_id)
+            with SessionLocal() as session:
+                generation = crud.get_generation(session, generation_id)
+                is_agentic = bool(
+                    generation
+                    and generation.request_snapshot_json
+                    and generation.request_snapshot_json.get("is_agentic")
+                )
+            if is_agentic:
+                await self._execute_agentic_generation_job(generation_id)
+            else:
+                await self._execute_generation_job(generation_id)
 
     async def run_asset_upscale_job(
         self,
@@ -937,6 +956,7 @@ class GenerationService:
                     )
                     created_files.append(sidecar_rel.as_posix())
 
+                    target_stack_id = generation.request_snapshot_json.get("stack_id") if generation.request_snapshot_json else None
                     session.add(
                         Asset(
                             generation_id=generation.id,
@@ -947,11 +967,14 @@ class GenerationService:
                             height=image_height,
                             mime=image_mime,
                             categories=list(categories),
+                            stack_id=target_stack_id,
+                            stack_order=idx - 1 if target_stack_id else 0,
                             meta_json={
                                 "provider_meta": image.meta,
                                 "raw_meta": result.raw_meta,
                                 "prompt_final": generation.prompt_final,
                                 "upscale": upscale_meta,
+                                "stack_id": target_stack_id,
                             },
                         )
                     )
@@ -1018,6 +1041,223 @@ class GenerationService:
                 except Exception:
                     generation.failure_sidecar_path = None
 
+                session.commit()
+
+    async def _execute_agentic_generation_job(self, generation_id: int) -> None:
+        """Internal execution of an agentic multi-image set generation job."""
+        import uuid
+
+        with SessionLocal() as session:
+            generation = crud.get_generation(session, generation_id)
+            if not generation or generation.status == "cancelled":
+                return
+            if generation.status != "queued":
+                return
+
+            generation.status = "running"
+            generation.error = None
+            session.commit()
+
+            base_dir = self._base_dir_from_snapshot(
+                generation.storage_template_snapshot_json
+            )
+            ensure_dir(base_dir)
+
+            try:
+                self._raise_if_cancelled(session, generation_id)
+
+                req_snap = dict(generation.request_snapshot_json or {})
+                min_images = int(req_snap.get("min_images") or 4)
+                max_images = int(req_snap.get("max_images") or 8)
+                llm_model = req_snap.get("llm_model")
+
+                # Step 1: LLM Planning
+                req_snap["agentic_step"] = "planning"
+                generation.request_snapshot_json = req_snap
+                session.commit()
+
+                if not self.agentic_service:
+                    raise ProviderError("AgenticService is not configured.")
+
+                plan = await self.agentic_service.plan_set(
+                    instruction=generation.prompt_user,
+                    min_images=min_images,
+                    max_images=max_images,
+                    target_model=generation.model,
+                    target_provider=generation.provider,
+                    llm_model=llm_model,
+                )
+
+                self._raise_if_cancelled(session, generation_id)
+
+                stack_id = f"stk_{uuid.uuid4().hex[:12]}"
+                plan_dict = plan.to_dict()
+
+                req_snap = dict(generation.request_snapshot_json or {})
+                req_snap["agentic_step"] = "generating"
+                req_snap["agentic_plan"] = plan_dict
+                req_snap["stack_id"] = stack_id
+                req_snap["total_planned"] = len(plan.items)
+                req_snap["current_item_index"] = 0
+                generation.request_snapshot_json = req_snap
+                session.commit()
+
+                storage_template = str(
+                    generation.storage_template_snapshot_json.get(
+                        "template", self.settings.default_storage_template
+                    )
+                )
+                output_format = (
+                    str(generation.request_snapshot_json.get("output_format", "png"))
+                    .lower()
+                    .lstrip(".")
+                )
+                category_ids = self._parse_int_list(
+                    generation.request_snapshot_json.get("category_ids")
+                )
+                categories = crud.list_categories_by_ids(session, category_ids)
+
+                created_files: list[str] = []
+
+                for idx, item in enumerate(plan.items):
+                    self._raise_if_cancelled(session, generation_id)
+
+                    req_snap = dict(generation.request_snapshot_json or {})
+                    req_snap["current_item_index"] = idx
+                    req_snap["current_item_title"] = item.title
+                    generation.request_snapshot_json = req_snap
+                    session.commit()
+
+                    combined_prompt = item.prompt_detail
+                    if plan.common_style_anchor:
+                        combined_prompt = f"{combined_prompt}, {plan.common_style_anchor}"
+
+                    effective_neg = plan.negative_prompt or req_snap.get("negative_prompt")
+
+                    provider_request = self._provider_request_from_generation(generation)
+                    provider_request.prompt = combined_prompt
+                    if effective_neg:
+                        provider_request.negative_prompt = effective_neg
+                    provider_request.n_images = 1
+
+                    provider_request = self._prepare_provider_request(session, provider_request)
+                    self._raise_if_cancelled(session, generation_id)
+
+                    try:
+                        result = await self.registry.generate(
+                            generation.provider, provider_request
+                        )
+                    except Exception as gen_err:
+                        _logger.warning("Item %d (%s) failed during agentic run: %s", idx, item.title, gen_err)
+                        continue
+
+                    if not result.images:
+                        continue
+
+                    image = result.images[0]
+                    image_data = image.data
+                    image_width = image.width
+                    image_height = image.height
+                    image_mime = image.mime
+
+                    (
+                        image_data,
+                        image_width,
+                        image_height,
+                        image_mime,
+                    ) = self._normalize_image_for_output(
+                        data=image_data,
+                        output_format=output_format,
+                        fallback_mime=image_mime,
+                        fallback_width=image_width,
+                        fallback_height=image_height,
+                    )
+
+                    rendered_rel_path = self.storage_service.render_relative_path(
+                        template=storage_template,
+                        profile_name=generation.profile_name,
+                        prompt_user=item.title,
+                        generation_id=generation.id,
+                        idx=idx + 1,
+                        ext=output_format,
+                    )
+                    rel_path = rendered_rel_path
+                    abs_path = self.storage_service.resolve_managed_path(base_dir, rel_path)
+                    self.storage_service.write_bytes_atomic(abs_path, image_data)
+                    created_files.append(rel_path.as_posix())
+
+                    thumb_rel = self.thumbnail_service.create_thumbnail(base_dir, rel_path)
+                    created_files.append(thumb_rel.as_posix())
+
+                    sidecar_payload = self._build_asset_sidecar_payload(
+                        generation=generation,
+                        asset_index=idx + 1,
+                        image_rel=rel_path.as_posix(),
+                        thumbnail_rel=thumb_rel.as_posix(),
+                        provider_meta=image.meta,
+                        raw_meta=result.raw_meta,
+                        image_width=image_width,
+                        image_height=image_height,
+                        image_mime=image_mime,
+                    )
+                    sidecar_rel = self.sidecar_service.write_asset_sidecar(
+                        base_dir, rel_path, sidecar_payload
+                    )
+                    created_files.append(sidecar_rel.as_posix())
+
+                    asset = Asset(
+                        generation_id=generation.id,
+                        file_path=rel_path.as_posix(),
+                        sidecar_path=sidecar_rel.as_posix(),
+                        thumbnail_path=thumb_rel.as_posix(),
+                        width=image_width,
+                        height=image_height,
+                        mime=image_mime,
+                        categories=list(categories),
+                        stack_id=stack_id,
+                        stack_order=idx,
+                        meta_json={
+                            "provider_meta": image.meta,
+                            "raw_meta": result.raw_meta,
+                            "prompt": combined_prompt,
+                            "prompt_detail": item.prompt_detail,
+                            "item_title": item.title,
+                            "set_title": plan.set_title,
+                            "common_style_anchor": plan.common_style_anchor,
+                            "stack_id": stack_id,
+                            "stack_order": idx,
+                        },
+                    )
+                    session.add(asset)
+                    session.commit()
+
+                self._raise_if_cancelled(session, generation_id)
+                session.refresh(generation)
+                if generation.status == "cancelled":
+                    raise GenerationCancelledError("Canceled by user during finalization.")
+
+                if not generation.assets:
+                    raise ProviderError("None of the planned items could be generated.")
+
+                generation.status = "succeeded"
+                req_snap = dict(generation.request_snapshot_json or {})
+                req_snap["agentic_step"] = "completed"
+                generation.request_snapshot_json = req_snap
+                generation.error = None
+                generation.failure_sidecar_path = None
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
+
+            except GenerationCancelledError as exc:
+                generation.status = "cancelled"
+                generation.error = str(exc)
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
+            except Exception as exc:
+                _logger.exception("Agentic generation job %d failed: %s", generation_id, exc)
+                generation.status = "failed"
+                generation.error = str(exc)
+                generation.finished_at = datetime.now(UTC)
                 session.commit()
 
     def _raise_if_cancelled(self, session: Session, generation_id: int) -> None:

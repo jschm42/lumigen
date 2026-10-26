@@ -31,6 +31,10 @@ export interface SubmitGenerationPayload {
   duration?: number | null
   /** Whether the provider should synthesize an audio track (video models only). */
   generate_audio?: boolean
+  is_agentic?: boolean
+  min_images?: number | null
+  max_images?: number | null
+  llm_model?: string | null
 }
 
 export interface EnhancePromptPayload {
@@ -73,6 +77,10 @@ export const generationApi = {
     if (payload.media_type) formData.append('media_type', payload.media_type)
     if (payload.duration != null) formData.append('duration', String(payload.duration))
     if (payload.generate_audio != null) formData.append('generate_audio', payload.generate_audio ? 'true' : 'false')
+    if (payload.is_agentic) formData.append('is_agentic', 'true')
+    if (payload.min_images != null) formData.append('min_images', String(payload.min_images))
+    if (payload.max_images != null) formData.append('max_images', String(payload.max_images))
+    if (payload.llm_model) formData.append('llm_model', payload.llm_model)
 
     if (payload.input_images && payload.input_images.length > 0) {
       payload.input_images.forEach((file) => {

@@ -12,6 +12,7 @@ from app.db import crud
 from app.db.engine import get_session
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
+from app.services.agentic_service import AgenticService
 from app.services.app_settings_service import AppSettingsService
 from app.services.enhancement_service import EnhancementService
 from app.services.generation_service import GenerationService
@@ -31,6 +32,7 @@ thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_
 sidecar_service = SidecarService(storage_service)
 model_config_service = ModelConfigService(settings)
 enhancement_service = EnhancementService(settings, model_config_service)
+agentic_service = AgenticService(settings, model_config_service, enhancement_service)
 upscale_service = UpscaleService(settings)
 fal_upscale_service = FalUpscaleService()
 provider_registry = ProviderRegistry(settings)
@@ -44,6 +46,7 @@ generation_service = GenerationService(
     model_config_service=model_config_service,
     upscale_service=upscale_service,
     fal_upscale_service=fal_upscale_service,
+    agentic_service=agentic_service,
 )
 
 
@@ -83,6 +86,10 @@ async def api_generate_submit(
         duration = payload.get("duration")
         generate_audio = payload.get("generate_audio")
         output_format = payload.get("output_format")
+        is_agentic = bool(payload.get("is_agentic", False))
+        min_images = payload.get("min_images")
+        max_images = payload.get("max_images")
+        llm_model = payload.get("llm_model")
     else:
         form = await request.form()
         prompt = str(form.get("prompt", "")).strip()
@@ -109,6 +116,10 @@ async def api_generate_submit(
         duration = form.get("duration")
         generate_audio = form.get("generate_audio")
         output_format = form.get("output_format")
+        is_agentic = str(form.get("is_agentic", "")).strip().lower() in {"1", "true", "yes", "on"}
+        min_images = form.get("min_images")
+        max_images = form.get("max_images")
+        llm_model = form.get("llm_model")
 
         # Collect uploaded image files from form
         for key in ("images", "input_images"):
@@ -407,6 +418,15 @@ async def api_generate_submit(
     if category_ids is not None:
         overrides["category_ids"] = category_ids
 
+    if is_agentic:
+        overrides["is_agentic"] = True
+        min_val = _parse_int(min_images) if min_images is not None else None
+        max_val = _parse_int(max_images) if max_images is not None else None
+        overrides["min_images"] = max(2, min(min_val or 4, 12))
+        overrides["max_images"] = max(overrides["min_images"], min(max_val or 8, 12))
+        if llm_model:
+            overrides["llm_model"] = str(llm_model).strip()
+
     generation = generation_service.create_generation_from_profile(
         session,
         profile,
@@ -422,11 +442,15 @@ async def api_generate_submit(
     }
 
 
-def _generation_progress(status: str) -> int:
+def _generation_progress(status: str, req_snapshot: dict[str, Any] | None = None) -> int:
     if status == "succeeded":
         return 100
     if status in {"failed", "cancelled", "queued"}:
         return 0
+    if req_snapshot and req_snapshot.get("is_agentic"):
+        total = int(req_snapshot.get("total_planned") or 1)
+        curr = int(req_snapshot.get("current_item_index") or 0)
+        return max(5, min(95, round((curr / total) * 100)))
     return 50
 
 
@@ -515,6 +539,13 @@ def serialize_generation(gen: Any, session_token: str | None = None) -> dict[str
         "n_images": req_snapshot.get("n_images"),
         "usage": _generation_usage(gen),
         "assets": [serialize_asset(a, gen) for a in gen.assets] if gen.assets else [],
+        "is_agentic": bool(req_snapshot.get("is_agentic")),
+        "agentic_step": req_snapshot.get("agentic_step"),
+        "agentic_plan": req_snapshot.get("agentic_plan"),
+        "total_planned": req_snapshot.get("total_planned"),
+        "current_item_index": req_snapshot.get("current_item_index"),
+        "current_item_title": req_snapshot.get("current_item_title"),
+        "stack_id": req_snapshot.get("stack_id"),
     }
 
 

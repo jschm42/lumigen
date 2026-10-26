@@ -55,6 +55,12 @@ export const useGenerateStore = defineStore('generate', () => {
   const selectedCategoryIds = ref<number[]>([])
   const profileLockedCategoryIds = ref<number[]>([])
 
+  // Agentic Mode
+  const isAgenticMode = ref<boolean>(false)
+  const agenticMinImages = ref<number>(4)
+  const agenticMaxImages = ref<number>(8)
+  const agenticLlmModel = ref<string>('')
+
   // Advanced Overrides (from old prompt panel)
   const isAdvancedOpen = ref<boolean>(false)
   const dimensionPreset = ref<string>('')
@@ -538,6 +544,10 @@ export const useGenerateStore = defineStore('generate', () => {
         media_type: isVideoModel.value ? 'video' : undefined,
         duration: isVideoModel.value ? videoDuration.value : undefined,
         generate_audio: isVideoModel.value ? videoGenerateAudio.value : undefined,
+        is_agentic: isAgenticMode.value ? true : undefined,
+        min_images: isAgenticMode.value ? agenticMinImages.value : undefined,
+        max_images: isAgenticMode.value ? agenticMaxImages.value : undefined,
+        llm_model: isAgenticMode.value && agenticLlmModel.value ? agenticLlmModel.value : undefined,
       }
 
       const res = await generationApi.submitGeneration(payload)
@@ -563,6 +573,9 @@ export const useGenerateStore = defineStore('generate', () => {
         created_at: new Date().toISOString(),
         session_token: res.session_token,
         assets: [],
+        is_agentic: isAgenticMode.value,
+        agentic_step: isAgenticMode.value ? 'planning' : undefined,
+        total_planned: isAgenticMode.value ? agenticMaxImages.value : undefined,
       }
       generations.value.push(optimisticGen)
       lastSubmittedAt.value = Date.now()
@@ -661,6 +674,10 @@ export const useGenerateStore = defineStore('generate', () => {
     videoGenerateAudio,
     selectedCategoryIds,
     profileLockedCategoryIds,
+    isAgenticMode,
+    agenticMinImages,
+    agenticMaxImages,
+    agenticLlmModel,
     addAttachedImage,
     attachAssetAsImage,
     removeAttachedImage,

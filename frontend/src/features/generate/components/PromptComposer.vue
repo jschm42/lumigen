@@ -189,8 +189,42 @@ function handleKeydown(e: KeyboardEvent) {
         @keydown="handleKeydown"
         rows="2"
         class="w-full min-h-[3.25rem] max-h-52 overflow-y-auto resize-none rounded-xl border border-slate-300/80 bg-slate-50/80 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 focus:outline-none dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-950/80 dark:focus:ring-sky-400/20 transition-all leading-relaxed"
-        placeholder="Describe your desired image..."
+        :placeholder="generateStore.isAgenticMode ? 'Describe a set of images to generate (e.g. \'Design a set of RPG icons: potions, weapons, spells\')...' : 'Describe your desired image...'"
       ></textarea>
+    </div>
+
+    <!-- Collapsible Agentic Settings Bar -->
+    <div
+      v-if="generateStore.isAgenticMode"
+      class="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200/80 bg-indigo-50/70 px-3.5 py-2 text-xs transition-all dark:border-indigo-900/40 dark:bg-indigo-950/30"
+    >
+      <div class="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300 shrink-0 select-none">
+        <span>🤖</span>
+        <span>Agentic Mode:</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Min Images:</label>
+        <input
+          type="number"
+          min="2"
+          max="12"
+          v-model.number="generateStore.agenticMinImages"
+          class="w-14 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200"
+        />
+      </div>
+      <div class="flex items-center gap-1.5">
+        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Max Images:</label>
+        <input
+          type="number"
+          min="2"
+          max="12"
+          v-model.number="generateStore.agenticMaxImages"
+          class="w-14 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200"
+        />
+      </div>
+      <div class="hidden sm:flex items-center text-[11px] text-indigo-600/80 dark:text-indigo-400/80 italic ml-auto">
+        Generates a cohesive set into a single gallery stack
+      </div>
     </div>
 
     <!-- Collapsible Negative Prompt -->
@@ -296,6 +330,22 @@ function handleKeydown(e: KeyboardEvent) {
         >
           <span>🚫</span>
           <span class="hidden sm:inline">Negative</span>
+        </button>
+
+        <!-- Agentic Mode Toggle -->
+        <button
+          type="button"
+          @click="generateStore.isAgenticMode = !generateStore.isAgenticMode"
+          :class="[
+            'inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border text-xs font-medium transition shadow-xs cursor-pointer',
+            generateStore.isAgenticMode
+              ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-500/60 dark:bg-indigo-950/50 dark:text-indigo-300'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+          ]"
+          title="Toggle Agentic Mode (generates a cohesive set grouped into a gallery stack)"
+        >
+          <span>🤖</span>
+          <span>Agentic Set</span>
         </button>
 
         <!-- Advanced Overrides Toggle -->

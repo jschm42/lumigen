@@ -71,12 +71,27 @@ const elapsedSeconds = computed(() => {
 
 const statusLabel = computed(() => {
   const s = props.generation.status
+  if (props.generation.is_agentic) {
+    if (s === 'queued' || s === 'pending') return 'Agent set in queue'
+    if (props.generation.agentic_step === 'planning') return 'Agent planning cohesive set'
+    if (props.generation.current_item_title) {
+      const idx = (props.generation.current_item_index ?? 0) + 1
+      const total = props.generation.total_planned || '?'
+      return `Generating ${idx}/${total}: ${props.generation.current_item_title}`
+    }
+    return 'Agent generating set'
+  }
   if (s === 'queued' || s === 'pending') return 'Waiting in queue'
   return 'Generating'
 })
 
 // --- Layout helpers --------------------------------------------------------
-const expectedCount = computed(() => Math.min(Math.max(Number(props.generation.n_images) || 1, 1), 4))
+const expectedCount = computed(() => {
+  if (props.generation.is_agentic) {
+    return Math.min(Math.max(Number(props.generation.total_planned) || 4, 2), 12)
+  }
+  return Math.min(Math.max(Number(props.generation.n_images) || 1, 1), 4)
+})
 
 const placeholderAspect = computed(() => {
   const ratio = props.generation.aspect_ratio || '1:1'
@@ -86,11 +101,20 @@ const placeholderAspect = computed(() => {
 })
 
 const gridClass = computed(() => {
-  const count = isPending.value ? expectedCount.value : assets.value.length
+  const count = props.generation.is_agentic
+    ? Math.max(props.generation.total_planned || 0, assets.value.length || 0, isPending.value ? expectedCount.value : 1)
+    : (isPending.value ? expectedCount.value : assets.value.length)
   if (count <= 1) return 'grid-cols-1'
   if (count === 2) return 'grid-cols-1 sm:grid-cols-2'
-  return 'grid-cols-2 lg:grid-cols-3'
+  if (count === 3) return 'grid-cols-1 sm:grid-cols-3'
+  if (count === 4) return 'grid-cols-2 sm:grid-cols-2 md:grid-cols-4'
+  if (count <= 6) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6'
+  return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4'
 })
+
+function getItemTitle(asset: Asset): string | null {
+  return asset.metadata?.item_title || (asset as any).meta_json?.item_title || null
+}
 
 const dimensions = computed(() => {
   const first = assets.value[0]
@@ -181,6 +205,23 @@ function handleImageClick(asset: Asset) {
     <!-- Header: prompt + quick actions -->
     <header class="flex items-start gap-3">
       <div class="min-w-0 flex-1 space-y-1">
+        <!-- Agentic badge & Set title -->
+        <div v-if="generation.is_agentic" class="flex flex-wrap items-center gap-1.5 pb-0.5">
+          <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+            🤖 Agentic Set • {{ assets.length }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} Items
+          </span>
+          <span v-if="generation.agentic_plan?.set_title" class="text-xs font-bold text-slate-800 dark:text-slate-100">
+            {{ generation.agentic_plan.set_title }}
+          </span>
+          <router-link
+            v-if="generation.stack_id"
+            :to="{ path: '/gallery', query: { q: generation.stack_id } }"
+            class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:text-sky-600 dark:bg-slate-800 dark:text-slate-300 transition-colors"
+            title="View this entire stack in the Gallery"
+          >
+            📚 View in Gallery Stack
+          </router-link>
+        </div>
         <p
           :class="[
             'text-xs sm:text-sm font-medium leading-relaxed text-slate-900 dark:text-white break-words',
@@ -384,12 +425,38 @@ function handleImageClick(asset: Asset) {
           </div>
         </div>
 
+        <div v-if="getItemTitle(asset)" class="flex items-center justify-between px-1">
+          <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" :title="getItemTitle(asset)!">
+            {{ getItemTitle(asset) }}
+          </span>
+          <span v-if="asset.stack_order != null" class="text-[10px] text-slate-400 font-mono">
+            #{{ asset.stack_order + 1 }}
+          </span>
+        </div>
+
         <GenerationActions
           :asset="asset"
           :generation="generation"
           :compact="assets.length > 1"
           @delete="isDeleteOpen = true"
         />
+      </div>
+
+      <!-- Live Generating Slot in Agentic Grid -->
+      <div
+        v-if="generation.status === 'running' && generation.is_agentic"
+        class="min-w-0 space-y-2"
+      >
+        <div
+          class="relative flex flex-col items-center justify-center rounded-xl border border-dashed border-indigo-400 bg-indigo-50/50 p-4 text-center dark:border-indigo-600/50 dark:bg-indigo-950/30 aspect-square"
+        >
+          <div class="absolute inset-0 animate-pulse bg-gradient-to-br from-indigo-500/10 via-transparent to-sky-500/10 rounded-xl" />
+          <Spinner size="md" class="text-indigo-600 dark:text-indigo-400" />
+          <span class="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 mt-2 z-10 px-2 line-clamp-2">
+            Generating {{ generation.current_item_title || 'Item ' + ((generation.current_item_index ?? 0) + 1) }}…
+          </span>
+          <span class="font-mono text-[10px] text-slate-400 mt-1 z-10">{{ formatDuration(elapsedSeconds) }}</span>
+        </div>
       </div>
     </div>
 

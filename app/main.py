@@ -60,6 +60,7 @@ from app.db.models import Asset, ChatSession, Generation, User
 from app.providers.base import ExpandSpec, ProviderError
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
+from app.services.agentic_service import AgenticService
 from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
 from app.services.expand_service import ExpandService, ExpandValidationError
@@ -279,6 +280,7 @@ thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_
 sidecar_service = SidecarService(storage_service)
 model_config_service = ModelConfigService(settings)
 enhancement_service = EnhancementService(settings, model_config_service)
+agentic_service = AgenticService(settings, model_config_service, enhancement_service)
 upscale_service = UpscaleService(settings)
 fal_upscale_service = FalUpscaleService()
 provider_registry = ProviderRegistry(settings)
@@ -291,6 +293,7 @@ generation_service = GenerationService(
     model_config_service=model_config_service,
     upscale_service=upscale_service,
     fal_upscale_service=fal_upscale_service,
+    agentic_service=agentic_service,
 )
 gallery_service = GalleryService(default_page_size=settings.default_page_size)
 auth_service = AuthService()

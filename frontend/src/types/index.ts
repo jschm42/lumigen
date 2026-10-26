@@ -156,6 +156,18 @@ export interface Generation {
   duration_seconds?: number | null
   usage?: TokenUsage | null
   assets: Asset[]
+  is_agentic?: boolean
+  agentic_step?: string
+  agentic_plan?: {
+    set_title?: string
+    common_style_anchor?: string
+    negative_prompt?: string
+    items?: Array<{ title: string; prompt_detail: string }>
+  }
+  total_planned?: number
+  current_item_index?: number
+  current_item_title?: string
+  stack_id?: string
 }
 
 export interface ChatSession {
