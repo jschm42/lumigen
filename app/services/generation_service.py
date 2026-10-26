@@ -1120,6 +1120,7 @@ class GenerationService:
                 categories = crud.list_categories_by_ids(session, category_ids)
 
                 created_files: list[str] = []
+                last_error: str | None = None
 
                 for idx, item in enumerate(plan.items):
                     self._raise_if_cancelled(session, generation_id)
@@ -1150,6 +1151,7 @@ class GenerationService:
                             generation.provider, provider_request
                         )
                     except Exception as gen_err:
+                        last_error = str(gen_err)
                         _logger.warning("Item %d (%s) failed during agentic run: %s", idx, item.title, gen_err)
                         continue
 
@@ -1239,7 +1241,12 @@ class GenerationService:
                     raise GenerationCancelledError("Canceled by user during finalization.")
 
                 if not generation.assets:
-                    raise ProviderError("None of the planned items could be generated.")
+                    err_msg = (
+                        f"None of the planned items could be generated: {last_error}"
+                        if last_error
+                        else "None of the planned items could be generated."
+                    )
+                    raise ProviderError(err_msg)
 
                 generation.status = "succeeded"
                 req_snap = dict(generation.request_snapshot_json or {})
