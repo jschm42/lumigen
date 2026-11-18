@@ -8,13 +8,36 @@ import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Switch from '@/components/ui/Switch.vue'
+import Select from '@/components/ui/Select.vue'
+import Badge from '@/components/ui/Badge.vue'
+import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import type { ReasoningModelConfig } from '@/types'
+import { useConfirm } from '@/composables/useConfirm'
 
 const adminStore = useAdminStore()
+const confirm = useConfirm()
 const authStore = useAuthStore()
 const toastStore = useToastStore()
 
 const currency = computed(() => authStore.uiSettings.cost_currency || 'USD')
+
+const REASONING_PROVIDERS = [
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'google', label: 'Google Gemini' },
+  { value: 'anthropic', label: 'Anthropic' },
+]
+
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'name', label: 'Name' },
+  { key: 'provider', label: 'Provider' },
+  { key: 'model_identifier', label: 'Identifier' },
+  { key: 'pricing', label: `Pricing (${currency.value})` },
+  { key: 'custom_key', label: 'Custom Key' },
+  { key: 'is_active', label: 'Active' },
+  { key: 'is_default', label: 'Default' },
+  { key: 'actions', label: 'Actions', align: 'right' },
+])
 
 const isEditorOpen = ref(false)
 const customApiKey = ref('')
@@ -92,7 +115,12 @@ async function handleSave() {
 }
 
 async function handleDelete(id: number) {
-  if (!confirm('Are you sure you want to delete this reasoning model configuration?')) return
+  const ok = await confirm({
+    title: 'Delete reasoning model',
+    message: 'Are you sure you want to delete this reasoning model configuration?',
+    confirmText: 'Delete',
+  })
+  if (!ok) return
   await adminStore.deleteReasoningModel(id)
 }
 
@@ -122,98 +150,53 @@ function priceSummary(model: ReasoningModelConfig): string {
     </div>
 
     <!-- Models List Table -->
-    <div class="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 overflow-hidden shadow-sm">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="border-b border-slate-200 dark:border-white/10 text-slate-500 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-950/40">
-            <th class="p-3.5">Name</th>
-            <th class="p-3.5">Provider</th>
-            <th class="p-3.5">Identifier</th>
-            <th class="p-3.5">Pricing ({{ currency }})</th>
-            <th class="p-3.5">Custom Key</th>
-            <th class="p-3.5">Active</th>
-            <th class="p-3.5">Default</th>
-            <th class="p-3.5 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200/60 dark:divide-white/10">
-          <tr v-if="adminStore.reasoningModels.length === 0">
-            <td colspan="8" class="p-8 text-center text-slate-400">
-              No reasoning models configured yet. Click "Add Reasoning Model" above to get started.
-            </td>
-          </tr>
-          <tr
-            v-for="model in adminStore.reasoningModels"
-            :key="model.id"
-            class="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors"
-          >
-            <td class="p-3.5">
-              <div class="font-bold text-slate-900 dark:text-white">{{ model.name }}</div>
-              <div v-if="model.description" class="text-[11px] text-slate-500 dark:text-slate-400">
-                {{ model.description }}
-              </div>
-            </td>
-            <td class="p-3.5">
-              <span class="px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                {{ model.provider }}
-              </span>
-            </td>
-            <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">
-              {{ model.model_identifier }}
-            </td>
-            <td class="p-3.5 text-[11px] text-slate-500">
-              {{ priceSummary(model) }}
-            </td>
-            <td class="p-3.5 text-[11px]">
-              <span v-if="model.use_custom_api_key && model.has_custom_api_key" class="text-emerald-600 font-semibold dark:text-emerald-400">
-                Custom
-              </span>
-              <span v-else class="text-slate-400">
-                Default provider
-              </span>
-            </td>
-            <td class="p-3.5">
-              <span :class="model.is_active ? 'text-emerald-500 font-bold' : 'text-slate-400'">
-                {{ model.is_active ? 'Yes' : 'No' }}
-              </span>
-            </td>
-            <td class="p-3.5">
-              <span
-                v-if="model.is_default"
-                class="px-2 py-0.5 rounded-full text-[10px] bg-indigo-600 text-white font-bold"
-              >
-                Default
-              </span>
-              <button
-                v-else
-                type="button"
-                @click="adminStore.setDefaultReasoningModel(model.id)"
-                class="text-[11px] text-slate-400 hover:text-indigo-500 font-medium"
-                title="Make this model the default reasoning model"
-              >
-                Set Default
-              </button>
-            </td>
-            <td class="p-3.5 text-right space-x-2">
-              <button
-                type="button"
-                @click="openEdit(model)"
-                class="text-sky-500 hover:text-sky-400 font-semibold cursor-pointer"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                @click="handleDelete(model.id)"
-                class="text-rose-500 hover:text-rose-400 font-semibold cursor-pointer"
-              >
-                Delete
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      :columns="columns"
+      :rows="adminStore.reasoningModels"
+      row-key="id"
+      caption="Reasoning model configurations"
+      empty-title="No reasoning models configured"
+      empty-description="Click &quot;Add Reasoning Model&quot; above to get started."
+    >
+      <template #cell-name="{ row }">
+        <div class="font-bold text-slate-900 dark:text-white">{{ row.name }}</div>
+        <div v-if="row.description" class="text-2xs text-slate-500 dark:text-slate-400">{{ row.description }}</div>
+      </template>
+      <template #cell-provider="{ row }">
+        <Badge size="xs" class="font-mono">{{ row.provider }}</Badge>
+      </template>
+      <template #cell-model_identifier="{ row }">
+        <span class="font-mono">{{ row.model_identifier }}</span>
+      </template>
+      <template #cell-pricing="{ row }">
+        <span class="text-slate-500 dark:text-slate-400">{{ priceSummary(row) }}</span>
+      </template>
+      <template #cell-custom_key="{ row }">
+        <Badge v-if="row.use_custom_api_key && row.has_custom_api_key" variant="emerald" size="xs">Custom</Badge>
+        <span v-else class="text-slate-400">Default provider</span>
+      </template>
+      <template #cell-is_active="{ row }">
+        <Badge :variant="row.is_active ? 'emerald' : 'slate'" size="xs" dot>{{ row.is_active ? 'Active' : 'Inactive' }}</Badge>
+      </template>
+      <template #cell-is_default="{ row }">
+        <Badge v-if="row.is_default" variant="violet" size="xs">Default</Badge>
+        <Button
+          v-else
+          variant="ghost"
+          size="xs"
+          title="Make this model the default reasoning model"
+          @click="adminStore.setDefaultReasoningModel(row.id)"
+        >
+          Set default
+        </Button>
+      </template>
+      <template #cell-actions="{ row }">
+        <div class="flex justify-end gap-1">
+          <Button variant="ghost" size="xs" @click="openEdit(row)">Edit</Button>
+          <Button variant="danger-ghost" size="xs" @click="handleDelete(row.id)">Delete</Button>
+        </div>
+      </template>
+    </DataTable>
 
     <!-- Edit / Add Modal -->
     <Modal
@@ -230,18 +213,7 @@ function priceSummary(model: ReasoningModelConfig): string {
             v-model="editingConfig.name"
             required
           />
-          <div class="space-y-1">
-            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Provider</label>
-            <select
-              v-model="editingConfig.provider"
-              class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-white/10 dark:bg-slate-900 dark:text-white"
-            >
-              <option value="openrouter">OpenRouter</option>
-              <option value="openai">OpenAI</option>
-              <option value="google">Google Gemini</option>
-              <option value="anthropic">Anthropic</option>
-            </select>
-          </div>
+          <Select v-model="editingConfig.provider" label="Provider" :options="REASONING_PROVIDERS" />
         </div>
 
         <Input

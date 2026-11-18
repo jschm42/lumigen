@@ -106,6 +106,7 @@ Linters are part of the Poetry dev group (`poetry install`).
 - Provider logic stays in adapters; orchestration/policies stay in `ProviderRegistry`.
 - All file writes go through `StorageService` — do not bypass path-safety checks.
 - No inline JS or CSS in templates; use `app/web/static/js/*` and `app/web/static/css/app.css`.
+- Vue frontend (`frontend/`): follow the design & component rules in [`frontend/AGENTS.md`](frontend/AGENTS.md) (mandatory primitives, tokens, icons, layout, a11y).
 - Add/adjust tests for every backend or UI behavior change.
 - Tailwind theming: use class-based dark mode only. Do not introduce custom light/dark override systems. Follow [Tailwind theme customization](https://tailwindcss.com/docs/theme#customizing-your-theme).
 - Language & Localization: All user-facing UI text, labels, placeholders, tooltips, buttons, modal titles, confirmation dialogs, toasts/notifications, error messages, and default seed data (styles, templates) MUST be in English. Never hardcode German strings in components, stores, templates, or backend responses. All code, comments, docstrings, and generated text must be in English.
@@ -125,9 +126,11 @@ Linters are part of the Poetry dev group (`poetry install`).
 
 ## Playwright e2e details
 
-- Config: `playwright.config.js` (root) — `chromium` project, `setup` project (`tests/e2e/auth.setup.js`), `webServer` on port 8765 with isolated SQLite in `/tmp/lumigen-e2e/`.
-- Test files: `tests/e2e/*.spec.js` (one per feature area).
-- Auth: `auth.setup.js` creates the first admin via onboarding and saves session to `playwright/.auth/admin.json`; all specs reuse it via `storageState`.
+- The suite tests the **Vue SPA**: build it first with `npm run build:frontend` (output `app/web/dist`); CI does the same.
+- Config: `playwright.config.js` (root) — `chromium` project, `setup` project (`tests/e2e/auth.setup.js`), single worker. `webServer` runs `scripts/e2e_server.py` on port 8765, which **wipes** `<os-temp>/lumigen-e2e/` on every start, so each run begins with an empty database.
+- Test files: `tests/e2e/*.spec.js` (one per feature area); shared helpers in `tests/e2e/helpers.js` (`api()` for CSRF-aware API calls, `navigateTo()`, `ensureStubAsset()`).
+- Auth/seed: `auth.setup.js` onboards the first admin, seeds a stub provider key, a stub model and `E2E Test Profile`, and saves the session to `playwright/.auth/admin.json`; all specs reuse it via `storageState`.
+- Selectors: prefer roles/accessible names, then `data-testid`. Never select by Tailwind classes.
 - To add a test: create `tests/e2e/<feature>.spec.js`, import `{ test, expect }` from `@playwright/test`.
 
 ## Environment / secrets

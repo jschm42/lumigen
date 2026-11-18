@@ -8,9 +8,14 @@ import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Switch from '@/components/ui/Switch.vue'
 import Card from '@/components/ui/Card.vue'
+import Select from '@/components/ui/Select.vue'
+import Badge from '@/components/ui/Badge.vue'
+import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import type { DiscoveredUpscaleModel, UpscaleModel } from '@/types'
+import { useConfirm } from '@/composables/useConfirm'
 
 const adminStore = useAdminStore()
+const confirm = useConfirm()
 const toastStore = useToastStore()
 
 const isEditorOpen = ref(false)
@@ -28,6 +33,24 @@ const editingModel = ref<Partial<UpscaleModel>>({
 })
 
 const upscaleFactorInput = ref<number>(2)
+
+const UPSCALE_FACTORS = [
+  { value: 2, label: '2x Resolution' },
+  { value: 4, label: '4x Resolution' },
+]
+
+const columns: DataTableColumn[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'model_identifier', label: 'FAL Model Identifier' },
+  { key: 'is_enabled', label: 'Enabled' },
+  { key: 'is_default', label: 'Default' },
+  { key: 'actions', label: 'Actions', align: 'right' },
+]
+
+const presetOptions = computed(() => [
+  { value: 'custom', label: 'Custom / Manual Input' },
+  ...discoveredModels.value.map((m) => ({ value: m.endpoint_id, label: `${m.name} (${m.endpoint_id})` })),
+])
 
 const falStatus = computed(() => {
   return adminStore.providerStatuses.find((p) => p.provider === 'fal')
@@ -62,7 +85,8 @@ function openEdit(model: UpscaleModel) {
   isEditorOpen.value = true
 }
 
-function onPresetChange() {
+function onPresetChange(value: string | number) {
+  selectedPreset.value = String(value)
   if (selectedPreset.value === 'custom') {
     return
   }
@@ -120,9 +144,12 @@ async function handleToggle(id: number) {
 }
 
 async function handleDelete(id: number) {
-  if (confirm('Are you sure you want to delete this upscale model configuration?')) {
-    await adminStore.deleteUpscaleModel(id)
-  }
+  const ok = await confirm({
+    title: 'Delete upscale model',
+    message: 'Are you sure you want to delete this upscale model configuration?',
+    confirmText: 'Delete',
+  })
+  if (ok) await adminStore.deleteUpscaleModel(id)
 }
 </script>
 
@@ -169,83 +196,39 @@ async function handleDelete(id: number) {
     </Card>
 
     <!-- Configured Upscale Models Table -->
-    <div class="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 overflow-hidden shadow-sm">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="border-b border-slate-200 dark:border-white/10 text-slate-500 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-950/40">
-            <th class="p-3.5">Name</th>
-            <th class="p-3.5">FAL Model Identifier</th>
-            <th class="p-3.5">Status</th>
-            <th class="p-3.5">Default</th>
-            <th class="p-3.5 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200/60 dark:divide-white/10">
-          <tr
-            v-for="model in adminStore.upscaleModels"
-            :key="model.id"
-            class="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors"
-          >
-            <td class="p-3.5 font-bold text-slate-900 dark:text-white">
-              {{ model.name }}
-            </td>
-            <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">
-              {{ model.model_identifier }}
-            </td>
-            <td class="p-3.5">
-              <button
-                type="button"
-                @click="model.id && handleToggle(model.id)"
-                class="px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors"
-                :class="model.is_enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'"
-              >
-                {{ model.is_enabled ? 'Active' : 'Disabled' }}
-              </button>
-            </td>
-            <td class="p-3.5">
-              <span v-if="model.is_default" class="px-2 py-0.5 rounded-full text-[10px] bg-sky-500 text-white font-bold">
-                Default
-              </span>
-              <button
-                v-else
-                type="button"
-                @click="model.id && handleSetDefault(model.id)"
-                class="text-[10px] text-slate-400 hover:text-sky-500 font-semibold"
-              >
-                Set Default
-              </button>
-            </td>
-            <td class="p-3.5 text-right space-x-2">
-              <button
-                type="button"
-                @click="openEdit(model)"
-                class="text-sky-500 hover:text-sky-400 font-semibold"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                @click="model.id && handleDelete(model.id)"
-                class="text-rose-500 hover:text-rose-400 font-semibold"
-              >
-                Delete
-              </button>
-            </td>
-          </tr>
+    <DataTable
+      :columns="columns"
+      :rows="adminStore.upscaleModels"
+      :row-key="(row) => row.id ?? row.model_identifier"
+      caption="Upscale model configurations"
+      empty-title="No upscale models configured yet"
+      empty-description="Click &quot;Add Upscale Model&quot; or pick a model from the FAL.ai catalog below."
+    >
+      <template #cell-name="{ row }">
+        <span class="font-bold text-slate-900 dark:text-white">{{ row.name }}</span>
+      </template>
+      <template #cell-model_identifier="{ row }">
+        <span class="font-mono">{{ row.model_identifier }}</span>
+      </template>
+      <template #cell-is_enabled="{ row }">
+        <Switch
+          :model-value="row.is_enabled"
+          :aria-label="`${row.is_enabled ? 'Disable' : 'Enable'} ${row.name}`"
+          @update:model-value="row.id && handleToggle(row.id)"
+        />
+      </template>
+      <template #cell-is_default="{ row }">
+        <Badge v-if="row.is_default" variant="sky" size="xs">Default</Badge>
+        <Button v-else variant="ghost" size="xs" @click="row.id && handleSetDefault(row.id)">Set default</Button>
+      </template>
+      <template #cell-actions="{ row }">
+        <div class="flex justify-end gap-1">
+          <Button variant="ghost" size="xs" @click="openEdit(row)">Edit</Button>
+          <Button variant="danger-ghost" size="xs" @click="row.id && handleDelete(row.id)">Delete</Button>
+        </div>
+      </template>
+    </DataTable>
 
-          <tr v-if="adminStore.upscaleModels.length === 0">
-            <td colspan="5" class="p-8 text-center text-slate-400">
-              <div class="space-y-2">
-                <p class="font-medium text-slate-600 dark:text-slate-300">No upscale models configured yet.</p>
-                <p class="text-[11px] text-slate-400">
-                  Click "+ Add Upscale Model" or pick a model from the FAL.ai catalog below.
-                </p>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
 
     <!-- Quick Add from Discovered Models -->
     <div v-if="discoveredModels.length > 0" class="p-4 rounded-2xl border border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-slate-900/70 space-y-3">
@@ -285,68 +268,31 @@ async function handleDelete(id: number) {
     <Modal :open="isEditorOpen" :title="editingModel.id ? 'Edit Upscale Model' : 'Add Upscale Model'" @update:open="isEditorOpen = $event" @close="isEditorOpen = false">
       <div class="space-y-4">
         <!-- Preset Selector -->
-        <div class="space-y-1">
-          <label class="block text-slate-700 dark:text-slate-300 font-semibold">Select Model Template</label>
-          <select
-            v-model="selectedPreset"
-            @change="onPresetChange"
-            class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-          >
-            <option value="custom">Custom / Manual Input</option>
-            <option
-              v-for="m in discoveredModels"
-              :key="m.endpoint_id"
-              :value="m.endpoint_id"
-            >
-              {{ m.name }} ({{ m.endpoint_id }})
-            </option>
-          </select>
-        </div>
+        <Select
+          label="Model Template"
+          :options="presetOptions"
+          :model-value="selectedPreset"
+          @update:model-value="onPresetChange"
+        />
 
         <!-- Name Input -->
-        <div class="space-y-1">
-          <label class="block text-slate-700 dark:text-slate-300 font-semibold">Display Name</label>
-          <Input
-            v-model="editingModel.name"
-            placeholder="e.g. Clarity Upscaler"
-          />
-        </div>
+        <Input v-model="editingModel.name" label="Display Name" placeholder="e.g. Clarity Upscaler" />
 
         <!-- Identifier Input -->
-        <div class="space-y-1">
-          <label class="block text-slate-700 dark:text-slate-300 font-semibold">FAL Model Identifier</label>
-          <Input
-            v-model="editingModel.model_identifier"
-            placeholder="e.g. fal-ai/clarity-upscaler"
-          />
-          <p class="text-[10px] text-slate-400">
-            The endpoint ID hosted on FAL.ai (e.g. <code>fal-ai/clarity-upscaler</code>, <code>fal-ai/esrgan</code>).
-          </p>
-        </div>
+        <Input
+          v-model="editingModel.model_identifier"
+          label="FAL Model Identifier"
+          placeholder="e.g. fal-ai/clarity-upscaler"
+          hint="The endpoint ID hosted on FAL.ai, e.g. fal-ai/clarity-upscaler or fal-ai/esrgan."
+        />
 
         <!-- Upscale Factor -->
-        <div class="space-y-1">
-          <label class="block text-slate-700 dark:text-slate-300 font-semibold">Upscale Factor</label>
-          <select
-            v-model="upscaleFactorInput"
-            class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
-          >
-            <option :value="2">2x Resolution</option>
-            <option :value="4">4x Resolution</option>
-          </select>
-        </div>
+        <Select v-model="upscaleFactorInput" label="Upscale Factor" :options="UPSCALE_FACTORS" />
 
         <!-- Switches -->
         <div class="pt-2 space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-700 dark:text-slate-300 font-semibold">Active / Enabled</span>
-            <Switch v-model="editingModel.is_enabled" />
-          </div>
-
-          <div class="flex items-center justify-between">
-            <span class="text-slate-700 dark:text-slate-300 font-semibold">Studio Default Model</span>
-            <Switch v-model="editingModel.is_default" />
-          </div>
+          <Switch v-model="editingModel.is_enabled" label="Active / Enabled" />
+          <Switch v-model="editingModel.is_default" label="Studio Default Model" />
         </div>
 
         <!-- Actions -->

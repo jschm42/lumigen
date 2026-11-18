@@ -6,6 +6,13 @@ import { useToastStore } from '@/stores/toast'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import Textarea from '@/components/ui/Textarea.vue'
+import Select from '@/components/ui/Select.vue'
+
+const LLM_OPTIONS = [
+  { value: 'gemini-2.5-flash', label: 'Google Gemini 2.5 Flash' },
+  { value: 'openai/gpt-4o-mini', label: 'OpenAI GPT-4o Mini' },
+  { value: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku' },
+]
 
 interface Props {
   open: boolean
@@ -58,17 +65,7 @@ function applyEnhanced() {
   <Modal :open="open" title="Magic Prompt Enhancement" size="lg" @update:open="emit('update:open', $event)">
     <div class="space-y-4 text-xs">
       <!-- LLM Model Selection -->
-      <div class="flex items-center justify-between">
-        <span class="text-slate-600 dark:text-slate-400 font-medium">AI model for prompt enhancement:</span>
-        <select
-          v-model="selectedLlm"
-          class="rounded-xl border border-slate-300/80 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
-        >
-          <option value="gemini-2.5-flash">Google Gemini 2.5 Flash</option>
-          <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
-          <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
-        </select>
-      </div>
+      <Select v-model="selectedLlm" label="AI model for prompt enhancement" :options="LLM_OPTIONS" size="sm" />
 
       <!-- Original Prompt Preview -->
       <div class="space-y-1">

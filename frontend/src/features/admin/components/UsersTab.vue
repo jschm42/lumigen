@@ -9,7 +9,24 @@ import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Switch from '@/components/ui/Switch.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import Select from '@/components/ui/Select.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Avatar from '@/components/ui/Avatar.vue'
+import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import type { User } from '@/types'
+
+const ROLE_OPTIONS = [
+  { value: 'user', label: 'User (Standard)' },
+  { value: 'admin', label: 'Administrator' },
+]
+
+const columns: DataTableColumn[] = [
+  { key: 'user', label: 'User' },
+  { key: 'role', label: 'Role' },
+  { key: 'status', label: 'Status' },
+  { key: 'last_login', label: 'Last login' },
+  { key: 'actions', label: 'Actions', align: 'right' },
+]
 
 type Role = 'admin' | 'user'
 
@@ -217,12 +234,7 @@ async function confirmDelete() {
       </div>
 
       <div class="flex items-center gap-2">
-        <input
-          v-model="search"
-          type="search"
-          placeholder="Search users..."
-          class="w-48 rounded-xl border border-slate-300/80 bg-white/70 px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200"
-        />
+        <Input v-model="search" type="search" size="sm" class="w-48" placeholder="Search users..." aria-label="Search users" />
         <Button variant="primary" size="sm" @click="openCreate" data-testid="add-user">
           <template #icon>+</template>
           Add User
@@ -230,93 +242,67 @@ async function confirmDelete() {
       </div>
     </div>
 
-    <div class="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
-      <table class="w-full min-w-[720px] border-collapse text-left">
-        <thead>
-          <tr class="border-b border-slate-200 bg-slate-50/50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-white/10 dark:bg-slate-950/40">
-            <th class="p-3">User</th>
-            <th class="p-3">Role</th>
-            <th class="p-3">Status</th>
-            <th class="p-3">Last login</th>
-            <th class="p-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200/60 dark:divide-white/10">
-          <tr
-            v-for="u in filteredUsers"
-            :key="u.id"
-            :class="['transition-colors hover:bg-slate-50/50 dark:hover:bg-white/5', u.is_active === false ? 'opacity-60' : '']"
+    <DataTable
+      :columns="columns"
+      :rows="filteredUsers"
+      row-key="id"
+      caption="User accounts"
+      empty-title="No users found"
+      empty-description="Try a different search term."
+    >
+      <template #cell-user="{ row }">
+        <div :class="['flex items-center gap-2.5', row.is_active === false ? 'opacity-60' : '']">
+          <Avatar :initials="(row.display_name || row.username).charAt(0).toUpperCase()" />
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+              <span class="truncate">{{ row.display_name || row.username }}</span>
+              <Badge v-if="isSelf(row)" variant="sky" size="xs">You</Badge>
+            </div>
+            <div class="truncate text-2xs text-slate-500 dark:text-slate-400">
+              @{{ row.username }}<span v-if="row.email"> · {{ row.email }}</span>
+              <span v-else class="italic text-amber-600 dark:text-amber-400"> · no e-mail</span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #cell-role="{ row }">
+        <Badge :variant="row.role === 'admin' ? 'sky' : 'slate'" size="xs" class="uppercase">{{ row.role }}</Badge>
+      </template>
+      <template #cell-status="{ row }">
+        <Badge :variant="row.is_active === false ? 'slate' : 'emerald'" size="xs" dot>
+          {{ row.is_active === false ? 'Inactive' : 'Active' }}
+        </Badge>
+      </template>
+      <template #cell-last_login="{ row }">
+        <span class="text-slate-500 dark:text-slate-400">{{ formatDate(row.last_login_at) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <div class="flex flex-wrap items-center justify-end gap-1">
+          <Button variant="ghost" size="xs" @click="openEdit(row)">Edit</Button>
+          <Button variant="ghost" size="xs" @click="openPassword(row)">Set password</Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            :loading="creatingLinkFor === row.id"
+            :disabled="row.is_active === false"
+            @click="createResetLink(row)"
           >
-            <td class="p-3">
-              <div class="flex items-center gap-2.5">
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 text-[11px] font-bold text-white">
-                  {{ (u.display_name || u.username).charAt(0).toUpperCase() }}
-                </span>
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                    <span class="truncate">{{ u.display_name || u.username }}</span>
-                    <span v-if="isSelf(u)" class="rounded bg-sky-500/15 px-1 text-[9px] font-bold text-sky-600 dark:text-sky-300">YOU</span>
-                  </div>
-                  <div class="truncate text-[11px] text-slate-500">
-                    @{{ u.username }}<span v-if="u.email"> · {{ u.email }}</span>
-                    <span v-else class="italic text-amber-600 dark:text-amber-400"> · no e-mail</span>
-                  </div>
-                </div>
-              </div>
-            </td>
-            <td class="p-3">
-              <span
-                :class="[
-                  'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
-                  u.role === 'admin'
-                    ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
-                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-                ]"
-              >
-                {{ u.role }}
-              </span>
-            </td>
-            <td class="p-3">
-              <span :class="['inline-flex items-center gap-1.5 text-[11px] font-medium', u.is_active === false ? 'text-slate-400' : 'text-emerald-600 dark:text-emerald-400']">
-                <span :class="['h-1.5 w-1.5 rounded-full', u.is_active === false ? 'bg-slate-400' : 'bg-emerald-500']" />
-                {{ u.is_active === false ? 'Inactive' : 'Active' }}
-              </span>
-            </td>
-            <td class="p-3 text-[11px] text-slate-500">{{ formatDate(u.last_login_at) }}</td>
-            <td class="p-3">
-              <div class="flex flex-wrap items-center justify-end gap-1">
-                <Button variant="ghost" size="xs" @click="openEdit(u)">Edit</Button>
-                <Button variant="ghost" size="xs" @click="openPassword(u)">Set password</Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  :loading="creatingLinkFor === u.id"
-                  :disabled="u.is_active === false"
-                  @click="createResetLink(u)"
-                >
-                  Reset link
-                </Button>
-                <Button v-if="!isSelf(u)" variant="ghost" size="xs" @click="toggleActive(u)">
-                  {{ u.is_active === false ? 'Activate' : 'Deactivate' }}
-                </Button>
-                <Button
-                  v-if="!isSelf(u)"
-                  variant="ghost"
-                  size="xs"
-                  class="text-rose-500 hover:text-rose-600"
-                  @click="deleteTarget = u"
-                >
-                  Delete
-                </Button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="filteredUsers.length === 0">
-            <td colspan="5" class="p-6 text-center text-slate-400">No users found.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            Reset link
+          </Button>
+          <Button v-if="!isSelf(row)" variant="ghost" size="xs" @click="toggleActive(row)">
+            {{ row.is_active === false ? 'Activate' : 'Deactivate' }}
+          </Button>
+          <Button
+            v-if="!isSelf(row)"
+            variant="danger-ghost"
+            size="xs"
+            @click="deleteTarget = row"
+          >
+            Delete
+          </Button>
+        </div>
+      </template>
+    </DataTable>
 
     <!-- Create / Edit Modal -->
     <Modal
@@ -337,17 +323,12 @@ async function confirmDelete() {
           :placeholder="`Min. ${authStore.passwordMinLength} characters`"
           v-model="formPassword"
         />
-        <div>
-          <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Role</label>
-          <select
-            v-model="formRole"
-            :disabled="!!editingUser && isSelf(editingUser)"
-            class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs text-slate-900 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="user">User (Standard)</option>
-            <option value="admin">Administrator</option>
-          </select>
-        </div>
+        <Select
+          v-model="formRole"
+          label="Role"
+          :options="ROLE_OPTIONS"
+          :disabled="!!editingUser && isSelf(editingUser)"
+        />
         <Switch
           v-if="!editingUser || !isSelf(editingUser)"
           v-model="formActive"
@@ -381,7 +362,7 @@ async function confirmDelete() {
           v-model="passwordValue"
           autofocus
         />
-        <p class="text-[11px] text-slate-500">All active sessions of this user will be signed out.</p>
+        <p class="text-2xs text-slate-500 dark:text-slate-400">All active sessions of this user will be signed out.</p>
         <p v-if="passwordError" class="text-xs font-medium text-rose-500">{{ passwordError }}</p>
       </form>
       <template #footer>
@@ -403,10 +384,12 @@ async function confirmDelete() {
           It expires {{ formatDate(resetLink.expiresAt) }}. Creating a new link invalidates older ones.
         </p>
         <div class="flex items-center gap-2">
-          <input
-            :value="resetLink.url"
+          <Input
+            :model-value="resetLink.url"
             readonly
-            class="flex-1 rounded-xl border border-slate-300/80 bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-800 dark:border-white/10 dark:bg-slate-950 dark:text-slate-200"
+            size="sm"
+            class="flex-1"
+            aria-label="Password reset link"
             @focus="($event.target as HTMLInputElement).select()"
           />
           <Button variant="primary" size="sm" @click="copyResetLink">Copy</Button>

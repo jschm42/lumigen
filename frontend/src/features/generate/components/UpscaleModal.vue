@@ -4,6 +4,7 @@ import { generationApi } from '@/api/generation'
 import { useToastStore } from '@/stores/toast'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
+import Select from '@/components/ui/Select.vue'
 import type { Asset } from '@/types'
 
 interface Props {
@@ -31,6 +32,15 @@ interface UpscaleModelOption {
 
 const mode = ref<'standard' | 'custom'>('standard')
 const selectedModelId = ref<number | null>(null)
+
+const upscaleModelOptions = computed(() =>
+  enabledDbModels.value
+    .filter((m) => m.id != null)
+    .map((m) => {
+      const name = m.name || m.model_identifier || `Model ${m.id}`
+      return { value: m.id as number, label: m.is_default ? `${name} (Default)` : name }
+    }),
+)
 const availableModels = ref<UpscaleModelOption[]>([])
 const isLoadingModels = ref(false)
 const isSubmitting = ref(false)
@@ -198,18 +208,12 @@ async function handleSubmit() {
 
             <!-- Dropdown shown when Custom is active -->
             <div v-if="mode === 'custom'" class="pt-1">
-              <select
+              <Select
                 v-model="selectedModelId"
-                class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/15 dark:bg-slate-950 dark:text-slate-200"
-              >
-                <option
-                  v-for="m in enabledDbModels"
-                  :key="m.id"
-                  :value="m.id"
-                >
-                  {{ m.name }} {{ m.is_default ? '(Default)' : '' }}
-                </option>
-              </select>
+                :options="upscaleModelOptions"
+                size="sm"
+                aria-label="Upscale model"
+              />
             </div>
           </div>
         </label>

@@ -18,6 +18,7 @@ const galleryStore = useGalleryStore()
 const generateStore = useGenerateStore()
 const toastStore = useToastStore()
 const imageViewerStore = useImageViewerStore()
+const modalRef = ref<InstanceType<typeof Modal> | null>(null)
 
 const stackItems = computed<Asset[]>(() => {
   if (!galleryStore.activeAsset?.stack_id) return []
@@ -183,7 +184,8 @@ const hasNext = computed(
 )
 
 function handleDetailKeydown(e: KeyboardEvent) {
-  if (!galleryStore.isDetailModalOpen || imageViewerStore.isOpen) return
+  // Only react while this modal is the top-most overlay (not under the viewer or a dialog).
+  if (!galleryStore.isDetailModalOpen || !modalRef.value?.isTopmost()) return
   const target = e.target as HTMLElement | null
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
   if (e.key === 'ArrowLeft' && hasPrev.value) {
@@ -203,6 +205,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleDetailKeydown))
 
 <template>
   <Modal
+    ref="modalRef"
     :open="galleryStore.isDetailModalOpen"
     size="2xl"
     @update:open="galleryStore.closeDetailModal"

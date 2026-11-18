@@ -5,6 +5,7 @@ import { useToastStore } from '@/stores/toast'
 import { downloadFile } from '@/utils/download'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
+import { Archive, FileJson, FolderArchive, Upload } from 'lucide-vue-next'
 
 const toastStore = useToastStore()
 const importFileInput = ref<HTMLInputElement | null>(null)
@@ -47,29 +48,18 @@ async function handleFileSelect(e: Event) {
         </p>
 
         <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            @click="downloadFile('/api/admin/export/all', 'lumigen_backup.json')"
-            class="px-4 py-2 rounded-xl bg-sky-500 text-white hover:bg-sky-600 font-semibold shadow-sm inline-flex items-center gap-2 transition-colors"
-          >
-            <span>📦</span> Full Export
-          </button>
-
-          <button
-            type="button"
-            @click="downloadFile('/api/admin/export/styles-zip', 'lumigen_styles.zip')"
-            class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-2 transition-colors"
-          >
-            <span>🎨</span> Styles as ZIP
-          </button>
-
-          <button
-            type="button"
-            @click="downloadFile('/api/admin/export/styles', 'lumigen_styles.json')"
-            class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 font-semibold inline-flex items-center gap-2 transition-colors"
-          >
-            <span>📄</span> Styles as JSON
-          </button>
+          <Button variant="primary" @click="downloadFile('/api/admin/export/all', 'lumigen_backup.json')">
+            <template #icon><Archive class="size-4" aria-hidden="true" /></template>
+            Full Export
+          </Button>
+          <Button variant="secondary" @click="downloadFile('/api/admin/export/styles-zip', 'lumigen_styles.zip')">
+            <template #icon><FolderArchive class="size-4" aria-hidden="true" /></template>
+            Styles as ZIP
+          </Button>
+          <Button variant="secondary" @click="downloadFile('/api/admin/export/styles', 'lumigen_styles.json')">
+            <template #icon><FileJson class="size-4" aria-hidden="true" /></template>
+            Styles as JSON
+          </Button>
         </div>
       </Card>
 
@@ -94,7 +84,8 @@ async function handleFileSelect(e: Event) {
           :loading="isImporting"
           @click="importFileInput?.click()"
         >
-          <span>📥</span> Select & import backup file
+          <template #icon><Upload class="size-4" aria-hidden="true" /></template>
+          Select &amp; import backup file
         </Button>
       </Card>
     </div>

@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useQueueStore } from '@/stores/queue'
 import { useImageViewerStore } from '@/stores/imageViewer'
 import Spinner from '@/components/ui/Spinner.vue'
 import Badge from '@/components/ui/Badge.vue'
 import type { Generation } from '@/types'
+import { Inbox, RefreshCw } from 'lucide-vue-next'
+import Drawer from '@/components/ui/Drawer.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import Button from '@/components/ui/Button.vue'
+import Tabs from '@/components/ui/Tabs.vue'
 
 const queueStore = useQueueStore()
 const imageViewerStore = useImageViewerStore()
@@ -18,11 +24,10 @@ const displayList = computed(() => {
   return queueStore.recentJobs
 })
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && queueStore.isOpen) {
-    queueStore.closeQueue()
-  }
-}
+const tabs = computed(() => [
+  { id: 'active', label: 'Active Jobs', badge: queueStore.activeJobs.length },
+  { id: 'recent', label: 'History', badge: queueStore.recentJobs.length },
+])
 
 function formatTime(isoString?: string | null) {
   if (!isoString) return ''
@@ -48,162 +53,52 @@ function viewAsset(gen: Generation) {
 watch(
   () => queueStore.isOpen,
   (open) => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-      // Default to active tab if there are active jobs, otherwise show recent
-      if (queueStore.totalActive > 0) {
-        activeTab.value = 'active'
-      }
-    } else {
-      document.body.style.overflow = ''
+    // Default to active tab if there are active jobs, otherwise show recent
+    if (open && queueStore.totalActive > 0) {
+      activeTab.value = 'active'
     }
   }
 )
-
-onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown)
-  document.body.style.overflow = ''
-})
 </script>
 
 <template>
-  <Teleport to="body">
-    <!-- Backdrop -->
-    <Transition
-      enter-active-class="transition-opacity duration-200 ease-out"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition-opacity duration-150 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="queueStore.isOpen"
-        class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm"
-        @click="queueStore.closeQueue"
-      />
-    </Transition>
-
-    <!-- Slide-over Drawer (From Left) -->
-    <Transition
-      enter-active-class="transition-transform duration-300 ease-out"
-      enter-from-class="-translate-x-full"
-      enter-to-class="translate-x-0"
-      leave-active-class="transition-transform duration-200 ease-in"
-      leave-from-class="translate-x-0"
-      leave-to-class="-translate-x-full"
-    >
-      <aside
-        v-if="queueStore.isOpen"
-        class="fixed inset-y-0 left-0 z-50 flex w-full max-w-md sm:max-w-lg flex-col bg-white text-slate-900 shadow-2xl dark:bg-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-white/10 select-none overflow-hidden"
-      >
-        <!-- Drawer Header -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-950/50 shrink-0">
-          <div class="flex items-center gap-2.5">
-            <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:bg-sky-400/20 dark:text-sky-300 text-base">
-              ⏳
-            </span>
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
-                  Generation Queue
-                </h3>
-                <span
-                  v-if="queueStore.totalActive > 0"
-                  class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-500 text-white shadow-sm"
-                >
-                  {{ queueStore.totalActive }} active
-                </span>
-              </div>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                Progress & Job Management
-              </p>
-            </div>
+  <Drawer
+    :open="queueStore.isOpen"
+    side="left"
+    size="lg"
+    class="select-none"
+    @update:open="(open: boolean) => { if (!open) queueStore.closeQueue() }"
+  >
+    <template #header>
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">Generation queue</h2>
+            <Badge v-if="queueStore.totalActive > 0" variant="sky" size="xs">{{ queueStore.totalActive }} active</Badge>
           </div>
-
-          <div class="flex items-center gap-1.5">
-            <button
-              type="button"
-              @click="queueStore.fetchQueue"
-              class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-              title="Refresh"
-            >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              @click="queueStore.closeQueue"
-              class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-              title="Close (Esc)"
-            >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          <p class="text-2xs text-slate-500 dark:text-slate-400">Progress &amp; job management</p>
         </div>
+        <IconButton label="Refresh queue" @click="queueStore.fetchQueue">
+          <RefreshCw class="size-4" aria-hidden="true" />
+        </IconButton>
+      </div>
+    </template>
 
-        <!-- Navigation Tabs -->
-        <div class="flex border-b border-slate-200 dark:border-white/10 px-5 pt-2 bg-slate-50/50 dark:bg-slate-950/30 shrink-0">
-          <button
-            type="button"
-            @click="activeTab = 'active'"
-            :class="[
-              'flex items-center gap-2 px-3 py-2 border-b-2 text-xs font-semibold transition-all -mb-[1px]',
-              activeTab === 'active'
-                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
-            ]"
-          >
-            <span>Active Jobs</span>
-            <span
-              :class="[
-                'px-1.5 py-0.2 rounded-full text-[10px] font-mono leading-none',
-                activeTab === 'active' ? 'bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
-              ]"
-            >
-              {{ queueStore.activeJobs.length }}
-            </span>
-          </button>
+    <template #toolbar>
+      <div class="shrink-0 bg-slate-50/50 px-5 pt-3 dark:bg-slate-950/30">
+        <Tabs :tabs="tabs" :model-value="activeTab" variant="underline" @update:model-value="activeTab = $event as 'active' | 'recent'" />
+      </div>
+    </template>
 
-          <button
-            type="button"
-            @click="activeTab = 'recent'"
-            :class="[
-              'flex items-center gap-2 px-3 py-2 border-b-2 text-xs font-semibold transition-all -mb-[1px]',
-              activeTab === 'recent'
-                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
-            ]"
-          >
-            <span>History</span>
-            <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono leading-none bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-              {{ queueStore.recentJobs.length }}
-            </span>
-          </button>
-        </div>
+    <div class="space-y-3 p-4">
 
-        <!-- Drawer Content List -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-3">
           <!-- Empty State -->
-          <div
+          <EmptyState
             v-if="displayList.length === 0"
-            class="flex flex-col items-center justify-center py-16 text-center text-slate-500 dark:text-slate-400 px-4"
-          >
-            <span class="text-3xl mb-2">📥</span>
-            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              {{ activeTab === 'active' ? 'No active generations' : 'No recent jobs' }}
-            </p>
-            <p class="text-xs mt-1 max-w-xs">
-              {{ activeTab === 'active' ? 'Start one or more generations in the prompt editor to track them here.' : 'Completed or failed generations will appear here.' }}
-            </p>
-          </div>
+            :icon="Inbox"
+            :title="activeTab === 'active' ? 'No active generations' : 'No recent jobs'"
+            :description="activeTab === 'active' ? 'Start one or more generations in the prompt editor to track them here.' : 'Completed or failed generations will appear here.'"
+          />
 
           <!-- Job Cards -->
           <div
@@ -349,20 +244,13 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-        </div>
+    </div>
 
-        <!-- Footer -->
-        <div class="px-5 py-3 border-t border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-slate-950/40 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
-          <span>Backend-driven pipeline</span>
-          <button
-            type="button"
-            @click="queueStore.closeQueue"
-            class="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:underline"
-          >
-            Close
-          </button>
-        </div>
-      </aside>
-    </Transition>
-  </Teleport>
+    <template #footer>
+      <div class="flex items-center justify-between text-2xs text-slate-500 dark:text-slate-400">
+        <span>Backend-driven pipeline</span>
+        <Button variant="ghost" size="xs" @click="queueStore.closeQueue">Close</Button>
+      </div>
+    </template>
+  </Drawer>
 </template>

@@ -4,9 +4,9 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Playwright end-to-end test configuration.
  *
- * The webServer block starts the Lumigen development server against an
- * isolated SQLite database in /tmp so that tests never touch your real
- * data directory.
+ * The webServer block starts Lumigen (scripts/e2e_server.py) against a
+ * freshly wiped SQLite database in the OS temp dir so that tests never touch
+ * your real data directory. Build the Vue SPA first: npm run build:frontend
  *
  * Run all e2e tests:
  *   npx playwright test
@@ -31,8 +31,8 @@ export default defineConfig({
   /* Re-run failing tests once before reporting them as failures */
   retries: process.env.CI ? 1 : 0,
 
-  /* Limit parallelism in CI to save resources */
-  workers: process.env.CI ? 1 : undefined,
+  /* All specs share one seeded database, so run them in a single worker. */
+  workers: 1,
 
   /* Reporter: list for local dev, HTML report in CI */
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
@@ -64,18 +64,13 @@ export default defineConfig({
     },
   ],
 
-  /* Start the Lumigen server against an isolated test database */
+  /* Start Lumigen against a freshly wiped, isolated data directory.
+     Requires the SPA build in app/web/dist (npm run build:frontend). */
   webServer: {
-    command: `python -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_PORT}`,
+    command: `python scripts/e2e_server.py --port ${E2E_PORT}`,
     url: `${BASE_URL}/login`,
-    reuseExistingServer: !process.env.CI,
-    /* Isolated data directory – separate from your real data/ folder */
-    env: {
-      DATA_DIR: "/tmp/lumigen-e2e",
-      DEFAULT_BASE_DIR: "/tmp/lumigen-e2e/images",
-      SQLITE_PATH: "/tmp/lumigen-e2e/test.db",
-      SESSION_HTTPS_ONLY: "false",
-      SESSION_SECRET_KEY: "e2e-test-secret-key-not-for-production",
-    },
+    /* Never reuse a running server: every run must start from an empty database. */
+    reuseExistingServer: false,
+    timeout: 60_000,
   },
 });

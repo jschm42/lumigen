@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useGenerateStore, DIMENSION_PRESETS } from '@/stores/generate'
+import { Dices, X } from 'lucide-vue-next'
 import Button from '@/components/ui/Button.vue'
+import FormField from '@/components/ui/FormField.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
 import PromptEnhanceModal from './PromptEnhanceModal.vue'
 import StylePickerModal from './StylePickerModal.vue'
 import GalleryImagePickerModal from './GalleryImagePickerModal.vue'
@@ -208,10 +213,12 @@ function handleKeydown(e: KeyboardEvent) {
         <span>Agentic Mode:</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Reasoning Model:</label>
-        <select
+        <span class="text-2xs font-medium text-slate-600 dark:text-slate-300" aria-hidden="true">Reasoning Model:</span>
+        <Select
           v-model="generateStore.agenticLlmModel"
-          class="rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-xs text-slate-800 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200 max-w-[210px] truncate"
+          size="sm"
+          class="max-w-[210px]"
+          aria-label="Reasoning model"
           title="Choose the LLM model used for planning and decomposing the image set"
         >
           <option value="">
@@ -224,7 +231,7 @@ function handleKeydown(e: KeyboardEvent) {
           >
             {{ m.name }}{{ m.is_default ? ' ★' : '' }}
           </option>
-        </select>
+        </Select>
       </div>
       <div class="flex items-center gap-1.5">
         <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Min (optional):</label>
@@ -446,214 +453,106 @@ function handleKeydown(e: KeyboardEvent) {
       class="mt-3.5 rounded-xl border border-slate-200/80 bg-slate-100/80 p-3.5 dark:border-white/10 dark:bg-slate-950/60 space-y-3"
     >
       <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-white/10 pb-1.5">
-        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+        <span class="text-2xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
           Advanced Override Options
         </span>
-        <button
-          type="button"
-          @click="generateStore.isAdvancedOpen = false"
-          class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs"
-        >
-          Close ✕
-        </button>
+        <IconButton label="Close advanced options" size="xs" @click="generateStore.isAdvancedOpen = false">
+          <X class="size-3.5" aria-hidden="true" />
+        </IconButton>
       </div>
 
       <!-- Controls Grid -->
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
         <!-- 1. Dimension Preset -->
-        <div>
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Preset
-          </label>
-          <select
-            :value="generateStore.dimensionPreset"
-            @change="generateStore.onDimensionPresetChange(($event.target as HTMLSelectElement).value)"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option v-for="p in DIMENSION_PRESETS" :key="p.value" :value="p.value">
-              {{ p.label }}
-            </option>
-          </select>
-        </div>
+        <Select
+          label="Preset"
+          size="sm"
+          :options="DIMENSION_PRESETS"
+          :model-value="generateStore.dimensionPreset"
+          @update:model-value="generateStore.onDimensionPresetChange(String($event))"
+        />
 
         <!-- 2. Provider-specific Ratio / Custom Width -->
-        <div v-if="activeProvider === 'openrouter'">
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Ratio (OpenRouter)
-          </label>
-          <select
-            v-model="generateStore.openRouterAspectRatio"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option value="">From profile</option>
-            <option v-for="r in openRouterRatios.slice(1)" :key="r" :value="r">{{ r }}</option>
-          </select>
-        </div>
-
-        <div v-else-if="activeProvider === 'fal'">
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Ratio (FAL.ai)
-          </label>
-          <select
-            v-model="generateStore.falAspectRatio"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option value="">From profile</option>
-            <option v-for="r in falRatios.slice(1)" :key="r" :value="r">{{ r }}</option>
-          </select>
-        </div>
-
-        <div v-else-if="activeProvider === 'google'">
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Ratio (Google)
-          </label>
-          <select
-            v-model="generateStore.googleAspectRatio"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option value="">From profile</option>
-            <option v-for="r in googleRatios.slice(1)" :key="r" :value="r">{{ r }}</option>
-          </select>
-        </div>
-
-        <div v-else>
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Width (px)
-          </label>
-          <input
-            type="number"
-            step="64"
-            v-model="generateStore.customWidth"
-            placeholder="e.g. 1024"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          />
-        </div>
+        <Select v-if="activeProvider === 'openrouter'" v-model="generateStore.openRouterAspectRatio" label="Ratio (OpenRouter)" size="sm">
+          <option value="">From profile</option>
+          <option v-for="r in openRouterRatios.slice(1)" :key="r" :value="r">{{ r }}</option>
+        </Select>
+        <Select v-else-if="activeProvider === 'fal'" v-model="generateStore.falAspectRatio" label="Ratio (FAL.ai)" size="sm">
+          <option value="">From profile</option>
+          <option v-for="r in falRatios.slice(1)" :key="r" :value="r">{{ r }}</option>
+        </Select>
+        <Select v-else-if="activeProvider === 'google'" v-model="generateStore.googleAspectRatio" label="Ratio (Google)" size="sm">
+          <option value="">From profile</option>
+          <option v-for="r in googleRatios.slice(1)" :key="r" :value="r">{{ r }}</option>
+        </Select>
+        <Input
+          v-else
+          v-model="generateStore.customWidth"
+          label="Width (px)"
+          size="sm"
+          type="number"
+          step="64"
+          placeholder="e.g. 1024"
+        />
 
         <!-- 3. Provider-specific Resolution / Custom Height -->
-        <div v-if="activeProvider === 'openrouter'">
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Size (OpenRouter)
-          </label>
-          <select
-            v-model="generateStore.openRouterImageSize"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option value="">From profile</option>
-            <option v-for="s in openRouterSizes.slice(1)" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </div>
-
-        <div v-else-if="activeProvider === 'fal'">
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Resolution (FAL)
-          </label>
-          <select
-            v-model="generateStore.falResolution"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option value="">From profile</option>
-            <option v-for="res in falResolutions.slice(1)" :key="res" :value="res">{{ res }}</option>
-          </select>
-        </div>
-
-        <div v-else-if="activeProvider === 'google'">
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Resolution (Google)
-          </label>
-          <select
-            v-model="generateStore.googleResolution"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option value="">From profile</option>
-            <option v-for="res in googleResolutions.slice(1)" :key="res" :value="res">{{ res }}</option>
-          </select>
-        </div>
-
-        <div v-else>
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Height (px)
-          </label>
-          <input
-            type="number"
-            step="64"
-            v-model="generateStore.customHeight"
-            placeholder="e.g. 1024"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          />
-        </div>
+        <Select v-if="activeProvider === 'openrouter'" v-model="generateStore.openRouterImageSize" label="Size (OpenRouter)" size="sm">
+          <option value="">From profile</option>
+          <option v-for="sz in openRouterSizes.slice(1)" :key="sz" :value="sz">{{ sz }}</option>
+        </Select>
+        <Select v-else-if="activeProvider === 'fal'" v-model="generateStore.falResolution" label="Resolution (FAL)" size="sm">
+          <option value="">From profile</option>
+          <option v-for="res in falResolutions.slice(1)" :key="res" :value="res">{{ res }}</option>
+        </Select>
+        <Select v-else-if="activeProvider === 'google'" v-model="generateStore.googleResolution" label="Resolution (Google)" size="sm">
+          <option value="">From profile</option>
+          <option v-for="res in googleResolutions.slice(1)" :key="res" :value="res">{{ res }}</option>
+        </Select>
+        <Input
+          v-else
+          v-model="generateStore.customHeight"
+          label="Height (px)"
+          size="sm"
+          type="number"
+          step="64"
+          placeholder="e.g. 1024"
+        />
 
         <!-- 4. Number of Images (n_images) -->
-        <div>
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Images (1-8)
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="8"
-            v-model.number="generateStore.nImages"
-            placeholder="From profile"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          />
-        </div>
+        <Input
+          v-model.number="generateStore.nImages"
+          label="Images (1-8)"
+          size="sm"
+          type="number"
+          min="1"
+          max="8"
+          placeholder="From profile"
+        />
 
         <!-- 5. Seed with Random Dice & Clear -->
-        <div>
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Seed
-          </label>
-          <div class="flex items-center gap-1">
-            <input
-              type="text"
-              v-model="generateStore.seed"
-              placeholder="Random"
-              class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-            />
-            <button
-              type="button"
-              @click="randomizeSeed"
-              class="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 dark:border-white/10 dark:bg-slate-800 text-xs shrink-0"
-              title="Generate random seed"
-            >
-              🎲
-            </button>
-            <button
-              v-if="generateStore.seed"
-              type="button"
-              @click="clearSeed"
-              class="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 dark:border-white/10 dark:bg-slate-800 text-xs shrink-0"
-              title="Clear seed"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
+        <FormField label="Seed">
+          <template #default="{ id }">
+            <div class="flex items-center gap-1">
+              <Input :id="id" v-model="generateStore.seed" size="sm" class="min-w-0 flex-1" placeholder="Random" />
+              <IconButton label="Generate random seed" variant="surface" size="sm" @click="randomizeSeed">
+                <Dices class="size-3.5" aria-hidden="true" />
+              </IconButton>
+              <IconButton v-if="generateStore.seed" label="Clear seed" variant="surface" size="sm" @click="clearSeed">
+                <X class="size-3.5" aria-hidden="true" />
+              </IconButton>
+            </div>
+          </template>
+        </FormField>
 
         <!-- 6. Upscale Mode Override -->
-        <div>
-          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            Upscaling
-          </label>
-          <select
-            v-model="generateStore.upscaleModel"
-            class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <option
-              v-for="opt in generateStore.availableUpscaleModels"
-              :key="opt.value"
-              :value="opt.value"
-            >
-              {{ opt.label }}
-            </option>
-            <option
-              v-if="customUpscaleOption"
-              :value="customUpscaleOption.value"
-            >
-              {{ customUpscaleOption.label }}
-            </option>
-          </select>
-
-        </div>
+        <Select v-model="generateStore.upscaleModel" label="Upscaling" size="sm">
+          <option v-for="opt in generateStore.availableUpscaleModels" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+          <option v-if="customUpscaleOption" :value="customUpscaleOption.value">
+            {{ customUpscaleOption.label }}
+          </option>
+        </Select>
       </div>
     </div>
 

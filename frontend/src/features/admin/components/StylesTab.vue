@@ -9,9 +9,12 @@ import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
+import Select from '@/components/ui/Select.vue'
 import type { StylePreset } from '@/types'
+import { useConfirm } from '@/composables/useConfirm'
 
 const adminStore = useAdminStore()
+const confirm = useConfirm()
 const toastStore = useToastStore()
 
 const isEditorOpen = ref(false)
@@ -55,7 +58,12 @@ onMounted(async () => {
   }
 })
 
-async function handleModelChange() {
+const previewModelOptions = computed(() =>
+  adminStore.modelConfigs.map((m) => ({ value: m.id, label: `${m.name} (${m.provider})` })),
+)
+
+async function handleModelChange(value: string | number) {
+  previewModelId.value = Number(value)
   if (!previewModelId.value) return
   try {
     const res = await adminApi.updateStylePreviewSettings(previewModelId.value)
@@ -121,9 +129,13 @@ async function handleSave() {
 }
 
 async function handleRestoreDefaults() {
-  if (!confirm('Do you want to restore the default styles? Existing default styles will be updated to their default values.')) {
-    return
-  }
+  const ok = await confirm({
+    title: 'Restore default styles',
+    message: 'Do you want to restore the default styles? Existing default styles will be updated to their default values.',
+    confirmText: 'Restore',
+    variant: 'primary',
+  })
+  if (!ok) return
   isRestoring.value = true
   try {
     await adminStore.restoreDefaultStyles()
@@ -244,26 +256,16 @@ async function generateAiPreview(style: StylePreset) {
 
       <div class="flex items-center gap-2 flex-wrap">
         <!-- Preview Model Selector -->
-        <div
+        <Select
           v-if="adminStore.modelConfigs.length > 0"
-          class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-white/10 shadow-sm"
-        >
-          <span class="font-semibold text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">✨ Preview Model:</span>
-          <select
-            v-model="previewModelId"
-            @change="handleModelChange"
-            class="bg-transparent font-semibold text-slate-800 dark:text-slate-200 text-xs focus:outline-none cursor-pointer pr-1"
-          >
-            <option
-              v-for="m in adminStore.modelConfigs"
-              :key="m.id"
-              :value="m.id"
-              class="dark:bg-slate-900 text-slate-900 dark:text-white"
-            >
-              {{ m.name }} ({{ m.provider }})
-            </option>
-          </select>
-        </div>
+          :model-value="previewModelId"
+          :options="previewModelOptions"
+          size="sm"
+          class="w-56"
+          aria-label="Preview model"
+          title="Model used to generate style preview images"
+          @update:model-value="handleModelChange"
+        />
 
         <!-- Generate Missing Previews Button -->
         <Button

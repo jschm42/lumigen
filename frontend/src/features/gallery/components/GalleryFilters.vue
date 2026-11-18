@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGalleryStore } from '@/stores/gallery'
+import { CalendarRange, Search, X } from 'lucide-vue-next'
+import Button from '@/components/ui/Button.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
 
 const galleryStore = useGalleryStore()
 const isCategoryPopoverOpen = ref(false)
@@ -70,7 +75,8 @@ const timePresets = [
   { value: 'custom', label: 'Custom range...' },
 ]
 
-function handleTimePresetChange() {
+function handleTimePresetChange(value: string | number) {
+  galleryStore.filters.time_preset = String(value) as typeof galleryStore.filters.time_preset
   if (galleryStore.filters.time_preset !== 'custom') {
     galleryStore.filters.date_from = ''
     galleryStore.filters.date_to = ''
@@ -153,56 +159,43 @@ function toggleCategory(catId: number) {
     <!-- Top Filter Row: Search & Selects -->
     <div class="flex flex-wrap items-center gap-2">
       <!-- Search Input -->
-      <div class="relative min-w-[200px] flex-[2_1_260px]">
-        <svg class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-        </svg>
-        <input
-          type="text"
-          v-model="galleryStore.filters.q"
-          @input="galleryStore.searchDebounced()"
-          @keydown.enter="galleryStore.fetchAssets(true)"
-          placeholder="Search prompts..."
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 py-2 pl-8 pr-8 text-xs text-slate-900 placeholder-slate-400 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-          data-testid="gallery-search"
-        />
-        <button
-          v-if="galleryStore.filters.q"
-          type="button"
-          @click="clearSearch"
-          class="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-white"
-          title="Clear search"
-          aria-label="Clear search"
-        >
-          ✕
-        </button>
-      </div>
+      <Input
+        v-model="galleryStore.filters.q"
+        size="sm"
+        class="min-w-[200px] flex-[2_1_260px]"
+        placeholder="Search prompts..."
+        aria-label="Search prompts"
+        data-testid="gallery-search"
+        @input="galleryStore.searchDebounced()"
+        @keydown.enter="galleryStore.fetchAssets(true)"
+      >
+        <template #prefix><Search class="size-3.5" aria-hidden="true" /></template>
+        <template v-if="galleryStore.filters.q" #suffix>
+          <IconButton label="Clear search" size="xs" @click="clearSearch">
+            <X class="size-3.5" aria-hidden="true" />
+          </IconButton>
+        </template>
+      </Input>
 
       <!-- Time Preset -->
-      <div class="min-w-[140px] flex-[1_1_150px]">
-        <select
-          v-model="galleryStore.filters.time_preset"
-          @change="handleTimePresetChange"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        >
-          <option v-for="t in timePresets" :key="t.value" :value="t.value">{{ t.label }}</option>
-        </select>
-      </div>
+      <Select
+        :model-value="galleryStore.filters.time_preset"
+        :options="timePresets"
+        size="sm"
+        class="min-w-[140px] flex-[1_1_150px]"
+        aria-label="Time range"
+        @update:model-value="handleTimePresetChange"
+      />
 
       <!-- Min Rating -->
-      <div class="min-w-[140px] flex-[1_1_150px]">
-        <select
-          v-model="ratingFilter"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        >
+      <Select v-model="ratingFilter" size="sm" class="min-w-[140px] flex-[1_1_150px]" aria-label="Rating">
           <option value="">All ratings</option>
           <option value="5">★★★★★ 5 stars</option>
           <option value="4">★★★★ min. 4 stars</option>
           <option value="3">★★★ min. 3 stars</option>
           <option value="1">★ min. 1 star</option>
           <option value="unrated">Unrated only</option>
-        </select>
-      </div>
+      </Select>
 
       <!-- Categories Popover -->
       <div class="relative min-w-[140px] flex-[1_1_150px]" ref="popoverRef">
@@ -389,24 +382,39 @@ function toggleCategory(catId: number) {
 
     <!-- More filters row -->
     <div v-if="isMoreOpen" class="flex flex-wrap items-center gap-2 border-t border-slate-200/60 pt-2.5 dark:border-white/10">
-      <div class="min-w-[140px] flex-[1_1_160px]">
-        <select :value="galleryStore.filters.provider || ''" @change="setFacet('provider', ($event.target as HTMLSelectElement).value)" class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500" data-testid="gallery-filter-provider">
+      <Select
+        :model-value="galleryStore.filters.provider || ''"
+        size="sm"
+        class="min-w-[140px] flex-[1_1_160px]"
+        aria-label="Provider"
+        data-testid="gallery-filter-provider"
+        @update:model-value="setFacet('provider', String($event))"
+      >
           <option value="">All providers</option>
           <option v-for="item in galleryStore.facets.providers" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </div>
-      <div class="min-w-[160px] flex-[2_1_220px]">
-        <select :value="galleryStore.filters.model || ''" @change="setFacet('model', ($event.target as HTMLSelectElement).value)" class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500" data-testid="gallery-filter-model">
+      </Select>
+      <Select
+        :model-value="galleryStore.filters.model || ''"
+        size="sm"
+        class="min-w-[160px] flex-[2_1_220px]"
+        aria-label="Model"
+        data-testid="gallery-filter-model"
+        @update:model-value="setFacet('model', String($event))"
+      >
           <option value="">All models</option>
           <option v-for="item in galleryStore.facets.models" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </div>
-      <div class="min-w-[140px] flex-[1_1_160px]">
-        <select :value="galleryStore.filters.profile_name || ''" @change="setFacet('profile_name', ($event.target as HTMLSelectElement).value)" class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500" data-testid="gallery-filter-profile">
+      </Select>
+      <Select
+        :model-value="galleryStore.filters.profile_name || ''"
+        size="sm"
+        class="min-w-[140px] flex-[1_1_160px]"
+        aria-label="Profile"
+        data-testid="gallery-filter-profile"
+        @update:model-value="setFacet('profile_name', String($event))"
+      >
           <option value="">All profiles</option>
           <option v-for="item in galleryStore.facets.profiles" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </div>
+      </Select>
     </div>
 
     <!-- Result summary & reset -->
@@ -431,60 +439,38 @@ function toggleCategory(catId: number) {
       class="pt-2 border-t border-slate-200/60 dark:border-white/10 flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-150"
     >
       <div class="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
-        <span>📅</span>
+        <CalendarRange class="size-4" aria-hidden="true" />
         <span>Date Range:</span>
       </div>
 
-      <div class="flex items-center gap-2">
-        <label class="text-slate-500 dark:text-slate-400">From</label>
-        <input
-          type="date"
-          v-model="galleryStore.filters.date_from"
-          @change="galleryStore.fetchAssets(true)"
-          class="rounded-xl border border-slate-300/80 bg-white/90 px-2.5 py-1 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        />
-      </div>
+      <Input
+        v-model="galleryStore.filters.date_from"
+        type="date"
+        size="sm"
+        aria-label="From date"
+        @change="galleryStore.fetchAssets(true)"
+      />
 
-      <div class="flex items-center gap-2">
-        <label class="text-slate-500 dark:text-slate-400">To</label>
-        <input
-          type="date"
-          v-model="galleryStore.filters.date_to"
-          @change="galleryStore.fetchAssets(true)"
-          class="rounded-xl border border-slate-300/80 bg-white/90 px-2.5 py-1 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        />
-      </div>
+      <Input
+        v-model="galleryStore.filters.date_to"
+        type="date"
+        size="sm"
+        aria-label="To date"
+        @change="galleryStore.fetchAssets(true)"
+      />
 
       <div class="flex items-center gap-1.5 ml-auto">
-        <button
-          type="button"
-          @click="setDateRangePreset(0)"
-          class="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] text-slate-600 dark:text-slate-300 transition-colors"
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          @click="setDateRangePreset(7)"
-          class="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] text-slate-600 dark:text-slate-300 transition-colors"
-        >
-          Last 7d
-        </button>
-        <button
-          type="button"
-          @click="setDateRangePreset(30)"
-          class="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] text-slate-600 dark:text-slate-300 transition-colors"
-        >
-          Last 30d
-        </button>
-        <button
+        <Button variant="secondary" size="xs" @click="setDateRangePreset(0)">Today</Button>
+        <Button variant="secondary" size="xs" @click="setDateRangePreset(7)">Last 7d</Button>
+        <Button variant="secondary" size="xs" @click="setDateRangePreset(30)">Last 30d</Button>
+        <Button
           v-if="galleryStore.filters.date_from || galleryStore.filters.date_to"
-          type="button"
+          variant="danger-ghost"
+          size="xs"
           @click="clearDateRange"
-          class="px-2 py-0.5 rounded-lg border border-rose-400/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 text-[11px] transition-colors"
         >
           Clear
-        </button>
+        </Button>
       </div>
     </div>
   </div>

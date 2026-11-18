@@ -1,47 +1,34 @@
 /**
- * Gallery page e2e tests.
- *
- * Verifies that the gallery page is accessible and renders the expected
- * chrome (navigation, page title, empty-state message when there are no
- * assets in the test database).
+ * Gallery page e2e tests (Vue SPA).
  */
 
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { ensureStubAsset, navigateTo } from "./helpers.js";
 
 test.describe("Gallery page (authenticated)", () => {
-  test("renders the gallery page with a 200 response", async ({ page }) => {
+  test("deep link renders the SPA with the filter bar", async ({ page }) => {
     const response = await page.goto("/gallery");
     expect(response?.status()).toBe(200);
-  });
-
-  test("has a page title that contains Lumigen", async ({ page }) => {
-    await page.goto("/gallery");
     await expect(page).toHaveTitle(/Lumigen/);
+    await expect(page.getByTestId("gallery-search")).toBeVisible();
   });
 
-  test("shows an empty-state message when no assets exist", async ({
-    page,
-  }) => {
-    await page.goto("/gallery");
+  test("shows a stub-generated asset in the grid", async ({ page }) => {
+    await page.goto("/");
+    await ensureStubAsset(page);
 
-    /* The gallery renders this placeholder when the asset list is empty */
-    await expect(
-      page.locator("text=No assets found for current filters.")
-    ).toBeVisible();
+    await navigateTo(page, "Gallery");
+    await expect(page.getByTestId("gallery-grid")).toBeVisible();
+    await expect(page.getByTestId("gallery-grid").locator("img").first()).toBeVisible();
   });
 
-  test("loads the gallery-page.js script", async ({ page }) => {
-    /** @type {string[]} */
-    const scriptsLoaded = [];
-    page.on("request", (req) => scriptsLoaded.push(req.url()));
-
+  test("search without matches shows the filtered empty state", async ({ page }) => {
     await page.goto("/gallery");
-    await page.waitForLoadState("networkidle");
+    await page.getByTestId("gallery-search").fill("zz-no-such-prompt-zz");
 
-    const hasGalleryScript = scriptsLoaded.some((url) =>
-      url.includes("gallery-page.js")
-    );
-    expect(hasGalleryScript).toBe(true);
+    await expect(page.getByText("No images match your filters")).toBeVisible();
+    await page.getByRole("button", { name: "Reset filters" }).click();
+    await expect(page.getByTestId("gallery-search")).toHaveValue("");
   });
 });

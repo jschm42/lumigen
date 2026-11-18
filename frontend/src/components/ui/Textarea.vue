@@ -1,30 +1,46 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, useAttrs, watch } from 'vue'
+import FormField from './FormField.vue'
+import { controlBaseClasses, controlSizeClasses, controlStateClasses, type ControlSize } from './controlStyles'
+
+/**
+ * Multi-line text control with optional auto-grow and character counter.
+ * `class`/`style` apply to the wrapper; other attributes go to the <textarea>.
+ */
+defineOptions({ inheritAttrs: false })
 
 interface Props {
   modelValue?: string
   placeholder?: string
   label?: string
+  hint?: string
   error?: string
   rows?: number
   disabled?: boolean
+  readonly?: boolean
   autoGrow?: boolean
   id?: string
   name?: string
   maxLength?: number
+  size?: ControlSize
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   rows: 3,
-  disabled: false,
-  autoGrow: false,
+  size: 'md',
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
-  (e: 'keydown', event: KeyboardEvent): void
 }>()
+
+const attrs = useAttrs()
+const rootAttrs = computed(() => ({ class: attrs.class, style: attrs.style }))
+const controlAttrs = computed(() => {
+  const { class: _class, style: _style, ...rest } = attrs
+  return rest
+})
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
@@ -35,51 +51,36 @@ function adjustHeight() {
 }
 
 function handleInput(event: Event) {
-  const target = event.target as HTMLTextAreaElement
-  emit('update:modelValue', target.value)
+  emit('update:modelValue', (event.target as HTMLTextAreaElement).value)
   adjustHeight()
 }
 
-onMounted(() => {
-  adjustHeight()
-})
-
-watch(() => props.modelValue, () => {
-  adjustHeight()
-})
+onMounted(adjustHeight)
+watch(() => props.modelValue, adjustHeight)
 </script>
 
 <template>
-  <div class="w-full space-y-1.5">
-    <div v-if="label || maxLength" class="flex items-center justify-between">
-      <label v-if="label" :for="id" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-        {{ label }}
-      </label>
-      <span v-if="maxLength" class="text-[11px] text-slate-400">
-        {{ modelValue?.length || 0 }} / {{ maxLength }}
-      </span>
-    </div>
-    <textarea
-      ref="textareaRef"
-      :id="id"
-      :name="name"
-      :value="modelValue"
-      :placeholder="placeholder"
-      :rows="rows"
-      :disabled="disabled"
-      :maxlength="maxLength"
-      @input="handleInput"
-      @keydown="$emit('keydown', $event)"
-      :class="[
-        'w-full rounded-xl border bg-white/70 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-all duration-150',
-        'focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 resize-none',
-        'dark:bg-slate-900/70 dark:text-slate-100 dark:placeholder-slate-500',
-        error
-          ? 'border-rose-500 focus:ring-rose-500/40 focus:border-rose-500'
-          : 'border-slate-300/80 hover:border-slate-400 dark:border-white/10 dark:hover:border-white/20',
-        disabled ? 'opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800' : '',
-      ]"
-    ></textarea>
-    <p v-if="error" class="text-xs text-rose-500 font-medium">{{ error }}</p>
-  </div>
+  <FormField v-bind="rootAttrs" :id="id" :label="label" :hint="hint" :error="error">
+    <template v-if="maxLength" #aside>
+      <span class="text-2xs text-slate-400">{{ modelValue?.length || 0 }} / {{ maxLength }}</span>
+    </template>
+    <template #default="{ id: fieldId, describedBy, invalid }">
+      <textarea
+        v-bind="controlAttrs"
+        :id="fieldId"
+        ref="textareaRef"
+        :name="name"
+        :value="modelValue"
+        :placeholder="placeholder"
+        :rows="rows"
+        :disabled="disabled"
+        :readonly="readonly"
+        :maxlength="maxLength"
+        :aria-invalid="invalid || undefined"
+        :aria-describedby="describedBy"
+        :class="[controlBaseClasses, controlSizeClasses[props.size], controlStateClasses(invalid), 'resize-none']"
+        @input="handleInput"
+      ></textarea>
+    </template>
+  </FormField>
 </template>

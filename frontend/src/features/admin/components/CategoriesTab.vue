@@ -7,7 +7,9 @@ import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
-import Spinner from '@/components/ui/Spinner.vue'
+import { Tags } from 'lucide-vue-next'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import LoadingState from '@/components/ui/LoadingState.vue'
 import type { Category } from '@/types'
 
 const router = useRouter()
@@ -127,24 +129,20 @@ function navigateToGallery(cat: Category) {
     </div>
 
     <!-- Loading state -->
-    <div v-if="isLoading" class="py-12 flex justify-center">
-      <Spinner size="lg" class="text-sky-500" />
-    </div>
+    <LoadingState v-if="isLoading" label="Loading categories…" />
 
     <!-- Empty state -->
-    <div
+    <EmptyState
       v-else-if="categories.length === 0"
-      class="py-12 text-center rounded-2xl border border-dashed border-slate-300 dark:border-white/10 p-8 space-y-3"
+      :icon="Tags"
+      title="No categories created yet"
+      description="Create categories to organize your generated images in the gallery."
+      class="rounded-2xl border border-dashed border-slate-300 dark:border-white/10"
     >
-      <div class="text-3xl">🏷️</div>
-      <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">No categories created yet</p>
-      <p class="text-xs text-slate-500 max-w-sm mx-auto">
-        Create categories to organize your generated images in the gallery.
-      </p>
-      <Button variant="surface" size="xs" @click="openNew">
-        Create first category
-      </Button>
-    </div>
+      <template #actions>
+        <Button variant="surface" size="sm" @click="openNew">Create first category</Button>
+      </template>
+    </EmptyState>
 
     <!-- Categories Grid / List -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">

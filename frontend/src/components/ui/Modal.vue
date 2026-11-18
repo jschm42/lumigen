@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, useId } from 'vue'
+import { useOverlay } from '@/composables/useOverlay'
 
 interface Props {
   open: boolean
@@ -20,6 +21,9 @@ const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'close'): void
 }>()
+
+const panelRef = ref<HTMLElement | null>(null)
+const titleId = `modal-title-${useId()}`
 
 const sizeClasses = computed(() => {
   switch (props.size) {
@@ -50,28 +54,14 @@ function handleBackdropClick() {
   }
 }
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.open && !props.persistent) {
-    close()
-  }
-}
-
-watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    document.body.style.overflow = 'hidden'
-  } else {
-    document.body.style.overflow = ''
-  }
+const { isTopmost } = useOverlay(() => props.open, {
+  container: panelRef,
+  onEscape: () => {
+    if (!props.persistent) close()
+  },
 })
 
-onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown)
-  document.body.style.overflow = ''
-})
+defineExpose({ isTopmost })
 </script>
 
 <template>
@@ -99,26 +89,34 @@ onUnmounted(() => {
         >
           <div
             v-if="open"
+            ref="panelRef"
+            role="dialog"
+            aria-modal="true"
+            :aria-labelledby="title || $slots.header ? titleId : undefined"
+            tabindex="-1"
             :class="[
-              'relative w-full rounded-2xl bg-white text-slate-900 shadow-2xl dark:bg-slate-900 dark:text-slate-100 border border-slate-300/80 dark:border-white/10 overflow-hidden flex flex-col my-auto max-h-[92vh]',
+              'relative w-full outline-none rounded-2xl bg-white text-slate-900 shadow-2xl dark:bg-slate-900 dark:text-slate-100 border border-slate-300/80 dark:border-white/10 overflow-hidden flex flex-col my-auto max-h-[92vh]',
               sizeClasses,
             ]"
             @click.stop
           >
             <!-- Header -->
             <div v-if="title || $slots.header" class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-white/10 shrink-0">
-              <slot name="header">
-                <h3 class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
-                  {{ title }}
-                </h3>
-              </slot>
+              <div :id="titleId" class="min-w-0 flex-1">
+                <slot name="header">
+                  <h3 class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+                    {{ title }}
+                  </h3>
+                </slot>
+              </div>
               <button
                 v-if="!hideCloseButton"
                 type="button"
+                aria-label="Close dialog"
                 @click="close"
                 class="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200 transition-colors"
               >
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="w-5 h-5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useOverlay } from '@/composables/useOverlay'
 import { useRouter } from 'vue-router'
 import { useImageViewerStore } from '@/stores/imageViewer'
 import { useGenerateStore } from '@/stores/generate'
@@ -33,9 +34,6 @@ watch(
   (open) => {
     if (open) {
       resetZoom()
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
     }
   }
 )
@@ -258,12 +256,19 @@ const seedValue = computed(() => {
 })
 
 // Keyboard shortcuts
-function handleKeydown(e: KeyboardEvent) {
-  if (!imageViewerStore.isOpen) return
+const viewerRef = ref<HTMLElement | null>(null)
 
-  if (e.key === 'Escape') {
-    imageViewerStore.closeViewer()
-  } else if (e.key === '+' || e.key === '=') {
+const { isTopmost } = useOverlay(() => imageViewerStore.isOpen, {
+  container: viewerRef,
+  onEscape: () => imageViewerStore.closeViewer(),
+})
+
+function handleKeydown(e: KeyboardEvent) {
+  if (!isTopmost()) return
+  const target = e.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+
+  if (e.key === '+' || e.key === '=') {
     zoomIn()
   } else if (e.key === '-') {
     zoomOut()
@@ -280,7 +285,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
-  document.body.style.overflow = ''
 })
 </script>
 
@@ -296,7 +300,12 @@ onUnmounted(() => {
     >
       <div
         v-if="imageViewerStore.isOpen"
-        class="fixed inset-0 z-50 flex bg-slate-950/95 backdrop-blur-xl select-none overflow-hidden"
+        ref="viewerRef"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image viewer"
+        tabindex="-1"
+        class="outline-none fixed inset-0 z-50 flex bg-slate-950/95 backdrop-blur-xl select-none overflow-hidden"
         @click="handleBackdropClick"
       >
         <!-- Floating Top Toolbar -->
