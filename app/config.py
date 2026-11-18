@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     provider_minimax_max_concurrent: int = 1
     provider_minimax_min_interval_ms: int = 800
 
+    # Custom endpoints: limits apply per endpoint (each endpoint gets its own executor).
+    provider_openai_compatible_max_concurrent: int = 2
+    provider_openai_compatible_min_interval_ms: int = 0
+    provider_comfyui_max_concurrent: int = 1
+    provider_comfyui_min_interval_ms: int = 0
+
     llm_models_timeout_seconds: float = 30.0
     llm_models_connect_timeout_seconds: float = 10.0
     llm_generate_timeout_seconds: float = 60.0
@@ -91,6 +97,11 @@ class Settings(BaseSettings):
     llm_enhancement_connect_timeout_seconds: float = 10.0
 
     provider_openai_generate_timeout_seconds: float = 120.0
+    # Local models can be slow; generous defaults for custom endpoints.
+    provider_openai_compatible_generate_timeout_seconds: float = 300.0
+    provider_comfyui_request_timeout_seconds: float = 30.0
+    provider_comfyui_generate_timeout_seconds: float = 900.0
+    provider_comfyui_poll_interval_seconds: float = 1.0
     provider_openai_generate_connect_timeout_seconds: float = 10.0
     provider_openrouter_generate_timeout_seconds: float = 120.0
     provider_google_generate_timeout_seconds: float = 240.0

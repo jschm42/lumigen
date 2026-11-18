@@ -27,6 +27,8 @@ from app.config import get_settings
 from app.db import crud
 from app.db.engine import get_session
 from app.db.models import User
+from app.providers.base import ENDPOINT_PROVIDERS, EndpointConfig, ProviderError
+from app.providers.comfyui_workflow import PLACEHOLDERS, WorkflowError, parse_workflow
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.services.app_settings_service import AppSettingsService
 from app.services.import_export_service import (
@@ -78,7 +80,8 @@ def _provider_catalog() -> list[tuple[str, dict[str, str]]]:
     from app.api.generation import provider_registry
 
     meta = provider_registry.provider_meta()
-    items = [(name, info) for name, info in meta.items() if name != "stub"]
+    # Endpoint-based providers have no global key; they are configured under Admin -> Endpoints.
+    items = [(name, info) for name, info in meta.items() if name != "stub" and name not in ENDPOINT_PROVIDERS]
     return sorted(items, key=lambda item: (item[1]["display_name"] or item[0]).lower())
 
 
@@ -118,6 +121,9 @@ def _serialize_model_config(c: Any) -> dict[str, Any]:
         "price_input_per_mtok": c.price_input_per_mtok,
         "price_output_per_mtok": c.price_output_per_mtok,
         "price_per_image": c.price_per_image,
+        "endpoint_id": c.endpoint_id,
+        "endpoint_name": c.endpoint.name if c.endpoint_id and c.endpoint else None,
+        "provider_options": c.provider_options or {},
     }
 
 
@@ -246,11 +252,14 @@ def create_model_config(
     if not name or not model:
         raise HTTPException(status_code=400, detail="Name and model identifier required")
 
+    endpoint_id, provider_options = _resolve_model_endpoint(session, provider, payload, None, None)
     cfg = crud.create_model_config(
         session,
         name=name,
         provider=provider,
         model=model,
+        endpoint_id=endpoint_id,
+        provider_options=provider_options,
         **{key: _parse_price(payload, key, None) for key in _PRICE_FIELDS},
     )
     return _serialize_model_config(cfg)
@@ -267,15 +276,65 @@ def update_model_config(
     if not cfg:
         raise HTTPException(status_code=404, detail="Model config not found")
 
+    provider = str(payload.get("provider", cfg.provider) or "").strip()
+    endpoint_id, provider_options = _resolve_model_endpoint(
+        session, provider, payload, cfg.endpoint_id, cfg.provider_options
+    )
     cfg = crud.update_model_config(
         session,
         cfg,
         name=payload.get("name", cfg.name),
-        provider=payload.get("provider", cfg.provider),
+        provider=provider,
         model=payload.get("model_identifier", cfg.model),
+        endpoint_id=endpoint_id,
+        provider_options=provider_options,
         **{key: _parse_price(payload, key, getattr(cfg, key)) for key in _PRICE_FIELDS},
     )
     return _serialize_model_config(cfg)
+
+
+def _resolve_model_endpoint(
+    session: Session,
+    provider: str,
+    payload: dict[str, Any],
+    current_endpoint_id: int | None,
+    current_options: dict[str, Any] | None,
+) -> tuple[int | None, dict[str, Any] | None]:
+    """Validate the endpoint link and adapter options of a model config payload.
+
+    Built-in providers never carry an endpoint. Endpoint-based providers
+    (OpenAI-compatible, ComfyUI) require an endpoint of the same kind; a ComfyUI
+    ``workflow`` option is validated as an API-format graph.
+    """
+    if provider not in ENDPOINT_PROVIDERS:
+        return None, None
+
+    raw_id = payload.get("endpoint_id", current_endpoint_id)
+    try:
+        endpoint_id = int(raw_id) if raw_id not in (None, "") else None
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="endpoint_id must be a number.") from exc
+    if endpoint_id is None:
+        raise HTTPException(status_code=400, detail="Select the endpoint this model runs on.")
+    endpoint = crud.get_custom_endpoint(session, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=400, detail="The selected endpoint does not exist.")
+    if endpoint.kind != provider:
+        raise HTTPException(status_code=400, detail=f"Endpoint {endpoint.name!r} is not a {provider} endpoint.")
+
+    options = payload.get("provider_options", current_options)
+    if options in (None, ""):
+        return endpoint_id, None
+    if not isinstance(options, dict):
+        raise HTTPException(status_code=400, detail="provider_options must be an object.")
+    # Keep "" values: e.g. response_format="" means "omit the field" for OpenAI-compatible servers.
+    options = {key: value for key, value in options.items() if value is not None}
+    if provider == "comfyui" and "workflow" in options:
+        try:
+            options["workflow"] = parse_workflow(options["workflow"])
+        except WorkflowError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid ComfyUI workflow: {exc}") from exc
+    return endpoint_id, options or None
 
 
 @router.delete("/models/{model_id}")
@@ -290,6 +349,183 @@ def delete_model_config(
 
     crud.delete_model_config(session, cfg)
     return {"success": True}
+
+
+_ENDPOINT_KIND_LABELS = {"openai_compatible": "OpenAI-compatible API", "comfyui": "ComfyUI"}
+
+
+def _serialize_endpoint(endpoint: Any, model_count: int = 0) -> dict[str, Any]:
+    """Serialize a custom endpoint without exposing its API key."""
+    return {
+        "id": endpoint.id,
+        "name": endpoint.name,
+        "kind": endpoint.kind,
+        "kind_label": _ENDPOINT_KIND_LABELS.get(endpoint.kind, endpoint.kind),
+        "base_url": endpoint.base_url,
+        "has_api_key": bool(endpoint.api_key_encrypted),
+        "is_active": bool(endpoint.is_active),
+        "model_count": model_count,
+    }
+
+
+def _normalize_base_url(value: Any) -> str:
+    """Return a trimmed http(s) base URL without trailing slash or raise HTTP 400."""
+    url = str(value or "").strip().rstrip("/")
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Base URL must start with http:// or https://.")
+    if len(url) > 512:
+        raise HTTPException(status_code=400, detail="Base URL is too long.")
+    return url
+
+
+def _normalize_kind(value: Any) -> str:
+    """Return a supported endpoint kind or raise HTTP 400."""
+    kind = str(value or "").strip().lower()
+    if kind not in ENDPOINT_PROVIDERS:
+        raise HTTPException(
+            status_code=400, detail=f"Endpoint type must be one of: {', '.join(ENDPOINT_PROVIDERS)}."
+        )
+    return kind
+
+
+def _encrypt_optional_key(payload: dict[str, Any], current: str | None) -> str | None:
+    """Return the encrypted key for a payload: new key, cleared key or the unchanged current one."""
+    if payload.get("clear_api_key"):
+        return None
+    api_key = str(payload.get("api_key") or "").strip()
+    if not api_key:
+        return current
+    try:
+        return model_config_service.encrypt_api_key(api_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _validated_name(value: Any) -> str:
+    """Return a trimmed endpoint name or raise HTTP 400."""
+    name = str(value or "").strip()
+    if not name or len(name) > 80:
+        raise HTTPException(status_code=400, detail="Name is required (max. 80 characters).")
+    return name
+
+
+@router.get("/endpoints")
+def list_endpoints(session: Session = Depends(get_session)) -> list[dict[str, Any]]:
+    """List custom endpoints (OpenAI-compatible APIs and ComfyUI servers) with model counts."""
+    return [
+        _serialize_endpoint(e, len(crud.list_model_configs_for_endpoint(session, e.id)))
+        for e in crud.list_custom_endpoints(session)
+    ]
+
+
+@router.get("/endpoints/meta")
+def endpoint_meta() -> dict[str, Any]:
+    """Return endpoint types and the ComfyUI workflow placeholders for the admin editor."""
+    return {
+        "kinds": [{"value": kind, "label": label} for kind, label in _ENDPOINT_KIND_LABELS.items()],
+        "comfyui_placeholders": list(PLACEHOLDERS),
+    }
+
+
+@router.post("/endpoints")
+def create_endpoint(payload: dict[str, Any], session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Create a custom endpoint; the API key is optional and stored encrypted."""
+    name = _validated_name(payload.get("name"))
+    if crud.get_custom_endpoint_by_name(session, name):
+        raise HTTPException(status_code=409, detail=f"An endpoint named {name!r} already exists.")
+    endpoint = crud.create_custom_endpoint(
+        session,
+        name=name,
+        kind=_normalize_kind(payload.get("kind")),
+        base_url=_normalize_base_url(payload.get("base_url")),
+        api_key_encrypted=_encrypt_optional_key(payload, None),
+        is_active=bool(payload.get("is_active", True)),
+    )
+    return _serialize_endpoint(endpoint)
+
+
+@router.put("/endpoints/{endpoint_id}")
+def update_endpoint(
+    endpoint_id: int, payload: dict[str, Any], session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    """Update a custom endpoint. Omit ``api_key`` to keep the stored key; ``clear_api_key`` removes it."""
+    endpoint = crud.get_custom_endpoint(session, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    name = _validated_name(payload.get("name", endpoint.name))
+    duplicate = crud.get_custom_endpoint_by_name(session, name)
+    if duplicate and duplicate.id != endpoint.id:
+        raise HTTPException(status_code=409, detail=f"An endpoint named {name!r} already exists.")
+    models = crud.list_model_configs_for_endpoint(session, endpoint.id)
+    kind = _normalize_kind(payload.get("kind", endpoint.kind))
+    if kind != endpoint.kind and models:
+        raise HTTPException(status_code=409, detail="The type cannot change while models use this endpoint.")
+    endpoint = crud.update_custom_endpoint(
+        session,
+        endpoint,
+        name=name,
+        kind=kind,
+        base_url=_normalize_base_url(payload.get("base_url", endpoint.base_url)),
+        api_key_encrypted=_encrypt_optional_key(payload, endpoint.api_key_encrypted),
+        is_active=bool(payload.get("is_active", endpoint.is_active)),
+    )
+    return _serialize_endpoint(endpoint, len(models))
+
+
+@router.delete("/endpoints/{endpoint_id}")
+def delete_endpoint(endpoint_id: int, session: Session = Depends(get_session)) -> dict[str, bool]:
+    """Delete a custom endpoint; refused (409) while model configurations still use it."""
+    endpoint = crud.get_custom_endpoint(session, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    models = crud.list_model_configs_for_endpoint(session, endpoint.id)
+    if models:
+        names = ", ".join(m.name for m in models)
+        raise HTTPException(
+            status_code=409, detail=f"Endpoint is used by model(s): {names}. Delete or move them first."
+        )
+    crud.delete_custom_endpoint(session, endpoint)
+    return {"success": True}
+
+
+@router.post("/endpoints/test")
+async def test_endpoint(payload: dict[str, Any], session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Check connectivity by listing models; works for unsaved settings (``id`` reuses the stored key)."""
+    from app.api.generation import provider_registry
+
+    kind = _normalize_kind(payload.get("kind"))
+    base_url = _normalize_base_url(payload.get("base_url"))
+    api_key = str(payload.get("api_key") or "").strip() or None
+    stored = crud.get_custom_endpoint(session, int(payload["id"])) if payload.get("id") else None
+    if api_key is None and stored is not None and stored.api_key_encrypted and not payload.get("clear_api_key"):
+        api_key = model_config_service.decrypt_api_key(stored.api_key_encrypted)
+    config = EndpointConfig(
+        id=stored.id if stored else 0, name="connection test", kind=kind, base_url=base_url, api_key=api_key
+    )
+    try:
+        models = await provider_registry.list_endpoint_models(config)
+    except ProviderError as exc:
+        return {"success": False, "message": str(exc), "models": []}
+    noun = "checkpoint" if kind == "comfyui" else "model"
+    plural = "" if len(models) == 1 else "s"
+    return {"success": True, "message": f"Connected. {len(models)} {noun}{plural} available.", "models": models}
+
+
+@router.get("/endpoints/{endpoint_id}/models")
+async def list_endpoint_models(endpoint_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Discover the models (or ComfyUI checkpoints) offered by a saved endpoint."""
+    from app.api.generation import provider_registry
+
+    endpoint = crud.get_custom_endpoint(session, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    try:
+        models = await provider_registry.list_endpoint_models(
+            model_config_service.endpoint_config_from_row(endpoint)
+        )
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"models": models}
 
 
 def _serialize_reasoning_model_config(c: Any) -> dict[str, Any]:

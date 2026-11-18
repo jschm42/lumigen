@@ -1291,8 +1291,15 @@ class GenerationService:
         if not model:
             raise ProviderError("Generation request has no model specified")
 
+        # Models on a custom endpoint (OpenAI-compatible / ComfyUI) carry their own
+        # connection; the API key is optional there (local servers run without auth).
+        resolve_endpoint = getattr(self.model_config_service, "endpoint_config_for", None)
+        endpoint = resolve_endpoint(model_config) if model_config is not None and resolve_endpoint else None
+
         api_key: str | None = None
-        if self.model_config_service:
+        if endpoint is not None:
+            api_key = endpoint.api_key
+        elif self.model_config_service:
             if model_config and getattr(model_config, "use_custom_api_key", False):
                 api_key = self.model_config_service.get_api_key(model_config.id)
             else:
@@ -1300,7 +1307,7 @@ class GenerationService:
                     generation.provider
                 )
 
-        if not api_key:
+        if not api_key and endpoint is None:
             raise ProviderError(
                 f"No API key configured for provider {generation.provider}. "
                 "Please configure an API key for this model in Admin settings."
@@ -1338,6 +1345,7 @@ class GenerationService:
             expand=expand_spec,
             aspect_ratio=str(request_data.get("aspect_ratio") or "").strip() or None,
             negative_prompt=str(request_data.get("negative_prompt") or "").strip() or None,
+            endpoint=endpoint,
         )
 
     def _prepare_provider_request(
@@ -1387,6 +1395,7 @@ class GenerationService:
             ],
             mode=request.mode,
             expand=request.expand,
+            endpoint=request.endpoint,
         )
 
     def _build_expand_prompt(self, prompt: str) -> str:

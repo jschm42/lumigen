@@ -2,13 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { adminApi, type SystemInfo } from '@/api/admin'
 import { useToastStore } from './toast'
-import type { ModelConfig, ProviderApiKeyStatus, ReasoningModelConfig, StylePreset, UpscaleModel, User } from '@/types'
+import type { CustomEndpoint, CustomEndpointInput, ModelConfig, ProviderApiKeyStatus, ReasoningModelConfig, StylePreset, UpscaleModel, User } from '@/types'
 
 export const useAdminStore = defineStore('admin', () => {
   const toastStore = useToastStore()
 
   const providerStatuses = ref<ProviderApiKeyStatus[]>([])
   const modelConfigs = ref<ModelConfig[]>([])
+  const endpoints = ref<CustomEndpoint[]>([])
   const reasoningModels = ref<ReasoningModelConfig[]>([])
   const styles = ref<StylePreset[]>([])
   const users = ref<User[]>([])
@@ -51,6 +52,39 @@ export const useAdminStore = defineStore('admin', () => {
       modelConfigs.value = await adminApi.listModelConfigs()
     } catch (_error) {
       modelConfigs.value = []
+    }
+  }
+
+  async function fetchEndpoints() {
+    try {
+      endpoints.value = await adminApi.listEndpoints()
+    } catch (_error) {
+      endpoints.value = []
+    }
+  }
+
+  async function saveEndpoint(input: CustomEndpointInput) {
+    try {
+      const saved = await adminApi.saveEndpoint(input)
+      const index = endpoints.value.findIndex((e) => e.id === saved.id)
+      if (index !== -1) endpoints.value[index] = saved
+      else endpoints.value.push(saved)
+      endpoints.value.sort((a, b) => a.name.localeCompare(b.name))
+      toastStore.success('Endpoint saved.')
+      return saved
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to save endpoint.')
+      throw error
+    }
+  }
+
+  async function deleteEndpoint(id: number) {
+    try {
+      await adminApi.deleteEndpoint(id)
+      endpoints.value = endpoints.value.filter((e) => e.id !== id)
+      toastStore.success('Endpoint deleted.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to delete endpoint.')
     }
   }
 
@@ -251,6 +285,10 @@ export const useAdminStore = defineStore('admin', () => {
   return {
     providerStatuses,
     modelConfigs,
+    endpoints,
+    fetchEndpoints,
+    saveEndpoint,
+    deleteEndpoint,
     reasoningModels,
     upscaleModels,
     styles,

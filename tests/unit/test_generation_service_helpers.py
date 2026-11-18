@@ -10,7 +10,7 @@ from PIL import Image
 
 from app.config import Settings
 from app.db.models import Asset, Generation
-from app.providers.base import ExpandSpec, ProviderError
+from app.providers.base import EndpointConfig, ExpandSpec, ProviderError
 from app.services.generation_service import GenerationCancelledError, GenerationService
 
 
@@ -97,6 +97,34 @@ def test_provider_request_from_generation_uses_default_key_when_no_custom() -> N
 
     request = service._provider_request_from_generation(generation)
     assert request.api_key == "openrouter-env-key"
+
+
+def test_provider_request_from_generation_uses_endpoint_without_api_key() -> None:
+    """Models on a custom endpoint (e.g. local ComfyUI) need no provider API key."""
+    endpoint = EndpointConfig(id=3, name="GPU", kind="comfyui", base_url="http://gpu:8188", options={"workflow": {}})
+    model_config_service = SimpleNamespace(
+        get_model_config=lambda _id: SimpleNamespace(id=_id, use_custom_api_key=False, endpoint_id=3),
+        get_api_key=lambda _id: None,
+        get_default_api_key=lambda _provider: None,
+        endpoint_config_for=lambda _cfg: endpoint,
+    )
+    service = _service_with_model_config(model_config_service)
+    generation = Generation(
+        profile_name="P",
+        prompt_user="u",
+        prompt_final="f",
+        provider="comfyui",
+        model="sdxl.safetensors",
+        status="queued",
+        profile_snapshot_json={"model_config_id": 9, "model": "sdxl.safetensors"},
+        storage_template_snapshot_json={},
+        request_snapshot_json={"provider": "comfyui", "model": "sdxl.safetensors", "model_config_id": 9},
+    )
+
+    request = service._provider_request_from_generation(generation)
+
+    assert request.endpoint is endpoint
+    assert request.api_key is None
 
 
 def test_provider_request_from_generation_includes_expand_mode_and_spec() -> None:

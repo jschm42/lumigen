@@ -45,6 +45,42 @@ export interface ModelConfig {
   price_output_per_mtok?: number | null
   /** Optional price per generated image (studio currency). */
   price_per_image?: number | null
+  /** Custom endpoint (OpenAI-compatible / ComfyUI) the model runs on; null for built-in providers. */
+  endpoint_id?: number | null
+  endpoint_name?: string | null
+  /** Adapter options, e.g. `{ workflow: {...} }` for ComfyUI or `{ response_format: 'url' }`. */
+  provider_options?: Record<string, any>
+}
+
+export type EndpointKind = 'openai_compatible' | 'comfyui'
+
+/** User-defined provider endpoint (Admin -> Endpoints). The API key itself is never returned. */
+export interface CustomEndpoint {
+  id: number
+  name: string
+  kind: EndpointKind
+  kind_label: string
+  base_url: string
+  has_api_key: boolean
+  is_active: boolean
+  model_count: number
+}
+
+/** Payload for creating/updating an endpoint; omit `api_key` to keep the stored key. */
+export interface CustomEndpointInput {
+  id?: number
+  name: string
+  kind: EndpointKind
+  base_url: string
+  api_key?: string
+  clear_api_key?: boolean
+  is_active: boolean
+}
+
+export interface EndpointTestResult {
+  success: boolean
+  message: string
+  models: string[]
 }
 
 export interface ReasoningModelConfig {

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.providers.base import (
+    EndpointConfig,
     ProviderAdapter,
     ProviderError,
     ProviderGenerationRequest,
@@ -16,11 +17,13 @@ from app.providers.base import (
 )
 from app.providers.bfl_adapter import BFLAdapter
 from app.providers.byteplus_adapter import BytePlusAdapter
+from app.providers.comfyui_adapter import ComfyUIAdapter
 from app.providers.fal_adapter import FalAdapter
 from app.providers.google_adapter import GoogleAdapter
 from app.providers.ideogram_adapter import IdeogramAdapter
 from app.providers.minimax_adapter import MiniMaxAdapter
 from app.providers.openai_adapter import OpenAIAdapter
+from app.providers.openai_compatible_adapter import OpenAICompatibleAdapter
 from app.providers.openrouter_adapter import OpenRouterAdapter
 from app.providers.replicate_adapter import ReplicateAdapter
 from app.providers.seedance_adapter import SeedanceAdapter
@@ -112,6 +115,9 @@ class ProviderRegistry:
         self.register(IdeogramAdapter())
         self.register(BytePlusAdapter())
         self.register(SeedanceAdapter())
+        # Endpoint-based adapters: base URL/key come from a custom endpoint per model.
+        self.register(OpenAICompatibleAdapter())
+        self.register(ComfyUIAdapter())
 
     def register(self, adapter: ProviderAdapter) -> None:
         """Register *adapter* under its ``name`` attribute, replacing any existing entry."""
@@ -181,13 +187,15 @@ class ProviderRegistry:
             retry_max_delay_ms=int(defaults.provider_default_retry_max_delay_ms),
         )
 
-    def _executor_for(self, provider: str) -> ProviderExecutor:
-        existing = self._executors.get(provider)
+    def _executor_for(self, provider: str, endpoint: EndpointConfig | None = None) -> ProviderExecutor:
+        """Return the executor for *provider*; custom endpoints get one executor each."""
+        key = f"{provider}:{endpoint.id}" if endpoint is not None else provider
+        existing = self._executors.get(key)
         if existing:
             return existing
         policy = self._build_policy(provider)
         executor = ProviderExecutor(policy)
-        self._executors[provider] = executor
+        self._executors[key] = executor
         return executor
 
     async def generate(
@@ -196,8 +204,15 @@ class ProviderRegistry:
         """Dispatch *request* to the named *provider* via its executor and return the result."""
         adapter = self.get(provider)
         settings = self._settings_for_provider(provider, request.api_key)
-        executor = self._executor_for(provider)
+        executor = self._executor_for(provider, request.endpoint)
         return await executor.run(lambda: adapter.generate(request, settings))
+
+    async def list_endpoint_models(self, endpoint: EndpointConfig) -> list[str]:
+        """Return sorted, deduplicated model IDs offered by a custom *endpoint*."""
+        adapter = self.get(endpoint.kind)
+        models = await adapter.list_endpoint_models(endpoint, self._settings)
+        normalized = [str(item).strip() for item in models if str(item).strip()]
+        return sorted(set(normalized))
 
     async def list_models(self, provider: str, api_key: str | None = None) -> list[str]:
         """Return sorted, deduplicated model IDs available from *provider*.

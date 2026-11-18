@@ -12,6 +12,7 @@ from app.db.models import (
     Asset,
     Category,
     ChatSession,
+    CustomEndpoint,
     DimensionPreset,
     EnhancementConfig,
     Generation,
@@ -907,3 +908,51 @@ def delete_reasoning_model_config(
     session.delete(config)
     session.commit()
 
+
+def list_custom_endpoints(session: Session, *, active_only: bool = False) -> list[CustomEndpoint]:
+    """Return custom provider endpoints ordered by name, optionally only active ones."""
+    stmt = select(CustomEndpoint).order_by(CustomEndpoint.name.asc())
+    if active_only:
+        stmt = stmt.where(CustomEndpoint.is_active.is_(True))
+    return list(session.scalars(stmt).all())
+
+
+def get_custom_endpoint(session: Session, endpoint_id: int) -> CustomEndpoint | None:
+    """Return a custom endpoint by primary key, or ``None`` if not found."""
+    return session.get(CustomEndpoint, endpoint_id)
+
+
+def get_custom_endpoint_by_name(session: Session, name: str) -> CustomEndpoint | None:
+    """Return a custom endpoint by its unique name, or ``None`` if not found."""
+    return session.scalar(select(CustomEndpoint).where(CustomEndpoint.name == name))
+
+
+def create_custom_endpoint(session: Session, **fields) -> CustomEndpoint:
+    """Create a custom endpoint from the given field values and return it."""
+    row = CustomEndpoint(**fields)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def update_custom_endpoint(session: Session, endpoint: CustomEndpoint, **fields) -> CustomEndpoint:
+    """Update the given custom endpoint's fields and return the refreshed instance."""
+    for key, value in fields.items():
+        setattr(endpoint, key, value)
+    session.add(endpoint)
+    session.commit()
+    session.refresh(endpoint)
+    return endpoint
+
+
+def delete_custom_endpoint(session: Session, endpoint: CustomEndpoint) -> None:
+    """Delete the given custom endpoint (callers must ensure no model references it)."""
+    session.delete(endpoint)
+    session.commit()
+
+
+def list_model_configs_for_endpoint(session: Session, endpoint_id: int) -> list[ModelConfig]:
+    """Return all model configurations that run on the given custom endpoint."""
+    stmt = select(ModelConfig).where(ModelConfig.endpoint_id == endpoint_id).order_by(ModelConfig.name.asc())
+    return list(session.scalars(stmt).all())
