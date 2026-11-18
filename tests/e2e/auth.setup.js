@@ -1,68 +1,50 @@
 /**
- * Authentication setup – runs once as a Playwright "setup" project before
- * all other test projects.
+ * Authentication setup – runs once as the Playwright "setup" project before
+ * all other test projects. The e2e server always starts with an empty
+ * database (scripts/e2e_server.py), so this:
  *
- * 1. Creates the first admin user via the onboarding form (shown when the
- *    database has no users).
- * 2. Creates a stub model config so that profiles can be created.
- * 3. Creates a test profile so the generate page shows the prompt input.
- * 4. Saves the authenticated browser session to playwright/.auth/admin.json
- *    so every test project can reuse it without going through login again.
+ * 1. Creates the first admin user via the SPA onboarding form.
+ * 2. Seeds a stub provider key + stub model config (no real API calls) and a
+ *    test profile through the JSON API.
+ * 3. Saves the authenticated browser session to playwright/.auth/admin.json
+ *    so every spec can reuse it.
  */
 
 // @ts-check
 import { test as setup, expect } from "@playwright/test";
-import { ADMIN_USERNAME, ADMIN_PASSWORD, AUTH_STATE_PATH } from "./e2e-constants.js";
+import { ADMIN_USERNAME, ADMIN_PASSWORD, AUTH_STATE_PATH, E2E_PROFILE_NAME } from "./e2e-constants.js";
+import { api } from "./helpers.js";
 
-setup("create admin account, model config, profile and save auth state", async ({ page }) => {
-  /* ------------------------------------------------------------------
-   * 1. Log in (or complete onboarding on a fresh database).
-   * ------------------------------------------------------------------ */
-  await page.goto("/login");
-  await expect(page.locator("form")).toBeVisible();
+setup("onboard admin, seed stub model + profile and save auth state", async ({ page }) => {
+  /* 1. Onboarding (fresh database redirects every route to /onboarding). */
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/onboarding/);
 
-  await page.locator("#username").fill(ADMIN_USERNAME);
-  await page.locator("#password").fill(ADMIN_PASSWORD);
+  await page.locator("#admin-username").fill(ADMIN_USERNAME);
+  await page.locator("#admin-email").fill("e2e-admin@example.test");
+  await page.locator("#admin-password").fill(ADMIN_PASSWORD);
+  await page.locator("#admin-confirm-password").fill(ADMIN_PASSWORD);
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL("/");
+  await expect(page).toHaveURL("/");
 
-  /* ------------------------------------------------------------------
-   * 2. Create a stub model config via the admin page.
-   *    The stub provider never calls a real API, so no API key is needed.
-   * ------------------------------------------------------------------ */
-  await page.goto("/admin?section=models");
+  /* 2. Seed fixtures through the JSON API. */
+  const key = await api(page, "POST", "/api/admin/providers/stub", { json: { api_key: "e2e-stub-key" } });
+  expect(key.status, "stub provider key").toBeLessThan(300);
 
-  const csrfMeta = await page.locator('meta[name="csrf-token"]').getAttribute("content");
-  expect(csrfMeta).toBeTruthy();
-
-  const modelConfigResponse = await page.request.post("/admin/model-configs", {
-    form: {
+  const model = await api(page, "POST", "/api/admin/models", {
+    json: {
       name: "Stub Model",
       provider: "stub",
-      model: "stub-default",
-      csrf_token: csrfMeta ?? "",
+      model_identifier: "stub-default",
+      is_active: true,
+      is_default: true,
     },
   });
-  /* Server redirects on success */
-  expect([200, 303]).toContain(modelConfigResponse.status());
+  expect(model.status, "stub model config").toBeLessThan(300);
 
-  /* ------------------------------------------------------------------
-   * 3. Create a test profile.
-   * ------------------------------------------------------------------ */
-  await page.goto("/profiles");
-  const profileCsrf = await page.locator('meta[name="csrf-token"]').getAttribute("content");
-  expect(profileCsrf).toBeTruthy();
+  const profile = await api(page, "POST", "/api/profiles", { json: { name: E2E_PROFILE_NAME } });
+  expect(profile.status, "test profile").toBeLessThan(300);
 
-  const profileResponse = await page.request.post("/profiles", {
-    form: {
-      name: "E2E Test Profile",
-      csrf_token: profileCsrf ?? "",
-    },
-  });
-  expect([200, 303]).toContain(profileResponse.status());
-
-  /* ------------------------------------------------------------------
-   * 5. Persist the authenticated session for all test projects.
-   * ------------------------------------------------------------------ */
+  /* 3. Persist the authenticated session for all specs. */
   await page.context().storageState({ path: AUTH_STATE_PATH });
 });

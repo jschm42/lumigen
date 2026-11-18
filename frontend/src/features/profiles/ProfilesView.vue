@@ -4,7 +4,10 @@ import { useProfilesStore } from '@/stores/profiles'
 import ProfileCard from './components/ProfileCard.vue'
 import ProfileEditorModal from './components/ProfileEditorModal.vue'
 import Button from '@/components/ui/Button.vue'
-import Spinner from '@/components/ui/Spinner.vue'
+import Input from '@/components/ui/Input.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import LoadingState from '@/components/ui/LoadingState.vue'
+import { Plus, Search, SlidersHorizontal } from 'lucide-vue-next'
 
 const profilesStore = useProfilesStore()
 const searchQuery = ref('')
@@ -34,39 +37,39 @@ const filteredProfiles = computed(() => {
       </div>
 
       <div class="flex items-center gap-3 w-full sm:w-auto">
-        <input
-          type="text"
+        <Input
           v-model="searchQuery"
+          type="search"
+          size="sm"
+          class="w-full sm:w-48"
           placeholder="Filter profiles..."
-          class="w-full sm:w-48 rounded-xl border border-slate-300/80 bg-white/80 px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        />
+          aria-label="Filter profiles"
+        >
+          <template #prefix><Search class="size-3.5" aria-hidden="true" /></template>
+        </Input>
 
         <Button variant="primary" size="sm" @click="profilesStore.openCreateModal" class="shrink-0">
-          <template #icon>+</template>
+          <template #icon><Plus class="size-4" aria-hidden="true" /></template>
           New Profile
         </Button>
       </div>
     </div>
 
     <!-- Loading -->
-    <div v-if="profilesStore.isLoading" class="py-20 flex justify-center">
-      <Spinner size="lg" class="text-sky-500" />
-    </div>
+    <LoadingState v-if="profilesStore.isLoading" label="Loading profiles…" />
 
     <!-- Empty State -->
-    <div
+    <EmptyState
       v-else-if="filteredProfiles.length === 0"
-      class="py-20 text-center space-y-3"
+      :icon="SlidersHorizontal"
+      :title="searchQuery ? 'No profiles match your filter' : 'No profiles yet'"
+      :description="searchQuery ? 'Try a different name.' : 'Create your first profile to save workflows and default parameters.'"
     >
-      <div class="text-4xl">🎭</div>
-      <h3 class="text-base font-bold text-slate-800 dark:text-white">No profiles found</h3>
-      <p class="text-xs text-slate-500 max-w-sm mx-auto">
-        Create your first profile to save workflows and default parameters.
-      </p>
-      <Button variant="primary" size="sm" @click="profilesStore.openCreateModal">
-        Create Profile
-      </Button>
-    </div>
+      <template #actions>
+        <Button v-if="searchQuery" variant="secondary" size="sm" @click="searchQuery = ''">Clear filter</Button>
+        <Button v-else variant="primary" size="sm" @click="profilesStore.openCreateModal">Create Profile</Button>
+      </template>
+    </EmptyState>
 
     <!-- Profiles Grid -->
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

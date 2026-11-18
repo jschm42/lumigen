@@ -3,6 +3,7 @@ import { useProfilesStore } from '@/stores/profiles'
 import type { Profile } from '@/types'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
+import { useConfirm } from '@/composables/useConfirm'
 
 interface Props {
   profile: Profile
@@ -11,20 +12,24 @@ interface Props {
 const props = defineProps<Props>()
 
 const profilesStore = useProfilesStore()
+const confirm = useConfirm()
 
 function handleEdit() {
   profilesStore.openEditModal(props.profile)
 }
 
-function handleDelete() {
-  if (confirm(`Do you really want to delete profile "${props.profile.name}"?`)) {
-    profilesStore.deleteProfile(props.profile.id)
-  }
+async function handleDelete() {
+  const ok = await confirm({
+    title: 'Delete profile',
+    message: `Do you really want to delete profile "${props.profile.name}"?`,
+    confirmText: 'Delete',
+  })
+  if (ok) profilesStore.deleteProfile(props.profile.id)
 }
 </script>
 
 <template>
-  <div class="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 p-5 shadow-sm hover:border-sky-400/50 dark:hover:border-sky-400/40 transition-all flex flex-col justify-between text-xs space-y-4">
+  <div data-testid="profile-card" class="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 p-5 shadow-sm hover:border-sky-400/50 dark:hover:border-sky-400/40 transition-all flex flex-col justify-between text-xs space-y-4">
     <!-- Header -->
     <div class="space-y-2">
       <div class="flex items-start justify-between gap-2">
@@ -78,8 +83,8 @@ function handleDelete() {
       <Button variant="secondary" size="xs" @click="handleEdit">
         ✏️ Edit
       </Button>
-      <Button variant="danger" size="xs" @click="handleDelete">
-        🗑️
+      <Button variant="danger" size="xs" aria-label="Delete profile" title="Delete profile" @click="handleDelete">
+        <span aria-hidden="true">🗑️</span>
       </Button>
     </div>
   </div>

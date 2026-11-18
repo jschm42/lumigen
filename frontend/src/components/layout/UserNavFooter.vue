@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCreditsStore } from '@/stores/credits'
 import { COPYRIGHT_NOTICE } from '@/constants/app'
+import Avatar from '@/components/ui/Avatar.vue'
 
 interface Props {
   collapsed?: boolean
@@ -36,9 +37,7 @@ const creditsStore = useCreditsStore()
       ]"
       :title="collapsed ? `${authStore.displayName} – My profile` : 'My profile'"
     >
-      <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 text-[11px] font-bold text-white shadow-sm">
-        {{ authStore.initials }}
-      </span>
+      <Avatar :initials="authStore.initials" />
       <span v-if="!collapsed" class="min-w-0 flex-1">
         <span class="block truncate text-xs font-semibold text-slate-800 group-hover:text-sky-600 dark:text-slate-100 dark:group-hover:text-sky-300">
           {{ authStore.displayName }}

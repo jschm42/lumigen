@@ -552,7 +552,7 @@ def serve_spa_index() -> Response:
 
 
 # SPA-only client routes without a dedicated FastAPI handler.
-SPA_PUBLIC_PATHS = frozenset({"/forgot-password", "/reset-password"})
+SPA_PUBLIC_PATHS = frozenset({"/onboarding", "/forgot-password", "/reset-password"})
 SPA_PRIVATE_PATHS = frozenset({"/account"})
 
 

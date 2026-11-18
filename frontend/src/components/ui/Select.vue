@@ -1,5 +1,17 @@
 <script setup lang="ts">
-interface Option {
+import { computed, useAttrs } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
+import FormField from './FormField.vue'
+import { controlBaseClasses, controlSizeClasses, controlStateClasses, type ControlSize } from './controlStyles'
+
+/**
+ * Native select with the shared control styling.
+ * With `options`, the emitted value keeps the option's original type (number stays number);
+ * with slotted <option> elements the raw string value is emitted.
+ */
+defineOptions({ inheritAttrs: false })
+
+export interface SelectOption {
   value: string | number
   label: string
   disabled?: boolean
@@ -7,67 +19,71 @@ interface Option {
 
 interface Props {
   modelValue?: string | number | null
-  options?: Option[]
+  options?: SelectOption[]
   placeholder?: string
   label?: string
+  hint?: string
   error?: string
   disabled?: boolean
   id?: string
   name?: string
+  size?: ControlSize
 }
 
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  size: 'md',
+})
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: any): void
+  (e: 'update:modelValue', value: string | number): void
 }>()
 
+const attrs = useAttrs()
+const rootAttrs = computed(() => ({ class: attrs.class, style: attrs.style }))
+const controlAttrs = computed(() => {
+  const { class: _class, style: _style, ...rest } = attrs
+  return rest
+})
+
 function handleChange(event: Event) {
-  const target = event.target as HTMLSelectElement
-  emit('update:modelValue', target.value)
+  const raw = (event.target as HTMLSelectElement).value
+  const match = props.options?.find((option) => String(option.value) === raw)
+  emit('update:modelValue', match ? match.value : raw)
 }
 </script>
 
 <template>
-  <div class="w-full space-y-1.5">
-    <label v-if="label" :for="id" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-      {{ label }}
-    </label>
-    <div class="relative">
-      <select
-        :id="id"
-        :name="name"
-        :value="modelValue ?? ''"
-        :disabled="disabled"
-        @change="handleChange"
-        :class="[
-          'w-full appearance-none rounded-xl border bg-white/70 px-3.5 py-2 pr-10 text-sm text-slate-900 transition-all duration-150',
-          'focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 cursor-pointer',
-          'dark:bg-slate-900/70 dark:text-slate-100',
-          error
-            ? 'border-rose-500 focus:ring-rose-500/40 focus:border-rose-500'
-            : 'border-slate-300/80 hover:border-slate-400 dark:border-white/10 dark:hover:border-white/20',
-          disabled ? 'opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800' : '',
-        ]"
-      >
-        <option v-if="placeholder" value="" disabled selected>{{ placeholder }}</option>
-        <slot>
-          <option
-            v-for="opt in options"
-            :key="opt.value"
-            :value="opt.value"
-            :disabled="opt.disabled"
-          >
-            {{ opt.label }}
-          </option>
-        </slot>
-      </select>
-      <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
-        <svg class="h-4 w-4 fill-current" viewBox="0 0 20 20">
-          <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-        </svg>
+  <FormField v-bind="rootAttrs" :id="id" :label="label" :hint="hint" :error="error">
+    <template #default="{ id: fieldId, describedBy, invalid }">
+      <div class="relative">
+        <select
+          v-bind="controlAttrs"
+          :id="fieldId"
+          :name="name"
+          :value="modelValue ?? ''"
+          :disabled="disabled"
+          :aria-invalid="invalid || undefined"
+          :aria-describedby="describedBy"
+          :class="[
+            controlBaseClasses,
+            controlSizeClasses[props.size],
+            controlStateClasses(invalid),
+            'cursor-pointer appearance-none pr-8',
+          ]"
+          @change="handleChange"
+        >
+          <option v-if="placeholder" value="" disabled>{{ placeholder }}</option>
+          <slot>
+            <option v-for="opt in options" :key="opt.value" :value="opt.value" :disabled="opt.disabled">
+              {{ opt.label }}
+            </option>
+          </slot>
+        </select>
+        <ChevronDown
+          class="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+          aria-hidden="true"
+        />
       </div>
-    </div>
-    <p v-if="error" class="text-xs text-rose-500 font-medium">{{ error }}</p>
-  </div>
+    </template>
+  </FormField>
 </template>

@@ -3,7 +3,9 @@ import { onMounted } from 'vue'
 import { useGalleryStore } from '@/stores/gallery'
 import { useGenerateStore } from '@/stores/generate'
 import Modal from '@/components/ui/Modal.vue'
-import Spinner from '@/components/ui/Spinner.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import LoadingState from '@/components/ui/LoadingState.vue'
+import { Images } from 'lucide-vue-next'
 import type { Asset } from '@/types'
 
 interface Props {
@@ -44,17 +46,16 @@ function selectAsset(asset: Asset) {
       </p>
 
       <!-- Loading spinner -->
-      <div v-if="galleryStore.isLoading" class="py-16 flex justify-center">
-        <Spinner size="lg" class="text-sky-500" />
-      </div>
+      <LoadingState v-if="galleryStore.isLoading" label="Loading gallery…" />
 
       <!-- Empty state -->
-      <div
+      <EmptyState
         v-else-if="galleryStore.assets.length === 0"
-        class="py-12 text-center text-xs text-slate-500 dark:text-slate-400"
-      >
-        No gallery images available yet.
-      </div>
+        :icon="Images"
+        title="No gallery images yet"
+        description="Generated images appear here and can then be used as references."
+        size="sm"
+      />
 
       <!-- Gallery Grid for selection -->
       <div

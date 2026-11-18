@@ -8,7 +8,11 @@ import VirtualAssetGrid from './components/VirtualAssetGrid.vue'
 import BatchActionBar from './components/BatchActionBar.vue'
 import AssetDetailModal from './components/AssetDetailModal.vue'
 import Spinner from '@/components/ui/Spinner.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import Skeleton from '@/components/ui/Skeleton.vue'
+import { Images, SearchX } from 'lucide-vue-next'
 import Button from '@/components/ui/Button.vue'
+import { hasOpenOverlay } from '@/composables/useOverlay'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,12 +25,7 @@ const hoveredAssetId = ref<number | null>(null)
 let observer: IntersectionObserver | null = null
 
 function isOverlayOpen() {
-  return (
-    imageViewerStore.isOpen ||
-    galleryStore.isDetailModalOpen ||
-    document.body.style.overflow === 'hidden' ||
-    !!document.querySelector('.fixed.inset-0.z-50')
-  )
+  return hasOpenOverlay() || imageViewerStore.isOpen || galleryStore.isDetailModalOpen
 }
 
 function isTypingTarget(el: EventTarget | null) {
@@ -156,34 +155,23 @@ const isRefreshing = computed(() => galleryStore.isLoading && galleryStore.hasLo
 
     <!-- Initial loading: skeleton grid -->
     <div v-if="isInitialLoading" class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
-      <div
-        v-for="n in 18"
-        :key="n"
-        class="aspect-square animate-pulse rounded-2xl bg-slate-200/80 dark:bg-slate-800/60"
-      />
+      <Skeleton v-for="n in 18" :key="n" class="aspect-square" />
     </div>
 
     <!-- Empty state -->
-    <div
+    <EmptyState
       v-else-if="galleryStore.displayedAssets.length === 0 && !galleryStore.isLoading"
-      class="py-20 text-center space-y-3"
+      :icon="galleryStore.activeFilterCount > 0 ? SearchX : Images"
+      :title="galleryStore.activeFilterCount > 0 ? 'No images match your filters' : 'Your gallery is empty'"
+      :description="galleryStore.activeFilterCount > 0 ? 'Try removing a filter or widening the time range.' : 'Generated images appear here automatically.'"
     >
-      <div class="text-4xl">🖼️</div>
-      <h3 class="text-base font-bold text-slate-800 dark:text-white">
-        {{ galleryStore.activeFilterCount > 0 ? 'No images match your filters' : 'Your gallery is empty' }}
-      </h3>
-      <p class="text-xs text-slate-500 max-w-sm mx-auto">
-        {{ galleryStore.activeFilterCount > 0 ? 'Try removing a filter or widening the time range.' : 'Generated images appear here automatically.' }}
-      </p>
-      <div class="flex justify-center gap-2 pt-1">
+      <template #actions>
         <Button v-if="galleryStore.activeFilterCount > 0" variant="secondary" size="sm" @click="galleryStore.resetFilters">
           Reset filters
         </Button>
-        <router-link v-else to="/">
-          <Button variant="primary" size="sm">Open studio</Button>
-        </router-link>
-      </div>
-    </div>
+        <Button v-else variant="primary" size="sm" @click="router.push('/')">Open studio</Button>
+      </template>
+    </EmptyState>
 
     <!-- Gallery Grid (stays visible while filters reload) -->
     <div v-else class="relative">

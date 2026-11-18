@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { useGenerateStore } from '@/stores/generate'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
+import Input from '@/components/ui/Input.vue'
+import { Search } from 'lucide-vue-next'
 import type { StylePreset } from '@/types'
 
 interface Props {
@@ -42,12 +44,9 @@ function selectStyle(style: StylePreset | null) {
     <div class="space-y-4">
       <!-- Search & Filter bar -->
       <div class="flex items-center gap-3">
-        <input
-          type="text"
-          v-model="searchQuery"
-          placeholder="Search styles..."
-          class="flex-1 rounded-xl border border-slate-300/80 bg-white/70 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
-        />
+        <Input v-model="searchQuery" type="search" size="sm" class="flex-1" placeholder="Search styles..." aria-label="Search styles">
+          <template #prefix><Search class="size-3.5" aria-hidden="true" /></template>
+        </Input>
         <Button
           variant="secondary"
           size="sm"

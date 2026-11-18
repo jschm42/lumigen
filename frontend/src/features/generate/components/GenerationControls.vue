@@ -3,10 +3,31 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useGenerateStore } from '@/stores/generate'
 import { useProfilesStore } from '@/stores/profiles'
 import { galleryApi } from '@/api/gallery'
+import Select from '@/components/ui/Select.vue'
 import type { Category } from '@/types'
 
 const generateStore = useGenerateStore()
 const profilesStore = useProfilesStore()
+
+const VIDEO_DURATIONS = [4, 5, 6, 8, 10].map((seconds) => ({ value: seconds, label: `${seconds}s` }))
+
+const modelOptions = computed(() => [
+  { value: '', label: 'Select model...' },
+  ...generateStore.activeModels.map((model) => ({
+    value: model.id,
+    label: `${model.name} (${model.provider.toUpperCase()})${model.media_type === 'video' ? ' · Video' : ''}`,
+  })),
+])
+
+const profileOptions = computed(() => [
+  { value: '', label: 'No profile (Default)' },
+  ...profilesStore.profiles.map((profile) => ({ value: profile.id, label: profile.name })),
+])
+
+/** Select emits '' for the "none" option; the store expects null. */
+function toOptionalId(value: string | number): number | null {
+  return value === '' ? null : Number(value)
+}
 
 const availableCategories = ref<Category[]>([])
 const isCategoryDropdownOpen = ref(false)
@@ -118,21 +139,14 @@ const selectedCategorySummaryTitle = computed(() => {
 <template>
   <div class="flex flex-wrap items-center gap-2 text-xs">
     <!-- Model Config Selector -->
-    <div class="min-w-[160px] flex-1 max-w-xs">
-      <select
-        v-model.number="generateStore.selectedModelConfigId"
-        class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
-      >
-        <option :value="null">Select model...</option>
-        <option
-          v-for="model in generateStore.activeModels"
-          :key="model.id"
-          :value="model.id"
-        >
-          {{ model.name }} ({{ model.provider.toUpperCase() }}){{ model.media_type === 'video' ? ' · 🎬 Video' : '' }}
-        </option>
-      </select>
-    </div>
+    <Select
+      :model-value="generateStore.selectedModelConfigId ?? ''"
+      :options="modelOptions"
+      size="sm"
+      class="min-w-[160px] max-w-xs flex-1"
+      aria-label="Model"
+      @update:model-value="generateStore.selectedModelConfigId = toOptionalId($event)"
+    />
 
     <!-- Video options: shown for video-capable models (FAL.ai video models, Seedance) -->
     <div
@@ -141,20 +155,14 @@ const selectedCategorySummaryTitle = computed(() => {
       data-testid="video-controls"
     >
       <span class="font-semibold">🎬 Video</span>
-      <label class="flex items-center gap-1">
-        <span class="text-[11px]">Duration</span>
-        <select
-          v-model.number="generateStore.videoDuration"
-          class="rounded-lg border border-violet-300/70 bg-white/90 px-1.5 py-0.5 text-[11px] dark:border-violet-500/30 dark:bg-slate-900/80 dark:text-violet-100"
-          data-testid="video-duration"
-        >
-          <option :value="4">4s</option>
-          <option :value="5">5s</option>
-          <option :value="6">6s</option>
-          <option :value="8">8s</option>
-          <option :value="10">10s</option>
-        </select>
-      </label>
+      <Select
+        v-model="generateStore.videoDuration"
+        :options="VIDEO_DURATIONS"
+        size="sm"
+        class="w-20"
+        aria-label="Video duration"
+        data-testid="video-duration"
+      />
       <label class="flex items-center gap-1 text-[11px] cursor-pointer">
         <input
           v-model="generateStore.videoGenerateAudio"
@@ -167,22 +175,14 @@ const selectedCategorySummaryTitle = computed(() => {
     </div>
 
     <!-- Profile Selector -->
-    <div class="min-w-[140px] flex-1 max-w-xs">
-      <select
-        v-model.number="generateStore.selectedProfileId"
-        class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 transition-all dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer shadow-sm"
-        title="Select profile (Optional)"
-      >
-        <option :value="null">No profile (Default)</option>
-        <option
-          v-for="profile in profilesStore.profiles"
-          :key="profile.id"
-          :value="profile.id"
-        >
-          {{ profile.name }}
-        </option>
-      </select>
-    </div>
+    <Select
+      :model-value="generateStore.selectedProfileId ?? ''"
+      :options="profileOptions"
+      size="sm"
+      class="min-w-[140px] max-w-xs flex-1"
+      aria-label="Profile (optional)"
+      @update:model-value="generateStore.selectedProfileId = toOptionalId($event)"
+    />
 
     <!-- Category Multi-Select Combobox -->
     <div class="min-w-[140px] flex-1 max-w-xs relative" ref="categoryDropdownRef">

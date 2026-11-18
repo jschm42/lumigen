@@ -6,6 +6,7 @@ import { useQueueStore } from '@/stores/queue'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
+import { Search } from 'lucide-vue-next'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import UserNavFooter from '@/components/layout/UserNavFooter.vue'
 import type { ChatSession } from '@/types'
@@ -217,18 +218,17 @@ async function handleDeleteAll() {
     </div>
 
     <!-- Search Input -->
-    <div class="relative mb-2">
-      <svg class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-      </svg>
-      <input
-        type="search"
-        v-model="sessionsStore.searchQuery"
-        @input="sessionsStore.fetchSessions"
-        placeholder="Search sessions..."
-        class="w-full rounded-xl border border-slate-200 bg-white/60 py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-200 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-      />
-    </div>
+    <Input
+      v-model="sessionsStore.searchQuery"
+      type="search"
+      size="sm"
+      class="mb-2"
+      placeholder="Search sessions..."
+      aria-label="Search sessions"
+      @input="sessionsStore.fetchSessions"
+    >
+      <template #prefix><Search class="size-3.5" aria-hidden="true" /></template>
+    </Input>
 
     <!-- List header -->
     <div class="mb-1 flex items-center justify-between px-1">

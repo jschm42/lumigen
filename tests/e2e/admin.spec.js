@@ -1,79 +1,55 @@
 /**
- * Admin page e2e tests.
- *
- * Verifies that the admin page is accessible to admins, renders the
- * expected sections, and that the static JS bundle is linked correctly.
+ * Admin page e2e tests (Vue SPA).
  */
 
 // @ts-check
 import { test, expect } from "@playwright/test";
+import { ADMIN_USERNAME } from "./e2e-constants.js";
+import { api, navigateTo } from "./helpers.js";
 
 test.describe("Admin page (authenticated admin)", () => {
-  test("renders the admin page with a 200 response", async ({ page }) => {
-    const response = await page.goto("/admin");
-    expect(response?.status()).toBe(200);
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await navigateTo(page, "Admin");
+    await expect(page).toHaveURL(/\/admin/);
   });
 
-  test("has a page title that contains Admin", async ({ page }) => {
-    await page.goto("/admin");
-    await expect(page).toHaveTitle(/Admin|Lumigen/);
+  test("renders the administration heading and tabs", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "Studio Administration" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Users" })).toBeVisible();
   });
 
-  test("loads the admin-page.js script", async ({ page }) => {
-    /** @type {string[]} */
-    const scriptsLoaded = [];
-    page.on("request", (req) => scriptsLoaded.push(req.url()));
-
-    await page.goto("/admin");
-    await page.waitForLoadState("networkidle");
-
-    const hasAdminScript = scriptsLoaded.some((url) =>
-      url.includes("admin-page.js")
-    );
-    expect(hasAdminScript).toBe(true);
+  test("lists the seeded stub model", async ({ page }) => {
+    await page.getByRole("tab", { name: "Image Models" }).click();
+    await expect(page.getByRole("cell", { name: "Stub Model" })).toBeVisible();
   });
 
-  test("shows the providers / storage section", async ({ page }) => {
-    await page.goto("/admin");
-
-    /* At least one well-known admin section heading should be visible */
-    const sectionHeading = page
-      .locator("text=Provider")
-      .or(page.locator("text=Storage"))
-      .or(page.locator("text=Modell"))
-      .or(page.locator("text=Model"))
-      .or(page.locator("text=Benutzer"))
-      .or(page.locator("text=User"));
-    await expect(sectionHeading.first()).toBeVisible();
+  test("shows the admin account in the users tab", async ({ page }) => {
+    await page.getByRole("tab", { name: "Users" }).click();
+    await expect(page.getByTestId("add-user")).toBeVisible();
+    await expect(page.getByText(ADMIN_USERNAME).first()).toBeVisible();
   });
 
-  test("shows the users section when the users tab is active", async ({
-    page,
-  }) => {
-    await page.goto("/admin?section=users");
+  test("deleting a model requires confirmation", async ({ page }) => {
+    const name = `Disposable Model ${Date.now()}`;
+    const created = await api(page, "POST", "/api/admin/models", {
+      json: { name, provider: "stub", model_identifier: `stub-${Date.now()}`, is_active: false },
+    });
+    expect(created.status).toBeLessThan(300);
 
-    /* The users management section should contain a 'create user' element */
-    const usersContent = page
-      .locator("text=Benutzer")
-      .or(page.locator("text=User"))
-      .or(page.locator('input[name="username"]'));
-    await expect(usersContent.first()).toBeVisible();
-  });
+    await page.reload();
+    await page.getByRole("tab", { name: "Image Models" }).click();
+    const row = page.getByRole("row").filter({ hasText: name });
+    await expect(row).toBeVisible();
 
-  test("can save and reload enhancement prompt", async ({ page }) => {
-    await page.goto("/admin?section=enhancement");
-    const modelInput = page.locator('input[name="model"]');
-    await modelInput.fill("test-model");
-    const textarea = page.locator('textarea[name="default_enhancement_prompt"]');
-    const testPrompt = `Test prompt ${Date.now()}`;
-    await textarea.fill("");
-    await textarea.fill(testPrompt);
-    await page.click('button[type="submit"]');
-    // Wait for reload and success message
-    await expect(page.locator('text=Saved')).toBeVisible();
-    // Reload page to ensure value is persisted
-    await page.goto("/admin?section=enhancement");
-    await expect(textarea).toHaveValue(testPrompt);
-    await expect(modelInput).toHaveValue("test-model");
+    await row.getByRole("button", { name: "Delete" }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete model" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(row).toBeVisible();
+
+    await row.getByRole("button", { name: "Delete" }).click();
+    await dialog.getByRole("button", { name: "Delete" }).click();
+    await expect(row).toHaveCount(0);
   });
 });

@@ -9,11 +9,35 @@ import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Switch from '@/components/ui/Switch.vue'
+import Select from '@/components/ui/Select.vue'
+import Badge from '@/components/ui/Badge.vue'
+import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
+import { useConfirm } from '@/composables/useConfirm'
 import type { ModelConfig } from '@/types'
 
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
 const toastStore = useToastStore()
+const confirm = useConfirm()
+
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'name', label: 'Name' },
+  { key: 'provider', label: 'Provider' },
+  { key: 'model_identifier', label: 'Identifier' },
+  { key: 'pricing', label: `Pricing (${currency.value})` },
+  { key: 'is_active', label: 'Active' },
+  { key: 'is_default', label: 'Default' },
+  { key: 'actions', label: 'Actions', align: 'right' },
+])
+
+async function handleDelete(model: ModelConfig) {
+  const ok = await confirm({
+    title: 'Delete model',
+    message: `Delete the model configuration "${model.name}"? Existing images keep their metadata.`,
+    confirmText: 'Delete',
+  })
+  if (ok) await adminStore.deleteModelConfig(model.id)
+}
 
 const PRICE_FIELDS = ['price_input_per_mtok', 'price_output_per_mtok', 'price_per_image'] as const
 type PriceField = (typeof PRICE_FIELDS)[number]
@@ -160,78 +184,52 @@ async function handleDiscover() {
     </div>
 
     <!-- Models List -->
-    <div class="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 overflow-hidden shadow-sm">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="border-b border-slate-200 dark:border-white/10 text-slate-500 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-950/40">
-            <th class="p-3.5">Name</th>
-            <th class="p-3.5">Provider</th>
-            <th class="p-3.5">Identifier</th>
-            <th class="p-3.5">Pricing ({{ currency }})</th>
-            <th class="p-3.5">Active</th>
-            <th class="p-3.5">Default</th>
-            <th class="p-3.5 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200/60 dark:divide-white/10">
-          <tr
-            v-for="model in adminStore.modelConfigs"
-            :key="model.id"
-            class="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors"
-          >
-            <td class="p-3.5 font-bold text-slate-900 dark:text-white">{{ model.name }}</td>
-            <td class="p-3.5 text-[11px] text-slate-500">{{ providerLabel(model.provider) }}</td>
-            <td class="p-3.5 font-mono text-slate-700 dark:text-slate-300">
-              {{ model.model_identifier }}
-              <span
-                v-if="model.media_type === 'video'"
-                class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300"
-              >🎬 Video</span>
-            </td>
-            <td class="p-3.5 text-[11px] text-slate-500">{{ priceSummary(model) }}</td>
-            <td class="p-3.5">
-              <span :class="model.is_active ? 'text-emerald-500 font-bold' : 'text-slate-400'">
-                {{ model.is_active ? 'Yes' : 'No' }}
-              </span>
-            </td>
-            <td class="p-3.5">
-              <span v-if="model.is_default" class="px-2 py-0.5 rounded-full text-[10px] bg-sky-500 text-white font-bold">
-                Default
-              </span>
-            </td>
-            <td class="p-3.5 text-right space-x-2">
-              <button
-                type="button"
-                @click="openEdit(model)"
-                class="text-sky-500 hover:text-sky-400 font-semibold"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                @click="adminStore.deleteModelConfig(model.id)"
-                class="text-rose-500 hover:text-rose-400 font-semibold"
-              >
-                Delete
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      :columns="columns"
+      :rows="adminStore.modelConfigs"
+      row-key="id"
+      caption="Image model configurations"
+      empty-title="No models configured"
+      empty-description="Add a model or discover available models from a provider below."
+    >
+      <template #cell-name="{ row }">
+        <span class="font-bold text-slate-900 dark:text-white">{{ row.name }}</span>
+      </template>
+      <template #cell-provider="{ row }">
+        <span class="text-slate-500 dark:text-slate-400">{{ providerLabel(row.provider) }}</span>
+      </template>
+      <template #cell-model_identifier="{ row }">
+        <span class="font-mono">{{ row.model_identifier }}</span>
+        <Badge v-if="row.media_type === 'video'" variant="violet" size="xs" class="ml-1.5">Video</Badge>
+      </template>
+      <template #cell-pricing="{ row }">
+        <span class="text-slate-500 dark:text-slate-400">{{ priceSummary(row) }}</span>
+      </template>
+      <template #cell-is_active="{ row }">
+        <Badge :variant="row.is_active ? 'emerald' : 'slate'" size="xs" dot>{{ row.is_active ? 'Active' : 'Inactive' }}</Badge>
+      </template>
+      <template #cell-is_default="{ row }">
+        <Badge v-if="row.is_default" variant="sky" size="xs">Default</Badge>
+      </template>
+      <template #cell-actions="{ row }">
+        <div class="flex justify-end gap-1">
+          <Button variant="ghost" size="xs" @click="openEdit(row)">Edit</Button>
+          <Button variant="danger-ghost" size="xs" @click="handleDelete(row)">Delete</Button>
+        </div>
+      </template>
+    </DataTable>
 
     <!-- Provider Model Discovery Box -->
     <div class="p-4 rounded-2xl border border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-slate-900/70 space-y-3">
       <h4 class="font-bold text-slate-900 dark:text-white">Discover Models from Provider</h4>
       <div class="flex items-center gap-3">
-        <select
+        <Select
           v-model="selectedProvider"
-          class="rounded-xl border border-slate-300/80 bg-white px-3 py-1.5 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
-        >
-          <option v-for="option in providerOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+          :options="providerOptions"
+          size="sm"
+          class="w-48"
+          aria-label="Provider to discover models from"
+        />
         <Button
           variant="secondary"
           size="sm"
@@ -283,19 +281,7 @@ async function handleDiscover() {
           required
         />
 
-        <div>
-          <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-            Provider
-          </label>
-          <select
-            v-model="editingConfig.provider"
-            class="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option v-for="option in providerOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
+        <Select v-model="editingConfig.provider" label="Provider" :options="providerOptions" />
 
         <div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-white/10">
           <div class="flex items-baseline justify-between gap-2">

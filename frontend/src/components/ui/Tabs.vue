@@ -24,12 +24,15 @@ const emit = defineEmits<{
 <template>
   <div
     v-if="variant === 'pills'"
+    role="tablist"
     class="inline-flex p-1 rounded-xl bg-slate-200/60 dark:bg-slate-900/60 border border-slate-300/40 dark:border-white/10 gap-1"
   >
     <button
       v-for="tab in tabs"
       :key="tab.id"
       type="button"
+      role="tab"
+      :aria-selected="modelValue === tab.id"
       @click="emit('update:modelValue', tab.id)"
       :class="[
         'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer',
@@ -41,7 +44,7 @@ const emit = defineEmits<{
       <span>{{ tab.label }}</span>
       <span
         v-if="tab.badge !== undefined"
-        class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+        class="px-1.5 py-0.5 rounded-full text-2xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
       >
         {{ tab.badge }}
       </span>
@@ -50,12 +53,15 @@ const emit = defineEmits<{
 
   <div
     v-else
+    role="tablist"
     class="flex border-b border-slate-200 dark:border-white/10 gap-6"
   >
     <button
       v-for="tab in tabs"
       :key="tab.id"
       type="button"
+      role="tab"
+      :aria-selected="modelValue === tab.id"
       @click="emit('update:modelValue', tab.id)"
       :class="[
         'pb-3 text-sm font-semibold border-b-2 transition-all duration-150 flex items-center gap-2 cursor-pointer',
@@ -67,7 +73,7 @@ const emit = defineEmits<{
       <span>{{ tab.label }}</span>
       <span
         v-if="tab.badge !== undefined"
-        class="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+        class="px-1.5 py-0.5 rounded-full text-2xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
       >
         {{ tab.badge }}
       </span>

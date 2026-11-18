@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import Spinner from './Spinner.vue'
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'surface'
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'outline' | 'surface'
   size?: 'xs' | 'sm' | 'md' | 'lg'
   disabled?: boolean
   loading?: boolean
@@ -42,6 +42,8 @@ const variantClasses = computed(() => {
       return 'bg-transparent hover:bg-slate-200/60 text-slate-700 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
     case 'danger':
       return 'bg-rose-500 hover:bg-rose-600 text-white shadow-md shadow-rose-500/20 active:scale-[0.98]'
+    case 'danger-ghost':
+      return 'bg-transparent text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-300'
     case 'outline':
       return 'bg-transparent border border-slate-300 hover:border-slate-400 text-slate-700 dark:border-white/20 dark:hover:border-white/40 dark:text-slate-200'
     case 'surface':

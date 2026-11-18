@@ -5,6 +5,7 @@ import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ImageViewerModal from '@/components/ui/ImageViewerModal.vue'
 import QueueModal from '@/components/queue/QueueModal.vue'
 import CreditsModal from '@/components/ui/CreditsModal.vue'
+import ConfirmHost from './ConfirmHost.vue'
 import { useQueueStore } from '@/stores/queue'
 
 const queueStore = useQueueStore()
@@ -39,6 +40,9 @@ onMounted(() => {
 
     <!-- Global Credits & Licenses Modal -->
     <CreditsModal />
+
+    <!-- Global confirmation dialog (useConfirm) -->
+    <ConfirmHost />
 
     <!-- Global Toast Container -->
     <ToastContainer />

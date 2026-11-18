@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
+import Select from '@/components/ui/Select.vue'
 
 const profilesStore = useProfilesStore()
 const generateStore = useGenerateStore()
@@ -150,17 +151,9 @@ async function handleSubmit() {
         :rows="2"
       />
 
-      <div>
-        <label class="block font-semibold uppercase tracking-wider text-[11px] text-slate-500 mb-1.5">
-          Default Format (Aspect Ratio)
-        </label>
-        <select
-          v-model="formData.default_aspect_ratio"
-          class="w-full rounded-xl border border-slate-300/80 bg-white/80 px-3 py-2 text-xs text-slate-900 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
-        >
-          <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
-        </select>
-      </div>
+      <Select v-model="formData.default_aspect_ratio" label="Default Format (Aspect Ratio)">
+        <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
+      </Select>
 
       <!-- Categories Section -->
       <div class="space-y-2 pt-2 border-t border-slate-200/80 dark:border-white/10">
@@ -204,11 +197,12 @@ async function handleSubmit() {
 
         <!-- Quick create category -->
         <div class="flex items-center gap-2 pt-1">
-          <input
+          <Input
             v-model="newCategoryName"
-            type="text"
+            size="sm"
+            class="flex-1"
             placeholder="Add new category..."
-            class="flex-1 rounded-xl border border-slate-300/80 bg-white/80 px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-100"
+            aria-label="New category name"
             @keydown.enter.prevent="handleQuickCreateCategory"
           />
           <Button
