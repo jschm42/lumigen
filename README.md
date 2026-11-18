@@ -4,7 +4,7 @@
 
 # Lumigen
 
-**One studio. Thirteen AI providers for images, video & vector graphics. Your media stays on your machine.**
+**One studio. Thirteen AI providers plus your own OpenAI-compatible and ComfyUI servers for images, video & vector graphics. Your media stays on your machine.**
 
 A self-hosted, local-first AI creation studio: generate images, videos, and scalable vector graphics with FLUX, GPT-Image, Gemini, Seedream, Seedance, Kling, Recraft, Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interface, without subscriptions or tracking.
 
@@ -51,7 +51,7 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 <td width="50%" valign="top">
 
 ### 🎨 Create
-- **13 providers, one prompt box** – switch models and media types in a dropdown, no context switch
+- **13 providers + your own endpoints, one prompt box** – switch models and media types in a dropdown, no context switch
 - **🤖 Agentic Mode** – decompose high-level prompts (e.g. "RPG icons" or "character concepts") into cohesive multi-image sets using LLM reasoning; automatically groups outputs into gallery stacks with one-click full-set ZIP download
 - **AI Video Generation** – text-to-video & image-to-video via ByteDance Seedance & fal.ai (Kling 2.5/1.5, Minimax Video-01, Hunyuan, Luma, LTX, Veo 3)
 - **Vector Graphics (SVG)** – prompt-to-SVG vector output (e.g. Recraft V3) stored in pure XML without rasterization artifacts
@@ -121,8 +121,27 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 | **Together AI** | FLUX.2 [dev], FLUX.1.1 [pro], FLUX.1 [schnell] | Width/height from aspect ratio |
 | **xAI** | Grok Imagine (`grok-imagine-image-2.0`) | Generation & edits, reports usage |
 | **Ideogram** | Ideogram 3.0 Turbo / Default / Quality | Great typography, style references |
+| **OpenAI-compatible APIs** | Anything behind LocalAI, LiteLLM, vLLM or a hosted gateway | Custom endpoints with base URL and optional key; `b64_json` and `url` responses, image edits |
+| **ComfyUI** | Your local checkpoints (SDXL, FLUX, …) | Self-hosted; built-in text-to-image graph or your own API-format workflow with placeholders |
 
 Add keys under **Admin → API Keys** (each provider links to its key page) or in `.env`.
+
+### Custom endpoints: OpenAI-compatible APIs and ComfyUI
+
+Under **Admin → Endpoints** you can add any number of your own servers:
+
+- **OpenAI-compatible API** – base URL including the version path (e.g. `http://localhost:8080/v1`).
+  Lumigen calls `/images/generations` (and `/images/edits` for reference images) and lists models via `/models`.
+- **ComfyUI** – the server address (e.g. `http://127.0.0.1:8188`). Checkpoints are listed from the server.
+
+The API key is optional and stored encrypted. **Test connection** checks the settings before saving.
+Then add a model under **Admin → Image Models**, choose the endpoint type and endpoint, and pick a model
+or checkpoint from the list.
+
+For ComfyUI, models use a built-in text-to-image graph (checkpoint = model identifier) unless you enable
+**Use a custom workflow**: export your graph in ComfyUI with *Workflow → Export (API)* and put placeholders
+into the inputs Lumigen should fill – `{{prompt}}` (required), `{{negative_prompt}}`, `{{seed}}`, `{{width}}`,
+`{{height}}`, `{{batch_size}}`, `{{model}}` and `{{input_image}}` (the first reference image, uploaded to ComfyUI).
 
 > **Why no Midjourney?** Midjourney offers no official API, and its terms prohibit automated access.
 > Lumigen only integrates official provider APIs.

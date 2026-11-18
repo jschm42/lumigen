@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import Tabs, { type TabItem } from '@/components/ui/Tabs.vue'
 import ApiKeysTab from './components/ApiKeysTab.vue'
+import EndpointsTab from './components/EndpointsTab.vue'
 import ModelConfigsTab from './components/ModelConfigsTab.vue'
 import ReasoningModelConfigsTab from './components/ReasoningModelConfigsTab.vue'
 import UpscalingTab from './components/UpscalingTab.vue'
@@ -16,6 +17,7 @@ const activeTab = ref('apikeys')
 
 const tabs: TabItem[] = [
   { id: 'apikeys', label: 'API Keys' },
+  { id: 'endpoints', label: 'Endpoints' },
   { id: 'models', label: 'Image Models' },
   { id: 'reasoning', label: 'Reasoning Models' },
   { id: 'upscaling', label: 'Upscaling' },
@@ -43,6 +45,7 @@ const tabs: TabItem[] = [
     <!-- Active Tab Component -->
     <div>
       <ApiKeysTab v-if="activeTab === 'apikeys'" />
+      <EndpointsTab v-else-if="activeTab === 'endpoints'" />
       <ModelConfigsTab v-else-if="activeTab === 'models'" />
       <ReasoningModelConfigsTab v-else-if="activeTab === 'reasoning'" />
       <UpscalingTab v-else-if="activeTab === 'upscaling'" />

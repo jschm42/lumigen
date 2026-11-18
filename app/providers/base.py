@@ -29,6 +29,30 @@ class ProviderGenerationRequest:
     # Generic UI selections; adapters map them to provider-specific parameters.
     aspect_ratio: str | None = None
     negative_prompt: str | None = None
+    # Set for models that run on a user-defined endpoint (OpenAI-compatible / ComfyUI).
+    endpoint: EndpointConfig | None = None
+
+
+#: Provider names whose adapters are configured per custom endpoint instead of globally.
+ENDPOINT_PROVIDERS: tuple[str, ...] = ("openai_compatible", "comfyui")
+
+
+@dataclass
+class EndpointConfig:
+    """Connection details of a custom endpoint plus model-level adapter options."""
+
+    id: int
+    name: str
+    kind: str
+    base_url: str
+    api_key: str | None = None
+    #: Model-level options, e.g. ``{"workflow": {...}}`` for ComfyUI.
+    options: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def root_url(self) -> str:
+        """Base URL without trailing slash."""
+        return self.base_url.strip().rstrip("/")
 
 
 @dataclass
@@ -209,6 +233,10 @@ class ProviderAdapter(ABC):
     async def list_models(self, settings: Settings) -> list[str]:
         """Return the list of model IDs available from this provider. Defaults to an empty list."""
         return []
+
+    async def list_endpoint_models(self, endpoint: EndpointConfig, settings: Settings) -> list[str]:
+        """Return model IDs offered by a custom *endpoint* (only endpoint-based adapters override this)."""
+        raise ProviderConfigError(f"{self.display_name or self.name} does not support custom endpoints.")
 
     #: Substrings that identify a model ID as video-generating. Adapters whose
     #: models are video-only (e.g. Seedance) override :meth:`media_type_for_model`

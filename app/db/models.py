@@ -127,6 +127,25 @@ class Profile(Base, TimestampMixin):
     )
 
 
+class CustomEndpoint(Base, TimestampMixin):
+    """User-defined provider endpoint (OpenAI-compatible API or ComfyUI server).
+
+    ``kind`` selects the adapter (``openai_compatible`` or ``comfyui``); the API key
+    is optional because local servers usually run without authentication.
+    """
+
+    __tablename__ = "custom_endpoints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    base_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    api_key_encrypted: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean(), default=True, nullable=False)
+
+    model_configs: Mapped[list[ModelConfig]] = relationship(back_populates="endpoint")
+
+
 class ModelConfig(Base, TimestampMixin):
     """Named model configuration that can optionally carry a custom encrypted API key."""
 
@@ -147,8 +166,15 @@ class ModelConfig(Base, TimestampMixin):
     use_custom_api_key: Mapped[bool] = mapped_column(
         Boolean(), default=False, nullable=False
     )
+    # Custom endpoint (OpenAI-compatible / ComfyUI) this model runs on; None for built-in providers.
+    endpoint_id: Mapped[int | None] = mapped_column(
+        ForeignKey("custom_endpoints.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    # Adapter-specific options, e.g. a ComfyUI API-format workflow under "workflow".
+    provider_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     profiles: Mapped[list[Profile]] = relationship(back_populates="model_config")
+    endpoint: Mapped[CustomEndpoint | None] = relationship(back_populates="model_configs")
 
 
 class TopazUpscaleModel(Base, TimestampMixin):

@@ -23,12 +23,15 @@ interface Props {
   name?: string
   maxLength?: number
   size?: ControlSize
+  /** Monospace text, e.g. for JSON or code. */
+  mono?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   rows: 3,
   size: 'md',
+  mono: false,
 })
 
 const emit = defineEmits<{
@@ -78,7 +81,7 @@ watch(() => props.modelValue, adjustHeight)
         :maxlength="maxLength"
         :aria-invalid="invalid || undefined"
         :aria-describedby="describedBy"
-        :class="[controlBaseClasses, controlSizeClasses[props.size], controlStateClasses(invalid), 'resize-none']"
+        :class="[controlBaseClasses, controlSizeClasses[props.size], controlStateClasses(invalid), 'resize-none', mono ? 'font-mono' : '']"
         @input="handleInput"
       ></textarea>
     </template>

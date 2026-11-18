@@ -51,3 +51,5 @@ are redistributed; each service's own terms apply to the API usage and generated
 | xAI | https://x.ai/legal/terms-of-service |
 | Ideogram | https://ideogram.ai/legal/api-tos |
 | BytePlus ModelArk (ByteDance Seedream) | https://www.byteplus.com/en/legal/terms-of-service |
+| ComfyUI (self-hosted, GPL-3.0; Lumigen only calls its HTTP API) | https://github.com/comfyanonymous/ComfyUI (license of each loaded checkpoint/LoRA applies to the output) |
+| OpenAI-compatible APIs (user-configured endpoints, e.g. LocalAI, LiteLLM, vLLM) | Terms and model licenses of the respective server/provider |

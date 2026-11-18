@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { DiscoveredUpscaleModel, ModelConfig, ProviderApiKeyStatus, ReasoningModelConfig, StylePreset, UiSettings, UpscaleModel, User } from '@/types'
+import type { CustomEndpoint, CustomEndpointInput, DiscoveredUpscaleModel, EndpointTestResult, ModelConfig, ProviderApiKeyStatus, ReasoningModelConfig, StylePreset, UiSettings, UpscaleModel, User } from '@/types'
 
 export interface AdminUserPayload {
   username?: string
@@ -65,6 +65,41 @@ export const adminApi = {
   async deleteModelConfig(id: number): Promise<{ success: boolean }> {
     const res = await apiClient.delete(`/api/admin/models/${id}`)
     return res.data
+  },
+
+  async listEndpoints(): Promise<CustomEndpoint[]> {
+    const res = await apiClient.get<CustomEndpoint[]>('/api/admin/endpoints')
+    return res.data
+  },
+
+  async getEndpointMeta(): Promise<{ kinds: { value: string; label: string }[]; comfyui_placeholders: string[] }> {
+    const res = await apiClient.get('/api/admin/endpoints/meta')
+    return res.data
+  },
+
+  async saveEndpoint(data: CustomEndpointInput): Promise<CustomEndpoint> {
+    if (data.id) {
+      const res = await apiClient.put<CustomEndpoint>(`/api/admin/endpoints/${data.id}`, data)
+      return res.data
+    }
+    const res = await apiClient.post<CustomEndpoint>('/api/admin/endpoints', data)
+    return res.data
+  },
+
+  async deleteEndpoint(id: number): Promise<{ success: boolean }> {
+    const res = await apiClient.delete(`/api/admin/endpoints/${id}`)
+    return res.data
+  },
+
+  /** Test unsaved or saved settings by listing the endpoint's models. */
+  async testEndpoint(data: CustomEndpointInput): Promise<EndpointTestResult> {
+    const res = await apiClient.post<EndpointTestResult>('/api/admin/endpoints/test', data)
+    return res.data
+  },
+
+  async listEndpointModels(id: number): Promise<string[]> {
+    const res = await apiClient.get<{ models: string[] }>(`/api/admin/endpoints/${id}/models`)
+    return res.data.models
   },
 
   async listStyles(): Promise<StylePreset[]> {

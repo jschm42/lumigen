@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAdminStore } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
@@ -13,7 +13,8 @@ import Select from '@/components/ui/Select.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import type { ModelConfig } from '@/types'
+import Textarea from '@/components/ui/Textarea.vue'
+import type { EndpointKind, ModelConfig } from '@/types'
 
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
@@ -59,6 +60,95 @@ function providerLabel(provider: string) {
   return adminStore.providerStatuses.find((p) => p.provider === provider)?.display_name || provider
 }
 
+// --- Custom endpoints (OpenAI-compatible APIs, ComfyUI) ---------------------
+const ENDPOINT_KINDS: EndpointKind[] = ['openai_compatible', 'comfyui']
+const ENDPOINT_PROVIDER_OPTIONS = [
+  { value: 'openai_compatible', label: 'OpenAI-compatible API (custom endpoint)' },
+  { value: 'comfyui', label: 'ComfyUI (custom endpoint)' },
+]
+const RESPONSE_FORMAT_OPTIONS = [
+  { value: 'b64_json', label: 'b64_json (default)' },
+  { value: 'url', label: 'url (server returns image links)' },
+  { value: 'none', label: 'Do not send response_format' },
+]
+const COMFYUI_PLACEHOLDERS = [
+  'prompt',
+  'negative_prompt',
+  'seed',
+  'width',
+  'height',
+  'batch_size',
+  'model',
+  'input_image',
+].map((name) => `{{${name}}}`)
+
+const editorProviderOptions = computed(() => [...providerOptions.value, ...ENDPOINT_PROVIDER_OPTIONS])
+const isEndpointProvider = computed(() => ENDPOINT_KINDS.includes(editingConfig.value.provider as EndpointKind))
+const endpointOptions = computed(() =>
+  adminStore.endpoints
+    .filter((e) => e.kind === editingConfig.value.provider)
+    .map((e) => ({ value: e.id, label: e.is_active ? e.name : `${e.name} (inactive)` })),
+)
+const modelIdentifierPlaceholder = computed(() => {
+  if (editingConfig.value.provider === 'comfyui') return 'Checkpoint file, e.g. sd_xl_base_1.0.safetensors'
+  if (editingConfig.value.provider === 'openai_compatible') return 'Model name on the server, e.g. flux-dev'
+  return 'e.g. fal-ai/flux/schnell'
+})
+
+const useCustomWorkflow = ref(false)
+const workflowText = ref('')
+const responseFormat = ref('b64_json')
+const endpointModels = ref<string[]>([])
+const isLoadingEndpointModels = ref(false)
+
+function modelLabel(model: ModelConfig): string {
+  if (model.endpoint_name) return `${providerLabel(model.provider)} · ${model.endpoint_name}`
+  if (model.provider === 'comfyui') return 'ComfyUI'
+  if (model.provider === 'openai_compatible') return 'OpenAI-compatible API'
+  return providerLabel(model.provider)
+}
+
+function fillEndpointOptions(config: Partial<ModelConfig>) {
+  const options = config.provider_options || {}
+  useCustomWorkflow.value = !!options.workflow
+  workflowText.value = options.workflow ? JSON.stringify(options.workflow, null, 2) : ''
+  if (!('response_format' in options)) responseFormat.value = 'b64_json'
+  else responseFormat.value = options.response_format ? String(options.response_format) : 'none'
+  endpointModels.value = []
+}
+
+function buildProviderOptions(): Record<string, any> | null {
+  if (editingConfig.value.provider === 'comfyui') {
+    return useCustomWorkflow.value ? { workflow: workflowText.value } : {}
+  }
+  if (editingConfig.value.provider === 'openai_compatible') {
+    if (responseFormat.value === 'b64_json') return {}
+    return { response_format: responseFormat.value === 'none' ? '' : responseFormat.value }
+  }
+  return null
+}
+
+async function loadEndpointModels() {
+  const endpointId = editingConfig.value.endpoint_id
+  if (!endpointId) return
+  isLoadingEndpointModels.value = true
+  try {
+    endpointModels.value = await adminApi.listEndpointModels(endpointId)
+    if (endpointModels.value.length === 0) toastStore.info('The endpoint reported no models.')
+  } catch (error: any) {
+    endpointModels.value = []
+    toastStore.error(error?.response?.data?.detail || 'Could not load models from the endpoint.')
+  } finally {
+    isLoadingEndpointModels.value = false
+  }
+}
+
+function pickEndpointModel(model: string | number) {
+  const id = String(model)
+  editingConfig.value.model_identifier = id
+  if (!editingConfig.value.name) editingConfig.value.name = id.split('/').pop()?.slice(0, 50) || id
+}
+
 function fillPrices(config: Partial<ModelConfig>) {
   PRICE_FIELDS.forEach((field) => {
     const value = config[field]
@@ -96,6 +186,7 @@ const editingConfig = ref<Partial<ModelConfig>>({
 
 onMounted(() => {
   adminStore.fetchModelConfigs()
+  adminStore.fetchEndpoints()
   if (adminStore.providerStatuses.length === 0) adminStore.fetchProviderKeys()
 })
 
@@ -111,14 +202,29 @@ function openNew() {
     supported_resolutions: ['1K', '2K'],
   }
   fillPrices({})
+  fillEndpointOptions({})
   isEditorOpen.value = true
 }
 
 function openEdit(config: ModelConfig) {
   editingConfig.value = { ...config }
   fillPrices(config)
+  fillEndpointOptions(config)
   isEditorOpen.value = true
 }
+
+// Switching the provider drops an endpoint of the wrong kind and stale discoveries.
+watch(
+  () => editingConfig.value.provider,
+  (provider) => {
+    const current = adminStore.endpoints.find((e) => e.id === editingConfig.value.endpoint_id)
+    if (!current || current.kind !== provider) {
+      const candidates = adminStore.endpoints.filter((e) => e.kind === provider)
+      editingConfig.value.endpoint_id = candidates.length === 1 ? candidates[0].id : null
+    }
+    endpointModels.value = []
+  },
+)
 
 function addDiscovered(model: string) {
   openNew()
@@ -144,8 +250,17 @@ async function handleSave() {
     prices[field] = value
   }
   priceError.value = ''
-  await adminStore.saveModelConfig({ ...editingConfig.value, ...prices })
-  isEditorOpen.value = false
+  try {
+    await adminStore.saveModelConfig({
+      ...editingConfig.value,
+      ...prices,
+      endpoint_id: isEndpointProvider.value ? editingConfig.value.endpoint_id ?? null : null,
+      provider_options: buildProviderOptions() ?? undefined,
+    })
+    isEditorOpen.value = false
+  } catch (_error) {
+    // The store shows the API error (e.g. invalid workflow); keep the editor open.
+  }
 }
 
 async function handleDiscover() {
@@ -196,7 +311,7 @@ async function handleDiscover() {
         <span class="font-bold text-slate-900 dark:text-white">{{ row.name }}</span>
       </template>
       <template #cell-provider="{ row }">
-        <span class="text-slate-500 dark:text-slate-400">{{ providerLabel(row.provider) }}</span>
+        <span class="text-slate-500 dark:text-slate-400">{{ modelLabel(row) }}</span>
       </template>
       <template #cell-model_identifier="{ row }">
         <span class="font-mono">{{ row.model_identifier }}</span>
@@ -267,6 +382,26 @@ async function handleDiscover() {
       @update:open="isEditorOpen = $event"
     >
       <form @submit.prevent="handleSave" class="space-y-4">
+        <Select id="model-provider" v-model="editingConfig.provider" label="Provider" :options="editorProviderOptions" />
+
+        <template v-if="isEndpointProvider">
+          <p
+            v-if="endpointOptions.length === 0"
+            role="alert"
+            class="rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200"
+          >
+            No endpoint of this type exists yet. Add one under <strong>Endpoints</strong> first.
+          </p>
+          <Select
+            v-else
+            id="model-endpoint"
+            v-model="editingConfig.endpoint_id"
+            label="Endpoint"
+            placeholder="Select endpoint…"
+            :options="endpointOptions"
+          />
+        </template>
+
         <Input
           label="Display Name"
           placeholder="e.g. FLUX.1 Schnell"
@@ -274,14 +409,71 @@ async function handleDiscover() {
           required
         />
 
-        <Input
-          label="Model Identifier"
-          placeholder="e.g. fal-ai/flux/schnell"
-          v-model="editingConfig.model_identifier"
-          required
+        <div class="space-y-2">
+          <Input
+            id="model-identifier"
+            label="Model Identifier"
+            :placeholder="modelIdentifierPlaceholder"
+            v-model="editingConfig.model_identifier"
+            required
+          />
+          <div v-if="isEndpointProvider && editingConfig.endpoint_id" class="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              size="xs"
+              :loading="isLoadingEndpointModels"
+              data-testid="load-endpoint-models"
+              @click="loadEndpointModels"
+            >
+              {{ editingConfig.provider === 'comfyui' ? 'Load checkpoints' : 'Load models' }}
+            </Button>
+            <Select
+              v-if="endpointModels.length"
+              :model-value="editingConfig.model_identifier || ''"
+              size="sm"
+              class="min-w-0 flex-1"
+              aria-label="Pick a model from the endpoint"
+              placeholder="Pick from endpoint…"
+              :options="endpointModels.map((m) => ({ value: m, label: m }))"
+              @update:model-value="pickEndpointModel"
+            />
+          </div>
+        </div>
+
+        <Select
+          v-if="editingConfig.provider === 'openai_compatible'"
+          v-model="responseFormat"
+          label="Response format"
+          :options="RESPONSE_FORMAT_OPTIONS"
+          hint="Most servers support b64_json. Switch only if the server rejects it."
         />
 
-        <Select v-model="editingConfig.provider" label="Provider" :options="providerOptions" />
+        <div
+          v-if="editingConfig.provider === 'comfyui'"
+          class="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-white/10"
+        >
+          <Switch
+            v-model="useCustomWorkflow"
+            label="Use a custom workflow"
+            description="Off: built-in text-to-image graph with the model identifier as checkpoint."
+          />
+          <template v-if="useCustomWorkflow">
+            <Textarea
+              id="model-workflow"
+              v-model="workflowText"
+              label="Workflow (API format JSON)"
+              :rows="10"
+              mono
+              placeholder='{"3": {"class_type": "KSampler", "inputs": {"seed": "{{seed}}", …}}, …}'
+              hint="In ComfyUI use Workflow → Export (API). Put placeholders into the inputs Lumigen should fill."
+            />
+            <div class="flex flex-wrap gap-1" aria-label="Available placeholders">
+              <Badge v-for="placeholder in COMFYUI_PLACEHOLDERS" :key="placeholder" size="xs" class="font-mono">
+                {{ placeholder }}
+              </Badge>
+            </div>
+          </template>
+        </div>
 
         <div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-white/10">
           <div class="flex items-baseline justify-between gap-2">

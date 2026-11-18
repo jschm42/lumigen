@@ -5,6 +5,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.config import Settings
 from app.db import crud
 from app.db.engine import SessionLocal
+from app.providers.base import EndpointConfig, ProviderConfigError
 
 
 class ModelConfigService:
@@ -96,6 +97,34 @@ class ModelConfigService:
         """Get a model config by ID."""
         with SessionLocal() as session:
             return crud.get_model_config(session, model_config_id)
+
+    def endpoint_config_for(self, model_config) -> EndpointConfig | None:
+        """Return the custom endpoint connection for *model_config*, or None for built-in providers.
+
+        Raises ``ProviderConfigError`` when the linked endpoint is missing or deactivated.
+        """
+        endpoint_id = getattr(model_config, "endpoint_id", None)
+        if not endpoint_id:
+            return None
+        with SessionLocal() as session:
+            endpoint = crud.get_custom_endpoint(session, int(endpoint_id))
+            if endpoint is None:
+                raise ProviderConfigError(f"The endpoint of model {model_config.name!r} no longer exists.")
+            if not endpoint.is_active:
+                raise ProviderConfigError(f"Endpoint {endpoint.name!r} is deactivated (Admin -> Endpoints).")
+            return self.endpoint_config_from_row(endpoint, getattr(model_config, "provider_options", None))
+
+    def endpoint_config_from_row(self, endpoint, options: dict | None = None) -> EndpointConfig:
+        """Build an ``EndpointConfig`` from a ``CustomEndpoint`` row, decrypting its optional API key."""
+        api_key = self.decrypt_api_key(endpoint.api_key_encrypted) if endpoint.api_key_encrypted else None
+        return EndpointConfig(
+            id=endpoint.id,
+            name=endpoint.name,
+            kind=endpoint.kind,
+            base_url=endpoint.base_url,
+            api_key=api_key,
+            options=dict(options or {}),
+        )
 
     def get_reasoning_model_api_key(self, reasoning_model_id: int) -> str | None:
         """Get custom API key for a reasoning model config if enabled, else provider key."""
