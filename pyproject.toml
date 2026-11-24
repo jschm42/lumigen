@@ -1,7 +1,7 @@
 [project]
 name = "lumigen"
 # Keep in sync with the VERSION file (scripts/update_version.py updates both).
-version = "0.6.0-beta"
+version = "0.7.0-beta"
 description = "Self-hosted AI creation studio for images, video & SVGs with pluggable providers, Agentic Mode, and a local-first gallery."
 requires-python = ">=3.12"
 dependencies = [
