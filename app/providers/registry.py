@@ -165,6 +165,30 @@ class ProviderRegistry:
         except Exception:  # pragma: no cover - defensive against third-party adapters
             return "image"
 
+    def supports_image_input(self, provider: str, model: str, explicit: bool | None = None) -> bool:
+        """Return whether a model accepts reference images (edit / image-to-image).
+
+        An explicit admin setting (*explicit*) wins; otherwise the adapter's
+        model-name heuristic decides. Unknown providers report ``False``.
+        """
+        if explicit is not None:
+            return bool(explicit)
+        adapter = self._adapters.get(provider)
+        if adapter is None:
+            return False
+        try:
+            return bool(adapter.supports_image_input_for_model(model))
+        except Exception:  # pragma: no cover - defensive against third-party adapters
+            return False
+
+    def capabilities_for(self, provider: str, model: str, explicit_image_input: bool | None = None) -> list[str]:
+        """Return the capability list of a model config (media type plus ``image_input``)."""
+        media_type = self.media_type_for(provider, model)
+        capabilities = [media_type]
+        if self.supports_image_input(provider, model, explicit_image_input):
+            capabilities.append("image_input")
+        return capabilities
+
     def _build_policy(self, provider: str) -> ProviderPolicy:
         defaults = self._settings
         return ProviderPolicy(

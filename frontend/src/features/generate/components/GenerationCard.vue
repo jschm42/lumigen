@@ -33,6 +33,9 @@ const isPromptExpanded = ref(false)
 
 const assets = computed(() => props.generation.assets || [])
 const hasAssets = computed(() => assets.value.length > 0)
+// Agentic runs add assets one by one: always use the grid so the first result doesn't flash
+// the single-image layout (inline action bar) and then jump once the second one arrives.
+const isSingleLayout = computed(() => assets.value.length === 1 && !props.generation.is_agentic)
 const isFailed = computed(() => props.generation.status === 'failed' || props.generation.status === 'cancelled')
 const isPending = computed(() => !isFailed.value && !hasAssets.value && props.generation.status !== 'succeeded')
 const isLongPrompt = computed(() => (props.generation.prompt || '').length > 220)
@@ -70,17 +73,39 @@ const elapsedSeconds = computed(() => {
   return Math.max(0, (now.value - started) / 1000)
 })
 
+const isAnimation = computed(() => props.generation.agentic_kind === 'animation')
+const animationOutput = computed(() => props.generation.animation?.output || 'gif')
+const animationBadge = computed(() => {
+  if (!isAnimation.value) return 'Agentic Mode'
+  if (animationOutput.value === 'none') return 'Frame series'
+  return animationOutput.value === 'webp' ? 'WebP animation' : 'GIF animation'
+})
+const assemblingLabel = computed(() => (animationOutput.value === 'webp' ? 'Assembling WebP' : 'Assembling GIF'))
+const agenticNoun = computed(() => (isAnimation.value ? 'animation' : 'set'))
+const agenticItemNoun = computed(() => (isAnimation.value ? 'Frame' : 'Item'))
+const planTitle = computed(() => props.generation.agentic_plan?.set_title || props.generation.agentic_plan?.title || '')
+
+const liveSlotLabel = computed(() => {
+  if (props.generation.agentic_step === 'assembling') return `${assemblingLabel.value}…`
+  const fallback = `${agenticItemNoun.value} ${(props.generation.current_item_index ?? 0) + 1}`
+  return `Generating ${props.generation.current_item_title || fallback}…`
+})
+
 const statusLabel = computed(() => {
   const s = props.generation.status
   if (props.generation.is_agentic) {
-    if (s === 'queued' || s === 'pending') return 'Agent set in queue'
-    if (props.generation.agentic_step === 'planning') return 'Agent planning cohesive set'
+    if (s === 'queued' || s === 'pending') return `Agent ${agenticNoun.value} in queue`
+    if (props.generation.agentic_step === 'planning') {
+      return isAnimation.value ? 'Agent planning animation frames' : 'Agent planning cohesive set'
+    }
+    if (props.generation.agentic_step === 'assembling') return assemblingLabel.value
     if (props.generation.current_item_title) {
       const idx = (props.generation.current_item_index ?? 0) + 1
       const total = props.generation.total_planned || '?'
-      return `Generating ${idx}/${total}: ${props.generation.current_item_title}`
+      const prefix = isAnimation.value ? 'Frame ' : 'Generating '
+      return `${prefix}${idx}/${total}: ${props.generation.current_item_title}`
     }
-    return 'Agent generating set'
+    return `Agent generating ${agenticNoun.value}`
   }
   if (s === 'queued' || s === 'pending') return 'Waiting in queue'
   return 'Generating'
@@ -187,7 +212,7 @@ async function handleDownloadSetZip() {
   isDownloadingZip.value = true
   try {
     const assetIds = assets.value.map((a) => a.id)
-    const customName = props.generation.agentic_plan?.set_title || props.generation.prompt || 'lumigen-set'
+    const customName = planTitle.value || props.generation.prompt || 'lumigen-set'
     const { blob, filename } = await galleryApi.downloadZip(assetIds, customName)
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -234,10 +259,10 @@ function handleImageClick(asset: Asset) {
         <!-- Agentic badge & Set title -->
         <div v-if="generation.is_agentic" class="flex flex-wrap items-center gap-1.5 pb-0.5">
           <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-            🤖 Agentic Mode • {{ assets.length }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} Items
+            🤖 {{ animationBadge }} • {{ assets.length }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} {{ isAnimation ? 'Frames' : 'Items' }}
           </span>
-          <span v-if="generation.agentic_plan?.set_title" class="text-xs font-bold text-slate-800 dark:text-slate-100">
-            {{ generation.agentic_plan.set_title }}
+          <span v-if="planTitle" class="text-xs font-bold text-slate-800 dark:text-slate-100">
+            {{ planTitle }}
           </span>
           <router-link
             v-if="generation.stack_id"
@@ -411,7 +436,7 @@ function handleImageClick(asset: Asset) {
           @click="handleImageClick(asset)"
           :class="[
             'group relative flex cursor-zoom-in select-none items-center justify-center overflow-hidden rounded-xl border border-slate-300/60 bg-slate-950 transition-all duration-200 hover:border-sky-500/50 hover:shadow-lg dark:border-white/10',
-            assets.length === 1 ? 'max-h-[460px] sm:max-h-[520px]' : '',
+            isSingleLayout ? 'max-h-[460px] sm:max-h-[520px]' : '',
           ]"
           title="Click to enlarge (fullscreen & zoom)"
         >
@@ -421,7 +446,7 @@ function handleImageClick(asset: Asset) {
             :src="asset.image_url"
             :poster="asset.thumbnail_url"
             :class="[
-              assets.length === 1 ? 'max-h-[460px] sm:max-h-[520px] w-auto max-w-full object-contain' : 'h-full w-full object-cover aspect-square',
+              isSingleLayout ? 'max-h-[460px] sm:max-h-[520px] w-auto max-w-full object-contain' : 'h-full w-full object-cover aspect-square',
             ]"
             controls
             playsinline
@@ -435,7 +460,7 @@ function handleImageClick(asset: Asset) {
             :alt="asset.prompt"
             :class="[
               'transition-transform duration-300 group-hover:scale-[1.01]',
-              assets.length === 1 ? 'max-h-[460px] sm:max-h-[520px] w-auto max-w-full object-contain' : 'h-full w-full object-cover aspect-square',
+              isSingleLayout ? 'max-h-[460px] sm:max-h-[520px] w-auto max-w-full object-contain' : 'h-full w-full object-cover aspect-square',
             ]"
             loading="lazy"
             @load="emit('image-loaded')"
@@ -506,9 +531,9 @@ function handleImageClick(asset: Asset) {
           </span>
         </div>
 
-        <!-- Normal inline action bar below image: ONLY when there is 1 single image -->
+        <!-- Normal inline action bar below image: ONLY for a single non-agentic image -->
         <GenerationActions
-          v-if="assets.length === 1"
+          v-if="isSingleLayout"
           :asset="asset"
           :generation="generation"
           variant="inline"
@@ -527,7 +552,7 @@ function handleImageClick(asset: Asset) {
           <div class="absolute inset-0 animate-pulse bg-gradient-to-br from-indigo-500/10 via-transparent to-sky-500/10 rounded-xl" />
           <Spinner size="md" class="text-indigo-600 dark:text-indigo-400" />
           <span class="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 mt-2 z-10 px-2 line-clamp-2">
-            Generating {{ generation.current_item_title || 'Item ' + ((generation.current_item_index ?? 0) + 1) }}…
+            {{ liveSlotLabel }}
           </span>
           <span class="font-mono text-[10px] text-slate-400 mt-1 z-10">{{ formatDuration(elapsedSeconds) }}</span>
         </div>

@@ -5,7 +5,10 @@ import { sessionsApi } from '@/api/sessions'
 import { useSessionsStore } from './sessions'
 import { useToastStore } from './toast'
 import { useQueueStore } from './queue'
-import type { Asset, Generation, ModelConfig, StylePreset, TokenUsage } from '@/types'
+import type { AgenticKind, AnimationLoop, AnimationOutput, Asset, Generation, ModelConfig, StylePreset, TokenUsage } from '@/types'
+
+export const ANIMATION_UNSUPPORTED_MESSAGE =
+  'The selected model does not support image input, which is required for animations. Choose an edit-capable model or enable image input for it in the admin settings.'
 
 export interface AttachedImage {
   id: string
@@ -60,6 +63,14 @@ export const useGenerateStore = defineStore('generate', () => {
   const agenticMinImages = ref<number | null>(null)
   const agenticMaxImages = ref<number | null>(null)
   const agenticLlmModel = ref<string>('')
+  /** "set" plans independent images, "animation" plans GIF frames. */
+  const agenticKind = ref<AgenticKind>('set')
+  /** Empty string lets the planner choose the loop mode. */
+  const animationLoop = ref<AnimationLoop | ''>('')
+  const animationFrameMs = ref<number | null>(null)
+  const animationTransparent = ref<boolean>(false)
+  /** GIF, animated WebP, or "none" for a plain consistent frame series. */
+  const animationOutput = ref<AnimationOutput>('gif')
   const availableLlmModels = ref<{ id: string; name: string; provider: string; is_default?: boolean }[]>([])
 
   // Advanced Overrides (from old prompt panel)
@@ -106,6 +117,11 @@ export const useGenerateStore = defineStore('generate', () => {
     selectedModel.value?.media_type === 'video' ? 'video' : 'image'
   )
   const isVideoModel = computed(() => selectedMediaType.value === 'video')
+  /** Animations chain frames via reference images, so the model must accept image input. */
+  const supportsAnimation = computed(
+    () => !isVideoModel.value && (selectedModel.value?.capabilities || []).includes('image_input')
+  )
+  const isAnimationMode = computed(() => isAgenticMode.value && agenticKind.value === 'animation')
 
   // Video-only generation options (provider payload: media_type/duration/generate_audio).
   const videoDuration = ref<number>(5)
@@ -520,6 +536,10 @@ export const useGenerateStore = defineStore('generate', () => {
       toastStore.warning('Please enter a prompt.')
       return
     }
+    if (isAnimationMode.value && !supportsAnimation.value) {
+      toastStore.error(ANIMATION_UNSUPPORTED_MESSAGE)
+      return
+    }
 
     isSubmitting.value = true
     try {
@@ -558,6 +578,15 @@ export const useGenerateStore = defineStore('generate', () => {
         min_images: isAgenticMode.value ? agenticMinImages.value : undefined,
         max_images: isAgenticMode.value ? agenticMaxImages.value : undefined,
         llm_model: isAgenticMode.value && agenticLlmModel.value ? agenticLlmModel.value : undefined,
+        agentic_kind: isAgenticMode.value ? agenticKind.value : undefined,
+        animation: isAnimationMode.value
+          ? {
+              loop: animationLoop.value || null,
+              frame_ms: animationFrameMs.value,
+              transparent: animationTransparent.value,
+              output: animationOutput.value,
+            }
+          : undefined,
       }
 
       const res = await generationApi.submitGeneration(payload)
@@ -585,6 +614,7 @@ export const useGenerateStore = defineStore('generate', () => {
         assets: [],
         is_agentic: isAgenticMode.value,
         agentic_step: isAgenticMode.value ? 'planning' : undefined,
+        agentic_kind: isAgenticMode.value ? agenticKind.value : undefined,
         total_planned: isAgenticMode.value ? (agenticMaxImages.value ?? undefined) : undefined,
       }
       generations.value.push(optimisticGen)
@@ -688,6 +718,13 @@ export const useGenerateStore = defineStore('generate', () => {
     agenticMinImages,
     agenticMaxImages,
     agenticLlmModel,
+    agenticKind,
+    animationLoop,
+    animationFrameMs,
+    animationTransparent,
+    animationOutput,
+    supportsAnimation,
+    isAnimationMode,
     availableLlmModels,
     addAttachedImage,
     attachAssetAsImage,

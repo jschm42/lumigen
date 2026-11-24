@@ -13,6 +13,28 @@ export interface UiSettings {
   show_token_usage: boolean
   /** ISO 4217 currency for configured model prices, e.g. "USD" or "EUR". */
   cost_currency: string
+  /** Limits for agentic GIF animations (admin-configurable). */
+  animation_max_frames: number
+  animation_max_dimension_px: number
+  animation_max_file_size_mb: number
+  animation_default_frame_ms: number
+}
+
+/** Agentic Mode output: a cohesive image set or a GIF animation. */
+export type AgenticKind = 'set' | 'animation'
+
+/** How a GIF animation repeats. */
+export type AnimationLoop = 'loop' | 'pingpong' | 'once'
+
+/** Assembled file of an agentic animation; "none" keeps only the frame series. */
+export type AnimationOutput = 'gif' | 'webp' | 'none'
+
+/** Options of an agentic animation request. */
+export interface AnimationOptions {
+  loop?: AnimationLoop | null
+  frame_ms?: number | null
+  transparent?: boolean
+  output?: AnimationOutput
 }
 
 export interface TokenUsage {
@@ -38,7 +60,12 @@ export interface ModelConfig {
   supported_resolutions: string[]
   generic_params?: Record<string, any>
   fal_params?: Record<string, any>
+  /** e.g. ["image"], ["image", "image_input"] or ["video"]. */
   capabilities?: string[]
+  /** Admin override for reference-image support; null = auto-detect from the model ID. */
+  supports_image_input?: boolean | null
+  /** Effective reference-image support (override or auto-detection). */
+  image_input?: boolean
   /** Optional price per one million input tokens (studio currency). */
   price_input_per_mtok?: number | null
   /** Optional price per one million output tokens (studio currency). */
@@ -209,13 +236,21 @@ export interface Generation {
   usage?: TokenUsage | null
   assets: Asset[]
   is_agentic?: boolean
+  agentic_kind?: AgenticKind
+  /** planning | generating | assembling | completed */
   agentic_step?: string
   agentic_plan?: {
+    kind?: AgenticKind
     set_title?: string
     common_style_anchor?: string
     negative_prompt?: string
     items?: Array<{ title: string; prompt_detail: string }>
+    /** Animation plans */
+    title?: string
+    loop?: AnimationLoop
+    frames?: Array<{ title: string; pose: string; duration_ms?: number | null }>
   }
+  animation?: AnimationOptions | null
   total_planned?: number
   current_item_index?: number
   current_item_title?: string

@@ -107,13 +107,17 @@ def _serialize_model_config(c: Any) -> dict[str, Any]:
 
     media_type = provider_registry.media_type_for(c.provider, c.model)
     is_video = media_type == "video"
+    explicit_image_input = getattr(c, "supports_image_input", None)
     return {
         "id": c.id,
         "name": c.name,
         "provider": c.provider,
         "model_identifier": c.model,
         "media_type": media_type,
-        "capabilities": ["video"] if is_video else ["image"],
+        "capabilities": provider_registry.capabilities_for(c.provider, c.model, explicit_image_input),
+        # Explicit admin override (None = auto-detect) and the effective value.
+        "supports_image_input": explicit_image_input,
+        "image_input": provider_registry.supports_image_input(c.provider, c.model, explicit_image_input),
         "is_active": True,
         "is_default": False,
         "supported_aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"],
@@ -128,6 +132,18 @@ def _serialize_model_config(c: Any) -> dict[str, Any]:
 
 
 _PRICE_FIELDS = ("price_input_per_mtok", "price_output_per_mtok", "price_per_image")
+
+
+def _parse_image_input(payload: dict[str, Any], current: bool | None) -> bool | None:
+    """Read the optional image-input override; ``None``/``"auto"`` means auto-detect."""
+    if "supports_image_input" not in payload:
+        return current
+    raw = payload.get("supports_image_input")
+    if raw is None or raw == "" or raw == "auto":
+        return None
+    if isinstance(raw, bool):
+        return raw
+    raise HTTPException(status_code=400, detail="supports_image_input must be true, false or null.")
 
 
 @router.post("/providers/{provider}")
@@ -260,6 +276,7 @@ def create_model_config(
         model=model,
         endpoint_id=endpoint_id,
         provider_options=provider_options,
+        supports_image_input=_parse_image_input(payload, None),
         **{key: _parse_price(payload, key, None) for key in _PRICE_FIELDS},
     )
     return _serialize_model_config(cfg)
@@ -288,6 +305,7 @@ def update_model_config(
         model=payload.get("model_identifier", cfg.model),
         endpoint_id=endpoint_id,
         provider_options=provider_options,
+        supports_image_input=_parse_image_input(payload, cfg.supports_image_input),
         **{key: _parse_price(payload, key, getattr(cfg, key)) for key in _PRICE_FIELDS},
     )
     return _serialize_model_config(cfg)

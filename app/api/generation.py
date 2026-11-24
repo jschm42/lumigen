@@ -90,6 +90,8 @@ async def api_generate_submit(
         min_images = payload.get("min_images")
         max_images = payload.get("max_images")
         llm_model = payload.get("llm_model")
+        agentic_kind = payload.get("agentic_kind")
+        animation_payload = payload.get("animation")
     else:
         form = await request.form()
         prompt = str(form.get("prompt", "")).strip()
@@ -120,6 +122,13 @@ async def api_generate_submit(
         min_images = form.get("min_images")
         max_images = form.get("max_images")
         llm_model = form.get("llm_model")
+        agentic_kind = form.get("agentic_kind")
+        animation_payload = {
+            "loop": form.get("animation_loop"),
+            "frame_ms": form.get("animation_frame_ms"),
+            "transparent": form.get("animation_transparent"),
+            "output": form.get("animation_output"),
+        }
 
         # Collect uploaded image files from form
         for key in ("images", "input_images"):
@@ -160,18 +169,8 @@ async def api_generate_submit(
     if profile_id:
         profile = crud.get_profile(session, profile_id)
     if not profile:
-        profiles = crud.list_profiles(session)
-        profile = profiles[0] if profiles else None
-
-    if not profile:
-        storage_templates = crud.list_storage_templates(session)
-        tmpl_id = storage_templates[0].id if storage_templates else 1
-        profile = crud.create_profile(
-            session,
-            name="Default",
-            aspect_ratio="1:1",
-            storage_template_id=tmpl_id,
-        )
+        # "No profile" must not silently apply another profile's model params, seed or prompt.
+        profile = _default_profile(session)
 
     import base64
 
@@ -210,9 +209,11 @@ async def api_generate_submit(
     if output_format:
         overrides["output_format"] = str(output_format).strip().lower().lstrip(".")
 
+    resolved_model_cfg = None
     if model_config_id:
         model_cfg = crud.get_model_config(session, model_config_id)
         if model_cfg:
+            resolved_model_cfg = model_cfg
             overrides["model_config_id"] = model_cfg.id
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
@@ -223,6 +224,7 @@ async def api_generate_submit(
     elif getattr(profile, "model_config_id", None):
         model_cfg = crud.get_model_config(session, profile.model_config_id)
         if model_cfg:
+            resolved_model_cfg = model_cfg
             overrides["model_config_id"] = model_cfg.id
             overrides["provider"] = model_cfg.provider
             overrides["model"] = model_cfg.model
@@ -436,6 +438,22 @@ async def api_generate_submit(
         if llm_model:
             overrides["llm_model"] = str(llm_model).strip()
 
+        kind = str(agentic_kind or "set").strip().lower()
+        if kind not in {"set", "animation"}:
+            raise HTTPException(status_code=400, detail="agentic_kind must be 'set' or 'animation'.")
+        overrides["agentic_kind"] = kind
+        if kind == "animation":
+            _apply_animation_overrides(
+                session,
+                overrides,
+                animation_payload,
+                provider=provider_value,
+                model=str(overrides.get("model") or profile.model or ""),
+                model_cfg=resolved_model_cfg,
+                min_images=min_images,
+                max_images=max_images,
+            )
+
     generation = generation_service.create_generation_from_profile(
         session,
         profile,
@@ -449,6 +467,105 @@ async def api_generate_submit(
         "status": generation.status,
         "session_token": conversation_value,
     }
+
+
+DEFAULT_PROFILE_NAME = "Default"
+
+
+def _default_profile(session: Session) -> Any:
+    """Return the neutral profile used when the user selects "No profile".
+
+    Reuses a profile named ``Default`` (case-insensitive) or creates one with
+    neutral settings. Never falls back to an arbitrary user profile, whose
+    provider-specific params, seed or base prompt would leak into the request.
+    """
+    for candidate in crud.list_profiles(session):
+        if str(candidate.name or "").strip().lower() == DEFAULT_PROFILE_NAME.lower():
+            return candidate
+    storage_templates = crud.list_storage_templates(session)
+    tmpl_id = storage_templates[0].id if storage_templates else 1
+    return crud.create_profile(
+        session,
+        name=DEFAULT_PROFILE_NAME,
+        aspect_ratio="1:1",
+        storage_template_id=tmpl_id,
+    )
+
+
+ANIMATION_IMAGE_INPUT_ERROR = (
+    "The selected model does not support image input, which is required for animations. "
+    "Choose an edit-capable or video model, or enable image input for this model in the admin settings."
+)
+
+
+def _apply_animation_overrides(
+    session: Session,
+    overrides: dict[str, Any],
+    animation_payload: Any,
+    *,
+    provider: str,
+    model: str,
+    model_cfg: Any,
+    min_images: Any,
+    max_images: Any,
+) -> None:
+    """Validate an agentic animation request and store its options in *overrides*.
+
+    Rejects models without (known) image-input support with HTTP 422 before a
+    generation is queued, caps the frame bounds by the studio frame limit and
+    normalizes loop mode, frame duration and transparency.
+    """
+    from app.services.animation_service import LOOP_MODES, OUTPUT_FORMATS
+
+    if provider_registry.media_type_for(provider, model) == "video":
+        raise HTTPException(
+            status_code=422,
+            detail="Video models are not supported for GIF animations yet. Choose an edit-capable image model.",
+        )
+    explicit = getattr(model_cfg, "supports_image_input", None) if model_cfg is not None else None
+    if not provider_registry.supports_image_input(provider, model, explicit):
+        raise HTTPException(status_code=422, detail=ANIMATION_IMAGE_INPUT_ERROR)
+
+    ui_settings = app_settings_service.get_ui_settings(session)
+    frame_limit = int(ui_settings["animation_max_frames"])
+
+    def _bounded(value: Any) -> int | None:
+        try:
+            parsed = int(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+        if parsed is None or parsed <= 0:
+            return None
+        return max(2, min(parsed, frame_limit))
+
+    min_frames = _bounded(min_images)
+    max_frames = _bounded(max_images)
+    if min_frames and max_frames and max_frames < min_frames:
+        max_frames = min_frames
+    overrides["min_images"] = min_frames
+    overrides["max_images"] = max_frames
+
+    raw = animation_payload if isinstance(animation_payload, dict) else {}
+    loop = str(raw.get("loop") or "").strip().lower() or None
+    if loop is not None and loop not in LOOP_MODES:
+        raise HTTPException(status_code=400, detail=f"animation.loop must be one of: {', '.join(LOOP_MODES)}.")
+    frame_ms_raw = raw.get("frame_ms")
+    frame_ms: int | None = None
+    if frame_ms_raw not in (None, ""):
+        try:
+            frame_ms = max(20, min(int(frame_ms_raw), 1000))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="animation.frame_ms must be a number.") from exc
+    transparent_raw = raw.get("transparent")
+    transparent = (
+        transparent_raw
+        if isinstance(transparent_raw, bool)
+        else str(transparent_raw or "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    output = str(raw.get("output") or "gif").strip().lower()
+    if output not in OUTPUT_FORMATS:
+        raise HTTPException(status_code=400, detail=f"animation.output must be one of: {', '.join(OUTPUT_FORMATS)}.")
+    overrides["animation"] = {"loop": loop, "frame_ms": frame_ms, "transparent": transparent, "output": output}
 
 
 def _generation_progress(status: str, req_snapshot: dict[str, Any] | None = None) -> int:
@@ -550,6 +667,8 @@ def serialize_generation(gen: Any, session_token: str | None = None) -> dict[str
         "assets": [serialize_asset(a, gen) for a in gen.assets] if gen.assets else [],
         "is_agentic": bool(req_snapshot.get("is_agentic")),
         "agentic_step": req_snapshot.get("agentic_step"),
+        "agentic_kind": req_snapshot.get("agentic_kind") or ("set" if req_snapshot.get("is_agentic") else None),
+        "animation": req_snapshot.get("animation"),
         "agentic_plan": req_snapshot.get("agentic_plan"),
         "total_planned": req_snapshot.get("total_planned"),
         "current_item_index": req_snapshot.get("current_item_index"),

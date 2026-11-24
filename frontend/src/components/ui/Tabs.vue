@@ -4,6 +4,10 @@ export interface TabItem {
   label: string
   icon?: any
   badge?: string | number
+  /** Disabled tabs cannot be selected; explain why via `hint`. */
+  disabled?: boolean
+  /** Tooltip text, e.g. the reason a tab is disabled. */
+  hint?: string
 }
 
 interface Props {
@@ -33,9 +37,12 @@ const emit = defineEmits<{
       type="button"
       role="tab"
       :aria-selected="modelValue === tab.id"
-      @click="emit('update:modelValue', tab.id)"
+      :aria-disabled="tab.disabled || undefined"
+      :disabled="tab.disabled"
+      :title="tab.hint"
+      @click="!tab.disabled && emit('update:modelValue', tab.id)"
       :class="[
-        'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer',
+        'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50',
         modelValue === tab.id
           ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
           : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
@@ -62,9 +69,12 @@ const emit = defineEmits<{
       type="button"
       role="tab"
       :aria-selected="modelValue === tab.id"
-      @click="emit('update:modelValue', tab.id)"
+      :aria-disabled="tab.disabled || undefined"
+      :disabled="tab.disabled"
+      :title="tab.hint"
+      @click="!tab.disabled && emit('update:modelValue', tab.id)"
       :class="[
-        'pb-3 text-sm font-semibold border-b-2 transition-all duration-150 flex items-center gap-2 cursor-pointer',
+        'pb-3 text-sm font-semibold border-b-2 transition-all duration-150 flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50',
         modelValue === tab.id
           ? 'border-sky-500 text-sky-600 dark:text-sky-400'
           : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',

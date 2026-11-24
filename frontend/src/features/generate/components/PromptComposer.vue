@@ -10,6 +10,7 @@ import Select from '@/components/ui/Select.vue'
 import PromptEnhanceModal from './PromptEnhanceModal.vue'
 import StylePickerModal from './StylePickerModal.vue'
 import GalleryImagePickerModal from './GalleryImagePickerModal.vue'
+import AgenticSettingsBar from './AgenticSettingsBar.vue'
 
 const generateStore = useGenerateStore()
 
@@ -79,9 +80,14 @@ const selectedStyle = computed(() => {
   return generateStore.styles.find((s) => String(s.id) === String(generateStore.selectedStyleId)) || null
 })
 
-const defaultLlmModelName = computed(() => {
-  const def = generateStore.availableLlmModels.find((m) => m.is_default)
-  return def ? def.name : null
+const promptPlaceholder = computed(() => {
+  if (generateStore.isAnimationMode) {
+    return "Describe the animation (e.g. 'A pixel-art knight swinging a sword, side view')..."
+  }
+  if (generateStore.isAgenticMode) {
+    return "Describe a set of images to generate (e.g. 'Design a set of RPG icons: potions, weapons, spells')..."
+  }
+  return 'Describe your desired image...'
 })
 
 function triggerFileInput() {
@@ -199,66 +205,12 @@ function handleKeydown(e: KeyboardEvent) {
         @keydown="handleKeydown"
         rows="2"
         class="w-full min-h-[3.25rem] max-h-52 overflow-y-auto resize-none rounded-xl border border-slate-300/80 bg-slate-50/80 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 focus:outline-none dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-sky-400 dark:focus:bg-slate-950/80 dark:focus:ring-sky-400/20 transition-all leading-relaxed"
-        :placeholder="generateStore.isAgenticMode ? 'Describe a set of images to generate (e.g. \'Design a set of RPG icons: potions, weapons, spells\')...' : 'Describe your desired image...'"
+        :placeholder="promptPlaceholder"
       ></textarea>
     </div>
 
     <!-- Collapsible Agentic Settings Bar -->
-    <div
-      v-if="generateStore.isAgenticMode"
-      class="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200/80 bg-indigo-50/70 px-3.5 py-2 text-xs transition-all dark:border-indigo-900/40 dark:bg-indigo-950/30"
-    >
-      <div class="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300 shrink-0 select-none">
-        <span>🤖</span>
-        <span>Agentic Mode:</span>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <span class="text-2xs font-medium text-slate-600 dark:text-slate-300" aria-hidden="true">Reasoning Model:</span>
-        <Select
-          v-model="generateStore.agenticLlmModel"
-          size="sm"
-          class="max-w-[210px]"
-          aria-label="Reasoning model"
-          title="Choose the LLM model used for planning and decomposing the image set"
-        >
-          <option value="">
-            Auto {{ defaultLlmModelName ? `(${defaultLlmModelName})` : '(Default)' }}
-          </option>
-          <option
-            v-for="m in generateStore.availableLlmModels"
-            :key="m.id"
-            :value="m.id"
-          >
-            {{ m.name }}{{ m.is_default ? ' ★' : '' }}
-          </option>
-        </Select>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Min (optional):</label>
-        <input
-          type="number"
-          min="1"
-          max="12"
-          v-model.number="generateStore.agenticMinImages"
-          placeholder="Auto"
-          class="w-16 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500"
-        />
-      </div>
-      <div class="flex items-center gap-1.5">
-        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Max (optional):</label>
-        <input
-          type="number"
-          min="1"
-          max="12"
-          v-model.number="generateStore.agenticMaxImages"
-          placeholder="Auto"
-          class="w-16 rounded-md border border-indigo-200 bg-white px-2 py-0.5 text-center font-mono text-xs text-slate-800 placeholder-slate-400 focus:outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500"
-        />
-      </div>
-      <div class="hidden sm:flex items-center text-[11px] text-indigo-600/80 dark:text-indigo-400/80 italic ml-auto">
-        Generates a cohesive set into a single gallery stack
-      </div>
-    </div>
+    <AgenticSettingsBar v-if="generateStore.isAgenticMode" />
 
     <!-- Collapsible Negative Prompt -->
     <div
@@ -375,7 +327,7 @@ function handleKeydown(e: KeyboardEvent) {
               ? 'border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-500/60 dark:bg-indigo-950/50 dark:text-indigo-300'
               : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
           ]"
-          title="Toggle Agentic Mode (generates a cohesive set grouped into a gallery stack)"
+          title="Toggle Agentic Mode (plans an image set or a GIF animation grouped into a gallery stack)"
         >
           <span>🤖</span>
           <span>Agentic Mode</span>

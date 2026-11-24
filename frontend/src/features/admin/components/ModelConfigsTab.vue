@@ -40,6 +40,22 @@ async function handleDelete(model: ModelConfig) {
   if (ok) await adminStore.deleteModelConfig(model.id)
 }
 
+// Reference-image support: "auto" stores null so the backend detects it from the model ID.
+const IMAGE_INPUT_OPTIONS = [
+  { value: 'auto', label: 'Auto-detect from model ID' },
+  { value: 'yes', label: 'Supported' },
+  { value: 'no', label: 'Not supported' },
+]
+const imageInputChoice = computed({
+  get: () => {
+    const value = editingConfig.value.supports_image_input
+    return value == null ? 'auto' : value ? 'yes' : 'no'
+  },
+  set: (choice: string | number) => {
+    editingConfig.value.supports_image_input = choice === 'auto' ? null : choice === 'yes'
+  },
+})
+
 const PRICE_FIELDS = ['price_input_per_mtok', 'price_output_per_mtok', 'price_per_image'] as const
 type PriceField = (typeof PRICE_FIELDS)[number]
 
@@ -474,6 +490,14 @@ async function handleDiscover() {
             </div>
           </template>
         </div>
+
+        <Select
+          v-model="imageInputChoice"
+          :options="IMAGE_INPUT_OPTIONS"
+          label="Reference images"
+          hint="Whether the model accepts input images (edit / image-to-image). Required for Agentic GIF animations."
+          data-testid="model-image-input"
+        />
 
         <div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-white/10">
           <div class="flex items-baseline justify-between gap-2">

@@ -67,7 +67,14 @@ def test_status_exposes_profile_and_ui_settings(api: TestClient):
     assert status["authenticated"] is True
     assert status["user"]["username"] == "boss"
     assert status["user"]["last_login_at"]
-    assert status["ui_settings"] == {"show_token_usage": False, "cost_currency": "USD"}
+    assert status["ui_settings"] == {
+        "show_token_usage": False,
+        "cost_currency": "USD",
+        "animation_max_frames": 24,
+        "animation_max_dimension_px": 512,
+        "animation_max_file_size_mb": 10,
+        "animation_default_frame_ms": 100,
+    }
     assert "password_hash" not in status["user"]
 
 
@@ -239,6 +246,22 @@ def test_ui_settings_roundtrip(api: TestClient):
     _setup_admin(api)
     res = api.put("/api/admin/settings", json={"show_token_usage": True, "unknown": 1})
     assert res.status_code == 200
-    assert res.json() == {"show_token_usage": True, "cost_currency": "USD"}
+    assert res.json()["show_token_usage"] is True
+    assert res.json()["cost_currency"] == "USD"
+    assert "unknown" not in res.json()
     assert api.get("/api/auth/status").json()["ui_settings"]["show_token_usage"] is True
     assert api.put("/api/admin/settings", json={"show_token_usage": "yes"}).status_code == 400
+
+
+def test_animation_limit_settings_are_validated(api: TestClient):
+    _setup_admin(api)
+    res = api.put("/api/admin/settings", json={"animation_max_frames": 32, "animation_max_dimension_px": 768})
+    assert res.status_code == 200
+    assert res.json()["animation_max_frames"] == 32
+    assert res.json()["animation_max_dimension_px"] == 768
+    assert api.get("/api/auth/status").json()["ui_settings"]["animation_max_frames"] == 32
+    # Out of range, wrong type and booleans are rejected.
+    assert api.put("/api/admin/settings", json={"animation_max_frames": 65}).status_code == 400
+    assert api.put("/api/admin/settings", json={"animation_max_file_size_mb": 0}).status_code == 400
+    assert api.put("/api/admin/settings", json={"animation_default_frame_ms": "100"}).status_code == 400
+    assert api.put("/api/admin/settings", json={"animation_max_frames": True}).status_code == 400

@@ -34,7 +34,9 @@ def list_active_models(session: Session = Depends(get_session)) -> list[dict[str
             "provider": cfg.provider,
             "model_identifier": cfg.model,
             "media_type": media_type,
-            "capabilities": ["video"] if is_video else ["image"],
+            "capabilities": provider_registry.capabilities_for(
+                cfg.provider, cfg.model, getattr(cfg, "supports_image_input", None)
+            ),
             "is_active": True,
             "is_default": False,
             "supported_aspect_ratios": list(_ALL_ASPECT_RATIOS),

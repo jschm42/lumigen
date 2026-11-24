@@ -21,6 +21,11 @@ class StubAdapter(ProviderAdapter):
     display_name = "Stub (testing)"
     homepage_url = ""
 
+    @classmethod
+    def supports_image_input_for_model(cls, model: str) -> bool:
+        """Accept reference images for every stub model so agentic animations are testable."""
+        return True
+
     async def list_models(self, settings: Settings) -> list[str]:
         _ = settings
         return ["stub-v1"]

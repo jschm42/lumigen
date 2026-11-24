@@ -66,7 +66,14 @@ class ThumbnailService:
 
     def _render_thumbnail(self, source: Image.Image) -> BytesIO:
         transposed = ImageOps.exif_transpose(source)
-        image = transposed.convert("RGB")
+        # Animated images (GIF) use their first frame; transparent pixels go on a light background.
+        has_alpha = transposed.mode in {"RGBA", "LA", "PA"} or "transparency" in transposed.info
+        if has_alpha:
+            rgba = transposed.convert("RGBA")
+            image = Image.new("RGB", rgba.size, (240, 240, 240))
+            image.paste(rgba, mask=rgba.getchannel("A"))
+        else:
+            image = transposed.convert("RGB")
         image.thumbnail((self.max_px, self.max_px))
         buffer = BytesIO()
         image.save(buffer, format="WEBP", quality=85)

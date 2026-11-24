@@ -172,6 +172,9 @@ class ModelConfig(Base, TimestampMixin):
     )
     # Adapter-specific options, e.g. a ComfyUI API-format workflow under "workflow".
     provider_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Whether the model accepts reference images (edit / image-to-image).
+    # None = auto-detect from the model identifier; True/False = admin override.
+    supports_image_input: Mapped[bool | None] = mapped_column(Boolean(), nullable=True)
 
     profiles: Mapped[list[Profile]] = relationship(back_populates="model_config")
     endpoint: Mapped[CustomEndpoint | None] = relationship(back_populates="model_configs")

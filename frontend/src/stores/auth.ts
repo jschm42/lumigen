@@ -8,6 +8,10 @@ declare const __APP_VERSION__: string | undefined
 const DEFAULT_UI_SETTINGS: UiSettings = {
   show_token_usage: false,
   cost_currency: 'USD',
+  animation_max_frames: 24,
+  animation_max_dimension_px: 512,
+  animation_max_file_size_mb: 10,
+  animation_default_frame_ms: 100,
 }
 
 export const useAuthStore = defineStore('auth', () => {

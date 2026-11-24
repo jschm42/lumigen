@@ -265,6 +265,10 @@ class GenerationService:
             "min_images": effective_overrides.get("min_images"),
             "max_images": effective_overrides.get("max_images"),
             "llm_model": effective_overrides.get("llm_model"),
+            "agentic_kind": effective_overrides.get("agentic_kind") or (
+                "set" if effective_overrides.get("is_agentic") else None
+            ),
+            "animation": effective_overrides.get("animation"),
             "stack_id": effective_overrides.get("stack_id"),
             "overrides": {
                 "width": "width" in effective_overrides,
@@ -501,7 +505,12 @@ class GenerationService:
                     and generation.request_snapshot_json
                     and generation.request_snapshot_json.get("is_agentic")
                 )
-            if is_agentic:
+                is_animation = bool(
+                    is_agentic and generation.request_snapshot_json.get("agentic_kind") == "animation"
+                )
+            if is_animation:
+                await self._execute_agentic_animation_job(generation_id)
+            elif is_agentic:
                 await self._execute_agentic_generation_job(generation_id)
             else:
                 await self._execute_generation_job(generation_id)
@@ -1041,6 +1050,376 @@ class GenerationService:
                 except Exception:
                     generation.failure_sidecar_path = None
 
+                session.commit()
+
+    def _model_supports_image_input(self, generation: Generation) -> bool:
+        """Return whether the generation's model accepts reference images.
+
+        Uses the model configuration's explicit admin setting when present,
+        otherwise the adapter heuristic.
+        """
+        request_data = generation.request_snapshot_json or {}
+        explicit: bool | None = None
+        config_id = request_data.get("model_config_id")
+        if config_id and self.model_config_service:
+            try:
+                config = self.model_config_service.get_model_config(int(config_id))
+            except Exception:
+                config = None
+            explicit = getattr(config, "supports_image_input", None)
+        checker = getattr(self.registry, "supports_image_input", None)
+        if checker is None:
+            return False
+        return bool(checker(generation.provider, generation.model, explicit))
+
+    def _persist_generated_asset(
+        self,
+        session: Session,
+        *,
+        generation: Generation,
+        base_dir: Path,
+        storage_template: str,
+        title: str,
+        idx: int,
+        ext: str,
+        data: bytes,
+        width: int,
+        height: int,
+        mime: str,
+        categories: list[Any],
+        stack_id: str,
+        stack_order: int,
+        meta: dict[str, Any],
+        provider_meta: dict[str, Any] | None = None,
+        raw_meta: dict[str, Any] | None = None,
+        created_files: list[str] | None = None,
+    ) -> Asset:
+        """Write an image plus thumbnail and sidecar via the storage services and add an ``Asset`` row."""
+        rel_path = self.storage_service.render_relative_path(
+            template=storage_template,
+            profile_name=generation.profile_name,
+            prompt_user=title,
+            generation_id=generation.id,
+            idx=idx,
+            ext=ext,
+        )
+        abs_path = self.storage_service.resolve_managed_path(base_dir, rel_path)
+        self.storage_service.write_bytes_atomic(abs_path, data)
+        thumb_rel = self.thumbnail_service.create_thumbnail(base_dir, rel_path)
+        sidecar_payload = self._build_asset_sidecar_payload(
+            generation=generation,
+            asset_index=idx,
+            image_rel=rel_path.as_posix(),
+            thumbnail_rel=thumb_rel.as_posix(),
+            provider_meta=provider_meta or {},
+            raw_meta=raw_meta or {},
+            image_width=width,
+            image_height=height,
+            image_mime=mime,
+        )
+        sidecar_rel = self.sidecar_service.write_asset_sidecar(base_dir, rel_path, sidecar_payload)
+        if created_files is not None:
+            created_files.extend([rel_path.as_posix(), thumb_rel.as_posix(), sidecar_rel.as_posix()])
+        asset = Asset(
+            generation_id=generation.id,
+            file_path=rel_path.as_posix(),
+            sidecar_path=sidecar_rel.as_posix(),
+            thumbnail_path=thumb_rel.as_posix(),
+            width=width,
+            height=height,
+            mime=mime,
+            categories=list(categories),
+            stack_id=stack_id,
+            stack_order=stack_order,
+            meta_json=meta,
+        )
+        session.add(asset)
+        session.commit()
+        return asset
+
+    @staticmethod
+    def _finish_succeeded(session: Session, generation: Generation) -> None:
+        """Mark an agentic generation as succeeded with the ``completed`` step."""
+        generation.status = "succeeded"
+        req_snap = dict(generation.request_snapshot_json or {})
+        req_snap["agentic_step"] = "completed"
+        generation.request_snapshot_json = req_snap
+        generation.error = None
+        generation.failure_sidecar_path = None
+        generation.finished_at = datetime.now(UTC)
+        session.commit()
+
+    async def _execute_agentic_animation_job(self, generation_id: int) -> None:
+        """Run an agentic animation job (keyframe-chain strategy).
+
+        Steps: plan frames with the LLM, generate frame 0 via text-to-image,
+        generate every following frame as an edit of the keyframe and the
+        previous frame, and store the frames as a gallery stack (keyed to
+        transparency when requested). Depending on ``animation.output`` the
+        frames are then assembled into a GIF or animated WebP that becomes the
+        stack cover (``stack_order`` 0), or kept as a plain frame series
+        (``"none"``).
+        """
+        import uuid
+
+        from app.services.animation_service import (
+            OUTPUT_FORMATS,
+            AnimationError,
+            AnimationLimits,
+            AnimationOptions,
+            assemble_animation,
+            key_frame,
+            parse_hex_color,
+        )
+
+        with SessionLocal() as session:
+            generation = crud.get_generation(session, generation_id)
+            if not generation or generation.status != "queued":
+                return
+
+            generation.status = "running"
+            generation.error = None
+            session.commit()
+
+            base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+            ensure_dir(base_dir)
+
+            try:
+                self._raise_if_cancelled(session, generation_id)
+                if not self.agentic_service:
+                    raise ProviderError("AgenticService is not configured.")
+                if not self._model_supports_image_input(generation):
+                    raise ProviderError(
+                        "The selected model does not support image input, which is required for animations. "
+                        "Choose an edit-capable model or enable image input for it in the admin settings."
+                    )
+
+                limits = AnimationLimits.from_ui_settings(AppSettingsService().get_ui_settings(session))
+                req_snap = dict(generation.request_snapshot_json or {})
+                animation_opts = dict(req_snap.get("animation") or {})
+                transparent = bool(animation_opts.get("transparent"))
+                loop_choice = animation_opts.get("loop") or None
+                frame_ms = self._parse_optional_int(animation_opts.get("frame_ms")) or limits.default_frame_ms
+                output_format = str(animation_opts.get("output") or "gif").lower()
+                if output_format not in OUTPUT_FORMATS:
+                    raise ProviderError(f"Unsupported animation output: {output_format!r}.")
+
+                req_snap["agentic_step"] = "planning"
+                generation.request_snapshot_json = req_snap
+                session.commit()
+
+                plan = await self.agentic_service.plan_animation(
+                    instruction=generation.prompt_user,
+                    min_frames=self._parse_optional_int(req_snap.get("min_images")),
+                    max_frames=self._parse_optional_int(req_snap.get("max_images")),
+                    frame_limit=limits.max_frames,
+                    loop=loop_choice,
+                    default_frame_ms=frame_ms,
+                    transparent=transparent,
+                    target_model=generation.model,
+                    target_provider=generation.provider,
+                    llm_model=req_snap.get("llm_model"),
+                )
+                self._raise_if_cancelled(session, generation_id)
+
+                stack_id = f"stk_{uuid.uuid4().hex[:12]}"
+                # Only an explicit seed is sent: several models (e.g. FLUX 3 via OpenRouter) reject the
+                # parameter, and frame consistency comes from the reference images anyway.
+                seed = self._parse_optional_int(req_snap.get("seed"))
+
+                req_snap = dict(generation.request_snapshot_json or {})
+                req_snap.update(
+                    {
+                        "agentic_step": "generating",
+                        "agentic_plan": plan.to_dict(),
+                        "stack_id": stack_id,
+                        "total_planned": len(plan.frames),
+                        "current_item_index": 0,
+                        "animation_seed": seed,
+                    }
+                )
+                generation.request_snapshot_json = req_snap
+                session.commit()
+
+                storage_template = str(
+                    generation.storage_template_snapshot_json.get("template", self.settings.default_storage_template)
+                )
+                categories = crud.list_categories_by_ids(
+                    session, self._parse_int_list(req_snap.get("category_ids"))
+                )
+
+                key_color = parse_hex_color(plan.key_color, (0, 255, 0))
+                frame_bytes: list[bytes] = []
+                frame_assets: list[Asset] = []
+                keyframe: ProviderInputImage | None = None
+                previous: ProviderInputImage | None = None
+
+                for idx, frame in enumerate(plan.frames):
+                    self._raise_if_cancelled(session, generation_id)
+                    req_snap = dict(generation.request_snapshot_json or {})
+                    req_snap["current_item_index"] = idx
+                    req_snap["current_item_title"] = frame.title
+                    generation.request_snapshot_json = req_snap
+                    session.commit()
+
+                    provider_request = self._provider_request_from_generation(generation)
+                    provider_request.prompt = plan.frame_prompt(idx)
+                    provider_request.negative_prompt = plan.negative_prompt or provider_request.negative_prompt
+                    provider_request.n_images = 1
+                    provider_request.seed = seed
+                    provider_request.output_format = "png"
+                    if keyframe is not None:
+                        # Keyframe first (identity anchor), previous frame second (motion continuity).
+                        references = [keyframe] if previous is None or previous is keyframe else [keyframe, previous]
+                        provider_request.input_images = references
+
+                    result = None
+                    last_error: Exception | None = None
+                    for _attempt in range(2):
+                        try:
+                            result = await self.registry.generate(generation.provider, provider_request)
+                        except Exception as gen_err:  # retried once, then the run fails
+                            last_error = gen_err
+                            _logger.warning("Animation frame %d (%s) failed: %s", idx, frame.title, gen_err)
+                            continue
+                        if result.images:
+                            break
+                    if result is None or not result.images:
+                        detail = f": {last_error}" if last_error else ""
+                        raise ProviderError(f"Frame {idx + 1} ({frame.title}) could not be generated{detail}")
+
+                    image = result.images[0]
+                    data, width, height, mime = self._normalize_image_for_output(
+                        data=image.data,
+                        output_format="png",
+                        fallback_mime=image.mime,
+                        fallback_width=image.width,
+                        fallback_height=image.height,
+                    )
+                    # References keep the raw frame (with key background) so the model sees the same scene.
+                    current = ProviderInputImage(data=data, mime=mime)
+                    if keyframe is None:
+                        keyframe = current
+                    previous = current
+                    if transparent:
+                        data = await asyncio.to_thread(key_frame, data, key_color)
+                        mime = "image/png"
+                    frame_bytes.append(data)
+
+                    asset = self._persist_generated_asset(
+                        session,
+                        generation=generation,
+                        base_dir=base_dir,
+                        storage_template=storage_template,
+                        title=f"{plan.title} {frame.title}",
+                        idx=idx + 1,
+                        ext="png",
+                        data=data,
+                        width=width,
+                        height=height,
+                        mime=mime,
+                        categories=categories,
+                        stack_id=stack_id,
+                        stack_order=idx,
+                        provider_meta=image.meta,
+                        raw_meta=result.raw_meta,
+                        meta={
+                            "role": "frame",
+                            "frame_index": idx,
+                            "duration_ms": frame.duration_ms or plan.default_frame_ms,
+                            "transparent": transparent,
+                            "prompt": provider_request.prompt,
+                            "item_title": frame.title,
+                            "set_title": plan.title,
+                            "stack_id": stack_id,
+                            "stack_order": idx,
+                            "provider_meta": image.meta,
+                            "raw_meta": result.raw_meta,
+                        },
+                    )
+                    frame_assets.append(asset)
+
+                self._raise_if_cancelled(session, generation_id)
+                if output_format == "none":
+                    # Frame series only: frame 0 stays the stack cover.
+                    self._finish_succeeded(session, generation)
+                    return
+
+                req_snap = dict(generation.request_snapshot_json or {})
+                req_snap["agentic_step"] = "assembling"
+                req_snap["current_item_index"] = len(plan.frames)
+                generation.request_snapshot_json = req_snap
+                session.commit()
+
+                options = AnimationOptions(
+                    loop=plan.loop,
+                    transparent=transparent,
+                    key_color=key_color,
+                    output_format=output_format,
+                )
+                try:
+                    animation = await asyncio.to_thread(
+                        assemble_animation,
+                        frame_bytes,
+                        [fr.duration_ms or plan.default_frame_ms for fr in plan.frames],
+                        options,
+                        limits,
+                    )
+                except AnimationError as exc:
+                    raise ProviderError(
+                        "The frames were generated and kept in the gallery, but the "
+                        f"{output_format.upper()} could not be assembled: {exc}"
+                    ) from exc
+
+                # The animation becomes the stack cover; frames move behind it.
+                for order, frame_asset in enumerate(frame_assets, start=1):
+                    frame_asset.stack_order = order
+                    frame_asset.meta_json = {**(frame_asset.meta_json or {}), "stack_order": order}
+                session.commit()
+
+                self._persist_generated_asset(
+                    session,
+                    generation=generation,
+                    base_dir=base_dir,
+                    storage_template=storage_template,
+                    title=plan.title,
+                    idx=0,
+                    ext=animation.extension,
+                    data=animation.data,
+                    width=animation.width,
+                    height=animation.height,
+                    mime=animation.mime,
+                    categories=categories,
+                    stack_id=stack_id,
+                    stack_order=0,
+                    meta={
+                        "role": "animation",
+                        "format": output_format,
+                        "strategy": "keyframe_chain",
+                        "frame_asset_ids": [a.id for a in frame_assets],
+                        "frame_count": animation.frame_count,
+                        "durations_ms": animation.durations_ms,
+                        "loop": plan.loop,
+                        "transparent": transparent,
+                        "colors": animation.colors,
+                        "item_title": plan.title,
+                        "set_title": plan.title,
+                        "stack_id": stack_id,
+                        "stack_order": 0,
+                    },
+                )
+
+                self._finish_succeeded(session, generation)
+            except GenerationCancelledError as exc:
+                generation.status = "cancelled"
+                generation.error = str(exc)
+                generation.finished_at = datetime.now(UTC)
+                session.commit()
+            except Exception as exc:
+                _logger.exception("Agentic animation job %d failed: %s", generation_id, exc)
+                generation.status = "failed"
+                generation.error = self._error_message_from_exception(exc)
+                generation.finished_at = datetime.now(UTC)
                 session.commit()
 
     async def _execute_agentic_generation_job(self, generation_id: int) -> None:

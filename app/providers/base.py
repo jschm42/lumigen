@@ -260,6 +260,36 @@ class ProviderAdapter(ABC):
         "animatediff",
     )
 
+    #: Substrings that identify a model ID as accepting reference images (edit /
+    #: image-to-image). Conservative on purpose: unknown models are treated as
+    #: text-only and admins can enable the capability per model configuration.
+    _IMAGE_INPUT_MODEL_TOKENS: tuple[str, ...] = (
+        "edit",
+        "kontext",
+        "gpt-image",
+        "gemini",
+        "nano-banana",
+        "seedream",
+        "flux-2",
+        "flux-3",
+        "img2img",
+        "image-to-image",
+        "i2i",
+        "redux",
+        "qwen-image",
+    )
+
+    @classmethod
+    def supports_image_input_for_model(cls, model: str) -> bool:
+        """Return True when *model* is known to accept reference images as input.
+
+        Heuristic based on the model identifier; adapters with a homogeneous
+        catalogue override it. Used as default when the model configuration has
+        no explicit admin setting.
+        """
+        low = (model or "").lower()
+        return any(token in low for token in cls._IMAGE_INPUT_MODEL_TOKENS)
+
     @classmethod
     def media_type_for_model(cls, model: str) -> str:
         """Return ``"video"`` when *model* produces video, otherwise ``"image"``.

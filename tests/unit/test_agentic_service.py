@@ -182,3 +182,103 @@ async def test_agentic_plan_optional_min_max(monkeypatch: pytest.MonkeyPatch) ->
     prompt_sent = calls[0]["json"]["messages"][1]["content"]
     assert "Decide on an ideal number" in prompt_sent
 
+
+
+def _animation_service(monkeypatch: pytest.MonkeyPatch, content: str | None) -> tuple[AgenticService, list]:
+    """Return an AgenticService whose LLM answers with *content* (None = network error)."""
+    calls: list = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+        async def post(self, url, headers=None, json=None):  # type: ignore[no-untyped-def]
+            calls.append(json)
+            if content is None:
+                raise httpx.ConnectError("Network unreachable")
+            return _json_response("POST", url, 200, {"choices": [{"message": {"content": content}}]})
+
+    monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+    secrets = SimpleNamespace(get_default_api_key=lambda provider: "key", decrypt_api_key=lambda tok: tok)
+    return AgenticService(Settings(), secrets, EnhancementService(Settings(), secrets)), calls
+
+
+@pytest.mark.asyncio
+async def test_plan_animation_parses_frames_and_applies_user_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "title": "Knight swing",
+        "subject_anchor": "pixel knight",
+        "scene_anchor": "flat blue background",
+        "style_anchor": "16-bit pixel art",
+        "negative_prompt": "blurry",
+        "loop": "once",
+        "frames": [
+            {"title": "Idle", "pose": "sword lowered", "duration_ms": 5},
+            {"title": "Wind-up", "pose": "sword raised"},
+            {"title": "Empty", "pose": ""},
+            "sword swung forward",
+        ],
+    }
+    service, calls = _animation_service(monkeypatch, "```json\n" + json.dumps(payload) + "\n```")
+
+    plan = await service.plan_animation("knight swings a sword", loop="pingpong", default_frame_ms=90)
+
+    assert [f.title for f in plan.frames] == ["Idle", "Wind-up", "Frame 4"]
+    assert plan.frames[0].duration_ms == 20  # clamped
+    assert plan.loop == "pingpong"  # user choice wins
+    assert plan.key_color is None
+    assert "sprite sheet" in plan.negative_prompt
+    assert "ping-pong" in calls[0]["messages"][0]["content"]
+    assert plan.frame_prompt(0).startswith("pixel knight, sword lowered")
+    assert "Change only the pose so that: sword raised" in plan.frame_prompt(1)
+    assert plan.to_dict()["kind"] == "animation"
+
+
+@pytest.mark.asyncio
+async def test_plan_animation_pads_and_caps_frame_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"title": "Blink", "frames": [{"pose": f"step {i}"} for i in range(30)]}
+    service, _ = _animation_service(monkeypatch, json.dumps(payload))
+    plan = await service.plan_animation("blinking eye", max_frames=40, frame_limit=10)
+    assert len(plan.frames) == 10
+
+    short = {"title": "Blink", "frames": [{"pose": "open"}]}
+    service, _ = _animation_service(monkeypatch, json.dumps(short))
+    plan = await service.plan_animation("blinking eye", min_frames=4)
+    assert len(plan.frames) == 4
+    assert plan.frames[-1].pose == "open"
+
+
+@pytest.mark.asyncio
+async def test_plan_animation_transparent_enforces_key_colour(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"title": "Frog", "scene_anchor": "white background", "key_color": "#123456",
+               "frames": [{"pose": "a"}, {"pose": "b"}]}
+    service, calls = _animation_service(monkeypatch, json.dumps(payload))
+    plan = await service.plan_animation("green frog hopping", transparent=True)
+    assert plan.key_color == "#00FF00"
+    assert "#00FF00" in plan.scene_anchor
+    assert "TRANSPARENT BACKGROUND" in calls[0]["messages"][0]["content"]
+
+    payload["key_color"] = "#ff00ff"
+    service, _ = _animation_service(monkeypatch, json.dumps(payload))
+    plan = await service.plan_animation("green frog hopping", transparent=True)
+    assert plan.key_color == "#FF00FF"
+    assert "magenta" in plan.scene_anchor
+
+
+@pytest.mark.asyncio
+async def test_plan_animation_falls_back_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    service, _ = _animation_service(monkeypatch, None)
+    plan = await service.plan_animation("a candle flickering", min_frames=5, loop="loop")
+    assert len(plan.frames) == 5
+    assert plan.subject_anchor == "a candle flickering"
+    assert plan.loop == "loop"
+
+    service, _ = _animation_service(monkeypatch, "not json")
+    plan = await service.plan_animation("a candle flickering")
+    assert len(plan.frames) >= 2

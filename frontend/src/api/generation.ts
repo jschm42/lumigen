@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { Generation, ModelConfig, StylePreset } from '@/types'
+import type { AgenticKind, AnimationOptions, Generation, ModelConfig, StylePreset } from '@/types'
 
 export interface SubmitGenerationPayload {
   prompt: string
@@ -35,6 +35,8 @@ export interface SubmitGenerationPayload {
   min_images?: number | null
   max_images?: number | null
   llm_model?: string | null
+  agentic_kind?: AgenticKind
+  animation?: AnimationOptions
 }
 
 export interface EnhancePromptPayload {
@@ -81,6 +83,13 @@ export const generationApi = {
     if (payload.min_images != null) formData.append('min_images', String(payload.min_images))
     if (payload.max_images != null) formData.append('max_images', String(payload.max_images))
     if (payload.llm_model) formData.append('llm_model', payload.llm_model)
+    if (payload.agentic_kind) formData.append('agentic_kind', payload.agentic_kind)
+    if (payload.animation) {
+      if (payload.animation.loop) formData.append('animation_loop', payload.animation.loop)
+      if (payload.animation.frame_ms != null) formData.append('animation_frame_ms', String(payload.animation.frame_ms))
+      formData.append('animation_transparent', payload.animation.transparent ? 'true' : 'false')
+      if (payload.animation.output) formData.append('animation_output', payload.animation.output)
+    }
 
     if (payload.input_images && payload.input_images.length > 0) {
       payload.input_images.forEach((file) => {
