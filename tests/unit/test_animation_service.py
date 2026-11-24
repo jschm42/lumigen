@@ -280,3 +280,14 @@ def test_key_frame_returns_png_with_alpha_and_passes_through_real_alpha() -> Non
     buffer = BytesIO()
     already.save(buffer, format="PNG")
     assert key_frame(buffer.getvalue(), (0, 255, 0)) == buffer.getvalue()
+
+
+
+def test_frame_difference_separates_copies_from_new_poses() -> None:
+    from app.services.animation_service import STATIC_FRAME_THRESHOLD, frame_difference
+
+    assert frame_difference(_frame(0), _frame(0)) == 0
+    # Same pose on a slightly different background tint (typical copy by an edit model).
+    assert frame_difference(_frame(0), _frame(0, background=(5, 250, 8))) < STATIC_FRAME_THRESHOLD
+    # Subject moved to a new position.
+    assert frame_difference(_frame(0), _frame(4)) > STATIC_FRAME_THRESHOLD

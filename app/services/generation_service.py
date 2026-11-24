@@ -1137,6 +1137,43 @@ class GenerationService:
         session.commit()
         return asset
 
+    async def _generate_animation_frame(
+        self,
+        generation: Generation,
+        provider_request: ProviderGenerationRequest,
+        idx: int,
+        title: str,
+    ) -> tuple[Any, Any, tuple[bytes, int, int, str]]:
+        """Generate one animation frame, retrying once on provider errors or empty results.
+
+        Returns the provider image, the full result and the PNG-normalized
+        ``(data, width, height, mime)``. Raises ``ProviderError`` when both
+        attempts fail.
+        """
+        result = None
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            try:
+                result = await self.registry.generate(generation.provider, provider_request)
+            except Exception as gen_err:  # retried once, then the run fails
+                last_error = gen_err
+                _logger.warning("Animation frame %d (%s) failed: %s", idx, title, gen_err)
+                continue
+            if result.images:
+                break
+        if result is None or not result.images:
+            detail = f": {last_error}" if last_error else ""
+            raise ProviderError(f"Frame {idx + 1} ({title}) could not be generated{detail}")
+        image = result.images[0]
+        normalized = self._normalize_image_for_output(
+            data=image.data,
+            output_format="png",
+            fallback_mime=image.mime,
+            fallback_width=image.width,
+            fallback_height=image.height,
+        )
+        return image, result, normalized
+
     @staticmethod
     def _finish_succeeded(session: Session, generation: Generation) -> None:
         """Mark an agentic generation as succeeded with the ``completed`` step."""
@@ -1164,10 +1201,12 @@ class GenerationService:
 
         from app.services.animation_service import (
             OUTPUT_FORMATS,
+            STATIC_FRAME_THRESHOLD,
             AnimationError,
             AnimationLimits,
             AnimationOptions,
             assemble_animation,
+            frame_difference,
             key_frame,
             parse_hex_color,
         )
@@ -1269,33 +1308,24 @@ class GenerationService:
                     provider_request.seed = seed
                     provider_request.output_format = "png"
                     if keyframe is not None:
-                        # Keyframe first (identity anchor), previous frame second (motion continuity).
-                        references = [keyframe] if previous is None or previous is keyframe else [keyframe, previous]
-                        provider_request.input_images = references
+                        # Only the keyframe is passed: it anchors the character identity. Passing the previous
+                        # frame as well made edit models copy it, so poses converged into near-identical frames.
+                        provider_request.input_images = [keyframe]
 
-                    result = None
-                    last_error: Exception | None = None
-                    for _attempt in range(2):
-                        try:
-                            result = await self.registry.generate(generation.provider, provider_request)
-                        except Exception as gen_err:  # retried once, then the run fails
-                            last_error = gen_err
-                            _logger.warning("Animation frame %d (%s) failed: %s", idx, frame.title, gen_err)
-                            continue
-                        if result.images:
-                            break
-                    if result is None or not result.images:
-                        detail = f": {last_error}" if last_error else ""
-                        raise ProviderError(f"Frame {idx + 1} ({frame.title}) could not be generated{detail}")
-
-                    image = result.images[0]
-                    data, width, height, mime = self._normalize_image_for_output(
-                        data=image.data,
-                        output_format="png",
-                        fallback_mime=image.mime,
-                        fallback_width=image.width,
-                        fallback_height=image.height,
+                    image, result, (data, width, height, mime) = await self._generate_animation_frame(
+                        generation, provider_request, idx, frame.title
                     )
+                    static_retry = False
+                    if previous is not None:
+                        difference = await asyncio.to_thread(frame_difference, previous.data, data)
+                        if difference < STATIC_FRAME_THRESHOLD:
+                            # The model returned (almost) the reference pose: retry once with a stronger instruction.
+                            _logger.info("Animation frame %d looks static (%.1f), retrying", idx, difference)
+                            static_retry = True
+                            provider_request.prompt = plan.frame_prompt(idx, emphasize_change=True)
+                            image, result, (data, width, height, mime) = await self._generate_animation_frame(
+                                generation, provider_request, idx, frame.title
+                            )
                     # References keep the raw frame (with key background) so the model sees the same scene.
                     current = ProviderInputImage(data=data, mime=mime)
                     if keyframe is None:
@@ -1328,6 +1358,7 @@ class GenerationService:
                             "frame_index": idx,
                             "duration_ms": frame.duration_ms or plan.default_frame_ms,
                             "transparent": transparent,
+                            "static_retry": static_retry,
                             "prompt": provider_request.prompt,
                             "item_title": frame.title,
                             "set_title": plan.title,

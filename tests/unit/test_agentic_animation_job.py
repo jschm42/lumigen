@@ -182,8 +182,8 @@ async def test_animation_job_chains_keyframe_and_builds_gif_cover(monkeypatch: p
     agentic.plan_animation.assert_awaited_once()
     assert agentic.plan_animation.await_args.kwargs["frame_limit"] == 24
 
-    # Frame 0 is text-to-image, later frames reference keyframe (+ previous frame).
-    assert [len(r.input_images) for r in registry.requests] == [0, 1, 2]
+    # Frame 0 is text-to-image; later frames only reference the keyframe (no copy chain via the previous frame).
+    assert [len(r.input_images) for r in registry.requests] == [0, 1, 1]
     assert registry.requests[2].input_images[0].data == registry.requests[1].input_images[0].data
     assert all(r.seed == 42 and r.n_images == 1 and r.output_format == "png" for r in registry.requests)
     assert registry.requests[0].prompt.startswith("red ball, pose 0")
@@ -489,3 +489,64 @@ async def test_animation_job_stores_keyed_frames_when_transparent(monkeypatch: p
     # The model still receives the raw frame (with key background) as reference.
     reference = Image.open(BytesIO(registry.requests[1].input_images[0].data)).convert("RGBA")
     assert reference.getpixel((5, 5)) == (0, 255, 0, 255)
+
+
+
+@pytest.mark.asyncio
+async def test_animation_job_retries_frames_that_copy_the_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _CopyingRegistry(_Registry):
+        """Returns the same image every time, like an edit model that ignores the pose instruction."""
+
+        prompts: list[str] = []
+
+        async def generate(self, _provider, request):  # type: ignore[no-untyped-def]
+            self.requests.append(request)
+            self.prompts.append(request.prompt)
+            image = Image.new("RGB", (160, 160), (40, 90, 160))
+            buffer = BytesIO()
+            image.save(buffer, format="PNG")
+            return ProviderGenerationResult(
+                images=[ProviderImage(data=buffer.getvalue(), mime="image/png", width=160, height=160)]
+            )
+
+    generation = _generation()
+    registry = _CopyingRegistry()
+    service, session, _storage, _agentic = _service(monkeypatch, registry, generation, _plan(3))
+
+    await service.run_generation_job(generation.id)
+
+    # One static retry per frame after the keyframe, then the run continues instead of failing.
+    assert generation.status == "succeeded", generation.error
+    assert len(registry.requests) == 1 + 2 * 2
+    assert "IMPORTANT" not in registry.prompts[1]
+    assert "IMPORTANT" in registry.prompts[2]
+    frames = [a for a in session.added if isinstance(a, Asset) and a.meta_json.get("role") == "frame"]
+    assert [a.meta_json["static_retry"] for a in sorted(frames, key=lambda a: a.meta_json["frame_index"])] == [
+        False,
+        True,
+        True,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_animation_job_does_not_retry_distinct_frames(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _MovingRegistry(_Registry):
+        async def generate(self, _provider, request):  # type: ignore[no-untyped-def]
+            self.requests.append(request)
+            image = Image.new("RGB", (160, 160), (0, 255, 0))
+            offset = len(self.requests) * 30
+            image.paste((20, 20, 20), (offset % 120, 40, offset % 120 + 40, 120))
+            buffer = BytesIO()
+            image.save(buffer, format="PNG")
+            return ProviderGenerationResult(
+                images=[ProviderImage(data=buffer.getvalue(), mime="image/png", width=160, height=160)]
+            )
+
+    generation = _generation()
+    registry = _MovingRegistry()
+    service, _session, _storage, _agentic = _service(monkeypatch, registry, generation, _plan(3))
+
+    await service.run_generation_job(generation.id)
+
+    assert generation.status == "succeeded", generation.error
+    assert len(registry.requests) == 3

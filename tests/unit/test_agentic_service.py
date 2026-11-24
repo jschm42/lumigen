@@ -236,7 +236,12 @@ async def test_plan_animation_parses_frames_and_applies_user_loop(monkeypatch: p
     assert "sprite sheet" in plan.negative_prompt
     assert "ping-pong" in calls[0]["messages"][0]["content"]
     assert plan.frame_prompt(0).startswith("pixel knight, sword lowered")
-    assert "Change only the pose so that: sword raised" in plan.frame_prompt(1)
+    second = plan.frame_prompt(1)
+    assert second.startswith("Frame 2 of 3 of an animation.")
+    assert "NEW POSE: sword raised" in second
+    assert "only for the character's identity" in second
+    assert "IMPORTANT" not in second
+    assert "IMPORTANT" in plan.frame_prompt(1, emphasize_change=True)
     assert plan.to_dict()["kind"] == "animation"
 
 

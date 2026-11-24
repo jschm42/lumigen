@@ -347,6 +347,30 @@ def _encode_webp(
     return buffer.getvalue()
 
 
+#: Mean grey-level difference (0–255, at 128 px) below which a new frame counts as a copy of the previous one.
+#: Measured on real runs: distinct walk-cycle poses differ by 10–24, copied frames by 3–8.
+STATIC_FRAME_THRESHOLD = 6.0
+
+
+def frame_difference(first: bytes, second: bytes) -> float:
+    """Return the mean grey-level difference of two frames, compared at 128×128 px.
+
+    Transparent pixels are composited onto mid-grey so keyed and raw frames are
+    comparable. Used to detect edit models that return the reference unchanged.
+    """
+
+    def _normalized(data: bytes) -> Image.Image:
+        with Image.open(BytesIO(data)) as source:
+            rgba = ImageOps.exif_transpose(source).convert("RGBA")
+        background = Image.new("RGBA", rgba.size, (128, 128, 128, 255))
+        background.alpha_composite(rgba)
+        return background.convert("L").resize((128, 128), Image.Resampling.BILINEAR)
+
+    diff = ImageChops.difference(_normalized(first), _normalized(second))
+    histogram = diff.histogram()
+    return sum(value * count for value, count in enumerate(histogram)) / (128 * 128)
+
+
 def key_frame(data: bytes, key_color: tuple[int, int, int], tolerance: int = 60) -> bytes:
     """Return *data* as RGBA PNG with the chroma-key background removed (full resolution).
 

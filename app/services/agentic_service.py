@@ -66,8 +66,11 @@ CRITICAL RULES:
 1. CONSISTENCY: The subject, its proportions, colours and clothing, the background, the camera position, the framing
    and the lighting stay identical in every frame. Describe them ONCE in 'subject_anchor', 'scene_anchor' and
    'style_anchor'. Never introduce new objects, cuts, zooms or camera moves unless explicitly requested.
-2. DELTA ONLY: Each frame's 'pose' describes ONLY what differs from the previous frame (position of limbs,
-   expression, object state). Split the motion into small, evenly spaced steps.
+2. FULL POSE PER FRAME: Each frame's 'pose' describes the COMPLETE body position of that frame in absolute terms
+   (both legs, both arms, torso, head, held objects), e.g. "left leg forward with heel touching the ground, right
+   leg behind on the toes, left arm swung back, right arm forward, torso upright". Never use relative wording such
+   as "moves", "continues", "reverses" or "same as before". Adjacent frames must be clearly, visibly different;
+   split the motion into evenly spaced key poses.
 3. LOOP: {loop_instruction}
 4. FRAME COUNT: {count_instruction}
 5. TIMING: 'duration_ms' per frame is optional (default {default_frame_ms} ms). Use longer holds for key poses and
@@ -87,8 +90,8 @@ IMPORTANT: You MUST respond ONLY with a valid JSON object matching this structur
   "default_frame_ms": {default_frame_ms},
   "key_color": "#00FF00",
   "frames": [
-    {{"title": "Idle", "pose": "standing upright, sword lowered at the side", "duration_ms": 150}},
-    {{"title": "Wind-up", "pose": "sword pulled back over the right shoulder"}}
+    {{"title": "Idle", "pose": "standing upright, feet shoulder-width apart, sword held low in the right hand, left arm relaxed", "duration_ms": 150}},
+    {{"title": "Wind-up", "pose": "weight on the back leg, torso twisted right, both hands raising the sword over the right shoulder"}}
   ]
 }}
 """
@@ -168,23 +171,38 @@ class AgenticAnimationPlan:
             ],
         }
 
-    def frame_prompt(self, index: int) -> str:
+    def frame_prompt(self, index: int, emphasize_change: bool = False) -> str:
         """Return the generation prompt for frame *index*.
 
-        Frame 0 is a full text-to-image description; later frames are edit
-        instructions that keep everything but the described change.
+        Frame 0 is a full text-to-image description. Later frames redraw the
+        character from the keyframe reference in the planned pose: the pose comes
+        first and the reference is restricted to character identity, because
+        edit models otherwise copy the reference image unchanged. With
+        *emphasize_change* (retry after a static result) the instruction to
+        change the pose is repeated more strongly.
         """
         frame = self.frames[index]
-        anchors = ", ".join(
-            part for part in (self.subject_anchor, self.scene_anchor, self.style_anchor) if part
-        )
         if index == 0:
             return ", ".join(part for part in (self.subject_anchor, frame.pose, self.scene_anchor, self.style_anchor) if part)
-        return (
-            "Edit the reference image. Keep exactly the same subject, proportions, colours, background, framing, "
-            "camera and art style as the first reference image. Change only the pose so that: "
-            f"{frame.pose}. Reference: {anchors}"
-        )
+        parts = [
+            f"Frame {index + 1} of {len(self.frames)} of an animation. Redraw the character from the reference image "
+            f"in this NEW POSE: {frame.pose}.",
+            "The pose must be clearly and visibly different from the reference image.",
+            "Use the reference image only for the character's identity, face, outfit, colours, proportions and art "
+            "style, not for the pose.",
+        ]
+        if emphasize_change:
+            parts.append(
+                "IMPORTANT: a previous attempt returned the reference pose unchanged. Move the limbs, torso and head "
+                "into the described position."
+            )
+        if self.subject_anchor:
+            parts.append(f"Character: {self.subject_anchor}.")
+        if self.scene_anchor:
+            parts.append(f"Keep the same scene and camera framing: {self.scene_anchor}.")
+        if self.style_anchor:
+            parts.append(f"Style: {self.style_anchor}.")
+        return " ".join(parts)
 
 
 class AgenticService:

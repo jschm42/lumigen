@@ -33,9 +33,16 @@ overridable by the user.
 ### Strategy A — Keyframe chain (default for edit-capable image models)
 
 1. Generate **frame 0** (the keyframe) via text-to-image (with the user's seed if one is set; several models reject the parameter, so none is invented).
-2. For every following frame, send an edit request with `input_images = [keyframe, previous_frame]` and a prompt that
-   describes only the *delta* ("same character, same background, same camera; the sword is now raised above the head").
+2. For every following frame, send an edit request with `input_images = [keyframe]` and a prompt that puts the
+   **complete target pose first** ("Frame 3 of 8 … redraw the character in this NEW POSE: …") and restricts the
+   reference to character identity, outfit, colours and art style.
 3. Keep seed, size, aspect ratio and style anchor constant.
+
+Lessons from real runs (FLUX 3 via OpenRouter): prompts starting with "keep exactly the same …", relative pose deltas
+("arms reverse") and passing the previous frame as a second reference made the model copy the reference, and the copy
+propagated through the chain (mean frame difference 3–8 instead of 10–24). Safety net: if a new frame differs from the
+previous one by less than `STATIC_FRAME_THRESHOLD` (mean grey-level difference at 128 px), it is regenerated once with
+an emphasized instruction; the frame's `meta_json.static_retry` records this.
 
 Works well with Gemini image / Nano Banana (FAL, OpenRouter, Google), OpenAI `gpt-image` edit, FLUX Kontext (BFL/FAL),
 ComfyUI img2img workflows. Cost: one image call per frame, strictly sequential.
