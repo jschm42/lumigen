@@ -141,6 +141,59 @@ test.describe("Agentic animation frame editing", () => {
     await expect(card.getByTestId("frame-actions")).toHaveCount(2);
   });
 
+  test("frames can be reordered and retimed via the API", async ({ page }) => {
+    await page.goto("/");
+    const jobId = await runAnimation(page, { prompt: "reorder api", min_images: "3", max_images: "3" });
+    const before = (await api(page, "GET", `/api/jobs/${jobId}/status`)).data;
+    const [a, b, c] = framesOf(before);
+
+    const res = await api(page, "PUT", `/api/jobs/${jobId}/frames`, {
+      json: { frames: [{ id: c.id, duration_ms: 300 }, { id: a.id, duration_ms: null }, { id: b.id, duration_ms: 40 }] },
+    });
+    expect(res.status).toBe(200);
+    const frames = framesOf(res.data);
+    expect(frames.map((/** @type {any} */ f) => f.id)).toEqual([c.id, a.id, b.id]);
+    expect(frames[0].metadata.duration_ms).toBe(300);
+    expect(frames[1].metadata.duration_ms).toBe(a.metadata.duration_ms); // null keeps the old value
+    expect(frames[2].metadata.duration_ms).toBe(40);
+    const cover = coverOf(res.data);
+    expect(cover.metadata.frame_asset_ids).toEqual([c.id, a.id, b.id]);
+    expect(cover.metadata.durations_ms).toEqual([300, a.metadata.duration_ms, 40]);
+
+    const missing = await api(page, "PUT", `/api/jobs/${jobId}/frames`, { json: { frames: [{ id: c.id }, { id: a.id }] } });
+    expect(missing.status).toBe(400);
+    const tooShort = await api(page, "PUT", `/api/jobs/${jobId}/frames`, {
+      json: { frames: [{ id: c.id, duration_ms: 5 }, { id: a.id }, { id: b.id }] },
+    });
+    expect(tooShort.status).toBe(400);
+  });
+
+  test("the frame editor dialog reorders frames", async ({ page }) => {
+    await openAgenticBar(page);
+    await page.getByRole("tab", { name: "Animation", exact: true }).click();
+    await page.getByRole("spinbutton", { name: "Minimum frames" }).fill("3");
+    await page.getByRole("spinbutton", { name: "Maximum frames" }).fill("3");
+    await page.locator("#prompt_user").fill("ui frame editor");
+    await page.locator('button[title="Start generation (Enter)"]').click();
+
+    const card = page.locator('article[data-status="succeeded"]', { hasText: "ui frame editor" }).last();
+    await expect(card.getByTestId("frame-actions")).toHaveCount(3, { timeout: 60_000 });
+    await card.getByTestId("edit-frames").click();
+
+    const dialog = page.getByRole("dialog", { name: "Edit frames" });
+    await dialog.getByRole("button", { name: "Move Frame 1 down" }).click();
+    await dialog.getByRole("spinbutton", { name: "Duration of Frame 1 in milliseconds" }).fill("250");
+    await dialog.getByRole("button", { name: "Save & rebuild" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText("Frames saved, animation rebuilt.")).toBeVisible();
+
+    // Card order follows the new stack order: Frame 2 first, then Frame 1.
+    const labels = await card
+      .getByTestId("frame-actions")
+      .evaluateAll((nodes) => nodes.map((node) => node.querySelector("button")?.getAttribute("aria-label")));
+    expect(labels).toEqual(["Regenerate Frame 2", "Regenerate Frame 1", "Regenerate Frame 3"]);
+  });
+
   test("frame edits are rejected for non-animation generations", async ({ page }) => {
     await page.goto("/");
     const modelId = await stubModelId(page);

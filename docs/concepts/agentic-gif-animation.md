@@ -226,7 +226,11 @@ for int settings (`isinstance(True, int)` is `True`).
   - `POST /api/jobs/{id}/animation/rebuild` re-assembles from the current frames without provider cost.
   - Replaced frames and covers are always new assets, stored *before* the old ones are deleted: thumbnails are
     cached as immutable and SQLite reuses the highest deleted id, so reusing an id would show a stale image.
-  - Still open: reordering frames and editing frame durations.
+  - `PUT /api/jobs/{id}/frames` with `{"frames": [{"id", "duration_ms"}]}` (every frame once, new order) reorders
+    frames and changes durations (20–10000 ms, `null` keeps the value), then rebuilds. UI: *Edit frames* dialog in
+    the generation card (move up/down, duration per frame).
+  - Asset URLs carry `?v=<hash of the file path>` so a reused id never shows a stale cached thumbnail anywhere in the
+    gallery.
 - **Thumbnails**: `ThumbnailService` must take the first frame of a GIF and must not animate in the grid; the viewer plays
   the original. Verify the gallery grid and lightbox handle `image/gif` (no conversion to WebP on output normalization —
   `_normalize_image_for_output` must not be applied to the assembled GIF).
@@ -257,7 +261,7 @@ If re-assembly and frame editing become first-class, consider an `animations` ta
 | Phase | Scope |
 |---|---|
 | **1 – MVP** ✅ | `image_input` capability (model + admin UI + migration) and rejection of unsupported models; `plan_animation()`; Strategy A; `AnimationService.assemble_gif()` incl. transparency and size limits; limit settings; GIF as stack cover; composer toggle; progress steps. |
-| **2** | Plan review for Set **and** Animation (`awaiting_review`, approve endpoint, editable plan UI); sprite-sheet strategy; ~~re-assemble + regenerate/remove-frame actions~~ ✅; reorder frames. |
+| **2** | Plan review for Set **and** Animation (`awaiting_review`, approve endpoint, editable plan UI); sprite-sheet strategy; ~~re-assemble, regenerate/remove/reorder frames, frame durations~~ ✅. |
 | **3** | Video → GIF route, WebP/APNG/MP4 export, cost estimate in composer. |
 
 ## 11. Tests

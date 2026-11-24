@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.assets import asset_url
 from app.api.generation import serialize_generation
 from app.db import crud
 from app.db.engine import get_session
@@ -102,9 +103,13 @@ def list_sessions(
         cover_url = None
         cover_id = getattr(s, "cover_asset_id", None)
         if cover_id:
-            cover_url = f"/assets/{cover_id}/thumb"
+            cover_asset = next((a for g in generations for a in g.assets if a.id == cover_id), None)
+            if cover_asset is None:
+                cover_asset = crud.get_asset(session, cover_id)
+            cover_url = asset_url(cover_id, cover_asset.file_path if cover_asset else None, "thumb")
         elif generations and generations[0].assets:
-            cover_url = f"/assets/{generations[0].assets[0].id}/thumb"
+            first = generations[0].assets[0]
+            cover_url = asset_url(first.id, first.file_path, "thumb")
 
         result.append({
             "id": s.id,

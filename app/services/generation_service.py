@@ -1623,6 +1623,52 @@ class GenerationService:
         session.refresh(generation)
         return generation
 
+    async def update_animation_frames(
+        self,
+        session: Session,
+        generation_id: int,
+        frames: list[dict[str, Any]],
+    ) -> Generation:
+        """Reorder the frames of a finished animation and/or change their durations, then rebuild it.
+
+        *frames* lists every current frame exactly once, in the new order, as
+        ``{"id": asset_id, "duration_ms": int | None}`` (``None`` keeps the
+        current duration). Durations are limited to 20–10000 ms. Raises
+        ``AnimationEditError`` for unknown, missing or duplicate frames.
+        """
+        generation = self.editable_animation(session, generation_id)
+        current, _cover = self.animation_frames(generation)
+        by_id = {frame.id: frame for frame in current}
+        try:
+            requested_ids = [int(item["id"]) for item in frames]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise AnimationEditError("Every frame needs a numeric id.") from exc
+        if sorted(requested_ids) != sorted(by_id):
+            raise AnimationEditError("The frame list must contain every frame of the animation exactly once.")
+
+        for order, item in enumerate(frames):
+            frame = by_id[int(item["id"])]
+            meta = dict(frame.meta_json or {})
+            raw_duration = item.get("duration_ms")
+            if raw_duration not in (None, ""):
+                if isinstance(raw_duration, bool):
+                    raise AnimationEditError("duration_ms must be a number.")
+                try:
+                    duration = int(raw_duration)
+                except (TypeError, ValueError) as exc:
+                    raise AnimationEditError("duration_ms must be a number.") from exc
+                if not 20 <= duration <= 10_000:
+                    raise AnimationEditError("duration_ms must be between 20 and 10000.")
+                meta["duration_ms"] = duration
+            frame.stack_order = order + 1
+            meta["stack_order"] = order + 1
+            frame.meta_json = meta
+        session.commit()
+        session.refresh(generation)
+        await self.rebuild_animation(session, generation)
+        session.refresh(generation)
+        return generation
+
     def start_frame_regeneration(
         self,
         session: Session,

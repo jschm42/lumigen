@@ -9,6 +9,9 @@ import Spinner from '@/components/ui/Spinner.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import GenerationActions from './GenerationActions.vue'
 import AnimationFrameActions from './AnimationFrameActions.vue'
+import FrameEditorModal from './FrameEditorModal.vue'
+import Button from '@/components/ui/Button.vue'
+import { ListOrdered } from 'lucide-vue-next'
 import { galleryApi } from '@/api/gallery'
 import { describeUsage, formatDuration, formatTimestamp, formatUsage } from '@/utils/format'
 
@@ -30,9 +33,15 @@ const isRetrying = ref(false)
 const isCancelling = ref(false)
 const isDeleteOpen = ref(false)
 const isDeleting = ref(false)
+const isFrameEditorOpen = ref(false)
 const isPromptExpanded = ref(false)
 
-const assets = computed(() => props.generation.assets || [])
+// Agentic stacks are shown in stack order (cover first, then frames as arranged by the user).
+const assets = computed(() => {
+  const list = props.generation.assets || []
+  if (!props.generation.is_agentic) return list
+  return [...list].sort((a, b) => (a.stack_order ?? 0) - (b.stack_order ?? 0) || a.id - b.id)
+})
 const hasAssets = computed(() => assets.value.length > 0)
 // Agentic runs add assets one by one: always use the grid so the first result doesn't flash
 // the single-image layout (inline action bar) and then jump once the second one arrives.
@@ -75,6 +84,13 @@ const elapsedSeconds = computed(() => {
 })
 
 const isAnimation = computed(() => props.generation.agentic_kind === 'animation')
+/** Reordering / timing needs a finished animation with at least two frames. */
+const canEditFrames = computed(
+  () =>
+    isAnimation.value &&
+    props.generation.status === 'succeeded' &&
+    (props.generation.assets || []).filter((a) => a.metadata?.role === 'frame').length > 1
+)
 const animationOutput = computed(() => props.generation.animation?.output || 'gif')
 const animationBadge = computed(() => {
   if (!isAnimation.value) return 'Agentic Mode'
@@ -279,6 +295,16 @@ function handleImageClick(asset: Asset) {
           >
             📚 View in Gallery Stack
           </router-link>
+          <Button
+            v-if="canEditFrames"
+            variant="ghost"
+            size="xs"
+            data-testid="edit-frames"
+            @click="isFrameEditorOpen = true"
+          >
+            <template #icon><ListOrdered class="size-3.5" aria-hidden="true" /></template>
+            Edit frames
+          </Button>
           <button
             v-if="assets.length > 1"
             type="button"
@@ -594,6 +620,12 @@ function handleImageClick(asset: Asset) {
       <span v-if="generation.duration_seconds" title="Generation time">{{ formatDuration(generation.duration_seconds) }}</span>
       <span :title="generation.created_at">{{ formatTimestamp(generation.created_at) }}</span>
     </footer>
+
+    <FrameEditorModal
+      v-if="isAnimation"
+      v-model:open="isFrameEditorOpen"
+      :generation="generation"
+    />
 
     <ConfirmDialog
       :open="isDeleteOpen"

@@ -1,6 +1,7 @@
 """Assets & Gallery REST API routes."""
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import uuid
 import zipfile
@@ -66,6 +67,17 @@ def _clean_up_stacks(session: Session, affected_stack_ids: set[str]) -> None:
     session.flush()
 
 
+def asset_url(asset_id: int, file_path: str | None, kind: str) -> str:
+    """Return the versioned URL of an asset's ``file`` or ``thumb``.
+
+    Thumbnails are served with an immutable cache header and SQLite may reuse
+    the id of a deleted asset, so the URL carries a short hash of the file path:
+    a new asset under a reused id gets a new URL instead of a stale cached image.
+    """
+    version = hashlib.sha1((file_path or "").encode("utf-8")).hexdigest()[:10]
+    return f"/assets/{asset_id}/{kind}?v={version}"
+
+
 def serialize_asset(
     a: Asset,
     gen: Generation | None = None,
@@ -118,8 +130,8 @@ def serialize_asset(
         "rating": rating,
         "is_favorite": rating >= 4,
         "created_at": _iso_utc(a.created_at),
-        "thumbnail_url": f"/assets/{a.id}/thumb",
-        "image_url": f"/assets/{a.id}/file",
+        "thumbnail_url": asset_url(a.id, a.file_path, "thumb"),
+        "image_url": asset_url(a.id, a.file_path, "file"),
         "download_url": f"/assets/{a.id}/download",
         "category_ids": [c.id for c in a.categories] if hasattr(a, "categories") and a.categories else [],
         "metadata": meta,

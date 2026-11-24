@@ -614,3 +614,13 @@ def _png() -> bytes:
     buffer = BytesIO()
     Image.new("RGB", (8, 8), (0, 255, 0)).save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def test_asset_url_changes_when_an_id_is_reused() -> None:
+    from app.api.assets import asset_url
+
+    first = asset_url(5, "default/2026/11/walk-230-0.gif", "thumb")
+    assert first.startswith("/assets/5/thumb?v=")
+    assert asset_url(5, "default/2026/11/walk-230-0.gif", "thumb") == first  # stable for the same file
+    assert asset_url(5, "default/2026/11/other-231-1.png", "thumb") != first  # reused id → new URL
+    assert asset_url(5, "default/2026/11/walk-230-0.gif", "file").startswith("/assets/5/file?v=")

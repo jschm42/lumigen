@@ -820,6 +820,27 @@ async def remove_animation_frame(
     return serialize_generation(generation)
 
 
+@router.put("/jobs/{generation_id}/frames")
+async def update_animation_frames(
+    generation_id: int,
+    payload: dict[str, Any],
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Reorder the frames of a finished agentic animation and/or change their durations.
+
+    Body: ``{"frames": [{"id": <asset id>, "duration_ms": <int|null>}, ...]}`` listing
+    every frame once in the new order. The GIF/WebP is rebuilt; returns the generation.
+    """
+    frames = payload.get("frames") if isinstance(payload, dict) else None
+    if not isinstance(frames, list) or not all(isinstance(item, dict) for item in frames):
+        raise HTTPException(status_code=400, detail="frames must be a list of {id, duration_ms} objects.")
+    try:
+        generation = await generation_service.update_animation_frames(session, generation_id, frames)
+    except AnimationEditError as exc:
+        _raise_edit_error(exc)
+    return serialize_generation(generation)
+
+
 @router.post("/jobs/{generation_id}/frames/{asset_id}/regenerate")
 def regenerate_animation_frame(
     generation_id: int,

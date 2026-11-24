@@ -141,6 +141,15 @@ export const generationApi = {
     return res.data
   },
 
+  /** Reorder frames and/or change their durations (every frame once, new order); the GIF/WebP is rebuilt. */
+  async updateAnimationFrames(
+    jobId: number,
+    frames: Array<{ id: number; duration_ms: number | null }>
+  ): Promise<Generation> {
+    const res = await apiClient.put<Generation>(`/api/jobs/${jobId}/frames`, { frames })
+    return res.data
+  },
+
   /** Start regenerating one frame of an agentic animation; poll the job until it is no longer running. */
   async regenerateAnimationFrame(jobId: number, assetId: number): Promise<Generation> {
     const res = await apiClient.post<Generation>(`/api/jobs/${jobId}/frames/${assetId}/regenerate`)

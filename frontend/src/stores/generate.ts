@@ -651,6 +651,21 @@ export const useGenerateStore = defineStore('generate', () => {
     }
   }
 
+  /** Save a new frame order and durations; returns true when the animation was rebuilt. */
+  async function updateAnimationFrames(
+    gen: Generation,
+    frames: Array<{ id: number; duration_ms: number | null }>
+  ): Promise<boolean> {
+    try {
+      upsertGeneration(await generationApi.updateAnimationFrames(gen.id, frames))
+      toastStore.success(gen.animation?.output === 'none' ? 'Frame order saved.' : 'Frames saved, animation rebuilt.')
+      return true
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to save the frames.')
+      return false
+    }
+  }
+
   /** Regenerate one frame of an agentic animation in the background and track it like a job. */
   async function regenerateAnimationFrame(gen: Generation, assetId: number) {
     try {
@@ -774,6 +789,7 @@ export const useGenerateStore = defineStore('generate', () => {
     retryGeneration,
     removeAnimationFrame,
     regenerateAnimationFrame,
+    updateAnimationFrames,
     remixGeneration,
   }
 })
