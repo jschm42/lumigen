@@ -6,7 +6,7 @@
 
 **One studio. Thirteen AI providers plus your own OpenAI-compatible and ComfyUI servers for images, video & vector graphics. Your media stays on your machine.**
 
-A self-hosted, local-first AI creation studio: generate images, videos, and scalable vector graphics with FLUX, GPT-Image, Gemini, Seedream, Seedance, Kling, Recraft, Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interface, without subscriptions or tracking.
+A self-hosted, local-first AI creation studio: generate images, videos, and scalable vector graphics with FLUX, GPT-Image, Gemini, Seedream, Seedance, Kling, Recraft, Stable Diffusion, Ideogram, Grok and more — side by side, in one clean interface, without subscriptions or tracking. Describe a motion in one sentence and Agentic Mode plans the frames and assembles a consistent **GIF or animated WebP** for you.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-0ea5e9.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)
@@ -31,6 +31,13 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
     <td colspan="2" align="center"><sub><b>Agentic Mode</b> – decompose high-level prompts into solitary cohesive item sets with anti-grid safeguards & one-click ZIP download</sub></td>
   </tr>
   <tr>
+    <td width="30%" align="center"><img src="docs/screenshots/agentic_animation_walk_cycle.gif" alt="Animated GIF of a pixel-art ranger walk cycle generated with Agentic Animations" width="220" /></td>
+    <td width="70%" align="center"><img src="docs/screenshots/agentic_animation_frames.png" alt="The seven consistent frames of the ranger walk cycle" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub><b>Agentic Animations</b> – "A RPG fantasy ranger walking" → planned walk cycle, same character in every frame, transparent GIF/WebP</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/gallery_view.png" alt="Gallery grouped by day" /></td>
     <td width="50%"><img src="docs/screenshots/compare_view.png" alt="Side-by-side compare view" /></td>
   </tr>
@@ -40,7 +47,7 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
   </tr>
 </table>
 
-<sub><i>Sample images were generated with Black Forest Labs FLUX.2 models for demonstration purposes.</i></sub>
+<sub><i>Sample images were generated with Black Forest Labs FLUX.2 models for demonstration purposes; the animation sample with OpenAI GPT-Image via OpenRouter.</i></sub>
 
 ---
 
@@ -53,6 +60,7 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 ### 🎨 Create
 - **13 providers + your own endpoints, one prompt box** – switch models and media types in a dropdown, no context switch
 - **🤖 Agentic Mode** – decompose high-level prompts (e.g. "RPG icons" or "character concepts") into cohesive multi-image sets using LLM reasoning; automatically groups outputs into gallery stacks with one-click full-set ZIP download
+- **🎞️ Agentic Animations** – "a pixel-art ranger walking" becomes a planned frame-by-frame walk cycle with the same character in every frame, assembled into a **GIF**, an **animated WebP** with real transparency, or kept as a consistent **frame series**; fix single frames afterwards (regenerate, remove, reorder, retime) without starting over
 - **AI Video Generation** – text-to-video & image-to-video via ByteDance Seedance & fal.ai (Kling 2.5/1.5, Minimax Video-01, Hunyuan, Luma, LTX, Veo 3)
 - **Vector Graphics (SVG)** – prompt-to-SVG vector output (e.g. Recraft V3) stored in pure XML without rasterization artifacts
 - **Sessions as visual history** – every prompt, image, and video of a session in one unified feed
@@ -228,6 +236,36 @@ Agentic Mode turns a high-level creative direction (e.g. *"design a set of 5 RPG
 - **Anti-Grid Safeguards:** Enforces single, centered, isolated subjects per image with automated negative prompts to prevent models from drawing sprite sheets or multi-icon collages.
 - **Configurable Models:** Add, test, and manage reasoning models (such as `DeepSeek 4.1`, `gpt-4o-mini`, `o3-mini`, `gemini-2.5-flash`) under **Admin → Reasoning Models**, complete with custom API keys and default selection.
 - **One-Click ZIP Export:** Instantly download the entire set as a structured ZIP archive with human-readable file names (`01-health-potion.png`, `02-iron-longsword.png`, etc.).
+
+### 🎞️ Agentic Animations: from one sentence to a GIF
+
+<p align="center">
+  <img src="docs/screenshots/agentic_animation_walk_cycle.gif" alt="Transparent GIF of a ranger walk cycle" width="200" />
+  <img src="docs/screenshots/agentic_animation_frames.png" alt="Frame series of the walk cycle" width="560" />
+</p>
+
+Switch Agentic Mode from **Image set** to **Animation**, describe the motion, and Lumigen does the rest:
+
+1. **Plans the frames** – the reasoning model fixes the character, scene and style once and describes every frame as a complete pose (e.g. an 8-frame walk cycle: contact, down, passing, up …).
+2. **Keeps the character consistent** – frame 1 is generated from text; every following frame is redrawn from it as reference, so face, outfit and colours stay the same while the pose changes. Frames that come back unchanged are detected and retried automatically.
+3. **Assembles the result** – pick the output:
+
+| Output | Best for |
+|---|---|
+| **GIF** | Universal compatibility, chats, forums, game prototypes |
+| **Animated WebP** | Smooth 8-bit transparency, more colours, smaller files |
+| **Frames only** | Sprite frames or pose series you want to process elsewhere |
+
+**Transparent backgrounds** included: the planner asks for a flat key-colour background and Lumigen keys it out per frame, even when the model's colour drifts from frame to frame. Loop modes (*loop*, *ping-pong*, *play once*) and frame durations are configurable.
+
+**Not happy with one frame?** No need to start over. In the generation card you can:
+- **Regenerate** a single frame – it is redrawn from the keyframe with the same planned pose,
+- **Remove** a frame that went wrong,
+- **Edit frames** – reorder them and change individual durations.
+
+The GIF/WebP is rebuilt automatically after every change. Frames and the animation live together as one gallery stack, with the animation as cover.
+
+> **Requirements:** a model that accepts reference images (e.g. GPT-Image, Gemini / Nano Banana, FLUX Kontext / FLUX.2+, Seedream). Lumigen detects this from the model ID; you can override it per model under **Admin → Models → Reference images**. Limits for frame count, size, file size and default frame duration are set under **Admin → General**.
 
 ### Accounts & password reset
 
