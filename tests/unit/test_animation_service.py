@@ -291,3 +291,13 @@ def test_frame_difference_separates_copies_from_new_poses() -> None:
     assert frame_difference(_frame(0), _frame(0, background=(5, 250, 8))) < STATIC_FRAME_THRESHOLD
     # Subject moved to a new position.
     assert frame_difference(_frame(0), _frame(4)) > STATIC_FRAME_THRESHOLD
+
+
+def test_flatten_on_color_fills_transparency_with_key() -> None:
+    from app.services.animation_service import flatten_on_color, key_frame
+
+    keyed = key_frame(_frame(0), (0, 255, 0))
+    flat = Image.open(BytesIO(flatten_on_color(keyed, (0, 255, 0))))
+    assert flat.mode == "RGB"
+    assert flat.getpixel((5, 5)) == (0, 255, 0)
+    assert flat.getpixel((205, 205)) == (200, 30, 30)

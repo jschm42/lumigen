@@ -26,6 +26,135 @@ async function openAgenticBar(page) {
   await expect(page.getByTestId("agentic-settings")).toBeVisible();
 }
 
+/**
+ * Submits a stub animation and waits until it has succeeded.
+ *
+ * @param {import("@playwright/test").Page} page
+ * @param {Record<string, string>} form
+ */
+async function runAnimation(page, form) {
+  const modelId = await stubModelId(page);
+  const submit = await api(page, "POST", "/api/generate", {
+    form: { model_config_id: modelId, is_agentic: "true", agentic_kind: "animation", ...form },
+  });
+  expect(submit.status).toBe(200);
+  const jobId = submit.data.job_id;
+  await expect
+    .poll(async () => (await api(page, "GET", `/api/jobs/${jobId}/status`)).data?.status, { timeout: 60_000 })
+    .toBe("succeeded");
+  return jobId;
+}
+
+/** @param {any} job */
+function framesOf(job) {
+  return job.assets
+    .filter((/** @type {any} */ a) => a.metadata.role === "frame")
+    .sort((/** @type {any} */ a, /** @type {any} */ b) => a.stack_order - b.stack_order);
+}
+
+/** @param {any} job */
+function coverOf(job) {
+  return job.assets.find((/** @type {any} */ a) => a.metadata.role === "animation");
+}
+
+test.describe("Agentic animation frame editing", () => {
+  test("removing a frame rebuilds the animation without it", async ({ page }) => {
+    await page.goto("/");
+    const jobId = await runAnimation(page, { prompt: "frame removal", min_images: "4", max_images: "4" });
+    const before = (await api(page, "GET", `/api/jobs/${jobId}/status`)).data;
+    const removed = framesOf(before)[1];
+
+    const res = await api(page, "DELETE", `/api/jobs/${jobId}/frames/${removed.id}`);
+    expect(res.status).toBe(200);
+    const frames = framesOf(res.data);
+    expect(frames).toHaveLength(3);
+    expect(frames.map((/** @type {any} */ f) => f.id)).not.toContain(removed.id);
+    expect(frames.map((/** @type {any} */ f) => f.stack_order)).toEqual([1, 2, 3]);
+    const cover = coverOf(res.data);
+    expect(cover.id).not.toBe(coverOf(before).id); // new asset → no stale cached image
+    expect(cover.stack_order).toBe(0);
+    expect(cover.metadata.frame_count).toBe(3);
+    expect(cover.metadata.frame_asset_ids).toEqual(frames.map((/** @type {any} */ f) => f.id));
+    expect((await page.request.get(removed.image_url)).status()).toBe(404);
+  });
+
+  test("an animation keeps at least two frames", async ({ page }) => {
+    await page.goto("/");
+    const jobId = await runAnimation(page, { prompt: "two frames only", min_images: "2", max_images: "2" });
+    const job = (await api(page, "GET", `/api/jobs/${jobId}/status`)).data;
+    const res = await api(page, "DELETE", `/api/jobs/${jobId}/frames/${framesOf(job)[0].id}`);
+    expect(res.status).toBe(400);
+    expect(res.data.detail).toContain("at least two frames");
+  });
+
+  test("regenerating a frame replaces it in place and rebuilds the animation", async ({ page }) => {
+    await page.goto("/");
+    const jobId = await runAnimation(page, {
+      prompt: "frame regeneration",
+      min_images: "3",
+      max_images: "3",
+      animation_output: "webp",
+    });
+    const before = (await api(page, "GET", `/api/jobs/${jobId}/status`)).data;
+    const target = framesOf(before)[1];
+
+    const res = await api(page, "POST", `/api/jobs/${jobId}/frames/${target.id}/regenerate`);
+    expect(res.status).toBe(200);
+    expect(res.data.status).toBe("running");
+    expect(res.data.agentic_step).toBe("regenerating");
+
+    await expect
+      .poll(async () => (await api(page, "GET", `/api/jobs/${jobId}/status`)).data?.status, { timeout: 60_000 })
+      .toBe("succeeded");
+    const after = (await api(page, "GET", `/api/jobs/${jobId}/status`)).data;
+    expect(after.edit_error).toBeNull();
+    const frames = framesOf(after);
+    expect(frames).toHaveLength(3);
+    const replacement = frames[1];
+    expect(replacement.id).not.toBe(target.id);
+    expect(replacement.metadata.frame_index).toBe(target.metadata.frame_index);
+    expect(replacement.metadata.regenerated).toBe(1);
+    expect(coverOf(after).mime).toBe("image/webp");
+    expect(coverOf(after).metadata.frame_asset_ids).toContain(replacement.id);
+  });
+
+  test("frame actions in the generation card remove and regenerate frames", async ({ page }) => {
+    await openAgenticBar(page);
+    await page.getByRole("tab", { name: "Animation", exact: true }).click();
+    await page.getByRole("spinbutton", { name: "Minimum frames" }).fill("3");
+    await page.getByRole("spinbutton", { name: "Maximum frames" }).fill("3");
+    await page.locator("#prompt_user").fill("ui frame editing");
+    await page.locator('button[title="Start generation (Enter)"]').click();
+
+    const card = page.locator('article[data-status="succeeded"]', { hasText: "ui frame editing" }).last();
+    await expect(card.getByTestId("frame-actions")).toHaveCount(3, { timeout: 60_000 });
+
+    // Remove frame 2 (with in-app confirmation) → two frames remain, removal is then blocked.
+    await card.getByRole("button", { name: "Remove Frame 2" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Remove" }).click();
+    await expect(card.getByTestId("frame-actions")).toHaveCount(2);
+    await expect(card.getByRole("button", { name: "An animation needs at least two frames" }).first()).toBeDisabled();
+
+    // Regenerate frame 1 → runs in the background, card returns to succeeded with two frames.
+    await card.getByRole("button", { name: "Regenerate Frame 1" }).click();
+    await expect(page.getByText("Frame regenerated, animation rebuilt.")).toBeVisible({ timeout: 60_000 });
+    await expect(card.getByTestId("frame-actions")).toHaveCount(2);
+  });
+
+  test("frame edits are rejected for non-animation generations", async ({ page }) => {
+    await page.goto("/");
+    const modelId = await stubModelId(page);
+    const submit = await api(page, "POST", "/api/generate", { form: { prompt: "plain image", model_config_id: modelId } });
+    const jobId = submit.data.job_id;
+    await expect
+      .poll(async () => (await api(page, "GET", `/api/jobs/${jobId}/status`)).data?.status, { timeout: 30_000 })
+      .toBe("succeeded");
+    const job = (await api(page, "GET", `/api/jobs/${jobId}/status`)).data;
+    const res = await api(page, "POST", `/api/jobs/${jobId}/frames/${job.assets[0].id}/regenerate`);
+    expect(res.status).toBe(400);
+  });
+});
+
 test.describe("Agentic GIF animation", () => {
   test("stub run produces frames and a GIF stack cover", async ({ page }) => {
     await page.goto("/");

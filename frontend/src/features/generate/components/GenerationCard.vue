@@ -8,6 +8,7 @@ import { useToastStore } from '@/stores/toast'
 import Spinner from '@/components/ui/Spinner.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import GenerationActions from './GenerationActions.vue'
+import AnimationFrameActions from './AnimationFrameActions.vue'
 import { galleryApi } from '@/api/gallery'
 import { describeUsage, formatDuration, formatTimestamp, formatUsage } from '@/utils/format'
 
@@ -86,6 +87,9 @@ const agenticItemNoun = computed(() => (isAnimation.value ? 'Frame' : 'Item'))
 const planTitle = computed(() => props.generation.agentic_plan?.set_title || props.generation.agentic_plan?.title || '')
 
 const liveSlotLabel = computed(() => {
+  if (props.generation.agentic_step === 'regenerating') {
+    return `Regenerating ${props.generation.current_item_title || 'frame'}…`
+  }
   if (props.generation.agentic_step === 'assembling') return `${assemblingLabel.value}…`
   const fallback = `${agenticItemNoun.value} ${(props.generation.current_item_index ?? 0) + 1}`
   return `Generating ${props.generation.current_item_title || fallback}…`
@@ -99,6 +103,9 @@ const statusLabel = computed(() => {
       return isAnimation.value ? 'Agent planning animation frames' : 'Agent planning cohesive set'
     }
     if (props.generation.agentic_step === 'assembling') return assemblingLabel.value
+    if (props.generation.agentic_step === 'regenerating') {
+      return `Regenerating ${props.generation.current_item_title || 'frame'}`
+    }
     if (props.generation.current_item_title) {
       const idx = (props.generation.current_item_index ?? 0) + 1
       const total = props.generation.total_planned || '?'
@@ -522,13 +529,20 @@ function handleImageClick(asset: Asset) {
         </div>
 
         <!-- Under image: Item title and order (clean, no clutter) -->
-        <div v-if="getItemTitle(asset)" class="flex items-center justify-between px-1">
+        <div v-if="getItemTitle(asset)" class="flex items-center justify-between gap-1 px-1">
           <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" :title="getItemTitle(asset)!">
             {{ getItemTitle(asset) }}
           </span>
-          <span v-if="asset.stack_order != null" class="text-[10px] text-slate-400 font-mono">
-            #{{ asset.stack_order + 1 }}
-          </span>
+          <div class="flex shrink-0 items-center gap-1">
+            <AnimationFrameActions
+              v-if="isAnimation && asset.metadata?.role === 'frame'"
+              :generation="generation"
+              :asset="asset"
+            />
+            <span v-if="asset.stack_order != null" class="text-[10px] text-slate-400 font-mono">
+              #{{ asset.stack_order + 1 }}
+            </span>
+          </div>
         </div>
 
         <!-- Normal inline action bar below image: ONLY for a single non-agentic image -->

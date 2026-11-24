@@ -215,8 +215,18 @@ for int settings (`isinstance(True, int)` is `True`).
 - **Stack view (decision: GIF is the stack cover)**: the gallery treats `stack_order == 0` as cover. Frames are
   stored with `stack_order` 0…n-1 while generating (so a failed assembly still leaves a visible stack) and are shifted
   to 1…n when the GIF is written with `stack_order = 0`. Deleting the cover keeps the frames;
-  deleting the stack deletes both. Actions: *Regenerate frame* (re-runs one frame with the same
-  references), *Reorder / remove frame*, *Re-assemble* (new GIF from current stack order + timing, no provider cost).
+  deleting the stack deletes both.
+- **Frame editing (implemented)**: each frame in the generation card has *Regenerate* and *Remove*.
+  - `DELETE /api/jobs/{id}/frames/{asset_id}` removes a frame and re-assembles synchronously (min. 2 frames for
+    GIF/WebP, 1 for a frame series).
+  - `POST /api/jobs/{id}/frames/{asset_id}/regenerate` runs in the background (status `running`, step
+    `regenerating`): the frame is redone from the keyframe reference (keyed frames are flattened back onto the key
+    colour first; regenerating the keyframe uses the next frame as reference), then the animation is re-assembled.
+    Failures leave the frames untouched and are reported as `edit_error`.
+  - `POST /api/jobs/{id}/animation/rebuild` re-assembles from the current frames without provider cost.
+  - Replaced frames and covers are always new assets, stored *before* the old ones are deleted: thumbnails are
+    cached as immutable and SQLite reuses the highest deleted id, so reusing an id would show a stale image.
+  - Still open: reordering frames and editing frame durations.
 - **Thumbnails**: `ThumbnailService` must take the first frame of a GIF and must not animate in the grid; the viewer plays
   the original. Verify the gallery grid and lightbox handle `image/gif` (no conversion to WebP on output normalization —
   `_normalize_image_for_output` must not be applied to the assembled GIF).
@@ -247,7 +257,7 @@ If re-assembly and frame editing become first-class, consider an `animations` ta
 | Phase | Scope |
 |---|---|
 | **1 – MVP** ✅ | `image_input` capability (model + admin UI + migration) and rejection of unsupported models; `plan_animation()`; Strategy A; `AnimationService.assemble_gif()` incl. transparency and size limits; limit settings; GIF as stack cover; composer toggle; progress steps. |
-| **2** | Plan review for Set **and** Animation (`awaiting_review`, approve endpoint, editable plan UI); sprite-sheet strategy; re-assemble + regenerate-frame actions. |
+| **2** | Plan review for Set **and** Animation (`awaiting_review`, approve endpoint, editable plan UI); sprite-sheet strategy; ~~re-assemble + regenerate/remove-frame actions~~ ✅; reorder frames. |
 | **3** | Video → GIF route, WebP/APNG/MP4 export, cost estimate in composer. |
 
 ## 11. Tests

@@ -48,6 +48,14 @@ class GenerationCancelledError(ProviderError):
     """Raised inside a generation job when the request has been cancelled by the user."""
 
 
+class AnimationEditError(ValueError):
+    """Raised when a frame edit (remove / regenerate / rebuild) is not allowed; carries an HTTP status."""
+
+    def __init__(self, message: str, status_code: int = 400) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class GenerationService:
     """Orchestrates the full lifecycle of an image generation job.
 
@@ -1451,6 +1459,320 @@ class GenerationService:
                 generation.status = "failed"
                 generation.error = self._error_message_from_exception(exc)
                 generation.finished_at = datetime.now(UTC)
+                session.commit()
+
+    # --- Editing finished animations ------------------------------------------------------------
+
+    @staticmethod
+    def animation_frames(generation: Generation) -> tuple[list[Asset], Asset | None]:
+        """Return the frame assets (ordered by ``stack_order``) and the assembled cover of an animation."""
+        frames: list[Asset] = []
+        cover: Asset | None = None
+        for asset in generation.assets or []:
+            role = (asset.meta_json or {}).get("role")
+            if role == "frame":
+                frames.append(asset)
+            elif role == "animation":
+                cover = asset
+        frames.sort(key=lambda a: (a.stack_order if a.stack_order is not None else 0, a.id or 0))
+        return frames, cover
+
+    def editable_animation(self, session: Session, generation_id: int) -> Generation:
+        """Load an animation generation that may be edited, or raise ``AnimationEditError``."""
+        generation = crud.get_generation(session, generation_id, with_assets=True)
+        if not generation:
+            raise AnimationEditError("Generation not found.", 404)
+        snapshot = generation.request_snapshot_json or {}
+        if snapshot.get("agentic_kind") != "animation" or not snapshot.get("agentic_plan"):
+            raise AnimationEditError("Only agentic animations can be edited frame by frame.")
+        if generation.status in {"queued", "running"}:
+            raise AnimationEditError("The animation is still being generated. Try again when it has finished.", 409)
+        return generation
+
+    @staticmethod
+    def _bump_revision(generation: Generation) -> int:
+        """Increment and return the edit revision (keeps file names and asset URLs unique)."""
+        snapshot = dict(generation.request_snapshot_json or {})
+        revision = int(snapshot.get("animation_revision") or 0) + 1
+        snapshot["animation_revision"] = revision
+        generation.request_snapshot_json = snapshot
+        return revision
+
+    async def rebuild_animation(self, session: Session, generation: Generation) -> Asset | None:
+        """Re-assemble the animation cover from the current frames of *generation*.
+
+        Frames are used in their ``stack_order`` with their stored durations. The
+        old cover asset is replaced by a new one (new id, so cached URLs never
+        show the old file). For ``output == "none"`` only the frame order is
+        normalized. Raises ``AnimationEditError`` when assembly fails.
+        """
+        from app.services.animation_service import (
+            AnimationError,
+            AnimationLimits,
+            AnimationOptions,
+            assemble_animation,
+            parse_hex_color,
+        )
+
+        snapshot = generation.request_snapshot_json or {}
+        plan = snapshot.get("agentic_plan") or {}
+        animation_opts = snapshot.get("animation") or {}
+        output_format = str(animation_opts.get("output") or "gif").lower()
+        frames, cover = self.animation_frames(generation)
+        base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+
+        if output_format == "none":
+            for order, frame in enumerate(frames):
+                frame.stack_order = order
+                frame.meta_json = {**(frame.meta_json or {}), "stack_order": order}
+            session.commit()
+            return None
+        if len(frames) < 2:
+            raise AnimationEditError("An animation needs at least two frames.")
+
+        frame_data = [self.asset_absolute_path(frame, which="file").read_bytes() for frame in frames]
+        durations = [(frame.meta_json or {}).get("duration_ms") for frame in frames]
+        limits = AnimationLimits.from_ui_settings(AppSettingsService().get_ui_settings(session))
+        options = AnimationOptions(
+            loop=str(plan.get("loop") or "loop"),
+            transparent=bool(animation_opts.get("transparent")),
+            key_color=parse_hex_color(plan.get("key_color"), (0, 255, 0)),
+            output_format=output_format,
+        )
+        try:
+            animation = await asyncio.to_thread(assemble_animation, frame_data, durations, options, limits)
+        except AnimationError as exc:
+            raise AnimationEditError(f"The {output_format.upper()} could not be assembled: {exc}") from exc
+
+        stack_id = str(snapshot.get("stack_id") or (frames[0].stack_id if frames else ""))
+        revision = self._bump_revision(generation)
+        for order, frame in enumerate(frames, start=1):
+            frame.stack_order = order
+            frame.meta_json = {**(frame.meta_json or {}), "stack_order": order}
+        if cover is not None:
+            cover.stack_order = len(frames) + 1  # leaves position 0 to the new cover until it is deleted
+        session.commit()
+
+        title = str(plan.get("title") or "Animation")
+        storage_template = str(
+            generation.storage_template_snapshot_json.get("template", self.settings.default_storage_template)
+        )
+        # The new cover is stored before the old one is deleted: SQLite would otherwise reuse the old id,
+        # and the immutable-cached thumbnail URL would keep showing the previous animation.
+        new_cover = self._persist_generated_asset(
+            session,
+            generation=generation,
+            base_dir=base_dir,
+            storage_template=storage_template,
+            title=f"{title} v{revision}",
+            idx=0,
+            ext=animation.extension,
+            data=animation.data,
+            width=animation.width,
+            height=animation.height,
+            mime=animation.mime,
+            categories=list(frames[0].categories) if frames else [],
+            stack_id=stack_id,
+            stack_order=0,
+            meta={
+                "role": "animation",
+                "format": output_format,
+                "strategy": "keyframe_chain",
+                "frame_asset_ids": [frame.id for frame in frames],
+                "frame_count": animation.frame_count,
+                "durations_ms": animation.durations_ms,
+                "loop": options.loop,
+                "transparent": options.transparent,
+                "colors": animation.colors,
+                "revision": revision,
+                "item_title": title,
+                "set_title": title,
+                "stack_id": stack_id,
+                "stack_order": 0,
+            },
+        )
+        if cover is not None:
+            self._delete_asset_files(cover, base_dir=base_dir)
+            session.delete(cover)
+            session.commit()
+        return new_cover
+
+    async def remove_animation_frame(self, session: Session, generation_id: int, asset_id: int) -> Generation:
+        """Delete one frame of a finished animation and re-assemble the animation from the rest.
+
+        Raises ``AnimationEditError`` if the generation is not an editable
+        animation, the asset is not one of its frames, or fewer than two frames
+        would remain for an assembled output.
+        """
+        generation = self.editable_animation(session, generation_id)
+        frames, _cover = self.animation_frames(generation)
+        frame = next((f for f in frames if f.id == asset_id), None)
+        if frame is None:
+            raise AnimationEditError("The asset is not a frame of this animation.", 404)
+        output_format = str(((generation.request_snapshot_json or {}).get("animation") or {}).get("output") or "gif")
+        if output_format != "none" and len(frames) <= 2:
+            raise AnimationEditError("An animation needs at least two frames; this frame cannot be removed.")
+        if len(frames) <= 1:
+            raise AnimationEditError("The last frame cannot be removed.")
+
+        self._delete_asset_files(frame)
+        session.delete(frame)
+        session.commit()
+        session.refresh(generation)
+        await self.rebuild_animation(session, generation)
+        session.refresh(generation)
+        return generation
+
+    def start_frame_regeneration(
+        self,
+        session: Session,
+        background_tasks: BackgroundTasks,
+        generation_id: int,
+        asset_id: int,
+    ) -> Generation:
+        """Mark an animation as running and enqueue the regeneration of one frame.
+
+        The job (see ``_regenerate_animation_frame_job``) replaces the frame and
+        re-assembles the animation. Raises ``AnimationEditError`` for invalid
+        requests.
+        """
+        generation = self.editable_animation(session, generation_id)
+        frames, _cover = self.animation_frames(generation)
+        frame = next((f for f in frames if f.id == asset_id), None)
+        if frame is None:
+            raise AnimationEditError("The asset is not a frame of this animation.", 404)
+        if not self._model_supports_image_input(generation):
+            raise AnimationEditError("The model of this animation no longer supports image input.", 422)
+
+        snapshot = dict(generation.request_snapshot_json or {})
+        snapshot.update(
+            {
+                "agentic_step": "regenerating",
+                "current_item_index": int((frame.meta_json or {}).get("frame_index") or 0),
+                "current_item_title": str((frame.meta_json or {}).get("item_title") or "frame"),
+                "edit_error": None,
+            }
+        )
+        generation.request_snapshot_json = snapshot
+        generation.status = "running"
+        generation.error = None
+        session.commit()
+        background_tasks.add_task(self._regenerate_animation_frame_job, generation_id, asset_id)
+        return generation
+
+    async def _regenerate_animation_frame_job(self, generation_id: int, asset_id: int) -> None:
+        """Regenerate one animation frame from the keyframe reference and re-assemble the animation.
+
+        The new frame replaces the old asset (new id, same position and
+        metadata). Failures never touch the existing frames: the generation goes
+        back to ``succeeded`` and the reason is stored as ``edit_error``.
+        """
+        from app.services.agentic_service import AgenticAnimationPlan
+        from app.services.animation_service import flatten_on_color, key_frame, parse_hex_color
+
+        async with self.get_queue_semaphore():
+            with SessionLocal() as session:
+                generation = crud.get_generation(session, generation_id, with_assets=True)
+                if not generation:
+                    return
+                edit_error: str | None = None
+                try:
+                    snapshot = generation.request_snapshot_json or {}
+                    plan = AgenticAnimationPlan.from_dict(snapshot.get("agentic_plan") or {})
+                    animation_opts = snapshot.get("animation") or {}
+                    transparent = bool(animation_opts.get("transparent"))
+                    key_color = parse_hex_color(plan.key_color, (0, 255, 0))
+                    frames, _cover = self.animation_frames(generation)
+                    old_frame = next((f for f in frames if f.id == asset_id), None)
+                    if old_frame is None:
+                        raise AnimationEditError("The frame no longer exists.")
+                    frame_index = int((old_frame.meta_json or {}).get("frame_index") or 0)
+                    if not 0 <= frame_index < len(plan.frames):
+                        raise AnimationEditError("The frame is not part of the animation plan.")
+
+                    # Identity reference: the keyframe, or the nearest other frame when the keyframe itself is redone.
+                    others = [f for f in frames if f.id != asset_id]
+                    if not others:
+                        raise AnimationEditError("At least one other frame is needed as reference.")
+                    reference = min(
+                        others, key=lambda f: abs(int((f.meta_json or {}).get("frame_index") or 0) - 0)
+                    )
+                    reference_data = self.asset_absolute_path(reference, which="file").read_bytes()
+                    if transparent:
+                        # Stored frames are keyed; show the model the key background it originally drew on.
+                        reference_data = await asyncio.to_thread(flatten_on_color, reference_data, key_color)
+
+                    provider_request = self._provider_request_from_generation(generation)
+                    provider_request.prompt = plan.frame_prompt(frame_index, as_edit=True)
+                    provider_request.negative_prompt = plan.negative_prompt or provider_request.negative_prompt
+                    provider_request.n_images = 1
+                    provider_request.seed = self._parse_optional_int(snapshot.get("seed"))
+                    provider_request.output_format = "png"
+                    provider_request.input_images = [ProviderInputImage(data=reference_data, mime="image/png")]
+                    image, result, (data, width, height, mime) = await self._generate_animation_frame(
+                        generation, provider_request, frame_index, plan.frames[frame_index].title
+                    )
+                    if transparent:
+                        data = await asyncio.to_thread(key_frame, data, key_color)
+                        mime = "image/png"
+
+                    revision = self._bump_revision(generation)
+                    base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
+                    storage_template = str(
+                        generation.storage_template_snapshot_json.get(
+                            "template", self.settings.default_storage_template
+                        )
+                    )
+                    old_meta = dict(old_frame.meta_json or {})
+                    stack_order = old_frame.stack_order
+                    stack_id = old_frame.stack_id or str(snapshot.get("stack_id") or "")
+                    categories = list(old_frame.categories)
+                    # Store the replacement first so it gets a fresh id (see rebuild_animation).
+                    self._persist_generated_asset(
+                        session,
+                        generation=generation,
+                        base_dir=base_dir,
+                        storage_template=storage_template,
+                        title=f"{plan.title} {plan.frames[frame_index].title} v{revision}",
+                        idx=frame_index + 1,
+                        ext="png",
+                        data=data,
+                        width=width,
+                        height=height,
+                        mime=mime,
+                        categories=categories,
+                        stack_id=stack_id,
+                        stack_order=stack_order,
+                        provider_meta=image.meta,
+                        raw_meta=result.raw_meta,
+                        meta={
+                            **old_meta,
+                            "prompt": provider_request.prompt,
+                            "regenerated": int(old_meta.get("regenerated") or 0) + 1,
+                            "static_retry": False,
+                            "provider_meta": image.meta,
+                            "raw_meta": result.raw_meta,
+                        },
+                    )
+                    self._delete_asset_files(old_frame, base_dir=base_dir)
+                    session.delete(old_frame)
+                    session.commit()
+                    session.refresh(generation)
+                    await self.rebuild_animation(session, generation)
+                except Exception as exc:  # existing frames stay untouched
+                    _logger.exception("Regenerating frame %d of generation %d failed", asset_id, generation_id)
+                    session.rollback()
+                    edit_error = self._error_message_from_exception(exc)
+
+                generation = crud.get_generation(session, generation_id)
+                if generation is None:
+                    return
+                snapshot = dict(generation.request_snapshot_json or {})
+                snapshot["agentic_step"] = "completed"
+                snapshot["edit_error"] = edit_error
+                generation.request_snapshot_json = snapshot
+                generation.status = "succeeded"
+                generation.error = None
                 session.commit()
 
     async def _execute_agentic_generation_job(self, generation_id: int) -> None:

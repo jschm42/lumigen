@@ -15,7 +15,7 @@ from app.providers.registry import ProviderRegistry
 from app.services.agentic_service import AgenticService
 from app.services.app_settings_service import AppSettingsService
 from app.services.enhancement_service import EnhancementService
-from app.services.generation_service import GenerationService
+from app.services.generation_service import AnimationEditError, GenerationService
 from app.services.model_config_service import ModelConfigService
 from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
@@ -667,6 +667,7 @@ def serialize_generation(gen: Any, session_token: str | None = None) -> dict[str
         "assets": [serialize_asset(a, gen) for a in gen.assets] if gen.assets else [],
         "is_agentic": bool(req_snapshot.get("is_agentic")),
         "agentic_step": req_snapshot.get("agentic_step"),
+        "edit_error": req_snapshot.get("edit_error"),
         "agentic_kind": req_snapshot.get("agentic_kind") or ("set" if req_snapshot.get("is_agentic") else None),
         "animation": req_snapshot.get("animation"),
         "agentic_plan": req_snapshot.get("agentic_plan"),
@@ -795,6 +796,62 @@ def retry_job(
         "status": new_gen.status,
         "session_token": session_token,
     }
+
+
+def _raise_edit_error(exc: AnimationEditError) -> None:
+    """Translate an ``AnimationEditError`` into the matching HTTP error."""
+    raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.delete("/jobs/{generation_id}/frames/{asset_id}")
+async def remove_animation_frame(
+    generation_id: int,
+    asset_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Remove one frame of a finished agentic animation and re-assemble the GIF/WebP.
+
+    Returns the updated generation.
+    """
+    try:
+        generation = await generation_service.remove_animation_frame(session, generation_id, asset_id)
+    except AnimationEditError as exc:
+        _raise_edit_error(exc)
+    return serialize_generation(generation)
+
+
+@router.post("/jobs/{generation_id}/frames/{asset_id}/regenerate")
+def regenerate_animation_frame(
+    generation_id: int,
+    asset_id: int,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Regenerate one frame of a finished agentic animation in the background.
+
+    The generation switches to ``running`` (step ``regenerating``) until the new
+    frame is stored and the animation is re-assembled; poll the job status.
+    """
+    try:
+        generation = generation_service.start_frame_regeneration(session, background_tasks, generation_id, asset_id)
+    except AnimationEditError as exc:
+        _raise_edit_error(exc)
+    return serialize_generation(generation)
+
+
+@router.post("/jobs/{generation_id}/animation/rebuild")
+async def rebuild_animation(
+    generation_id: int,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Re-assemble the GIF/WebP of a finished agentic animation from its current frames."""
+    try:
+        generation = generation_service.editable_animation(session, generation_id)
+        await generation_service.rebuild_animation(session, generation)
+    except AnimationEditError as exc:
+        _raise_edit_error(exc)
+    session.refresh(generation)
+    return serialize_generation(generation)
 
 
 @router.post("/enhance-prompt")

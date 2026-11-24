@@ -171,7 +171,31 @@ class AgenticAnimationPlan:
             ],
         }
 
-    def frame_prompt(self, index: int, emphasize_change: bool = False) -> str:
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AgenticAnimationPlan:
+        """Rebuild a plan from :meth:`to_dict` output (e.g. a generation's request snapshot)."""
+        frames = [
+            AgenticFramePlan(
+                title=str(item.get("title") or f"Frame {idx + 1}"),
+                pose=str(item.get("pose") or ""),
+                duration_ms=item.get("duration_ms"),
+            )
+            for idx, item in enumerate(data.get("frames") or [])
+            if isinstance(item, dict)
+        ]
+        return cls(
+            title=str(data.get("title") or "Animation"),
+            subject_anchor=str(data.get("subject_anchor") or ""),
+            scene_anchor=str(data.get("scene_anchor") or ""),
+            style_anchor=str(data.get("style_anchor") or ""),
+            negative_prompt=str(data.get("negative_prompt") or ""),
+            loop=str(data.get("loop") or "loop"),
+            default_frame_ms=int(data.get("default_frame_ms") or 100),
+            key_color=data.get("key_color"),
+            frames=frames,
+        )
+
+    def frame_prompt(self, index: int, emphasize_change: bool = False, as_edit: bool = False) -> str:
         """Return the generation prompt for frame *index*.
 
         Frame 0 is a full text-to-image description. Later frames redraw the
@@ -179,10 +203,11 @@ class AgenticAnimationPlan:
         first and the reference is restricted to character identity, because
         edit models otherwise copy the reference image unchanged. With
         *emphasize_change* (retry after a static result) the instruction to
-        change the pose is repeated more strongly.
+        change the pose is repeated more strongly. *as_edit* forces the edit
+        prompt for frame 0 too (regenerating the keyframe from another frame).
         """
         frame = self.frames[index]
-        if index == 0:
+        if index == 0 and not as_edit:
             return ", ".join(part for part in (self.subject_anchor, frame.pose, self.scene_anchor, self.style_anchor) if part)
         parts = [
             f"Frame {index + 1} of {len(self.frames)} of an animation. Redraw the character from the reference image "

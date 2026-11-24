@@ -343,6 +343,8 @@ export const useGenerateStore = defineStore('generate', () => {
 
   const sessionUsageTotal = ref<TokenUsage | null>(null)
   const jobStartedAt = new Map<number, number>()
+  /** Generations currently polled because of a frame edit (not a fresh generation run). */
+  const frameEditJobIds = new Set<number>()
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let pollInFlight = false
   let consecutivePollErrors = 0
@@ -398,6 +400,12 @@ export const useGenerateStore = defineStore('generate', () => {
 
   function handleFinishedJob(gen: Generation) {
     stopPolling(gen.id)
+    if (frameEditJobIds.delete(gen.id)) {
+      if (gen.edit_error) toastStore.error(gen.edit_error)
+      else toastStore.success('Frame regenerated, animation rebuilt.')
+      queueStore.fetchQueue()
+      return
+    }
     if (gen.status === 'succeeded') {
       const count = gen.assets?.length || 0
       toastStore.success(count > 1 ? `${count} images generated!` : 'Image successfully generated!')
@@ -633,6 +641,27 @@ export const useGenerateStore = defineStore('generate', () => {
     }
   }
 
+  /** Remove a frame from an agentic animation; the backend rebuilds the GIF/WebP synchronously. */
+  async function removeAnimationFrame(gen: Generation, assetId: number) {
+    try {
+      upsertGeneration(await generationApi.removeAnimationFrame(gen.id, assetId))
+      toastStore.success(gen.animation?.output === 'none' ? 'Frame removed.' : 'Frame removed, animation rebuilt.')
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to remove the frame.')
+    }
+  }
+
+  /** Regenerate one frame of an agentic animation in the background and track it like a job. */
+  async function regenerateAnimationFrame(gen: Generation, assetId: number) {
+    try {
+      upsertGeneration(await generationApi.regenerateAnimationFrame(gen.id, assetId))
+      frameEditJobIds.add(gen.id)
+      pollJob(gen.id)
+    } catch (error: any) {
+      toastStore.error(error?.response?.data?.detail || 'Failed to regenerate the frame.')
+    }
+  }
+
   async function retryGeneration(gen: Generation) {
     isSubmitting.value = true
     try {
@@ -743,6 +772,8 @@ export const useGenerateStore = defineStore('generate', () => {
     cancelGeneration,
     submit,
     retryGeneration,
+    removeAnimationFrame,
+    regenerateAnimationFrame,
     remixGeneration,
   }
 })

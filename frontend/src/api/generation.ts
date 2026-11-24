@@ -135,6 +135,18 @@ export const generationApi = {
     return res.data
   },
 
+  /** Remove one frame of an agentic animation; the GIF/WebP is rebuilt. Returns the updated generation. */
+  async removeAnimationFrame(jobId: number, assetId: number): Promise<Generation> {
+    const res = await apiClient.delete<Generation>(`/api/jobs/${jobId}/frames/${assetId}`)
+    return res.data
+  },
+
+  /** Start regenerating one frame of an agentic animation; poll the job until it is no longer running. */
+  async regenerateAnimationFrame(jobId: number, assetId: number): Promise<Generation> {
+    const res = await apiClient.post<Generation>(`/api/jobs/${jobId}/frames/${assetId}/regenerate`)
+    return res.data
+  },
+
   async upscale(
     assetId: number,
     options?: { provider?: string; model?: string; factor?: number; topaz_model_id?: number; model_id?: number }

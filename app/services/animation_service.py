@@ -371,6 +371,20 @@ def frame_difference(first: bytes, second: bytes) -> float:
     return sum(value * count for value, count in enumerate(histogram)) / (128 * 128)
 
 
+def flatten_on_color(data: bytes, color: tuple[int, int, int]) -> bytes:
+    """Return *data* as opaque PNG with transparent areas filled with *color*.
+
+    Used to show an edit model a keyed frame on its original chroma-key background.
+    """
+    with Image.open(BytesIO(data)) as source:
+        rgba = ImageOps.exif_transpose(source).convert("RGBA")
+    background = Image.new("RGBA", rgba.size, (*color, 255))
+    background.alpha_composite(rgba)
+    buffer = BytesIO()
+    background.convert("RGB").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def key_frame(data: bytes, key_color: tuple[int, int, int], tolerance: int = 60) -> bytes:
     """Return *data* as RGBA PNG with the chroma-key background removed (full resolution).
 

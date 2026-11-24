@@ -287,3 +287,24 @@ async def test_plan_animation_falls_back_without_llm(monkeypatch: pytest.MonkeyP
     service, _ = _animation_service(monkeypatch, "not json")
     plan = await service.plan_animation("a candle flickering")
     assert len(plan.frames) >= 2
+
+
+def test_animation_plan_roundtrip_and_keyframe_edit_prompt() -> None:
+    from app.services.agentic_service import AgenticAnimationPlan, AgenticFramePlan
+
+    plan = AgenticAnimationPlan(
+        title="Walk",
+        subject_anchor="ranger",
+        scene_anchor="flat green background",
+        style_anchor="pixel art",
+        negative_prompt="blurry",
+        loop="pingpong",
+        default_frame_ms=90,
+        key_color="#00FF00",
+        frames=[AgenticFramePlan("Contact", "left leg forward", 120), AgenticFramePlan("Pass", "legs together")],
+    )
+    restored = AgenticAnimationPlan.from_dict(plan.to_dict())
+    assert restored == plan
+    # The keyframe is a text-to-image prompt, but regenerating it from another frame needs the edit prompt.
+    assert plan.frame_prompt(0).startswith("ranger, left leg forward")
+    assert plan.frame_prompt(0, as_edit=True).startswith("Frame 1 of 2 of an animation.")

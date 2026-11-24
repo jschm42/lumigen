@@ -550,3 +550,67 @@ async def test_animation_job_does_not_retry_distinct_frames(monkeypatch: pytest.
 
     assert generation.status == "succeeded", generation.error
     assert len(registry.requests) == 3
+
+
+def test_frame_edits_require_a_finished_animation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.generation_service import AnimationEditError
+
+    generation = _generation()
+    service, _session, _storage, _agentic = _service(monkeypatch, _Registry(), generation, _plan())
+    monkeypatch.setattr("app.services.generation_service.crud.get_generation", lambda *_a, **_k: generation)
+
+    generation.status = "succeeded"
+    with pytest.raises(AnimationEditError, match="Only agentic animations"):
+        service.editable_animation(MagicMock(), generation.id)  # no plan yet
+
+    generation.request_snapshot_json = {**generation.request_snapshot_json, "agentic_plan": _plan().to_dict()}
+    generation.status = "running"
+    with pytest.raises(AnimationEditError) as exc_info:
+        service.editable_animation(MagicMock(), generation.id)
+    assert exc_info.value.status_code == 409
+
+    generation.status = "succeeded"
+    assert service.editable_animation(MagicMock(), generation.id) is generation
+
+    monkeypatch.setattr("app.services.generation_service.crud.get_generation", lambda *_a, **_k: None)
+    with pytest.raises(AnimationEditError) as exc_info:
+        service.editable_animation(MagicMock(), 999)
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_failed_frame_regeneration_keeps_frames_and_reports_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    generation = _generation()
+    generation.status = "running"
+    generation.request_snapshot_json = {
+        **generation.request_snapshot_json,
+        "agentic_plan": _plan(2).to_dict(),
+        "agentic_step": "regenerating",
+    }
+    frames = [
+        Asset(id=10 + i, generation_id=generation.id, file_path=f"f{i}.png", stack_id="stk", stack_order=i + 1,
+              mime="image/png", width=1, height=1, meta_json={"role": "frame", "frame_index": i})
+        for i in range(2)
+    ]
+    generation.assets = frames
+    registry = _Registry(fail_on=0)  # every provider call fails
+    service, session, _storage, _agentic = _service(monkeypatch, registry, generation, _plan(2))
+    session.rollback = lambda: None  # type: ignore[method-assign]
+    monkeypatch.setattr("app.services.generation_service.crud.get_generation", lambda *_a, **_k: generation)
+    monkeypatch.setattr(service, "asset_absolute_path", lambda *_a, **_k: MagicMock(read_bytes=lambda: _png()))
+    monkeypatch.setattr(service, "_delete_asset_files", MagicMock())
+
+    await service._regenerate_animation_frame_job(generation.id, frames[1].id)
+
+    assert generation.status == "succeeded"
+    assert generation.request_snapshot_json["agentic_step"] == "completed"
+    assert "Frame 2" in generation.request_snapshot_json["edit_error"]
+    service._delete_asset_files.assert_not_called()  # type: ignore[attr-defined]
+    assert len(registry.requests) == 2  # one retry, then give up
+    assert len(registry.requests[0].input_images) == 1  # keyframe reference
+
+
+def _png() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (8, 8), (0, 255, 0)).save(buffer, format="PNG")
+    return buffer.getvalue()

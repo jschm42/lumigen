@@ -251,6 +251,8 @@ export interface Generation {
     frames?: Array<{ title: string; pose: string; duration_ms?: number | null }>
   }
   animation?: AnimationOptions | null
+  /** Error of the last frame edit (e.g. a failed frame regeneration); the frames stay unchanged. */
+  edit_error?: string | null
   total_planned?: number
   current_item_index?: number
   current_item_title?: string
