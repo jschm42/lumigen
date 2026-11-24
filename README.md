@@ -173,6 +173,26 @@ On first start Lumigen asks you to create the admin account. Then:
 
 > **Tip:** for frontend development with hot reload run `npm run dev` alongside the backend.
 
+### Running with uvicorn directly
+
+`poetry run lumigen` is a thin wrapper around uvicorn. To control host, port, workers or TLS yourself, start the ASGI app
+`app.main:app` directly:
+
+```bash
+# Development: auto-reload on code changes
+poetry run uvicorn app.main:app --host 127.0.0.1 --port 8010 --reload
+
+# LAN / server: listen on all interfaces, no reload
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8010
+
+# HTTPS with your own certificate
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8443 \
+  --ssl-certfile certs/cert.pem --ssl-keyfile certs/key.pem
+```
+
+Run the command from the repository root so `.env` and the `./data` paths resolve, and apply migrations first
+(`poetry run lumigen-migrate`). Keep a single worker: generation jobs run as in-process background tasks.
+
 ---
 
 ## ⚙️ Configuration
