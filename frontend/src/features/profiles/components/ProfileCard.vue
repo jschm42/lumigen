@@ -36,8 +36,8 @@ async function handleDelete() {
         <h3 class="font-bold text-sm text-slate-900 dark:text-white truncate">
           {{ profile.name }}
         </h3>
-        <Badge v-if="profile.default_aspect_ratio" variant="sky" size="xs">
-          {{ profile.default_aspect_ratio }}
+        <Badge variant="sky" size="xs">
+          {{ profile.default_aspect_ratio || 'Auto' }}
         </Badge>
       </div>
 

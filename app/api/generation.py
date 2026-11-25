@@ -66,7 +66,8 @@ async def api_generate_submit(
         negative_prompt = payload.get("negative_prompt")
         profile_id = payload.get("profile_id")
         model_config_id = payload.get("model_config_id")
-        aspect_ratio = payload.get("aspect_ratio", "1:1")
+        # Omitted or empty: the profile's format applies; a profile without one leaves it to the prompt.
+        aspect_ratio = str(payload.get("aspect_ratio") or "").strip()
         resolution = payload.get("resolution", "1K")
         image_size = payload.get("image_size", "")
         fal_aspect_ratio = payload.get("fal_aspect_ratio", "")
@@ -98,7 +99,7 @@ async def api_generate_submit(
         negative_prompt = str(form.get("negative_prompt")) if form.get("negative_prompt") else None
         profile_id = int(form.get("profile_id")) if form.get("profile_id") else None
         model_config_id = int(form.get("model_config_id")) if form.get("model_config_id") else None
-        aspect_ratio = str(form.get("aspect_ratio", "1:1"))
+        aspect_ratio = str(form.get("aspect_ratio") or "").strip()
         resolution = str(form.get("resolution", "1K"))
         image_size = str(form.get("image_size", ""))
         fal_aspect_ratio = str(form.get("fal_aspect_ratio", ""))

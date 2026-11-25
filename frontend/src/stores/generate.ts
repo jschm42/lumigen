@@ -206,9 +206,9 @@ export const useGenerateStore = defineStore('generate', () => {
   }
 
   function applyProfileDefaults(profile: any) {
-    if (profile.aspect_ratio || profile.default_aspect_ratio) {
-      aspectRatio.value = profile.aspect_ratio || profile.default_aspect_ratio || '1:1'
-    }
+    // An empty profile format means "Auto": send no aspect ratio and let the prompt decide.
+    aspectRatio.value = profile.aspect_ratio || profile.default_aspect_ratio || ''
+
     if (profile.resolution || profile.default_resolution) {
       resolution.value = profile.resolution || profile.default_resolution || '1K'
     }

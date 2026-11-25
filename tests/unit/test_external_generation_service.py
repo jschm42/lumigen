@@ -119,3 +119,17 @@ def test_resolve_session_creates_and_reuses_by_name(db, service):
     assert unnamed.title == "A long prompt"
     with pytest.raises(ExternalGenerationError, match="longer than 200"):
         service.resolve_session(db, "x" * 201, prompt="x", profile=profile, model_cfg=None)
+
+
+def test_create_job_without_format_sends_no_aspect_ratio(db, service):
+    from app.db import crud
+
+    _add_model(db, "Auto", "stub-auto")
+    template = crud.list_storage_templates(db)[0]
+    crud.create_profile(db, name="Free Format", aspect_ratio=None, storage_template_id=template.id)
+    service.generation_service.create_generation_from_profile.return_value = MagicMock(id=8)
+
+    service.create_job(db, ExternalImageRequest(prompt="A tall tower", model="Auto", profile="Free Format"))
+
+    overrides = service.generation_service.create_generation_from_profile.call_args.kwargs["overrides"]
+    assert "aspect_ratio" not in overrides

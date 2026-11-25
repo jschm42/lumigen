@@ -290,13 +290,15 @@ class ExternalGenerationService:
             overrides["category_ids"] = [cat.id for cat in categories]
 
         provider = str(overrides.get("provider") or profile.provider or "").strip().lower()
-        aspect_ratio = (request.aspect_ratio or "").strip() or profile.aspect_ratio or "1:1"
+        # Without an aspect ratio (request or profile) none is sent and the prompt decides.
+        aspect_ratio = (request.aspect_ratio or "").strip() or (profile.aspect_ratio or "").strip()
         resolution = (request.resolution or "").strip() or "1K"
         try:
             overrides.update(_sizing_overrides(profile, provider, aspect_ratio, resolution))
         except ValueError as exc:
             raise ExternalGenerationError(str(exc)) from exc
-        overrides["aspect_ratio"] = aspect_ratio
+        if aspect_ratio:
+            overrides["aspect_ratio"] = aspect_ratio
         overrides["resolution"] = resolution
 
         if request.n_images is not None:

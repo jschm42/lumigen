@@ -86,7 +86,7 @@ No session handshake is needed between calls.
 | `profile` | string or int | neutral `Default` profile | Profile ID or name. Supplies base prompt, size, upscaling and default categories |
 | `categories` | list of string or int | profile's categories | Category IDs or names. Unknown names are created (max. 30 characters) |
 | `negative_prompt` | string | profile's | Things to avoid |
-| `aspect_ratio` | string | profile's, else `1:1` | For example `16:9` |
+| `aspect_ratio` | string | profile's format | For example `16:9`. If neither the call nor the profile sets one (profile format "Auto"), none is sent and the prompt and model decide |
 | `resolution` | string | `1K` | Provider size tier such as `1K`, `2K`, `4K` (where supported) |
 | `n_images` | int | profile's | 1 to 8 |
 | `seed` | int | profile's | Fixed seed |

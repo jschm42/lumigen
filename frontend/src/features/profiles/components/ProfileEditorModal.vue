@@ -67,7 +67,7 @@ watch(
         description: profile.description || '',
         system_prompt: profile.system_prompt || '',
         negative_prompt: profile.negative_prompt || '',
-        default_aspect_ratio: profile.default_aspect_ratio || '1:1',
+        default_aspect_ratio: profile.default_aspect_ratio ?? '1:1',
         default_resolution: profile.default_resolution || '1K',
         upscale_provider: profile.upscale_provider || null,
         upscale_model: profile.upscale_model || null,
@@ -151,7 +151,12 @@ async function handleSubmit() {
         :rows="2"
       />
 
-      <Select v-model="formData.default_aspect_ratio" label="Default Format (Aspect Ratio)">
+      <Select
+        v-model="formData.default_aspect_ratio"
+        label="Default Format (Aspect Ratio)"
+        hint="Auto sends no aspect ratio, so the prompt and the model decide the format."
+      >
+        <option value="">Auto (from prompt)</option>
         <option v-for="ar in aspectRatios" :key="ar" :value="ar">{{ ar }}</option>
       </Select>
 

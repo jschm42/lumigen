@@ -15,6 +15,12 @@ router = APIRouter(prefix="/profiles", tags=["profiles"])
 settings = get_settings()
 
 
+def _aspect_ratio_or_none(value: Any) -> str | None:
+    """Return the trimmed aspect ratio, or ``None`` for "Auto" (empty value)."""
+    text = str(value or "").strip()
+    return text or None
+
+
 def serialize_profile(p: Profile) -> dict[str, Any]:
     """Serialize Profile instance to clean dictionary for frontend consumption."""
     params = p.params_json or {}
@@ -27,8 +33,9 @@ def serialize_profile(p: Profile) -> dict[str, Any]:
         "negative_prompt": p.negative_prompt or "",
         "width": p.width,
         "height": p.height,
-        "aspect_ratio": p.aspect_ratio or "1:1",
-        "default_aspect_ratio": p.aspect_ratio or "1:1",
+        # Empty means "Auto": no aspect ratio is sent, the prompt/model decides.
+        "aspect_ratio": p.aspect_ratio or "",
+        "default_aspect_ratio": p.aspect_ratio or "",
         "resolution": params.get("resolution", "1K"),
         "default_resolution": params.get("resolution", "1K"),
         "default_model_config_id": p.model_config_id,
@@ -129,7 +136,7 @@ def create_profile(
         model_config_id=parsed_model_cfg_id,
         base_prompt=(payload.get("system_prompt") or "").strip() or None,
         negative_prompt=(payload.get("negative_prompt") or "").strip() or None,
-        aspect_ratio=payload.get("default_aspect_ratio", "1:1"),
+        aspect_ratio=_aspect_ratio_or_none(payload.get("default_aspect_ratio", "1:1")),
         params_json=params,
         storage_template_id=storage_template_id,
         categories=categories,
@@ -192,7 +199,11 @@ def update_profile(
         "model_config_id": parsed_model_cfg_id,
         "base_prompt": base_prompt_val,
         "negative_prompt": negative_prompt_val,
-        "aspect_ratio": payload.get("default_aspect_ratio", p.aspect_ratio),
+        "aspect_ratio": (
+            _aspect_ratio_or_none(payload["default_aspect_ratio"])
+            if "default_aspect_ratio" in payload
+            else p.aspect_ratio
+        ),
         "params_json": params,
     }
 
