@@ -34,6 +34,10 @@ poetry run lumigen-migrate
 npx.cmd playwright install --with-deps chromium
 ```
 
+- Dependencies live in `pyproject.toml` (`[project].dependencies` = runtime, `[tool.poetry.group.dev]` = tests + linters); `poetry.lock` is committed. Add deps with `poetry add <pkg>` / `poetry add --group dev <pkg>`.
+- Activate `.venv` or prefix commands below with `poetry run`.
+- Commits are gated by `.pre-commit-config.yaml`; run all hooks with `poetry run pre-commit run --all-files`. Do not bypass with `--no-verify`.
+
 ### Windows PowerShell workarounds
 
 Linters are part of the Poetry dev group (`poetry install`).
@@ -135,6 +139,20 @@ npx.cmd stylelint "app/web/static/css/app.css"     # CSS lint
 - Private helpers (`_`-prefixed) should be documented when logic is non-trivial.
 - Follow PEP 257: triple double-quotes, capital first letter, ends with a period.
 - Always include or update docstrings when adding or modifying a class or public method.
+
+### Model references in docs
+
+- Docs (README, `docs/`, UI help texts, seed data) must not recommend or showcase outdated AI models. Before naming a model, check it against the current provider catalog; replace deprecated or superseded models with their current successors.
+- Prefer tier descriptions ("flagship tier", "flash / mini tier", "light models") and give concrete model names only as current examples, so the text ages gracefully.
+- Style example (format, not content):
+
+  > A balanced starting configuration for cloud APIs:
+  >
+  > - Pass 1 (Mechanics): deepseek-v4.1-flash, gpt-oss-120b, Claude Haiku. Keep reasoning off.
+  > - Pass 2 (Narration): deepseek-v4.1-flash, gpt-6-luna, Cydonia 24B, gemma-4-26b. Upgrade to a larger tier if you want richer prose or play in languages other than English.
+  > - Pass 3 (World-Builder): Flagship tier (such as openai/gpt-6-astra, gemini-4-neon).
+  > - Pass 4 (Play-Agent): Flash / mini tier.
+  > - Pass 5 (Memory): Gemini Flash-Lite or comparable light models.
 
 ## Playwright e2e details
 
