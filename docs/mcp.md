@@ -3,7 +3,8 @@
 Lumigen has a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp`. External
 apps, such as the text adventure engine TaleWeaver, use it to generate images with the models,
 profiles and categories configured in Lumigen. The images land in the Lumigen gallery like any
-other generation, each request in its own session.
+other generation. Pass a session name to collect related images (for example all scenes of one
+story) in one Lumigen session.
 
 ## Setup
 
@@ -69,8 +70,9 @@ No session handshake is needed between calls.
 | Tool | Purpose |
 |---|---|
 | `list_models` | Configured image models (`id`, `name`, `provider`, `model`) |
-| `list_profiles` | Profiles with their model, aspect ratio, image count and categories |
-| `list_categories` | Gallery categories |
+| `list_profiles` | Profiles (`id`, `name`) with model, aspect ratio, image count, base prompt and categories |
+| `list_categories` | Gallery categories (`id`, `name`) |
+| `list_sessions` | Most recently used Lumigen sessions (`id`, `name`), newest first; `limit` (default 50) |
 | `generate_image` | Generate images and (by default) wait for them |
 | `get_generation` | Status, error and image IDs of a job |
 | `get_image` | One image by `asset_id`, full size or thumbnail |
@@ -88,7 +90,7 @@ No session handshake is needed between calls.
 | `resolution` | string | `1K` | Provider size tier such as `1K`, `2K`, `4K` (where supported) |
 | `n_images` | int | profile's | 1 to 8 |
 | `seed` | int | profile's | Fixed seed |
-| `session_title` | string | start of the prompt | Title of the Lumigen session that holds the result |
+| `session` | string | new session per call | Session name (or session ID). Calls with the same name (case-insensitive) land in the same Lumigen session; it is created on first use. Max. 200 characters. Without it, each call gets a new session titled after the prompt |
 | `wait` | bool | `true` | Wait for the result. With `false` the call returns the `job_id` right away |
 | `timeout_seconds` | int | `MCP_MAX_WAIT_SECONDS` | Wait limit, capped at `MCP_MAX_WAIT_SECONDS` |
 | `include_images` | `full`, `thumbnail`, `none` | `full` | Return the images inline as base64 image content |
@@ -109,6 +111,7 @@ block per image:
   "profile": "Story Scenes",
   "aspect_ratio": "16:9",
   "seed": null,
+  "session": { "id": "session:3f9c0a1b2d4e", "name": "Tale of the Lighthouse" },
   "images": [{ "asset_id": 118, "width": 1344, "height": 768, "mime": "image/png" }]
 }
 ```
@@ -129,7 +132,7 @@ curl -s http://127.0.0.1:8010/mcp \
   -H "Authorization: Bearer $MCP_API_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"generate_image","arguments":{"prompt":"A lighthouse on a cliff in a storm, oil painting","profile":"Story Scenes","categories":["TaleWeaver"],"include_images":"thumbnail"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"generate_image","arguments":{"prompt":"A lighthouse on a cliff in a storm, oil painting","profile":"Story Scenes","categories":["TaleWeaver"],"session":"Tale of the Lighthouse","include_images":"thumbnail"}}}'
 ```
 
 MCP client configuration (for clients that support remote HTTP servers with headers):

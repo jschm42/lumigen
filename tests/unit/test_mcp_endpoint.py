@@ -145,3 +145,46 @@ def test_mcp_generate_image_reports_unknown_model(mcp_client):
     result = _call_tool(mcp_client, "generate_image", {"prompt": "A castle", "model": "nope"})
     assert result["isError"] is True
     assert "Unknown model 'nope'" in result["content"][0]["text"]
+
+
+def test_mcp_session_name_groups_images(mcp_app, mcp_client):
+    _seed_stub_model(mcp_app)
+    first = _call_tool(
+        mcp_client,
+        "generate_image",
+        {"prompt": "Chapter 1 cover", "model": "Stub Model", "session": "Tale of the Lighthouse"},
+    )
+    second = _call_tool(
+        mcp_client,
+        "generate_image",
+        {"prompt": "Chapter 2 cover", "model": "Stub Model", "session": "tale of the lighthouse"},
+    )
+    session_one = first["structuredContent"]["session"]
+    session_two = second["structuredContent"]["session"]
+    assert session_one["name"] == "Tale of the Lighthouse"
+    assert session_one["id"] == session_two["id"]
+
+    sessions = _call_tool(mcp_client, "list_sessions", {})["structuredContent"]["sessions"]
+    assert [s["name"] for s in sessions].count("Tale of the Lighthouse") == 1
+
+    by_id = _call_tool(
+        mcp_client,
+        "generate_image",
+        {"prompt": "Chapter 3", "model": "Stub Model", "session": session_one["id"], "wait": False},
+    )
+    assert by_id["structuredContent"]["session"]["id"] == session_one["id"]
+
+
+def test_mcp_list_profiles_includes_category_ids(mcp_app, mcp_client):
+    from app.db import crud
+
+    with mcp_app.SessionLocal() as session:
+        category = crud.create_category(session, name="Scenes")
+        template = crud.list_storage_templates(session)[0]
+        profile = crud.create_profile(session, name="Story", storage_template_id=template.id)
+        profile.categories.append(category)
+        session.commit()
+
+    profiles = _call_tool(mcp_client, "list_profiles", {})["structuredContent"]["profiles"]
+    story = next(p for p in profiles if p["name"] == "Story")
+    assert story["categories"] == [{"id": category.id, "name": "Scenes"}]

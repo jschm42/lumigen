@@ -37,6 +37,8 @@ SERVER_INSTRUCTIONS = (
     "Lumigen generates images. Call list_models, list_profiles and list_categories "
     "to discover valid values, then call generate_image. Models, profiles and "
     "categories can be given by ID or name. Unknown category names are created. "
+    "Pass the same 'session' name to collect related images in one Lumigen session "
+    "(list_sessions shows existing ones). "
     "generate_image waits for the result by default; with wait=false it returns "
     "a job_id that you poll with get_generation."
 )
@@ -67,11 +69,18 @@ def build_mcp_server(external_service: ExternalGenerationService) -> MCPServer:
         with db_engine.SessionLocal() as session:
             return {"categories": external_service.list_categories(session)}
 
+    @server.tool(description="List the most recently used Lumigen sessions (ID and name), newest first.")
+    def list_sessions(limit: int = 50) -> dict[str, Any]:
+        with db_engine.SessionLocal() as session:
+            return {"sessions": external_service.list_sessions(session, limit)}
+
     @server.tool(
         description=(
             "Generate images from a prompt. 'model' and 'profile' accept an ID or a name; "
             "'model' overrides the profile's model. 'categories' takes IDs or names and "
-            "creates unknown names. With wait=true (default) the call returns when the "
+            "creates unknown names. 'session' is a session name (or ID): images with the same "
+            "name are collected in one Lumigen session, which is created on first use. "
+            "With wait=true (default) the call returns when the "
             "images are done or timeout_seconds passed; 'include_images' controls whether "
             "the images are returned inline as full size, thumbnail or not at all."
         )
@@ -86,7 +95,7 @@ def build_mcp_server(external_service: ExternalGenerationService) -> MCPServer:
         resolution: str | None = None,
         n_images: int | None = None,
         seed: int | None = None,
-        session_title: str | None = None,
+        session: str | None = None,
         wait: bool = True,
         timeout_seconds: int | None = None,
         include_images: ImageVariant = "full",
@@ -101,11 +110,11 @@ def build_mcp_server(external_service: ExternalGenerationService) -> MCPServer:
             resolution=resolution,
             n_images=n_images,
             seed=seed,
-            session_title=session_title,
+            session=session,
         )
         try:
-            with db_engine.SessionLocal() as session:
-                generation = external_service.create_job(session, request)
+            with db_engine.SessionLocal() as db:
+                generation = external_service.create_job(db, request)
                 generation_id = generation.id
         except ExternalGenerationError as exc:
             raise ToolError(str(exc)) from exc

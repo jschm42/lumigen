@@ -17,13 +17,15 @@ from sqlalchemy.orm import Session
 
 from app.db import crud
 from app.db import engine as db_engine
-from app.db.models import Asset, Category, Generation, ModelConfig, Profile
+from app.db.models import Asset, Category, ChatSession, Generation, ModelConfig, Profile
 from app.services.generation_service import GenerationService
 
 FINISHED_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 CATEGORY_NAME_MAX_LENGTH = 30
 MAX_IMAGES_PER_REQUEST = 8
 SESSION_TITLE_MAX_LENGTH = 40
+SESSION_NAME_MAX_LENGTH = 200
+SESSION_LIST_MAX = 200
 POLL_INTERVAL_SECONDS = 1.0
 
 
@@ -37,7 +39,8 @@ class ExternalImageRequest:
 
     ``model``, ``profile`` and each entry of ``categories`` may be a database
     ID or a name (case-insensitive). Models can also be matched by their
-    provider model identifier.
+    provider model identifier. ``session`` names the Lumigen session that
+    collects the images: requests with the same name land in the same session.
     """
 
     prompt: str
@@ -49,7 +52,7 @@ class ExternalImageRequest:
     resolution: str | None = None
     n_images: int | None = None
     seed: int | None = None
-    session_title: str | None = None
+    session: str | None = None
     create_missing_categories: bool = True
 
 
@@ -84,7 +87,10 @@ class ExternalGenerationService:
                 "model": profile.model_config.name if profile.model_config else profile.model,
                 "aspect_ratio": profile.aspect_ratio,
                 "n_images": profile.n_images,
-                "categories": [category.name for category in profile.categories],
+                "base_prompt": profile.base_prompt,
+                "categories": [
+                    {"id": category.id, "name": category.name} for category in profile.categories
+                ],
             }
             for profile in crud.list_profiles(session)
         ]
@@ -92,6 +98,68 @@ class ExternalGenerationService:
     def list_categories(self, session: Session) -> list[dict[str, Any]]:
         """Return all gallery categories."""
         return [{"id": cat.id, "name": cat.name} for cat in crud.list_categories(session)]
+
+    def list_sessions(self, session: Session, limit: int = 50) -> list[dict[str, Any]]:
+        """Return the most recently updated Lumigen sessions (newest first)."""
+        limit = max(1, min(SESSION_LIST_MAX, int(limit)))
+        return [
+            {
+                "id": chat.chat_session_id,
+                "name": chat.title,
+                "updated_at": chat.updated_at.isoformat() if chat.updated_at else None,
+            }
+            for chat in crud.list_chat_sessions(session)[:limit]
+        ]
+
+    def resolve_session(
+        self,
+        session: Session,
+        name: str | None,
+        *,
+        prompt: str,
+        profile: Profile,
+        model_cfg: ModelConfig | None,
+    ) -> ChatSession:
+        """Return the Lumigen session for *name*, creating it if needed.
+
+        *name* matches an existing session by its ID or by its title
+        (case-insensitive; the most recently used one wins). Without a name a
+        new session titled after the prompt is created.
+
+        Raises:
+            ExternalGenerationError: If the name is longer than 200 characters.
+        """
+        from app.main import build_chat_session_token
+
+        name = (name or "").strip()
+        if len(name) > SESSION_NAME_MAX_LENGTH:
+            raise ExternalGenerationError(
+                f"Session name is longer than {SESSION_NAME_MAX_LENGTH} characters."
+            )
+        if name:
+            chat = crud.get_chat_session(session, name)
+            if chat is None:
+                needle = name.lower()
+                chat = next(
+                    (
+                        item
+                        for item in crud.list_chat_sessions(session)
+                        if (item.title or "").strip().lower() == needle
+                    ),
+                    None,
+                )
+            if chat is not None:
+                chat.last_profile_id = profile.id
+                chat.last_model_config_id = model_cfg.id if model_cfg else None
+                session.commit()
+                return chat
+        return crud.create_chat_session(
+            session,
+            chat_session_id=build_chat_session_token(),
+            title=name or _title_from_prompt(prompt),
+            last_profile_id=profile.id,
+            last_model_config_id=model_cfg.id if model_cfg else None,
+        )
 
     def resolve_model(self, session: Session, ref: str | int) -> ModelConfig:
         """Return the model config matching *ref* (ID, name or provider model identifier).
@@ -183,7 +251,6 @@ class ExternalGenerationService:
             ExternalGenerationError: If the prompt is empty or a reference is invalid.
         """
         from app.api.generation import _default_profile
-        from app.main import build_chat_session_token
 
         prompt = (request.prompt or "").strip()
         if not prompt:
@@ -239,16 +306,12 @@ class ExternalGenerationService:
         if request.negative_prompt and request.negative_prompt.strip():
             overrides["negative_prompt"] = request.negative_prompt.strip()
 
-        chat_session_id = build_chat_session_token()
-        title = (request.session_title or "").strip() or _title_from_prompt(prompt)
-        crud.create_chat_session(
-            session,
-            chat_session_id=chat_session_id,
-            title=title[:SESSION_TITLE_MAX_LENGTH],
-            last_profile_id=profile.id,
-            last_model_config_id=model_cfg.id if model_cfg else None,
+        chat = self.resolve_session(
+            session, request.session, prompt=prompt, profile=profile, model_cfg=model_cfg
         )
-        overrides["chat_session_id"] = chat_session_id
+        overrides["chat_session_id"] = chat.chat_session_id
+        if chat.title:
+            overrides["chat_session_title"] = chat.title
 
         try:
             return self.generation_service.create_generation_from_profile(
@@ -301,6 +364,10 @@ class ExternalGenerationService:
             "profile": generation.profile_name,
             "aspect_ratio": snapshot.get("aspect_ratio"),
             "seed": snapshot.get("seed"),
+            "session": {
+                "id": snapshot.get("chat_session_id"),
+                "name": snapshot.get("chat_session_title"),
+            },
             "images": [
                 {
                     "asset_id": asset.id,

@@ -272,8 +272,8 @@ The GIF/WebP is rebuilt automatically after every change. Frames and the animati
 ### 🔌 MCP endpoint for external apps
 
 Other apps (for example the text adventure engine TaleWeaver) can generate images through Lumigen's
-MCP endpoint at `/mcp`. They pick a model, a profile and gallery categories by name, and get the
-finished images back inline. Enable it with a token from `scripts/generate_mcp_token.sh --write` (or `.ps1`). Tools, parameters and client
+MCP endpoint at `/mcp`. They pick a model, a profile and gallery categories by name, group the
+images in a named Lumigen session, and get the finished images back inline. Enable it with a token from `scripts/generate_mcp_token.sh --write` (or `.ps1`). Tools, parameters and client
 examples: [docs/mcp.md](docs/mcp.md).
 
 ### Accounts & password reset

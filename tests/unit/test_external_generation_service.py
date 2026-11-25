@@ -104,3 +104,18 @@ def test_create_job_uses_profile_by_name_and_model_override(db, service):
 def test_create_job_requires_prompt(db, service):
     with pytest.raises(ExternalGenerationError, match="Prompt is required"):
         service.create_job(db, ExternalImageRequest(prompt="   "))
+
+
+def test_resolve_session_creates_and_reuses_by_name(db, service):
+    from app.db import crud
+
+    template = crud.list_storage_templates(db)[0]
+    profile = crud.create_profile(db, name="P", storage_template_id=template.id)
+    created = service.resolve_session(db, "My Story", prompt="x", profile=profile, model_cfg=None)
+    reused = service.resolve_session(db, " my story ", prompt="y", profile=profile, model_cfg=None)
+    assert reused.chat_session_id == created.chat_session_id
+    unnamed = service.resolve_session(db, None, prompt="A long prompt", profile=profile, model_cfg=None)
+    assert unnamed.chat_session_id != created.chat_session_id
+    assert unnamed.title == "A long prompt"
+    with pytest.raises(ExternalGenerationError, match="longer than 200"):
+        service.resolve_session(db, "x" * 201, prompt="x", profile=profile, model_cfg=None)
