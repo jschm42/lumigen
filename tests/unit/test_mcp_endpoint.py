@@ -188,3 +188,22 @@ def test_mcp_list_profiles_includes_category_ids(mcp_app, mcp_client):
     profiles = _call_tool(mcp_client, "list_profiles", {})["structuredContent"]["profiles"]
     story = next(p for p in profiles if p["name"] == "Story")
     assert story["categories"] == [{"id": category.id, "name": "Scenes"}]
+
+
+def test_mcp_accepts_session_title_alias_and_reports_categories(mcp_app, mcp_client):
+    """Clients built against the first schema send ``session_title``; it must still group images."""
+    _seed_stub_model(mcp_app)
+    result = _call_tool(
+        mcp_client,
+        "generate_image",
+        {
+            "prompt": "a tiny blue gem",
+            "model": "Stub Model",
+            "categories": ["Cover"],
+            "session_title": "Test Adventure",
+            "include_images": "none",
+        },
+    )
+    summary = result["structuredContent"]
+    assert summary["session"]["name"] == "Test Adventure"
+    assert [cat["name"] for cat in summary["categories"]] == ["Cover"]

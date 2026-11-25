@@ -90,7 +90,7 @@ No session handshake is needed between calls.
 | `resolution` | string | `1K` | Provider size tier such as `1K`, `2K`, `4K` (where supported) |
 | `n_images` | int | profile's | 1 to 8 |
 | `seed` | int | profile's | Fixed seed |
-| `session` | string | new session per call | Session name (or session ID). Calls with the same name (case-insensitive) land in the same Lumigen session; it is created on first use. Max. 200 characters. Without it, each call gets a new session titled after the prompt |
+| `session` | string | new session per call | Session name (or session ID). Calls with the same name (case-insensitive) land in the same Lumigen session; it is created on first use. Max. 200 characters. Without it, each call gets a new session titled after the prompt. `session_title` is accepted as an alias |
 | `wait` | bool | `true` | Wait for the result. With `false` the call returns the `job_id` right away |
 | `timeout_seconds` | int | `MCP_MAX_WAIT_SECONDS` | Wait limit, capped at `MCP_MAX_WAIT_SECONDS` |
 | `include_images` | `full`, `thumbnail`, `none` | `full` | Return the images inline as base64 image content |
@@ -111,6 +111,7 @@ block per image:
   "profile": "Story Scenes",
   "aspect_ratio": "16:9",
   "seed": null,
+  "categories": [{ "id": 4, "name": "TaleWeaver" }],
   "session": { "id": "session:3f9c0a1b2d4e", "name": "Tale of the Lighthouse" },
   "images": [{ "asset_id": 118, "width": 1344, "height": 768, "mime": "image/png" }]
 }

@@ -364,6 +364,7 @@ class ExternalGenerationService:
             "profile": generation.profile_name,
             "aspect_ratio": snapshot.get("aspect_ratio"),
             "seed": snapshot.get("seed"),
+            "categories": self._category_summary(snapshot.get("category_ids") or []),
             "session": {
                 "id": snapshot.get("chat_session_id"),
                 "name": snapshot.get("chat_session_title"),
@@ -378,6 +379,17 @@ class ExternalGenerationService:
                 for asset in (generation.assets or [])
             ],
         }
+
+    @staticmethod
+    def _category_summary(category_ids: list[int]) -> list[dict[str, Any]]:
+        """Return ``{id, name}`` for the categories the job files its images under."""
+        if not category_ids:
+            return []
+        with db_engine.SessionLocal() as session:
+            return [
+                {"id": cat.id, "name": cat.name}
+                for cat in crud.list_categories_by_ids(session, list(category_ids))
+            ]
 
     def read_asset(self, asset_id: int, *, thumbnail: bool = False) -> tuple[bytes, str]:
         """Return the bytes and MIME type of an asset file or its thumbnail.

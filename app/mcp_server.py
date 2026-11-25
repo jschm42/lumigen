@@ -79,7 +79,8 @@ def build_mcp_server(external_service: ExternalGenerationService) -> MCPServer:
             "Generate images from a prompt. 'model' and 'profile' accept an ID or a name; "
             "'model' overrides the profile's model. 'categories' takes IDs or names and "
             "creates unknown names. 'session' is a session name (or ID): images with the same "
-            "name are collected in one Lumigen session, which is created on first use. "
+            "name are collected in one Lumigen session, which is created on first use "
+            "('session_title' is accepted as an alias). "
             "With wait=true (default) the call returns when the "
             "images are done or timeout_seconds passed; 'include_images' controls whether "
             "the images are returned inline as full size, thumbnail or not at all."
@@ -96,6 +97,7 @@ def build_mcp_server(external_service: ExternalGenerationService) -> MCPServer:
         n_images: int | None = None,
         seed: int | None = None,
         session: str | None = None,
+        session_title: str | None = None,
         wait: bool = True,
         timeout_seconds: int | None = None,
         include_images: ImageVariant = "full",
@@ -110,7 +112,7 @@ def build_mcp_server(external_service: ExternalGenerationService) -> MCPServer:
             resolution=resolution,
             n_images=n_images,
             seed=seed,
-            session=session,
+            session=session or session_title,
         )
         try:
             with db_engine.SessionLocal() as db:
