@@ -117,16 +117,16 @@ A self-hosted, local-first AI creation studio: generate images, videos, and scal
 | Provider | Example models | Notes |
 |---|---|---|
 | **Black Forest Labs** | FLUX.2 [pro] / [flex] / [klein], FLUX 3 | Native BFL API |
-| **OpenAI** | gpt-image-1, DALL·E 3 | Reports token usage |
+| **OpenAI** | GPT-Image 2.6 (Flare / Sunburst) | Reports token usage |
 | **Google Gemini** | Gemini image models, Imagen | Reports token usage |
-| **OpenRouter** | FLUX.2, GPT-5 Image, Seedream, … | One key, many models; reports token usage |
+| **OpenRouter** | FLUX.2, GPT-Image, Gemini image models, Seedream, … | One key, many models; reports token usage |
 | **fal.ai** | FLUX, Kling Video (v2.5/v1.5), Minimax Video, Hunyuan, Recraft V3 (SVG), Luma Dream Machine | Image generation, video models (text-to-video & image-to-video), cloud upscaling, and SVG vector graphics |
 | **ByteDance Seedance** | Seedance 2.5 / 2.0 / 1.5 Pro | Dedicated video generation on BytePlus ModelArk (text-to-video, resolutions up to 1080p, custom ratios) |
 | **BytePlus ModelArk** | ByteDance Seedream 5.0 / 4.5 / 4.0 | Up to 10 reference images, sequential multi-image output, reports usage |
 | **MiniMax** | image-01 | Subject reference support |
 | **Stability AI** | Stable Image Ultra / Core, SD 3.5 | Image-to-image for Ultra & SD 3.5 |
-| **Replicate** | Any hosted model, e.g. `black-forest-labs/flux-1.1-pro`, `recraft-ai/recraft-v3` | Supports image, video, and SVG vector models |
-| **Together AI** | FLUX.2 [dev], FLUX.1.1 [pro], FLUX.1 [schnell] | Width/height from aspect ratio |
+| **Replicate** | Any hosted model, e.g. `black-forest-labs/flux-2-max`, `recraft-ai/recraft-v3` | Supports image, video, and SVG vector models |
+| **Together AI** | FLUX.2 [dev] and further FLUX models from the Together catalog | Width/height from aspect ratio |
 | **xAI** | Grok Imagine (`grok-imagine-image-2.0`) | Generation & edits, reports usage |
 | **Ideogram** | Ideogram 3.0 Turbo / Default / Quality | Great typography, style references |
 | **OpenAI-compatible APIs** | Anything behind LocalAI, LiteLLM, vLLM or a hosted gateway | Custom endpoints with base URL and optional key; `b64_json` and `url` responses, image edits |
@@ -236,7 +236,7 @@ Costs appear only for models with prices configured under **Admin → Models**
 Agentic Mode turns a high-level creative direction (e.g. *"design a set of 5 RPG icons"*) into a cohesive collection of individual standalone images:
 - **LLM Decomposition:** An intelligent reasoning model breaks down your instruction into concrete, solitary items (e.g. Health Potion, Broadsword, Tower Shield) while applying a shared visual style anchor.
 - **Anti-Grid Safeguards:** Enforces single, centered, isolated subjects per image with automated negative prompts to prevent models from drawing sprite sheets or multi-icon collages.
-- **Configurable Models:** Add, test, and manage reasoning models (such as `DeepSeek 4.1`, `gpt-4o-mini`, `o3-mini`, `gemini-2.5-flash`) under **Admin → Reasoning Models**, complete with custom API keys and default selection.
+- **Configurable Models:** Add, test, and manage reasoning models (a fast, low-cost tier is enough, e.g. `deepseek-v4.1-flash`, `gpt-6-luna` or `gemini-3.8-flash`) under **Admin → Reasoning Models**, complete with custom API keys and default selection.
 - **One-Click ZIP Export:** Instantly download the entire set as a structured ZIP archive with human-readable file names (`01-health-potion.png`, `02-iron-longsword.png`, etc.).
 
 ### 🎞️ Agentic Animations: from one sentence to a GIF
