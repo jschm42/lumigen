@@ -168,30 +168,73 @@ test.describe("Agentic animation frame editing", () => {
     expect(tooShort.status).toBe(400);
   });
 
-  test("the frame editor dialog reorders frames", async ({ page }) => {
+  test("inline drag-and-drop, frame disable toggle, speed control, and reset build a new WebP in its own row", async ({ page }) => {
     await openAgenticBar(page);
     await page.getByRole("tab", { name: "Animation", exact: true }).click();
     await page.getByRole("spinbutton", { name: "Minimum frames" }).fill("3");
     await page.getByRole("spinbutton", { name: "Maximum frames" }).fill("3");
-    await page.locator("#prompt_user").fill("ui frame editor");
+    await page.locator("#prompt_user").fill("ui inline frame reorder");
     await page.locator('button[title="Start generation (Enter)"]').click();
 
-    const card = page.locator('article[data-status="succeeded"]', { hasText: "ui frame editor" }).last();
-    await expect(card.getByTestId("frame-actions")).toHaveCount(3, { timeout: 60_000 });
-    await card.getByTestId("edit-frames").click();
+    const card = page.locator('article[data-status="succeeded"]', { hasText: "ui inline frame reorder" }).last();
+    await expect(card.getByTestId("animation-frame-item")).toHaveCount(3, { timeout: 60_000 });
 
-    const dialog = page.getByRole("dialog", { name: "Edit frames" });
-    await dialog.getByRole("button", { name: "Move Frame 1 down" }).click();
-    await dialog.getByRole("spinbutton", { name: "Duration of Frame 1 in milliseconds" }).fill("250");
-    await dialog.getByRole("button", { name: "Save & rebuild" }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.getByText("Frames saved, animation rebuilt.")).toBeVisible();
+    // Result GIF is shown in its own dedicated row below the frame set (not inside the frame list).
+    const resultRow = card.getByTestId("animation-result-row");
+    await expect(resultRow).toBeVisible();
+    await expect(resultRow).toContainText("GIF");
 
-    // Card order follows the new stack order: Frame 2 first, then Frame 1.
-    const labels = await card
-      .getByTestId("frame-actions")
-      .evaluateAll((nodes) => nodes.map((node) => node.querySelector("button")?.getAttribute("aria-label")));
-    expect(labels).toEqual(["Regenerate Frame 2", "Regenerate Frame 1", "Regenerate Frame 3"]);
+    const resetBtn = card.getByTestId("reset-frame-order");
+    await expect(resetBtn).toBeDisabled();
+
+    const readOrder = () =>
+      card
+        .getByTestId("animation-frame-item")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => node.querySelector('button[aria-label^="Regenerate "]')?.getAttribute("aria-label"))
+        );
+
+    expect(await readOrder()).toEqual(["Regenerate Frame 1", "Regenerate Frame 2", "Regenerate Frame 3"]);
+
+    // Drag Frame 1 onto Frame 3 → order becomes Frame 2, Frame 3, Frame 1; Reset becomes active.
+    const items = card.getByTestId("animation-frame-item");
+    await items.nth(0).dragTo(items.nth(2));
+    expect(await readOrder()).toEqual(["Regenerate Frame 2", "Regenerate Frame 3", "Regenerate Frame 1"]);
+    await expect(resetBtn).toBeEnabled();
+    await expect(card.getByTestId("animation-set-controls")).toContainText("Order modified");
+
+    // Reset restores the original generation order.
+    await resetBtn.click();
+    expect(await readOrder()).toEqual(["Regenerate Frame 1", "Regenerate Frame 2", "Regenerate Frame 3"]);
+    await expect(resetBtn).toBeDisabled();
+
+    // Disable Frame 2 temporarily (kept in set, excluded from animation) and configure speed to 250 ms (4 fps).
+    await card.getByRole("button", { name: "Disable Frame 2 in animation" }).click();
+    await expect(items.nth(1)).toHaveAttribute("data-disabled", "true");
+    await expect(items.nth(1)).toContainText("Skipped");
+    await expect(card.getByTestId("animation-set-controls")).toContainText("2/3 active");
+    // Remaining two enabled frames cannot be disabled (minimum 2 active frames).
+    await expect(card.getByRole("button", { name: "At least two frames must stay enabled" }).first()).toBeDisabled();
+
+    const speedInput = card.getByTestId("animation-speed-ms");
+    await speedInput.fill("250");
+    await expect(card.getByTestId("animation-speed-fps")).toHaveText("4 fps");
+
+    // Drag Frame 1 onto Frame 3 and create a new 2-frame WebP at 250 ms.
+    await items.nth(0).dragTo(items.nth(2));
+    expect(await readOrder()).toEqual(["Regenerate Frame 2", "Regenerate Frame 3", "Regenerate Frame 1"]);
+    await card.getByTestId("create-animation-format").selectOption("webp");
+    await card.getByTestId("create-animation-btn").click();
+
+    await expect(page.getByText("New WebP animation created.")).toBeVisible();
+    await expect(resultRow).toContainText("Animated WebP");
+    await expect(resultRow).toContainText("2 frames");
+    await expect(resultRow).toContainText("250 ms");
+    // Disabled Frame 2 is still preserved in the frame set and can be re-enabled via Reset.
+    await expect(card.getByTestId("animation-frame-item")).toHaveCount(3);
+    await expect(resetBtn).toBeEnabled();
+    await resetBtn.click();
+    await expect(card.getByTestId("animation-set-controls")).toContainText("3/3 active");
   });
 
   test("frame edits are rejected for non-animation generations", async ({ page }) => {

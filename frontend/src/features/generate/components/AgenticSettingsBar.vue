@@ -15,6 +15,11 @@ const authStore = useAuthStore()
 
 const frameLimit = computed(() => authStore.uiSettings.animation_max_frames || 24)
 const defaultFrameMs = computed(() => authStore.uiSettings.animation_default_frame_ms || 100)
+const effectiveFps = computed(() => {
+  const ms = generateStore.animationFrameMs || defaultFrameMs.value
+  const fps = 1000 / Math.max(20, ms)
+  return `${Number.isInteger(fps) ? fps : fps.toFixed(1)} fps`
+})
 const countMax = computed(() => (generateStore.isAnimationMode ? frameLimit.value : 16))
 const countMin = computed(() => (generateStore.isAnimationMode ? 2 : 1))
 
@@ -151,19 +156,23 @@ const hint = computed(() => {
         aria-label="Loop mode"
         @update:model-value="setLoop"
       />
-      <Input
-        v-if="!isFramesOnly"
-        :model-value="generateStore.animationFrameMs ?? ''"
-        type="number"
-        size="sm"
-        class="w-36"
-        min="20"
-        max="1000"
-        step="10"
-        :placeholder="`Frame ms: ${defaultFrameMs}`"
-        aria-label="Frame duration in milliseconds"
-        @update:model-value="generateStore.animationFrameMs = toCount($event)"
-      />
+      <div v-if="!isFramesOnly" class="flex items-center gap-1.5">
+        <Input
+          :model-value="generateStore.animationFrameMs ?? ''"
+          type="number"
+          size="sm"
+          class="w-36"
+          min="20"
+          max="10000"
+          step="10"
+          :placeholder="`Frame ms: ${defaultFrameMs}`"
+          aria-label="Frame duration in milliseconds"
+          @update:model-value="generateStore.animationFrameMs = toCount($event)"
+        />
+        <span class="font-mono text-2xs text-slate-500 dark:text-slate-400" title="Playback speed">
+          {{ effectiveFps }}
+        </span>
+      </div>
       <Switch v-model="generateStore.animationTransparent" label="Transparent background" />
       <span class="text-2xs text-slate-500 dark:text-slate-400">Up to {{ frameLimit }} frames</span>
     </div>

@@ -1246,7 +1246,8 @@ class GenerationService:
                 animation_opts = dict(req_snap.get("animation") or {})
                 transparent = bool(animation_opts.get("transparent"))
                 loop_choice = animation_opts.get("loop") or None
-                frame_ms = self._parse_optional_int(animation_opts.get("frame_ms")) or limits.default_frame_ms
+                explicit_frame_ms = self._parse_optional_int(animation_opts.get("frame_ms"))
+                frame_ms = explicit_frame_ms or limits.default_frame_ms
                 output_format = str(animation_opts.get("output") or "gif").lower()
                 if output_format not in OUTPUT_FORMATS:
                     raise ProviderError(f"Unsupported animation output: {output_format!r}.")
@@ -1310,7 +1311,8 @@ class GenerationService:
                     session.commit()
 
                     provider_request = self._provider_request_from_generation(generation)
-                    provider_request.prompt = plan.frame_prompt(idx)
+                    has_user_reference = idx == 0 and bool(provider_request.input_images)
+                    provider_request.prompt = plan.frame_prompt(idx, as_edit=has_user_reference)
                     provider_request.negative_prompt = plan.negative_prompt or provider_request.negative_prompt
                     provider_request.n_images = 1
                     provider_request.seed = seed
@@ -1331,9 +1333,13 @@ class GenerationService:
                             _logger.info("Animation frame %d looks static (%.1f), retrying", idx, difference)
                             static_retry = True
                             provider_request.prompt = plan.frame_prompt(idx, emphasize_change=True)
-                            image, result, (data, width, height, mime) = await self._generate_animation_frame(
-                                generation, provider_request, idx, frame.title
+                            retry_img, retry_res, (retry_data, retry_w, retry_h, retry_mime) = (
+                                await self._generate_animation_frame(generation, provider_request, idx, frame.title)
                             )
+                            retry_diff = await asyncio.to_thread(frame_difference, previous.data, retry_data)
+                            if retry_diff >= difference:
+                                image, result = retry_img, retry_res
+                                data, width, height, mime = retry_data, retry_w, retry_h, retry_mime
                     # References keep the raw frame (with key background) so the model sees the same scene.
                     current = ProviderInputImage(data=data, mime=mime)
                     if keyframe is None:
@@ -1364,7 +1370,8 @@ class GenerationService:
                         meta={
                             "role": "frame",
                             "frame_index": idx,
-                            "duration_ms": frame.duration_ms or plan.default_frame_ms,
+                            "duration_ms": explicit_frame_ms or frame.duration_ms or plan.default_frame_ms,
+                            "disabled": False,
                             "transparent": transparent,
                             "static_retry": static_retry,
                             "prompt": provider_request.prompt,
@@ -1400,7 +1407,7 @@ class GenerationService:
                     animation = await asyncio.to_thread(
                         assemble_animation,
                         frame_bytes,
-                        [fr.duration_ms or plan.default_frame_ms for fr in plan.frames],
+                        [explicit_frame_ms or fr.duration_ms or plan.default_frame_ms for fr in plan.frames],
                         options,
                         limits,
                     )
@@ -1498,15 +1505,24 @@ class GenerationService:
         generation.request_snapshot_json = snapshot
         return revision
 
-    async def rebuild_animation(self, session: Session, generation: Generation) -> Asset | None:
+    async def rebuild_animation(
+        self,
+        session: Session,
+        generation: Generation,
+        *,
+        output: str | None = None,
+    ) -> Asset | None:
         """Re-assemble the animation cover from the current frames of *generation*.
 
-        Frames are used in their ``stack_order`` with their stored durations. The
-        old cover asset is replaced by a new one (new id, so cached URLs never
-        show the old file). For ``output == "none"`` only the frame order is
-        normalized. Raises ``AnimationEditError`` when assembly fails.
+        Frames are used in their ``stack_order`` with their stored durations. When
+        *output* (``"gif"`` or ``"webp"``) is passed, the animation's output format
+        is updated and assembled even if the run originally selected ``"none"``.
+        The old cover asset is replaced by a new one (new id, so cached URLs never
+        show the old file). For ``output == "none"`` without override only the
+        frame order is normalized. Raises ``AnimationEditError`` when assembly fails.
         """
         from app.services.animation_service import (
+            OUTPUT_FILE_TYPES,
             AnimationError,
             AnimationLimits,
             AnimationOptions,
@@ -1514,10 +1530,19 @@ class GenerationService:
             parse_hex_color,
         )
 
-        snapshot = generation.request_snapshot_json or {}
+        snapshot = dict(generation.request_snapshot_json or {})
         plan = snapshot.get("agentic_plan") or {}
-        animation_opts = snapshot.get("animation") or {}
-        output_format = str(animation_opts.get("output") or "gif").lower()
+        animation_opts = dict(snapshot.get("animation") or {})
+        if output is not None:
+            chosen = str(output).strip().lower()
+            if chosen not in OUTPUT_FILE_TYPES:
+                raise AnimationEditError(f"Unsupported animation output format: {output!r}.")
+            output_format = chosen
+            animation_opts["output"] = output_format
+            snapshot["animation"] = animation_opts
+            generation.request_snapshot_json = snapshot
+        else:
+            output_format = str(animation_opts.get("output") or "gif").lower()
         frames, cover = self.animation_frames(generation)
         base_dir = self._base_dir_from_snapshot(generation.storage_template_snapshot_json)
 
@@ -1527,11 +1552,12 @@ class GenerationService:
                 frame.meta_json = {**(frame.meta_json or {}), "stack_order": order}
             session.commit()
             return None
-        if len(frames) < 2:
-            raise AnimationEditError("An animation needs at least two frames.")
+        active_frames = [frame for frame in frames if not (frame.meta_json or {}).get("disabled")]
+        if len(active_frames) < 2:
+            raise AnimationEditError("An animation needs at least two enabled frames.")
 
-        frame_data = [self.asset_absolute_path(frame, which="file").read_bytes() for frame in frames]
-        durations = [(frame.meta_json or {}).get("duration_ms") for frame in frames]
+        frame_data = [self.asset_absolute_path(frame, which="file").read_bytes() for frame in active_frames]
+        durations = [(frame.meta_json or {}).get("duration_ms") for frame in active_frames]
         limits = AnimationLimits.from_ui_settings(AppSettingsService().get_ui_settings(session))
         options = AnimationOptions(
             loop=str(plan.get("loop") or "loop"),
@@ -1578,7 +1604,7 @@ class GenerationService:
                 "role": "animation",
                 "format": output_format,
                 "strategy": "keyframe_chain",
-                "frame_asset_ids": [frame.id for frame in frames],
+                "frame_asset_ids": [frame.id for frame in active_frames],
                 "frame_count": animation.frame_count,
                 "durations_ms": animation.durations_ms,
                 "loop": options.loop,
@@ -1610,9 +1636,11 @@ class GenerationService:
         if frame is None:
             raise AnimationEditError("The asset is not a frame of this animation.", 404)
         output_format = str(((generation.request_snapshot_json or {}).get("animation") or {}).get("output") or "gif")
-        if output_format != "none" and len(frames) <= 2:
+        remaining = [f for f in frames if f.id != asset_id]
+        enabled_remaining = [f for f in remaining if not (f.meta_json or {}).get("disabled")]
+        if output_format != "none" and len(enabled_remaining) < 2:
             raise AnimationEditError("An animation needs at least two frames; this frame cannot be removed.")
-        if len(frames) <= 1:
+        if not remaining:
             raise AnimationEditError("The last frame cannot be removed.")
 
         self._delete_asset_files(frame)
@@ -1628,13 +1656,17 @@ class GenerationService:
         session: Session,
         generation_id: int,
         frames: list[dict[str, Any]],
+        *,
+        output: str | None = None,
+        frame_ms: int | None = None,
     ) -> Generation:
-        """Reorder the frames of a finished animation and/or change their durations, then rebuild it.
+        """Reorder frames, toggle disabled state, and/or change durations, then rebuild.
 
         *frames* lists every current frame exactly once, in the new order, as
-        ``{"id": asset_id, "duration_ms": int | None}`` (``None`` keeps the
-        current duration). Durations are limited to 20–10000 ms. Raises
-        ``AnimationEditError`` for unknown, missing or duplicate frames.
+        ``{"id": asset_id, "duration_ms": int | None, "disabled": bool}`` (``None``
+        keeps the current duration). Optional *output* (``"gif"`` or ``"webp"``)
+        builds or converts the assembled animation to that format; optional
+        *frame_ms* updates the animation's configured default frame duration.
         """
         generation = self.editable_animation(session, generation_id)
         current, _cover = self.animation_frames(generation)
@@ -1646,10 +1678,33 @@ class GenerationService:
         if sorted(requested_ids) != sorted(by_id):
             raise AnimationEditError("The frame list must contain every frame of the animation exactly once.")
 
+        if frame_ms is not None and not 20 <= int(frame_ms) <= 10_000:
+            raise AnimationEditError("frame_ms must be between 20 and 10000.")
+
+        effective_output = (
+            str(output).strip().lower()
+            if output is not None
+            else str(((generation.request_snapshot_json or {}).get("animation") or {}).get("output") or "gif").lower()
+        )
+        enabled_count = sum(
+            1
+            for item in frames
+            if not (bool(item["disabled"]) if "disabled" in item else bool((by_id[int(item["id"])].meta_json or {}).get("disabled")))
+        )
+        if effective_output != "none" and enabled_count < 2:
+            raise AnimationEditError("An animation needs at least two enabled frames.")
+
+        if frame_ms is not None:
+            snapshot = dict(generation.request_snapshot_json or {})
+            anim_opts = dict(snapshot.get("animation") or {})
+            anim_opts["frame_ms"] = int(frame_ms)
+            snapshot["animation"] = anim_opts
+            generation.request_snapshot_json = snapshot
+
         for order, item in enumerate(frames):
             frame = by_id[int(item["id"])]
             meta = dict(frame.meta_json or {})
-            raw_duration = item.get("duration_ms")
+            raw_duration = item.get("duration_ms") if "duration_ms" in item and item.get("duration_ms") is not None else frame_ms
             if raw_duration not in (None, ""):
                 if isinstance(raw_duration, bool):
                     raise AnimationEditError("duration_ms must be a number.")
@@ -1660,12 +1715,14 @@ class GenerationService:
                 if not 20 <= duration <= 10_000:
                     raise AnimationEditError("duration_ms must be between 20 and 10000.")
                 meta["duration_ms"] = duration
+            if "disabled" in item:
+                meta["disabled"] = bool(item["disabled"])
             frame.stack_order = order + 1
             meta["stack_order"] = order + 1
             frame.meta_json = meta
         session.commit()
         session.refresh(generation)
-        await self.rebuild_animation(session, generation)
+        await self.rebuild_animation(session, generation, output=output)
         session.refresh(generation)
         return generation
 
@@ -1736,12 +1793,13 @@ class GenerationService:
                     if not 0 <= frame_index < len(plan.frames):
                         raise AnimationEditError("The frame is not part of the animation plan.")
 
-                    # Identity reference: the keyframe, or the nearest other frame when the keyframe itself is redone.
+                    # Identity reference: prefer enabled frames so a disabled/rejected frame is not copied.
                     others = [f for f in frames if f.id != asset_id]
                     if not others:
                         raise AnimationEditError("At least one other frame is needed as reference.")
+                    candidates = [f for f in others if not (f.meta_json or {}).get("disabled")] or others
                     reference = min(
-                        others, key=lambda f: abs(int((f.meta_json or {}).get("frame_index") or 0) - 0)
+                        candidates, key=lambda f: abs(int((f.meta_json or {}).get("frame_index") or 0) - 0)
                     )
                     reference_data = self.asset_absolute_path(reference, which="file").read_bytes()
                     if transparent:

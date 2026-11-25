@@ -8,10 +8,7 @@ import { useToastStore } from '@/stores/toast'
 import Spinner from '@/components/ui/Spinner.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import GenerationActions from './GenerationActions.vue'
-import AnimationFrameActions from './AnimationFrameActions.vue'
-import FrameEditorModal from './FrameEditorModal.vue'
-import Button from '@/components/ui/Button.vue'
-import { ListOrdered } from 'lucide-vue-next'
+import AnimationSetSection from './AnimationSetSection.vue'
 import { galleryApi } from '@/api/gallery'
 import { describeUsage, formatDuration, formatTimestamp, formatUsage } from '@/utils/format'
 
@@ -33,7 +30,6 @@ const isRetrying = ref(false)
 const isCancelling = ref(false)
 const isDeleteOpen = ref(false)
 const isDeleting = ref(false)
-const isFrameEditorOpen = ref(false)
 const isPromptExpanded = ref(false)
 
 // Agentic stacks are shown in stack order (cover first, then frames as arranged by the user).
@@ -84,13 +80,13 @@ const elapsedSeconds = computed(() => {
 })
 
 const isAnimation = computed(() => props.generation.agentic_kind === 'animation')
-/** Reordering / timing needs a finished animation with at least two frames. */
-const canEditFrames = computed(
+const frameCount = computed(
   () =>
-    isAnimation.value &&
-    props.generation.status === 'succeeded' &&
-    (props.generation.assets || []).filter((a) => a.metadata?.role === 'frame').length > 1
+    (props.generation.assets || []).filter(
+      (a) => a.metadata?.role === 'frame' || (!a.metadata?.role && a.mime === 'image/png')
+    ).length
 )
+const agenticDisplayCount = computed(() => (isAnimation.value ? frameCount.value : assets.value.length))
 const animationOutput = computed(() => props.generation.animation?.output || 'gif')
 const animationBadge = computed(() => {
   if (!isAnimation.value) return 'Agentic Mode'
@@ -282,7 +278,7 @@ function handleImageClick(asset: Asset) {
         <!-- Agentic badge & Set title -->
         <div v-if="generation.is_agentic" class="flex flex-wrap items-center gap-1.5 pb-0.5">
           <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-            🤖 {{ animationBadge }} • {{ assets.length }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} {{ isAnimation ? 'Frames' : 'Items' }}
+            🤖 {{ animationBadge }} • {{ agenticDisplayCount }}{{ generation.total_planned ? ' / ' + generation.total_planned : '' }} {{ isAnimation ? 'Frames' : 'Items' }}
           </span>
           <span v-if="planTitle" class="text-xs font-bold text-slate-800 dark:text-slate-100">
             {{ planTitle }}
@@ -295,16 +291,6 @@ function handleImageClick(asset: Asset) {
           >
             📚 View in Gallery Stack
           </router-link>
-          <Button
-            v-if="canEditFrames"
-            variant="ghost"
-            size="xs"
-            data-testid="edit-frames"
-            @click="isFrameEditorOpen = true"
-          >
-            <template #icon><ListOrdered class="size-3.5" aria-hidden="true" /></template>
-            Edit frames
-          </Button>
           <button
             v-if="assets.length > 1"
             type="button"
@@ -425,7 +411,7 @@ function handleImageClick(asset: Asset) {
 
     <!-- Failed or cancelled -->
     <div
-      v-else-if="isFailed"
+      v-if="!isPending && isFailed"
       :class="[
         'flex flex-col justify-between gap-3 rounded-xl border p-3.5 text-xs sm:flex-row sm:items-center',
         generation.status === 'cancelled'
@@ -462,8 +448,18 @@ function handleImageClick(asset: Asset) {
       </div>
     </div>
 
-    <!-- Results -->
-    <div v-else-if="hasAssets" :class="['grid gap-3', gridClass]">
+    <!-- Agentic Animation: draggable frame set + separate result GIF/WebP row -->
+    <AnimationSetSection
+      v-if="!isPending && isAnimation && (hasAssets || generation.status === 'running')"
+      :generation="generation"
+      :elapsed-seconds="elapsedSeconds"
+      :live-slot-label="liveSlotLabel"
+      @image-loaded="emit('image-loaded')"
+      @delete="isDeleteOpen = true"
+    />
+
+    <!-- Results (standard images, videos, or agentic image sets) -->
+    <div v-else-if="!isPending && hasAssets" :class="['grid gap-3', gridClass]">
       <div v-for="asset in assets" :key="asset.id" class="min-w-0 space-y-2">
         <div
           @click="handleImageClick(asset)"
@@ -559,16 +555,9 @@ function handleImageClick(asset: Asset) {
           <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate" :title="getItemTitle(asset)!">
             {{ getItemTitle(asset) }}
           </span>
-          <div class="flex shrink-0 items-center gap-1">
-            <AnimationFrameActions
-              v-if="isAnimation && asset.metadata?.role === 'frame'"
-              :generation="generation"
-              :asset="asset"
-            />
-            <span v-if="asset.stack_order != null" class="text-[10px] text-slate-400 font-mono">
-              #{{ asset.stack_order + 1 }}
-            </span>
-          </div>
+          <span v-if="asset.stack_order != null" class="text-[10px] text-slate-400 font-mono shrink-0">
+            #{{ asset.stack_order + 1 }}
+          </span>
         </div>
 
         <!-- Normal inline action bar below image: ONLY for a single non-agentic image -->
@@ -620,12 +609,6 @@ function handleImageClick(asset: Asset) {
       <span v-if="generation.duration_seconds" title="Generation time">{{ formatDuration(generation.duration_seconds) }}</span>
       <span :title="generation.created_at">{{ formatTimestamp(generation.created_at) }}</span>
     </footer>
-
-    <FrameEditorModal
-      v-if="isAnimation"
-      v-model:open="isFrameEditorOpen"
-      :generation="generation"
-    />
 
     <ConfirmDialog
       :open="isDeleteOpen"

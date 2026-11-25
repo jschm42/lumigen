@@ -301,3 +301,14 @@ def test_flatten_on_color_fills_transparency_with_key() -> None:
     assert flat.mode == "RGB"
     assert flat.getpixel((5, 5)) == (0, 255, 0)
     assert flat.getpixel((205, 205)) == (200, 30, 30)
+
+
+def test_chroma_key_zeroes_transparent_rgb_and_feathers_border() -> None:
+    image = Image.new("RGB", (20, 20), (0, 255, 0))
+    # Anti-aliased sprite-to-green edge pixel (key dominance 84 lies inside the 78..90 feather ramp).
+    image.putpixel((10, 10), (105, 189, 105))
+    keyed = chroma_key(image, (0, 255, 0), 60)
+    # Fully keyed background zeroes RGB so lossy WebP / GIF quantization never sees neon green.
+    assert keyed.getpixel((0, 0)) == (0, 0, 0, 0)
+    edge_alpha = keyed.getpixel((10, 10))[3]
+    assert 0 < edge_alpha < 255

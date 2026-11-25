@@ -30,6 +30,11 @@ const toastStore = useToastStore()
 const isDownloading = ref(false)
 const isUpscaleModalOpen = ref(false)
 
+function canUpscale(asset: Asset): boolean {
+  if (asset.mime?.startsWith('video/') || asset.mime === 'image/svg+xml' || asset.mime === 'image/gif') return false
+  return asset.metadata?.role !== 'animation'
+}
+
 function handleRemix() {
   if (props.generation) {
     generateStore.remixGeneration(props.generation)
@@ -95,7 +100,7 @@ function handleUpscaleSubmitted(jobId: number) {
 
     <!-- Upscale -->
     <button
-      v-if="!asset.mime?.startsWith('video/') && asset.mime !== 'image/svg+xml'"
+      v-if="canUpscale(asset)"
       type="button"
       @click="isUpscaleModalOpen = true"
       class="p-1 rounded-full text-amber-300 hover:text-amber-200 hover:bg-white/20 transition-colors shrink-0"
@@ -186,7 +191,7 @@ function handleUpscaleSubmitted(jobId: number) {
 
     <!-- Upscale -->
     <button
-      v-if="!asset.mime?.startsWith('video/') && asset.mime !== 'image/svg+xml'"
+      v-if="canUpscale(asset)"
       type="button"
       @click="isUpscaleModalOpen = true"
       class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5"

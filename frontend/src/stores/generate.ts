@@ -493,7 +493,7 @@ export const useGenerateStore = defineStore('generate', () => {
       generations.value = Array.isArray(res?.generations) ? res.generations : []
       sessionUsageTotal.value = res?.usage_total || null
       generations.value.forEach((g) => {
-        if (isRunningStatus(g.status) && (!g.assets || g.assets.length === 0)) {
+        if (isRunningStatus(g.status)) {
           pollJob(g.id)
         }
       })
@@ -623,6 +623,7 @@ export const useGenerateStore = defineStore('generate', () => {
         is_agentic: isAgenticMode.value,
         agentic_step: isAgenticMode.value ? 'planning' : undefined,
         agentic_kind: isAgenticMode.value ? agenticKind.value : undefined,
+        animation: payload.animation,
         total_planned: isAgenticMode.value ? (agenticMaxImages.value ?? undefined) : undefined,
       }
       generations.value.push(optimisticGen)
@@ -651,17 +652,28 @@ export const useGenerateStore = defineStore('generate', () => {
     }
   }
 
-  /** Save a new frame order and durations; returns true when the animation was rebuilt. */
+  /** Save frame order, disabled states, and/or speed and assemble a GIF/WebP. */
   async function updateAnimationFrames(
     gen: Generation,
-    frames: Array<{ id: number; duration_ms: number | null }>
+    frames: Array<{ id: number; duration_ms: number | null; disabled?: boolean }>,
+    options?: { output?: 'gif' | 'webp'; frame_ms?: number | null; silent?: boolean }
   ): Promise<boolean> {
     try {
-      upsertGeneration(await generationApi.updateAnimationFrames(gen.id, frames))
-      toastStore.success(gen.animation?.output === 'none' ? 'Frame order saved.' : 'Frames saved, animation rebuilt.')
+      const updated = await generationApi.updateAnimationFrames(gen.id, frames, options)
+      upsertGeneration(updated)
+      if (!options?.silent) {
+        const effectiveOutput = options?.output || updated.animation?.output
+        if (effectiveOutput === 'webp') {
+          toastStore.success('New WebP animation created.')
+        } else if (effectiveOutput === 'gif') {
+          toastStore.success('New GIF animation created.')
+        } else {
+          toastStore.success('Frame settings saved.')
+        }
+      }
       return true
     } catch (error: any) {
-      toastStore.error(error?.response?.data?.detail || 'Failed to save the frames.')
+      toastStore.error(error?.response?.data?.detail || 'Failed to build animation.')
       return false
     }
   }
@@ -715,6 +727,16 @@ export const useGenerateStore = defineStore('generate', () => {
     if (gen.aspect_ratio) aspectRatio.value = gen.aspect_ratio
     if (gen.resolution) resolution.value = gen.resolution
     if (gen.seed !== undefined && gen.seed !== null) seed.value = String(gen.seed)
+    isAgenticMode.value = !!gen.is_agentic
+    if (gen.is_agentic && gen.agentic_kind) {
+      agenticKind.value = gen.agentic_kind
+      if (gen.agentic_kind === 'animation' && gen.animation) {
+        animationOutput.value = gen.animation.output || 'gif'
+        animationLoop.value = gen.animation.loop || ''
+        animationFrameMs.value = gen.animation.frame_ms ?? null
+        animationTransparent.value = !!gen.animation.transparent
+      }
+    }
     toastStore.info('Prompt & settings applied!')
   }
 

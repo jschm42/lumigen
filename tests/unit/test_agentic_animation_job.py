@@ -610,9 +610,9 @@ async def test_failed_frame_regeneration_keeps_frames_and_reports_error(monkeypa
     assert len(registry.requests[0].input_images) == 1  # keyframe reference
 
 
-def _png() -> bytes:
+def _png(color: tuple[int, int, int] = (0, 255, 0)) -> bytes:
     buffer = BytesIO()
-    Image.new("RGB", (8, 8), (0, 255, 0)).save(buffer, format="PNG")
+    Image.new("RGB", (8, 8), color).save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -624,3 +624,185 @@ def test_asset_url_changes_when_an_id_is_reused() -> None:
     assert asset_url(5, "default/2026/11/walk-230-0.gif", "thumb") == first  # stable for the same file
     assert asset_url(5, "default/2026/11/other-231-1.png", "thumb") != first  # reused id → new URL
     assert asset_url(5, "default/2026/11/walk-230-0.gif", "file").startswith("/assets/5/file?v=")
+
+
+@pytest.mark.asyncio
+async def test_update_animation_frames_can_create_webp_from_frames_only_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generation = _with_animation(_generation(), output="none")
+    generation.status = "succeeded"
+    generation.request_snapshot_json = {
+        **generation.request_snapshot_json,
+        "agentic_plan": _plan(2).to_dict(),
+        "stack_id": "stk_test",
+    }
+    f1 = Asset(
+        id=1,
+        generation_id=generation.id,
+        file_path="f1.png",
+        stack_id="stk_test",
+        stack_order=0,
+        mime="image/png",
+        width=8,
+        height=8,
+        meta_json={"role": "frame", "frame_index": 0, "duration_ms": 100},
+    )
+    f2 = Asset(
+        id=2,
+        generation_id=generation.id,
+        file_path="f2.png",
+        stack_id="stk_test",
+        stack_order=1,
+        mime="image/png",
+        width=8,
+        height=8,
+        meta_json={"role": "frame", "frame_index": 1, "duration_ms": 120},
+    )
+    generation.assets = [f1, f2]
+    service, session, storage, _agentic = _service(monkeypatch, _Registry(), generation, _plan(2))
+    monkeypatch.setattr("app.services.generation_service.crud.get_generation", lambda *_a, **_k: generation)
+    monkeypatch.setattr(service, "asset_absolute_path", lambda *_a, **_k: MagicMock(read_bytes=lambda: _png()))
+
+    await service.update_animation_frames(
+        session,  # type: ignore[arg-type]
+        generation.id,
+        [{"id": 2, "duration_ms": None}, {"id": 1, "duration_ms": None}],
+        output="webp",
+    )
+
+    assert generation.request_snapshot_json["animation"]["output"] == "webp"
+    assert [f2.stack_order, f1.stack_order] == [1, 2]
+    created_cover = next(a for a in session.added if isinstance(a, Asset) and a.meta_json.get("role") == "animation")
+    assert created_cover.mime == "image/webp"
+    assert created_cover.stack_order == 0
+    assert created_cover.meta_json["frame_asset_ids"] == [2, 1]
+    assert "anim-0.webp" in storage.writes
+
+
+def test_serialize_generation_excludes_animation_cover_from_usage_and_computes_agentic_progress() -> None:
+    from app.api.generation import serialize_generation
+
+    gen = _generation()
+    gen.status = "running"
+    gen.request_snapshot_json = {
+        **gen.request_snapshot_json,
+        "total_planned": 4,
+        "current_item_index": 2,
+        "pricing": {"input_per_mtok": None, "output_per_mtok": None, "per_image": 0.05, "currency": "USD"},
+    }
+    gen.assets = [
+        Asset(
+            id=1,
+            generation_id=gen.id,
+            file_path="cover.gif",
+            mime="image/gif",
+            meta_json={"role": "animation", "raw_meta": {}},
+        ),
+        Asset(
+            id=2,
+            generation_id=gen.id,
+            file_path="f1.png",
+            mime="image/png",
+            meta_json={"role": "frame", "raw_meta": {"usage": {"input_tokens": 100, "output_tokens": 200}}},
+        ),
+        Asset(
+            id=3,
+            generation_id=gen.id,
+            file_path="f2.png",
+            mime="image/png",
+            meta_json={"role": "frame", "raw_meta": {"usage": {"input_tokens": 150, "output_tokens": 250}}},
+        ),
+    ]
+    serialized = serialize_generation(gen, session_token="session:test")
+    assert serialized["progress"] == 50  # 2 / 4 * 100
+    assert serialized["usage"] == {
+        "input_tokens": 250,
+        "output_tokens": 450,
+        "total_tokens": 700,
+        "cost": 0.1,  # 2 frames * $0.05 (the GIF cover is not billed as a 3rd provider image)
+        "currency": "USD",
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_animation_frames_skips_disabled_frames_and_applies_frame_ms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.generation_service import AnimationEditError
+
+    generation = _generation()
+    generation.status = "succeeded"
+    generation.request_snapshot_json = {
+        **generation.request_snapshot_json,
+        "agentic_plan": _plan(3).to_dict(),
+        "stack_id": "stk_skip",
+    }
+    frames = [
+        Asset(
+            id=10 + i,
+            generation_id=generation.id,
+            file_path=f"f{i}.png",
+            stack_id="stk_skip",
+            stack_order=i + 1,
+            mime="image/png",
+            width=8,
+            height=8,
+            meta_json={"role": "frame", "frame_index": i, "duration_ms": 100},
+        )
+        for i in range(3)
+    ]
+    generation.assets = list(frames)
+    service, session, storage, _agentic = _service(monkeypatch, _Registry(), generation, _plan(3))
+    monkeypatch.setattr("app.services.generation_service.crud.get_generation", lambda *_a, **_k: generation)
+    by_path = {f"f{i}.png": _png((i * 80, 40, 90)) for i in range(3)}
+    monkeypatch.setattr(
+        service,
+        "asset_absolute_path",
+        lambda asset, **_k: MagicMock(read_bytes=lambda p=asset.file_path: by_path[p]),
+    )
+
+    await service.update_animation_frames(
+        session,  # type: ignore[arg-type]
+        generation.id,
+        [
+            {"id": 10, "duration_ms": None, "disabled": False},
+            {"id": 11, "duration_ms": None, "disabled": True},
+            {"id": 12, "duration_ms": None, "disabled": False},
+        ],
+        output="gif",
+        frame_ms=250,
+    )
+
+    assert generation.request_snapshot_json["animation"]["frame_ms"] == 250
+    assert frames[1].meta_json["disabled"] is True  # kept in the set, not deleted
+    cover = next(a for a in session.added if isinstance(a, Asset) and a.meta_json.get("role") == "animation")
+    assert cover.meta_json["frame_asset_ids"] == [10, 12]
+    assert cover.meta_json["frame_count"] == 2
+    assert cover.meta_json["durations_ms"] == [250, 250]
+    assert Image.open(BytesIO(storage.writes["anim-0.gif"])).n_frames == 2
+
+    # Disabling down to fewer than two enabled frames is rejected.
+    with pytest.raises(AnimationEditError, match="at least two enabled frames"):
+        await service.update_animation_frames(
+            session,  # type: ignore[arg-type]
+            generation.id,
+            [
+                {"id": 10, "duration_ms": None, "disabled": True},
+                {"id": 11, "duration_ms": None, "disabled": True},
+                {"id": 12, "duration_ms": None, "disabled": False},
+            ],
+            output="gif",
+        )
+
+
+@pytest.mark.asyncio
+async def test_animation_job_honors_explicit_user_frame_ms(monkeypatch: pytest.MonkeyPatch) -> None:
+    generation = _with_animation(_generation(), frame_ms=220)
+    service, session, _storage, _agentic = _service(monkeypatch, _Registry(), generation, _plan(2))
+
+    await service.run_generation_job(generation.id)
+
+    assert generation.status == "succeeded", generation.error
+    cover = next(a for a in session.added if isinstance(a, Asset) and a.meta_json.get("role") == "animation")
+    assert cover.meta_json["durations_ms"] == [220, 220]

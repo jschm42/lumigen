@@ -122,6 +122,8 @@ def apply_loop_mode(frames: list[Image.Image], durations: list[int], loop: str) 
 _MAX_BACKGROUND_DRIFT = 140
 #: A pixel whose key channels exceed all other channels by this margin counts as background.
 _KEY_DOMINANCE = 90
+#: Soft ramp width (in channel-distance units) above tolerance for anti-aliased PNG/WebP edges.
+_EDGE_FEATHER = 12
 #: Width in pixels of the ring around the keyed area where colour spill is removed.
 _SPILL_RING_PX = 5
 
@@ -131,6 +133,22 @@ def _channel_distance(image: Image.Image, color: tuple[int, int, int]) -> Image.
     diff = ImageChops.difference(image, Image.new("RGB", image.size, color))
     dr, dg, db = diff.split()
     return ImageChops.lighter(ImageChops.lighter(dr, dg), db)
+
+
+def _clean_transparent_rgb(rgba: Image.Image, threshold: int = 1) -> Image.Image:
+    """Zero RGB channels where ``alpha < threshold`` so invisible key colours cannot bleed or waste palette slots."""
+    red, green, blue, alpha = rgba.split()
+    keep = alpha.point(lambda a: 255 if a >= threshold else 0)
+    zero = Image.new("L", rgba.size, 0)
+    return Image.merge(
+        "RGBA",
+        (
+            Image.composite(red, zero, keep),
+            Image.composite(green, zero, keep),
+            Image.composite(blue, zero, keep),
+            alpha,
+        ),
+    )
 
 
 def estimate_background(image: Image.Image, key_color: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -180,7 +198,17 @@ def _dominance_mask(channels: list[Image.Image], key_color: tuple[int, int, int]
     strong_min = strong[0] if len(strong) == 1 else ImageChops.darker(*strong)
     weak_max = weak[0] if len(weak) == 1 else ImageChops.lighter(*weak)
     margin = ImageChops.subtract(strong_min, weak_max)
-    return margin.point(lambda v: 255 if v >= _KEY_DOMINANCE else 0)
+    feather = max(1, _EDGE_FEATHER)
+    low = _KEY_DOMINANCE - feather
+
+    def _ramp(v: int) -> int:
+        if v >= _KEY_DOMINANCE:
+            return 255
+        if v <= low:
+            return 0
+        return round(255 * (v - low) / feather)
+
+    return margin.point(_ramp)
 
 
 def _despill(channels: list[Image.Image], key_color: tuple[int, int, int]) -> list[Image.Image]:
@@ -217,16 +245,27 @@ def chroma_key(image: Image.Image, key_color: tuple[int, int, int], tolerance: i
     rgb = rgba.convert("RGB")
 
     background = estimate_background(rgb, key_color)
-    key_mask = _channel_distance(rgb, background).point(lambda v: 255 if v <= tolerance else 0)
+    distance = _channel_distance(rgb, background)
+    feather = max(1, _EDGE_FEATHER)
+
+    def _soft_key(v: int) -> int:
+        if v <= tolerance:
+            return 255
+        if v >= tolerance + feather:
+            return 0
+        return round(255 * (tolerance + feather - v) / feather)
+
+    key_mask = distance.point(_soft_key)
     dominance = _dominance_mask(channels, key_color)
     if dominance is not None:
         key_mask = ImageChops.lighter(key_mask, dominance)
-    alpha = Image.composite(Image.new("L", rgba.size, 0), alpha, key_mask)
+    alpha = ImageChops.darker(alpha, ImageChops.invert(key_mask))
 
-    ring = ImageChops.subtract(key_mask.filter(ImageFilter.MaxFilter(_SPILL_RING_PX * 2 + 1)), key_mask)
+    hard_key = key_mask.point(lambda v: 255 if v == 255 else 0)
+    ring = ImageChops.subtract(hard_key.filter(ImageFilter.MaxFilter(_SPILL_RING_PX * 2 + 1)), hard_key)
     despilled = _despill(channels, key_color)
     channels = [Image.composite(despilled[i], channels[i], ring) for i in range(3)]
-    return Image.merge("RGBA", (*channels, alpha))
+    return _clean_transparent_rgb(Image.merge("RGBA", (*channels, alpha)), threshold=1)
 
 
 def _fit_frames(frames: list[Image.Image], max_dimension: int) -> list[Image.Image]:
@@ -280,10 +319,15 @@ def _encode(
 ) -> bytes:
     """Encode RGBA frames to GIF bytes with one shared palette."""
     palette_colors = colors - 1 if options.transparent else colors
+    prepared = (
+        [_clean_transparent_rgb(frame, threshold=ALPHA_THRESHOLD) for frame in frames]
+        if options.transparent
+        else frames
+    )
     # Build one global palette from a montage of all frames to avoid colour shimmer.
-    width, height = frames[0].size
-    montage = Image.new("RGB", (width, height * len(frames)))
-    for idx, frame in enumerate(frames):
+    width, height = prepared[0].size
+    montage = Image.new("RGB", (width, height * len(prepared)))
+    for idx, frame in enumerate(prepared):
         montage.paste(frame.convert("RGB"), (0, idx * height))
     quantized = montage.quantize(colors=palette_colors, method=Image.Quantize.MEDIANCUT)
     raw_palette = (quantized.getpalette() or [0, 0, 0])[: palette_colors * 3]
@@ -298,10 +342,10 @@ def _encode(
 
     encoded: list[Image.Image] = []
     transparent_index = palette_colors  # first unused slot after the quantized colours
-    for frame in frames:
-        indexed = frame.convert("RGB").quantize(palette=palette_image, dither=dither)
+    for source_frame, clean_frame in zip(frames, prepared, strict=True):
+        indexed = clean_frame.convert("RGB").quantize(palette=palette_image, dither=dither)
         if options.transparent:
-            alpha = frame.getchannel("A")
+            alpha = source_frame.getchannel("A")
             mask = alpha.point(lambda v: 255 if v < ALPHA_THRESHOLD else 0)
             indexed.paste(transparent_index, mask=mask)
             indexed.info["transparency"] = transparent_index
@@ -331,12 +375,13 @@ def _encode_webp(
     quality: int,
 ) -> bytes:
     """Encode RGBA frames to an animated WebP (full 8-bit alpha, no palette limit)."""
+    prepared = [_clean_transparent_rgb(frame, threshold=1) for frame in frames] if options.transparent else frames
     buffer = BytesIO()
-    frames[0].save(
+    prepared[0].save(
         buffer,
         format="WEBP",
         save_all=True,
-        append_images=frames[1:],
+        append_images=prepared[1:],
         duration=durations,
         # WebP loop count: 0 = infinite, 1 = play once.
         loop=1 if options.loop == "once" else 0,

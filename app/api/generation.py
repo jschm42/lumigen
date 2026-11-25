@@ -21,7 +21,7 @@ from app.services.sidecar_service import SidecarService
 from app.services.storage_service import StorageService
 from app.services.thumbnail_service import ThumbnailService
 from app.services.upscale_service import UpscaleService
-from app.services.usage_service import build_pricing, compute_usage
+from app.services.usage_service import build_pricing, compute_usage, sum_usage
 
 router = APIRouter(tags=["generation"])
 settings = get_settings()
@@ -553,7 +553,7 @@ def _apply_animation_overrides(
     frame_ms: int | None = None
     if frame_ms_raw not in (None, ""):
         try:
-            frame_ms = max(20, min(int(frame_ms_raw), 1000))
+            frame_ms = max(20, min(int(frame_ms_raw), 10_000))
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail="animation.frame_ms must be a number.") from exc
     transparent_raw = raw.get("transparent")
@@ -609,17 +609,38 @@ def _generation_pricing(gen: Any) -> dict[str, Any] | None:
 
 
 def _generation_usage(gen: Any) -> dict[str, Any] | None:
-    """Return token usage (and cost, when prices are configured) for a finished generation."""
-    assets = list(gen.assets or [])
-    if not assets:
+    """Return token usage (and cost, when prices are configured) for a finished generation.
+
+    Locally assembled animation covers (``role == "animation"``) are excluded so
+    re-encoding never adds image charges; agentic runs sum usage across each
+    separately generated item/frame.
+    """
+    generated_assets = [
+        asset
+        for asset in (gen.assets or [])
+        if (asset.meta_json if isinstance(asset.meta_json, dict) else {}).get("role") != "animation"
+    ]
+    if not generated_assets:
         return None
+    pricing = _generation_pricing(gen)
+    req_snapshot = gen.request_snapshot_json or {}
+    if req_snapshot.get("is_agentic"):
+        per_item = [
+            compute_usage(
+                (asset.meta_json if isinstance(asset.meta_json, dict) else {}).get("raw_meta"),
+                pricing,
+                image_count=1,
+            )
+            for asset in generated_assets
+        ]
+        return sum_usage(per_item)
     raw_meta: dict[str, Any] | None = None
-    for asset in assets:
+    for asset in generated_assets:
         meta = asset.meta_json if isinstance(asset.meta_json, dict) else {}
         if isinstance(meta.get("raw_meta"), dict):
             raw_meta = meta["raw_meta"]
             break
-    return compute_usage(raw_meta, _generation_pricing(gen), image_count=len(assets))
+    return compute_usage(raw_meta, pricing, image_count=len(generated_assets))
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -648,7 +669,7 @@ def serialize_generation(gen: Any, session_token: str | None = None) -> dict[str
     return {
         "id": gen.id,
         "status": gen.status,
-        "progress": _generation_progress(gen.status),
+        "progress": _generation_progress(gen.status, req_snapshot),
         "error_message": gen.error,
         "prompt": gen.prompt_user or gen.prompt_final or "",
         "negative_prompt": req_snapshot.get("negative_prompt", ""),
@@ -826,16 +847,32 @@ async def update_animation_frames(
     payload: dict[str, Any],
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Reorder the frames of a finished agentic animation and/or change their durations.
+    """Reorder frames, toggle disabled frames, and/or change frame durations, then rebuild.
 
-    Body: ``{"frames": [{"id": <asset id>, "duration_ms": <int|null>}, ...]}`` listing
-    every frame once in the new order. The GIF/WebP is rebuilt; returns the generation.
+    Body: ``{"frames": [{"id": <id>, "duration_ms": <int|null>, "disabled": <bool>}], "output": "gif"|"webp", "frame_ms": <int|null>}``
+    listing every frame once in the new order. Disabled frames stay in the set but are
+    excluded from the assembled GIF/WebP.
     """
     frames = payload.get("frames") if isinstance(payload, dict) else None
     if not isinstance(frames, list) or not all(isinstance(item, dict) for item in frames):
         raise HTTPException(status_code=400, detail="frames must be a list of {id, duration_ms} objects.")
+    raw_output = payload.get("output") if isinstance(payload, dict) else None
+    output = str(raw_output).strip().lower() if raw_output not in (None, "") else None
+    raw_frame_ms = payload.get("frame_ms") if isinstance(payload, dict) else None
+    frame_ms: int | None = None
+    if raw_frame_ms not in (None, ""):
+        if isinstance(raw_frame_ms, bool):
+            raise HTTPException(status_code=400, detail="frame_ms must be a number.")
+        try:
+            frame_ms = int(raw_frame_ms)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="frame_ms must be a number.") from exc
+        if not 20 <= frame_ms <= 10_000:
+            raise HTTPException(status_code=400, detail="frame_ms must be between 20 and 10000.")
     try:
-        generation = await generation_service.update_animation_frames(session, generation_id, frames)
+        generation = await generation_service.update_animation_frames(
+            session, generation_id, frames, output=output, frame_ms=frame_ms
+        )
     except AnimationEditError as exc:
         _raise_edit_error(exc)
     return serialize_generation(generation)
@@ -863,12 +900,15 @@ def regenerate_animation_frame(
 @router.post("/jobs/{generation_id}/animation/rebuild")
 async def rebuild_animation(
     generation_id: int,
+    payload: dict[str, Any] | None = None,
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """Re-assemble the GIF/WebP of a finished agentic animation from its current frames."""
+    raw_output = payload.get("output") if isinstance(payload, dict) else None
+    output = str(raw_output).strip().lower() if raw_output not in (None, "") else None
     try:
         generation = generation_service.editable_animation(session, generation_id)
-        await generation_service.rebuild_animation(session, generation)
+        await generation_service.rebuild_animation(session, generation, output=output)
     except AnimationEditError as exc:
         _raise_edit_error(exc)
     session.refresh(generation)

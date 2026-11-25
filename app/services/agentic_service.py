@@ -331,7 +331,7 @@ class AgenticService:
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             }
-            if "gpt-4o" in model or "gpt-3.5-turbo-0125" in model:
+            if any(tag in model for tag in ("gpt-4o", "gpt-4.1", "gpt-3.5-turbo-0125")):
                 payload["response_format"] = {"type": "json_object"}
         elif provider == "openrouter":
             url = self._settings.openrouter_base_url.rstrip("/") + "/chat/completions"
@@ -364,15 +364,21 @@ class AgenticService:
 
     @staticmethod
     def _strip_code_fence(raw_content: str) -> str:
-        """Remove a surrounding Markdown code fence from an LLM JSON answer."""
-        clean = raw_content.strip()
+        """Extract a JSON object from an LLM reply, stripping ``<think>`` blocks, prose and code fences."""
+        clean = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL | re.IGNORECASE).strip()
         if clean.startswith("```json"):
             clean = clean[7:]
         elif clean.startswith("```"):
             clean = clean[3:]
         if clean.endswith("```"):
             clean = clean[:-3]
-        return clean.strip()
+        clean = clean.strip()
+        if not clean.startswith("{"):
+            start = clean.find("{")
+            end = clean.rfind("}")
+            if start != -1 and end > start:
+                return clean[start : end + 1]
+        return clean
 
     def _parse_plan_json(
         self,
@@ -525,7 +531,10 @@ class AgenticService:
             )
 
         if loop == "loop":
-            loop_instruction = "The animation loops: the last frame must lead smoothly back into the first frame."
+            loop_instruction = (
+                "The animation loops: the last frame must be the in-between pose leading smoothly back into frame 1. "
+                "Do NOT repeat frame 1's pose on the last frame (repeating it causes a visible pause at the loop seam)."
+            )
         elif loop == "pingpong":
             loop_instruction = "The animation plays forward and then backward (ping-pong): plan only the forward motion."
         elif loop == "once":
@@ -533,7 +542,7 @@ class AgenticService:
         else:
             loop_instruction = (
                 "Decide 'loop' (cyclic motion), 'pingpong' (motion that reverses) or 'once'. "
-                "For 'loop' the last frame must lead smoothly back into the first frame."
+                "For 'loop' the last frame must transition smoothly back into frame 1 without repeating frame 1's pose."
             )
 
         background_instruction = ""

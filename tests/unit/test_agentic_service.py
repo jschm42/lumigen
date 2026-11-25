@@ -308,3 +308,19 @@ def test_animation_plan_roundtrip_and_keyframe_edit_prompt() -> None:
     # The keyframe is a text-to-image prompt, but regenerating it from another frame needs the edit prompt.
     assert plan.frame_prompt(0).startswith("ranger, left leg forward")
     assert plan.frame_prompt(0, as_edit=True).startswith("Frame 1 of 2 of an animation.")
+
+
+@pytest.mark.asyncio
+async def test_plan_animation_extracts_json_wrapped_in_think_or_prose(monkeypatch: pytest.MonkeyPatch) -> None:
+    wrapped = (
+        "<think>Let me plan 2 distinct poses.</think>\n"
+        "Here is the animation plan:\n"
+        '{"title": "Spin", "subject_anchor": "gold coin", "frames": [{"title": "Front", "pose": "front face"}, '
+        '{"title": "Edge", "pose": "thin side edge"}]}\n'
+        "Hope this helps!"
+    )
+    service, calls = _animation_service(monkeypatch, wrapped)
+    plan = await service.plan_animation("spinning coin", loop="loop")
+    assert plan.title == "Spin"
+    assert [f.title for f in plan.frames] == ["Front", "Edge"]
+    assert "Do NOT repeat frame 1" in calls[0]["messages"][0]["content"]

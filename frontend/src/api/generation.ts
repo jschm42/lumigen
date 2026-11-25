@@ -141,12 +141,17 @@ export const generationApi = {
     return res.data
   },
 
-  /** Reorder frames and/or change their durations (every frame once, new order); the GIF/WebP is rebuilt. */
+  /** Reorder frames, toggle disabled frames, and/or change durations; builds GIF/WebP. */
   async updateAnimationFrames(
     jobId: number,
-    frames: Array<{ id: number; duration_ms: number | null }>
+    frames: Array<{ id: number; duration_ms: number | null; disabled?: boolean }>,
+    options?: { output?: 'gif' | 'webp'; frame_ms?: number | null }
   ): Promise<Generation> {
-    const res = await apiClient.put<Generation>(`/api/jobs/${jobId}/frames`, { frames })
+    const res = await apiClient.put<Generation>(`/api/jobs/${jobId}/frames`, {
+      frames,
+      ...(options?.output ? { output: options.output } : {}),
+      ...(options?.frame_ms != null ? { frame_ms: options.frame_ms } : {}),
+    })
     return res.data
   },
 
