@@ -28,6 +28,36 @@ It does not use the web UI login. Anyone with the token can generate images at y
 cost, so treat it like an API key and serve Lumigen over HTTPS when it is reachable from other
 machines.
 
+## Docker
+
+The container reads `MCP_API_TOKEN` from the `.env` on the host, both with `docker compose`
+(`env_file`) and with `scripts/docker_run.*` / `scripts/docker_update.*` (`--env-file`). No token
+is generated automatically, so the endpoint stays off until you create one on the host:
+
+```bash
+./scripts/generate_mcp_token.sh --write          # or .\scripts\generate_mcp_token.ps1 --write
+./scripts/docker_update.sh                       # recreates the container with the new .env
+# with docker compose instead:
+docker compose up -d --force-recreate app
+```
+
+A plain `docker compose restart` does not re-read `.env`. The run and update scripts print the
+MCP URL, or a hint when no token is set.
+
+Without Python on the host, create the token with
+`openssl rand -base64 32 | tr '+/' '-_' | tr -d '='` and add `MCP_API_TOKEN=<token>` to `.env` by hand.
+
+Endpoint URL:
+
+| Setup | URL |
+|---|---|
+| `docker compose` (nginx with TLS) | `https://<host>/mcp` |
+| `scripts/docker_run.*` | `http://<host>:<PORT>/mcp` (default port 7003) |
+| Client in the same compose network | `http://app:7003/mcp` |
+
+The bundled nginx config gives `/mcp` a 900 s read timeout. Keep `MCP_MAX_WAIT_SECONDS` below that,
+otherwise long generations end in a `504` from nginx before Lumigen answers.
+
 ## Transport
 
 Streamable HTTP in stateless JSON mode: every call is a single `POST /mcp` with a JSON-RPC body and

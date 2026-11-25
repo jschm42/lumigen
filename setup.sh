@@ -95,4 +95,5 @@ echo "Setup completed on $(date)" > .setup_done
 echo "========================================="
 echo "Setup completed successfully!"
 echo "You can now start the application with ./run.sh"
+echo "Optional: enable the MCP endpoint for external apps with ./scripts/generate_mcp_token.sh --write"
 echo "========================================="

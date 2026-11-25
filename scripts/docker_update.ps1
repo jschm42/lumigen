@@ -134,3 +134,8 @@ if (-not [string]::IsNullOrWhiteSpace($SslCertFile) -and -not [string]::IsNullOr
   $Proto = "https"
 }
 Write-Host "Done. Open ${Proto}://127.0.0.1:$PortValue"
+if (-not [string]::IsNullOrWhiteSpace($EnvMap["MCP_API_TOKEN"])) {
+  Write-Host "MCP endpoint: ${Proto}://127.0.0.1:$PortValue/mcp (bearer token = MCP_API_TOKEN in .env)"
+} else {
+  Write-Host "MCP endpoint disabled. Enable it with .\scripts\generate_mcp_token.ps1 --write, then run this script again."
+}

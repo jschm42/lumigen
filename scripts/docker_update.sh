@@ -74,3 +74,8 @@ if [[ -n "${SSL_CERT_FILE:-}" && -n "${SSL_KEY_FILE:-}" ]]; then
   PROTO="https"
 fi
 echo "Done. Open ${PROTO}://127.0.0.1:$PORT"
+if [[ -n "${MCP_API_TOKEN:-}" ]]; then
+  echo "MCP endpoint: ${PROTO}://127.0.0.1:$PORT/mcp (bearer token = MCP_API_TOKEN in .env)"
+else
+  echo "MCP endpoint disabled. Enable it with ./scripts/generate_mcp_token.sh --write, then run this script again."
+fi

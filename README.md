@@ -335,7 +335,8 @@ rebuild the image with `./scripts/docker_update.sh`.
 ```
 
 Open <http://127.0.0.1:7003>. Update after pulling changes with `./scripts/docker_update.sh`
-(or `.ps1`). Data is shared via `DOCKER_DATA_DIR` (default `./data`).
+(or `.ps1`). Data is shared via `DOCKER_DATA_DIR` (default `./data`). To enable the MCP endpoint in the
+container, see [docs/mcp.md](docs/mcp.md#docker).
 
 ---
 

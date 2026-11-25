@@ -90,6 +90,11 @@ PROXY_HEADERS_ENABLED=false
 PROXY_HEADERS_TRUSTED_HOSTS=127.0.0.1
 CSRF_TOKEN_TTL_SECONDS=28800
 AUTH_ALLOW_ONBOARDING_RESET=false
+
+# MCP endpoint for external apps (e.g. TaleWeaver) at /mcp. Disabled while empty.
+# Generate a token with .\scripts\generate_mcp_token.ps1 --write
+MCP_API_TOKEN=
+MCP_MAX_WAIT_SECONDS=300
 "@
 
 $envContent | Set-Content -Path $envPath -Encoding UTF8

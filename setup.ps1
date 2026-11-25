@@ -103,4 +103,5 @@ Write-Host "Creating setup marker file..."
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "Setup completed successfully!" -ForegroundColor Green
 Write-Host "You can now start the application with .\run.ps1" -ForegroundColor Green
+Write-Host "Optional: enable the MCP endpoint for external apps with .\scripts\generate_mcp_token.ps1 --write" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
