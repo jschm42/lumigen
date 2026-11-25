@@ -219,6 +219,8 @@ All settings live in `.env` (see [`.env.example`](.env.example)). The most impor
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Optional e-mail delivery for password reset links |
 | `PUBLIC_BASE_URL` | Base URL used in reset links (defaults to the request URL) |
 | `PROXY_HEADERS_ENABLED` | Trust `X-Forwarded-*` headers behind a reverse proxy |
+| `MCP_API_TOKEN` | Enables the MCP endpoint `/mcp` for external apps; clients send it as bearer token (`scripts/generate_mcp_token.sh` / `.ps1`) |
+| `MCP_MAX_WAIT_SECONDS` | Longest time `generate_image` waits for a finished image (default `300`) |
 
 ### Token usage & costs
 
@@ -266,6 +268,13 @@ Switch Agentic Mode from **Image set** to **Animation**, describe the motion, an
 The GIF/WebP is rebuilt automatically after every change. Frames and the animation live together as one gallery stack, with the animation as cover.
 
 > **Requirements:** a model that accepts reference images (e.g. GPT-Image, Gemini / Nano Banana, FLUX Kontext / FLUX.2+, Seedream). Lumigen detects this from the model ID; you can override it per model under **Admin → Models → Reference images**. Limits for frame count, size, file size and default frame duration are set under **Admin → General**.
+
+### 🔌 MCP endpoint for external apps
+
+Other apps (for example the text adventure engine TaleWeaver) can generate images through Lumigen's
+MCP endpoint at `/mcp`. They pick a model, a profile and gallery categories by name, and get the
+finished images back inline. Enable it with a token from `scripts/generate_mcp_token.sh --write` (or `.ps1`). Tools, parameters and client
+examples: [docs/mcp.md](docs/mcp.md).
 
 ### Accounts & password reset
 

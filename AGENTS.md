@@ -110,6 +110,7 @@ npx.cmd stylelint "app/web/static/css/app.css"     # CSS lint
 | Sidecar contract | `app/services/sidecar_service.py` |
 | Provider registry + policies | `app/providers/registry.py` |
 | Provider HTTP adapters | `app/providers/*_adapter.py` |
+| MCP endpoint for external apps (`/mcp`) | `app/mcp_server.py`, `app/services/external_generation_service.py`, `docs/mcp.md` |
 | Server-rendered templates | `app/web/templates/` |
 | Client JavaScript | `app/web/static/js/` |
 | App-wide CSS | `app/web/static/css/app.css` |

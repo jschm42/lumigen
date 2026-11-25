@@ -113,6 +113,10 @@ class Settings(BaseSettings):
 
     provider_config_key: str | None = None
 
+    # MCP endpoint (/mcp) for external apps. Disabled while no token is set.
+    mcp_api_token: str | None = None
+    mcp_max_wait_seconds: int = 300
+
     session_secret_key: str = "dev-insecure-session-key-change-me"
     session_cookie_name: str = "lumigen_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7

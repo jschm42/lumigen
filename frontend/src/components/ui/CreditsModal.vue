@@ -296,6 +296,14 @@ const openSourceSoftware: SoftwareCredit[] = [
     url: 'https://cryptography.io',
     description: 'Cryptographic primitives for securing sensitive API keys in the local database.',
   },
+  {
+    name: 'MCP Python SDK',
+    category: 'Integrations',
+    license: 'MIT',
+    author: 'Anthropic, PBC & Model Context Protocol contributors',
+    url: 'https://github.com/modelcontextprotocol/python-sdk',
+    description: 'Model Context Protocol server that lets external apps generate images through the /mcp endpoint.',
+  },
 ]
 </script>
 

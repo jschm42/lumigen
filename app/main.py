@@ -50,13 +50,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.routing import Route
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import api_router
+from app.api.generation import generation_service as api_generation_service
 from app.config import get_settings
 from app.db import crud
 from app.db.engine import SessionLocal, get_session, init_db
 from app.db.models import Asset, ChatSession, Generation, User
+from app.mcp_server import MCP_PATH, McpEndpoint, build_mcp_server
 from app.providers.base import ExpandSpec, ProviderError
 from app.providers.fal_upscale_adapter import FalUpscaleService
 from app.providers.registry import ProviderRegistry
@@ -64,6 +67,7 @@ from app.services.agentic_service import AgenticService
 from app.services.auth_service import AuthService
 from app.services.enhancement_service import EnhancementService
 from app.services.expand_service import ExpandService, ExpandValidationError
+from app.services.external_generation_service import ExternalGenerationService
 from app.services.gallery_service import GalleryService
 from app.services.generation_service import GenerationService
 from app.services.import_export_service import (
@@ -202,7 +206,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             template=settings.default_storage_template,
         )
         ensure_default_styles(session)
-    yield
+    async with mcp_endpoint.lifespan():
+        yield
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -274,6 +279,10 @@ def favicon_endpoint() -> FileResponse:
 
 
 app.include_router(api_router)
+
+# MCP endpoint for external apps; authenticates with its own bearer token.
+mcp_endpoint = McpEndpoint(build_mcp_server(ExternalGenerationService(api_generation_service)))
+app.router.routes.append(Route(MCP_PATH, endpoint=mcp_endpoint))
 
 storage_service = StorageService(max_slug_length=settings.max_slug_length)
 thumbnail_service = ThumbnailService(storage_service, max_px=settings.thumb_max_px)
@@ -567,7 +576,8 @@ async def auth_guard_middleware(request: Request, call_next):
         or path == "/favicon.ico"
         or path == "/app-logo.svg"
     )
-    if is_static:
+    # /mcp checks its own bearer token instead of the browser session.
+    if is_static or path == MCP_PATH:
         return await call_next(request)
 
     session_payload = read_session_cookie_payload(request)

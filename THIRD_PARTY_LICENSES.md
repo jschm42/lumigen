@@ -32,6 +32,12 @@ This file tracks third-party assets that are redistributed with Lumigen.
 - Local license text: `licenses/OFL-1.1.txt`
 - Local notice: `licenses/fonts-NOTICE.md`
 
+## MCP Python SDK
+
+- Python dependency: `mcp` (serves the `/mcp` endpoint, see `docs/mcp.md`)
+- Upstream: https://github.com/modelcontextprotocol/python-sdk
+- License: MIT
+
 ## AI provider integrations
 
 Lumigen talks to the following image-generation APIs. No provider code, models or assets
