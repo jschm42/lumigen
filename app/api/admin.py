@@ -194,53 +194,95 @@ async def test_provider_connection(
     return {"success": True, "message": f"Connection to {provider.upper()} tested successfully."}
 
 
+_ANTHROPIC_CURATED_MODELS = [
+    "claude-sonnet-4-20250514",
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
+]
+
+
+async def _discover_anthropic_models(api_key: str | None) -> list[str]:
+    """Query Anthropic's models API when an API key is available, else return curated defaults."""
+    if not api_key:
+        return list(_ANTHROPIC_CURATED_MODELS)
+
+    import httpx
+
+    timeout = httpx.Timeout(
+        settings.llm_models_timeout_seconds,
+        connect=settings.llm_models_connect_timeout_seconds,
+    )
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.get(
+            "https://api.anthropic.com/v1/models",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
+        )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Anthropic models request failed ({response.status_code}).",
+        )
+    body = response.json()
+    models = [
+        str(item["id"]).strip()
+        for item in (body.get("data") or [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip()
+    ]
+    return sorted(set(models)) or list(_ANTHROPIC_CURATED_MODELS)
+
+
 @router.get("/providers/{provider}/discover-models")
 async def discover_provider_models(
     provider: str,
+    purpose: str = "image",
+    reasoning_model_id: int | None = None,
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Discover available models from provider."""
-    # Return standard/discovered model presets
-    default_discovery = {
-        "openrouter": [
-            "black-forest-labs/flux-1-schnell",
-            "black-forest-labs/flux-1-dev",
-            "stabilityai/stable-diffusion-3.5-large",
-            "google/imagen-3",
-        ],
-        "openai": [
-            "dall-e-3",
-            "dall-e-2",
-        ],
-        "google": [
-            "imagen-3.0-generate-002",
-        ],
-        "bfl": [
-            "flux-3-image",
-            "flux-2-pro",
-            "flux-2-flex",
-            "flux-2-max",
-            "flux-2-klein-9b",
-            "flux-pro-1.1",
-            "flux-dev",
-        ],
-    }
-    provider_name = provider.lower()
-    models = default_discovery.get(provider_name)
+    """Discover available models from *provider* using live APIs where supported."""
+    _ = session
     from app.api.generation import provider_registry
+    from app.providers.base import ProviderConfigError, ProviderError
 
-    if models is None:
-        # Newer adapters expose a curated model list without network access.
-        try:
-            models = await provider_registry.get(provider_name).list_models(settings)
-        except Exception:
-            models = []
+    provider_name = provider.strip().lower()
+    normalized_purpose = purpose.strip().lower()
+    if normalized_purpose not in {"image", "reasoning"}:
+        raise HTTPException(status_code=400, detail="purpose must be 'image' or 'reasoning'.")
+
+    api_key = model_config_service.get_default_api_key(provider_name)
+    if reasoning_model_id is not None:
+        custom_key = model_config_service.get_reasoning_model_api_key(reasoning_model_id)
+        if custom_key:
+            api_key = custom_key
+
+    if provider_name == "anthropic" and normalized_purpose == "reasoning":
+        models = await _discover_anthropic_models(api_key)
+        return {
+            "models": models,
+            "count": len(models),
+            "media_types": {},
+            "video_models": [],
+        }
+
+    try:
+        if normalized_purpose == "reasoning":
+            models = await provider_registry.list_reasoning_models(provider_name, api_key=api_key)
+        else:
+            models = await provider_registry.list_models(provider_name, api_key=api_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_name}") from exc
+    except ProviderConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     # Annotate every discovered model with the media type it produces so the admin
     # UI can distinguish image from video models (e.g. FAL.ai video models).
-    media_types = {
-        model: provider_registry.media_type_for(provider_name, model) for model in models
-    }
+    media_types = (
+        {model: provider_registry.media_type_for(provider_name, model) for model in models}
+        if normalized_purpose == "image"
+        else {}
+    )
     return {
         "models": models,
         "count": len(models),

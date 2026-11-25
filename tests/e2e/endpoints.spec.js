@@ -72,7 +72,7 @@ test.describe.serial("OpenAI-compatible endpoint", () => {
     await editor.getByLabel("Provider").selectOption("openai_compatible");
     await expect(editor.getByLabel("Endpoint")).toHaveValue(/\d+/); // single endpoint is preselected
     await editor.getByTestId("load-endpoint-models").click();
-    await editor.getByLabel("Pick a model from the endpoint").selectOption("fake-flux");
+    await editor.getByRole("option", { name: "fake-flux" }).click();
     await expect(editor.getByLabel("Model Identifier")).toHaveValue("fake-flux");
     await editor.getByLabel("Display Name").fill("Fake Flux (LocalAI)");
     await editor.getByRole("button", { name: "Save" }).click();
@@ -114,7 +114,7 @@ test.describe.serial("ComfyUI endpoint", () => {
     const editor = page.getByRole("dialog", { name: "Add New Model" });
     await editor.getByLabel("Provider").selectOption("comfyui");
     await editor.getByTestId("load-endpoint-models").click();
-    await editor.getByLabel("Pick a model from the endpoint").selectOption("fake_sdxl.safetensors");
+    await editor.getByRole("option", { name: "fake_sdxl.safetensors" }).click();
     await editor.getByLabel("Display Name").fill("Fake SDXL (ComfyUI)");
 
     await editor.getByText("Use a custom workflow").click();

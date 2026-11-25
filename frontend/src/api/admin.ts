@@ -42,9 +42,13 @@ export const adminApi = {
   },
 
   async discoverModels(
-    provider: string
+    provider: string,
+    options?: { purpose?: 'image' | 'reasoning'; reasoningModelId?: number },
   ): Promise<{ models: string[]; count: number; media_types?: Record<string, string>; video_models?: string[] }> {
-    const res = await apiClient.get(`/api/admin/providers/${provider}/discover-models`)
+    const params: Record<string, string | number> = {}
+    if (options?.purpose) params.purpose = options.purpose
+    if (options?.reasoningModelId != null) params.reasoning_model_id = options.reasoningModelId
+    const res = await apiClient.get(`/api/admin/providers/${provider}/discover-models`, { params })
     return res.data
   },
 

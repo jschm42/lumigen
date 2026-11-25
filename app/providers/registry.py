@@ -251,6 +251,20 @@ class ProviderRegistry:
         normalized = [str(item).strip() for item in models if str(item).strip()]
         return sorted(set(normalized))
 
+    async def list_reasoning_models(self, provider: str, api_key: str | None = None) -> list[str]:
+        """Return sorted, deduplicated LLM/reasoning model IDs available from *provider*."""
+        provider_name = provider.strip().lower()
+        if provider_name in {"openai", "openrouter", "google"}:
+            adapter = self.get(provider_name)
+            if isinstance(adapter, (OpenAIAdapter, OpenRouterAdapter, GoogleAdapter)):
+                models = await adapter.list_models(
+                    self._settings_for_provider(provider_name, api_key),
+                    image_only=False,
+                )
+                normalized = [str(item).strip() for item in models if str(item).strip()]
+                return sorted(set(normalized))
+        return await self.list_models(provider_name, api_key=api_key)
+
     async def test_connection(
         self,
         provider: str,

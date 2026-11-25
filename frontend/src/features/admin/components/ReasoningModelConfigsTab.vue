@@ -11,6 +11,7 @@ import Switch from '@/components/ui/Switch.vue'
 import Select from '@/components/ui/Select.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
+import ModelDiscovery, { type DiscoveredModelItem } from './ModelDiscovery.vue'
 import type { ReasoningModelConfig } from '@/types'
 import { useConfirm } from '@/composables/useConfirm'
 
@@ -41,6 +42,28 @@ const columns = computed<DataTableColumn[]>(() => [
 
 const isEditorOpen = ref(false)
 const customApiKey = ref('')
+const selectedDiscoveryProvider = ref('openrouter')
+const configuredModelIds = computed(() => adminStore.reasoningModels.map((m) => m.model_identifier))
+const editorProviderHasKey = computed(() => {
+  const provider = editingConfig.value.provider || 'openrouter'
+  if (editingConfig.value.use_custom_api_key && editingConfig.value.has_custom_api_key) return true
+  if (provider === 'anthropic') return true
+  return Boolean(adminStore.providerStatuses.find((p) => p.provider === provider)?.has_key)
+})
+
+function pickDiscoveredModel(item: DiscoveredModelItem) {
+  editingConfig.value.model_identifier = item.id
+  if (!editingConfig.value.name) {
+    editingConfig.value.name = item.id.split('/').pop()?.slice(0, 50) || item.id
+  }
+}
+
+function addDiscovered(item: DiscoveredModelItem) {
+  openNew()
+  editingConfig.value.provider = selectedDiscoveryProvider.value
+  editingConfig.value.model_identifier = item.id
+  editingConfig.value.name = item.id.split('/').pop()?.slice(0, 50) || item.id
+}
 
 const editingConfig = ref<Partial<ReasoningModelConfig>>({
   id: undefined,
@@ -198,6 +221,19 @@ function priceSummary(model: ReasoningModelConfig): string {
       </template>
     </DataTable>
 
+    <!-- Discover Reasoning Models -->
+    <ModelDiscovery
+      mode="catalog"
+      v-model:provider="selectedDiscoveryProvider"
+      :providers="REASONING_PROVIDERS"
+      purpose="reasoning"
+      :configured-ids="configuredModelIds"
+      title="Discover Reasoning Models from Provider"
+      description="Fetch available LLM and reasoning models from a provider and add them with one click."
+      button-label="Search Available Models"
+      @select="addDiscovered"
+    />
+
     <!-- Edit / Add Modal -->
     <Modal
       :open="isEditorOpen"
@@ -216,11 +252,19 @@ function priceSummary(model: ReasoningModelConfig): string {
           <Select v-model="editingConfig.provider" label="Provider" :options="REASONING_PROVIDERS" />
         </div>
 
-        <Input
+        <ModelDiscovery
+          id="reasoning-model-identifier"
+          mode="combobox"
           label="Model Identifier"
           placeholder="e.g. anthropic/claude-3.7-sonnet"
+          :required="true"
           v-model="editingConfig.model_identifier"
-          required
+          :provider="editingConfig.provider || 'openrouter'"
+          purpose="reasoning"
+          :reasoning-model-id="editingConfig.id"
+          :auto-discover="true"
+          :can-auto-discover="editorProviderHasKey"
+          @select="pickDiscoveredModel"
         />
 
         <Input

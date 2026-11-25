@@ -29,7 +29,8 @@ class GoogleAdapter(ProviderAdapter):
     BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
     _logger = logging.getLogger(__name__)
 
-    async def list_models(self, settings: Settings) -> list[str]:
+    async def list_models(self, settings: Settings, *, image_only: bool = True) -> list[str]:
+        """List available Google Gemini/Imagen models, filtering to image models by default."""
         if not settings.google_api_key:
             raise ProviderConfigError("Google adapter requires GOOGLE_API_KEY in .env.")
 
@@ -54,7 +55,9 @@ class GoogleAdapter(ProviderAdapter):
         except Exception as exc:
             raise ProviderError("Google returned a non-JSON models response.") from exc
 
-        models: list[str] = []
+        all_models: list[str] = []
+        image_models: list[str] = []
+        text_models: list[str] = []
         for item in body.get("models") or []:
             if not isinstance(item, dict):
                 continue
@@ -65,12 +68,22 @@ class GoogleAdapter(ProviderAdapter):
             method_values = {str(value).strip() for value in methods if str(value).strip()}
             if "generateContent" not in method_values and "predict" not in method_values:
                 continue
-            models.append(self._normalize_model_name(model_name))
+            normalized = self._normalize_model_name(model_name)
+            all_models.append(normalized)
 
-        return models or [
-            "gemini-2.0-flash-preview-image-generation",
-            "imagen-3.0-generate-002",
-        ]
+            lowered = normalized.lower()
+            is_image = "predict" in method_values or "image" in lowered or "imagen" in lowered
+            if is_image:
+                image_models.append(normalized)
+            if "generateContent" in method_values and not is_image:
+                text_models.append(normalized)
+
+        if image_only:
+            return image_models or all_models or [
+                "gemini-2.0-flash-preview-image-generation",
+                "imagen-3.0-generate-002",
+            ]
+        return text_models or all_models or ["gemini-2.5-flash", "gemini-2.5-pro"]
 
     async def generate(self, request: ProviderGenerationRequest, settings: Settings) -> ProviderGenerationResult:
         if not settings.google_api_key:

@@ -56,13 +56,16 @@ class OpenRouterAdapter(ProviderAdapter):
     homepage_url = "https://openrouter.ai/settings/keys"
     _logger = logging.getLogger(__name__)
 
-    async def list_models(self, settings: Settings) -> list[str]:
+    async def list_models(self, settings: Settings, *, image_only: bool = True) -> list[str]:
+        """List available OpenRouter models, filtering to image-output models by default."""
         if not settings.openrouter_api_key:
             raise ProviderConfigError(
                 "OpenRouter adapter requires OPENROUTER_API_KEY in .env."
             )
 
-        url = settings.openrouter_base_url.rstrip("/") + "/models"
+        # Without output_modalities=all, OpenRouter only returns text-output models
+        # and omits pure image models (e.g. FLUX, gpt-image-*).
+        url = settings.openrouter_base_url.rstrip("/") + "/models?output_modalities=all"
         headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
         timeout = httpx.Timeout(
             settings.llm_models_timeout_seconds,
@@ -86,14 +89,38 @@ class OpenRouterAdapter(ProviderAdapter):
                 "OpenRouter returned a non-JSON models response."
             ) from exc
 
-        models: list[str] = []
+        all_models: list[str] = []
+        image_models: list[str] = []
+        text_models: list[str] = []
         for item in body.get("data") or []:
             if not isinstance(item, dict):
                 continue
             model_id = item.get("id") or item.get("name")
-            if isinstance(model_id, str) and model_id.strip():
-                models.append(model_id.strip())
-        return models
+            if not isinstance(model_id, str) or not model_id.strip():
+                continue
+            cleaned_id = model_id.strip()
+            all_models.append(cleaned_id)
+
+            arch = item.get("architecture")
+            if isinstance(arch, dict):
+                raw_out = arch.get("output_modalities") or []
+                out_modalities = {str(m).strip().lower() for m in raw_out if str(m).strip()}
+                modality = str(arch.get("modality") or "").lower()
+                output_side = modality.split("->", 1)[1] if "->" in modality else modality
+                is_image_out = "image" in out_modalities or "image" in output_side
+                is_text_out = (
+                    "text" in out_modalities
+                    or "text" in output_side
+                    or (not out_modalities and not is_image_out)
+                )
+                if is_image_out:
+                    image_models.append(cleaned_id)
+                if is_text_out and not (out_modalities == {"image"}):
+                    text_models.append(cleaned_id)
+
+        if image_only:
+            return image_models or all_models
+        return text_models or all_models
 
     async def generate(
         self, request: ProviderGenerationRequest, settings: Settings

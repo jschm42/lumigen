@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { RefreshCw } from 'lucide-vue-next'
 import { useAdminStore } from '@/stores/admin'
-import { adminApi } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
@@ -11,6 +11,7 @@ import Card from '@/components/ui/Card.vue'
 import Select from '@/components/ui/Select.vue'
 import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
+import ModelDiscovery, { type DiscoveredModelItem } from './ModelDiscovery.vue'
 import type { DiscoveredUpscaleModel, UpscaleModel } from '@/types'
 import { useConfirm } from '@/composables/useConfirm'
 
@@ -19,7 +20,7 @@ const confirm = useConfirm()
 const toastStore = useToastStore()
 
 const isEditorOpen = ref(false)
-const isDiscovering = ref(false)
+const discoveryRef = ref<InstanceType<typeof ModelDiscovery> | null>(null)
 const discoveredModels = ref<DiscoveredUpscaleModel[]>([])
 const selectedPreset = ref<string>('custom')
 
@@ -56,11 +57,33 @@ const falStatus = computed(() => {
   return adminStore.providerStatuses.find((p) => p.provider === 'fal')
 })
 
+const configuredUpscaleIds = computed(() => adminStore.upscaleModels.map((m) => m.model_identifier))
+
 onMounted(async () => {
   adminStore.fetchProviderKeys()
   adminStore.fetchUpscaleModels()
-  handleDiscover()
 })
+
+function onModelsLoaded(items: DiscoveredModelItem[]) {
+  discoveredModels.value = items.map((item) => ({
+    endpoint_id: item.id,
+    name: item.label || item.id,
+  }))
+}
+
+function addDiscovered(item: DiscoveredModelItem) {
+  editingModel.value = {
+    id: undefined,
+    name: item.label || item.id,
+    model_identifier: item.id,
+    is_enabled: true,
+    is_default: false,
+    params_json: {},
+  }
+  selectedPreset.value = item.id
+  upscaleFactorInput.value = 2
+  isEditorOpen.value = true
+}
 
 function openNew() {
   selectedPreset.value = discoveredModels.value.length > 0 ? discoveredModels.value[0].endpoint_id : 'custom'
@@ -123,16 +146,8 @@ async function handleSave() {
   }
 }
 
-async function handleDiscover() {
-  isDiscovering.value = true
-  try {
-    const res = await adminApi.discoverUpscaleModels()
-    discoveredModels.value = res.models || []
-  } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Failed to discover models from FAL.ai.')
-  } finally {
-    isDiscovering.value = false
-  }
+function handleDiscover() {
+  discoveryRef.value?.discover(false)
 }
 
 async function handleSetDefault(id: number) {
@@ -165,8 +180,10 @@ async function handleDelete(id: number) {
       </div>
 
       <div class="flex items-center gap-2">
-        <Button variant="secondary" size="sm" :loading="isDiscovering" @click="handleDiscover">
-          <template #icon>🔄</template>
+        <Button variant="secondary" size="sm" @click="handleDiscover">
+          <template #icon>
+            <RefreshCw class="size-3.5" aria-hidden="true" />
+          </template>
           Refresh FAL Models
         </Button>
         <Button variant="primary" size="sm" @click="openNew">
@@ -231,38 +248,20 @@ async function handleDelete(id: number) {
 
 
     <!-- Quick Add from Discovered Models -->
-    <div v-if="discoveredModels.length > 0" class="p-4 rounded-2xl border border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-slate-900/70 space-y-3">
-      <div class="flex items-center justify-between">
-        <div>
-          <h4 class="font-bold text-slate-900 dark:text-white">Available FAL.ai Models</h4>
-          <p class="text-slate-500 text-[11px]">Click on any model to configure it for upscaling in your studio.</p>
-        </div>
-        <span class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-          {{ discoveredModels.length }} models found
-        </span>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-        <div
-          v-for="m in discoveredModels"
-          :key="m.endpoint_id"
-          @click="editingModel = { id: undefined, name: m.name, model_identifier: m.endpoint_id, is_enabled: true, is_default: false, params_json: {} }; selectedPreset = m.endpoint_id; isEditorOpen = true"
-          class="p-2.5 rounded-xl border border-slate-200/60 dark:border-white/5 bg-slate-50/50 dark:bg-slate-800/40 hover:border-sky-500/50 hover:bg-sky-500/5 transition-all cursor-pointer flex items-center justify-between group"
-        >
-          <div class="space-y-0.5 overflow-hidden pr-2">
-            <div class="font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-sky-500 transition-colors">
-              {{ m.name }}
-            </div>
-            <div class="font-mono text-[10px] text-slate-400 truncate">
-              {{ m.endpoint_id }}
-            </div>
-          </div>
-          <span class="text-xs text-sky-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-            + Use
-          </span>
-        </div>
-      </div>
-    </div>
+    <ModelDiscovery
+      ref="discoveryRef"
+      mode="catalog"
+      provider="fal"
+      purpose="upscale"
+      :auto-discover="true"
+      :can-auto-discover="true"
+      :configured-ids="configuredUpscaleIds"
+      title="Available FAL.ai Models"
+      description="Click on any model to configure it for upscaling in your studio."
+      button-label="Refresh FAL Models"
+      @loaded="onModelsLoaded"
+      @select="addDiscovered"
+    />
 
     <!-- Edit/Add Modal -->
     <Modal :open="isEditorOpen" :title="editingModel.id ? 'Edit Upscale Model' : 'Add Upscale Model'" @update:open="isEditorOpen = $event" @close="isEditorOpen = false">

@@ -86,7 +86,8 @@ class OpenAIAdapter(ProviderAdapter):
         "moderation",
     }
 
-    async def list_models(self, settings: Settings) -> list[str]:
+    async def list_models(self, settings: Settings, *, image_only: bool = True) -> list[str]:
+        """List available OpenAI models, filtering to image models by default."""
         if not settings.openai_api_key:
             raise ProviderConfigError("OpenAI adapter requires OPENAI_API_KEY in .env.")
 
@@ -116,6 +117,11 @@ class OpenAIAdapter(ProviderAdapter):
                 model_id = item.get("id")
                 if isinstance(model_id, str) and model_id.strip():
                     model_ids.append(model_id.strip())
+
+        if not image_only:
+            excluded = ("dall-e", "gpt-image", "whisper", "tts-", "text-embedding", "omni-moderation", "text-moderation")
+            llm_like = [item for item in model_ids if not any(token in item for token in excluded)]
+            return llm_like or model_ids
 
         image_like = [item for item in model_ids if "image" in item or item.startswith("dall-e")]
         return image_like or model_ids

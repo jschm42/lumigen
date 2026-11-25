@@ -99,6 +99,40 @@ async def test_discover_seedance_models_are_all_video(db_session: Session) -> No
     assert len(res["video_models"]) == res["count"]
 
 
+async def test_discover_provider_models_supports_reasoning_and_missing_key_error(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from fastapi import HTTPException
+    from app.api import generation as generation_api
+    from app.providers.base import ProviderConfigError
+
+    async def fake_list_reasoning(provider: str, api_key: str | None = None) -> list[str]:
+        assert provider == "openai"
+        return ["gpt-4o", "o3-mini"]
+
+    monkeypatch.setattr(
+        generation_api.provider_registry, "list_reasoning_models", fake_list_reasoning
+    )
+
+    res = await admin_api.discover_provider_models("openai", purpose="reasoning", session=db_session)
+    assert res["models"] == ["gpt-4o", "o3-mini"]
+    assert res["media_types"] == {}
+
+    anthropic_res = await admin_api.discover_provider_models(
+        "anthropic", purpose="reasoning", session=db_session
+    )
+    assert anthropic_res["count"] > 0
+
+    async def failing_list_models(provider: str, api_key: str | None = None) -> list[str]:
+        raise ProviderConfigError("Missing API key")
+
+    monkeypatch.setattr(generation_api.provider_registry, "list_models", failing_list_models)
+    with pytest.raises(HTTPException) as exc_info:
+        await admin_api.discover_provider_models("openai", session=db_session)
+    assert exc_info.value.status_code == 400
+    assert "Missing API key" in str(exc_info.value.detail)
+
+
 def test_admin_model_serialization_includes_media_type(db_session: Session) -> None:
     cfg = crud.create_model_config(
         db_session, name="FAL Veo", provider="fal", model="fal-ai/veo3"

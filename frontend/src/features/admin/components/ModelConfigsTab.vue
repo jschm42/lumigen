@@ -3,8 +3,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useAdminStore } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
-import { adminApi } from '@/api/admin'
-import { useToastStore } from '@/stores/toast'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
@@ -14,11 +12,11 @@ import Badge from '@/components/ui/Badge.vue'
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import Textarea from '@/components/ui/Textarea.vue'
+import ModelDiscovery, { type DiscoveredModelItem } from './ModelDiscovery.vue'
 import type { EndpointKind, ModelConfig } from '@/types'
 
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
-const toastStore = useToastStore()
 const confirm = useConfirm()
 
 const columns = computed<DataTableColumn[]>(() => [
@@ -114,8 +112,6 @@ const modelIdentifierPlaceholder = computed(() => {
 const useCustomWorkflow = ref(false)
 const workflowText = ref('')
 const responseFormat = ref('b64_json')
-const endpointModels = ref<string[]>([])
-const isLoadingEndpointModels = ref(false)
 
 function modelLabel(model: ModelConfig): string {
   if (model.endpoint_name) return `${providerLabel(model.provider)} · ${model.endpoint_name}`
@@ -130,7 +126,6 @@ function fillEndpointOptions(config: Partial<ModelConfig>) {
   workflowText.value = options.workflow ? JSON.stringify(options.workflow, null, 2) : ''
   if (!('response_format' in options)) responseFormat.value = 'b64_json'
   else responseFormat.value = options.response_format ? String(options.response_format) : 'none'
-  endpointModels.value = []
 }
 
 function buildProviderOptions(): Record<string, any> | null {
@@ -144,25 +139,9 @@ function buildProviderOptions(): Record<string, any> | null {
   return null
 }
 
-async function loadEndpointModels() {
-  const endpointId = editingConfig.value.endpoint_id
-  if (!endpointId) return
-  isLoadingEndpointModels.value = true
-  try {
-    endpointModels.value = await adminApi.listEndpointModels(endpointId)
-    if (endpointModels.value.length === 0) toastStore.info('The endpoint reported no models.')
-  } catch (error: any) {
-    endpointModels.value = []
-    toastStore.error(error?.response?.data?.detail || 'Could not load models from the endpoint.')
-  } finally {
-    isLoadingEndpointModels.value = false
-  }
-}
-
-function pickEndpointModel(model: string | number) {
-  const id = String(model)
-  editingConfig.value.model_identifier = id
-  if (!editingConfig.value.name) editingConfig.value.name = id.split('/').pop()?.slice(0, 50) || id
+function pickDiscoveredModel(item: DiscoveredModelItem) {
+  editingConfig.value.model_identifier = item.id
+  if (!editingConfig.value.name) editingConfig.value.name = item.id.split('/').pop()?.slice(0, 50) || item.id
 }
 
 function fillPrices(config: Partial<ModelConfig>) {
@@ -183,11 +162,12 @@ function priceSummary(model: ModelConfig): string {
 }
 
 const isEditorOpen = ref(false)
-const isDiscovering = ref(false)
 const selectedProvider = ref('openrouter')
-const discoveredModels = ref<string[]>([])
-// Provider-reported media type per discovered model (image/video).
-const discoveredMediaTypes = ref<Record<string, string>>({})
+const configuredModelIds = computed(() => adminStore.modelConfigs.map((m) => m.model_identifier))
+const editorProviderHasKey = computed(() => {
+  if (isEndpointProvider.value) return Boolean(editingConfig.value.endpoint_id)
+  return Boolean(adminStore.providerStatuses.find((p) => p.provider === editingConfig.value.provider)?.has_key)
+})
 
 const editingConfig = ref<Partial<ModelConfig>>({
   id: undefined,
@@ -229,7 +209,7 @@ function openEdit(config: ModelConfig) {
   isEditorOpen.value = true
 }
 
-// Switching the provider drops an endpoint of the wrong kind and stale discoveries.
+// Switching the provider drops an endpoint of the wrong kind.
 watch(
   () => editingConfig.value.provider,
   (provider) => {
@@ -238,15 +218,14 @@ watch(
       const candidates = adminStore.endpoints.filter((e) => e.kind === provider)
       editingConfig.value.endpoint_id = candidates.length === 1 ? candidates[0].id : null
     }
-    endpointModels.value = []
   },
 )
 
-function addDiscovered(model: string) {
+function addDiscovered(item: DiscoveredModelItem) {
   openNew()
   editingConfig.value.provider = selectedProvider.value
-  editingConfig.value.model_identifier = model
-  editingConfig.value.name = model.split('/').pop()?.slice(0, 50) || model
+  editingConfig.value.model_identifier = item.id
+  editingConfig.value.name = item.id.split('/').pop()?.slice(0, 50) || item.id
 }
 
 async function handleSave() {
@@ -276,25 +255,6 @@ async function handleSave() {
     isEditorOpen.value = false
   } catch (_error) {
     // The store shows the API error (e.g. invalid workflow); keep the editor open.
-  }
-}
-
-async function handleDiscover() {
-  isDiscovering.value = true
-  try {
-    const res = await adminApi.discoverModels(selectedProvider.value)
-    discoveredModels.value = res.models
-    discoveredMediaTypes.value = res.media_types || {}
-    const videoCount = res.video_models?.length || 0
-    toastStore.success(
-      videoCount > 0
-        ? `Found ${res.count} models from provider (${videoCount} video).`
-        : `Found ${res.count} models from provider.`
-    )
-  } catch (error: any) {
-    toastStore.error(error?.response?.data?.detail || 'Model discovery failed.')
-  } finally {
-    isDiscovering.value = false
   }
 }
 </script>
@@ -351,44 +311,17 @@ async function handleDiscover() {
     </DataTable>
 
     <!-- Provider Model Discovery Box -->
-    <div class="p-4 rounded-2xl border border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-slate-900/70 space-y-3">
-      <h4 class="font-bold text-slate-900 dark:text-white">Discover Models from Provider</h4>
-      <div class="flex items-center gap-3">
-        <Select
-          v-model="selectedProvider"
-          :options="providerOptions"
-          size="sm"
-          class="w-48"
-          aria-label="Provider to discover models from"
-        />
-        <Button
-          variant="secondary"
-          size="sm"
-          :loading="isDiscovering"
-          @click="handleDiscover"
-        >
-          Search Available Models
-        </Button>
-      </div>
-
-      <div v-if="discoveredModels.length > 0" class="max-h-40 overflow-y-auto space-y-1 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl">
-        <div
-          v-for="m in discoveredModels"
-          :key="m"
-          class="flex items-center justify-between px-2 py-1 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded cursor-pointer"
-          @click="addDiscovered(m)"
-        >
-          <span class="font-mono flex items-center gap-1.5">
-            {{ m }}
-            <span
-              v-if="discoveredMediaTypes[m] === 'video'"
-              class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300"
-            >🎬 Video</span>
-          </span>
-          <span class="text-sky-500 font-semibold text-[10px]">+ Add as configuration</span>
-        </div>
-      </div>
-    </div>
+    <ModelDiscovery
+      mode="catalog"
+      v-model:provider="selectedProvider"
+      :providers="providerOptions"
+      purpose="image"
+      :configured-ids="configuredModelIds"
+      title="Discover Models from Provider"
+      description="Query live provider catalogs and add available models with one click."
+      button-label="Search Available Models"
+      @select="addDiscovered"
+    />
 
     <!-- Model Config Edit Modal -->
     <Modal
@@ -425,36 +358,20 @@ async function handleDiscover() {
           required
         />
 
-        <div class="space-y-2">
-          <Input
-            id="model-identifier"
-            label="Model Identifier"
-            :placeholder="modelIdentifierPlaceholder"
-            v-model="editingConfig.model_identifier"
-            required
-          />
-          <div v-if="isEndpointProvider && editingConfig.endpoint_id" class="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              size="xs"
-              :loading="isLoadingEndpointModels"
-              data-testid="load-endpoint-models"
-              @click="loadEndpointModels"
-            >
-              {{ editingConfig.provider === 'comfyui' ? 'Load checkpoints' : 'Load models' }}
-            </Button>
-            <Select
-              v-if="endpointModels.length"
-              :model-value="editingConfig.model_identifier || ''"
-              size="sm"
-              class="min-w-0 flex-1"
-              aria-label="Pick a model from the endpoint"
-              placeholder="Pick from endpoint…"
-              :options="endpointModels.map((m) => ({ value: m, label: m }))"
-              @update:model-value="pickEndpointModel"
-            />
-          </div>
-        </div>
+        <ModelDiscovery
+          id="model-identifier"
+          mode="combobox"
+          label="Model Identifier"
+          :placeholder="modelIdentifierPlaceholder"
+          :required="true"
+          v-model="editingConfig.model_identifier"
+          :provider="editingConfig.provider || 'openrouter'"
+          :endpoint-id="isEndpointProvider ? editingConfig.endpoint_id : null"
+          purpose="image"
+          :auto-discover="!isEndpointProvider"
+          :can-auto-discover="editorProviderHasKey"
+          @select="pickDiscoveredModel"
+        />
 
         <Select
           v-if="editingConfig.provider === 'openai_compatible'"

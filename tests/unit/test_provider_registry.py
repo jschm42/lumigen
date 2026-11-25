@@ -232,3 +232,113 @@ def test_registered_providers_have_display_name_and_homepage_url() -> None:
             continue
         assert info["display_name"], f"Provider {name} is missing display_name"
         assert info["homepage_url"], f"Provider {name} is missing homepage_url"
+
+
+@pytest.mark.asyncio
+async def test_registry_list_reasoning_models_uses_non_image_openai_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+    from app.providers.openai_adapter import OpenAIAdapter
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, headers=None):
+            return httpx.Response(
+                200,
+                request=httpx.Request("GET", url),
+                json={
+                    "data": [
+                        {"id": "gpt-4o"},
+                        {"id": "o3-mini"},
+                        {"id": "dall-e-3"},
+                        {"id": "gpt-image-1"},
+                        {"id": "whisper-1"},
+                    ]
+                },
+            )
+
+    monkeypatch.setattr("app.providers.openai_adapter.httpx.AsyncClient", FakeClient)
+
+    settings = Settings()
+    registry = ProviderRegistry(settings)
+    registry.register(OpenAIAdapter())
+
+    image_models = await registry.list_models("openai", api_key="sk-test")
+    reasoning_models = await registry.list_reasoning_models("openai", api_key="sk-test")
+
+    assert image_models == ["dall-e-3", "gpt-image-1"]
+    assert reasoning_models == ["gpt-4o", "o3-mini"]
+
+
+@pytest.mark.asyncio
+async def test_registry_separates_openrouter_image_and_reasoning_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+    from app.providers.openrouter_adapter import OpenRouterAdapter
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, headers=None):
+            return httpx.Response(
+                200,
+                request=httpx.Request("GET", url),
+                json={
+                    "data": [
+                        {
+                            "id": "black-forest-labs/flux.2-pro",
+                            "architecture": {
+                                "modality": "text->image",
+                                "output_modalities": ["image"],
+                            },
+                        },
+                        {
+                            "id": "google/gemini-2.5-flash-image",
+                            "architecture": {
+                                "modality": "text+image->text+image",
+                                "output_modalities": ["text", "image"],
+                            },
+                        },
+                        {
+                            "id": "anthropic/claude-3.7-sonnet",
+                            "architecture": {
+                                "modality": "text+image->text",
+                                "output_modalities": ["text"],
+                            },
+                        },
+                    ]
+                },
+            )
+
+    monkeypatch.setattr("app.providers.openrouter_adapter.httpx.AsyncClient", FakeClient)
+
+    settings = Settings()
+    registry = ProviderRegistry(settings)
+    registry.register(OpenRouterAdapter())
+
+    image_models = await registry.list_models("openrouter", api_key="or-key")
+    reasoning_models = await registry.list_reasoning_models("openrouter", api_key="or-key")
+
+    assert image_models == [
+        "black-forest-labs/flux.2-pro",
+        "google/gemini-2.5-flash-image",
+    ]
+    assert reasoning_models == [
+        "anthropic/claude-3.7-sonnet",
+        "google/gemini-2.5-flash-image",
+    ]
